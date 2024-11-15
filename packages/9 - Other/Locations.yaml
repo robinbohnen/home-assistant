@@ -1,0 +1,79 @@
+general_locations_package:
+  automation:
+    - id: general_locations_notifcations
+      alias: General - Locations send notifications
+      description: 'Send notifications when someone leaves a zone to interested persons'
+      mode: single
+      triggers:
+        - trigger: zone
+          entity_id: !secret person_partner
+          zone: zone.crole
+          event: leave
+          id: partner_crole
+        - trigger: zone
+          entity_id: !secret person_partner
+          zone: zone.efteling
+          event: leave
+          id: partner_efteling
+        - trigger: zone
+          entity_id: person.robin_bohnen
+          zone: zone.vrbn_kantoor_kooikersweg
+          event: leave
+          id: robin_work
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - partner_crole
+              sequence:
+                - data:
+                    title: "{{ states['input_text.naam_partner'].state }} gaat weg bij Crole"
+                    message: >-
+                      {{ states['input_text.naam_partner'].state }} gaat weg bij Crole en is over {{
+                      states['sensor.samantha_reistijd_naar_huis'].state }} minuten
+                      thuis.
+                    data:
+                      push:
+                        sound:
+                          name: default
+                          critical: 1
+                          volume: 0.1
+                  action: notify.mobile_devices_robin
+            - conditions:
+                - condition: trigger
+                  id:
+                    - partner_efteling
+              sequence:
+                - data:
+                    title: "{{ states['input_text.naam_partner'].state }} gaat weg bij de Efteling"
+                    message: >-
+                      {{ states['input_text.naam_partner'].state }} gaat weg bij de Efteling en is over {{
+                      states['sensor.samantha_reistijd_naar_huis'].state }} minuten
+                      thuis.
+                    data:
+                      push:
+                        sound:
+                          name: default
+                          critical: 1
+                          volume: 0.1
+                  action: notify.mobile_devices_robin
+            - conditions:
+                - condition: trigger
+                  id:
+                    - robin_work
+              sequence:
+                - data:
+                    title: Robin gaat weg op het werk
+                    message: >-
+                      Robin gaat weg op het werk en is over {{
+                      states['sensor.robin_reistijd_naar_huis'].state }} minuten
+                      thuis.
+                    data:
+                      push:
+                        sound:
+                          name: default
+                          critical: 1
+                          volume: 0.1
+                  action: notify.mobile_devices_partner

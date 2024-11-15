@@ -1,0 +1,217 @@
+covers_package:
+  automation:
+    - id: covers_open_close
+      alias: General - Open or Close all Covers
+      description: "Open or Close all covers based on time, temperature and sun"
+      mode: single
+      triggers:
+        - trigger: time
+          at: "09:30:00"
+          id: morning
+        - trigger: time
+          at: "23:00:00"
+          id: midnight
+        - trigger: numeric_state
+          entity_id:
+            - sensor.samrob_buitentemperatuur
+          above: 20
+        - trigger: numeric_state
+          entity_id:
+            - sensor.voortuin_zon_luminance
+          above: 15000
+        - trigger: numeric_state
+          entity_id:
+            - sensor.achtertuin_zon_luminance
+          above: 15000
+        - trigger: numeric_state
+          entity_id:
+            - sensor.voortuin_zon_luminance
+          below: 15000
+        - trigger: numeric_state
+          entity_id:
+            - sensor.achtertuin_zon_luminance
+          below: 15000
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - alias: Morning
+                  condition: or
+                  conditions:
+                    - condition: trigger
+                      id:
+                        - morning
+                    - condition: time
+                      before: "17:00:00"
+                      after: "07:00:00"
+              sequence:
+                - alias: Check weather conditions
+                  choose:
+                    - conditions:
+                        - condition: numeric_state
+                          entity_id: sensor.samrob_buitentemperatuur
+                          above: 20
+                          alias: Hot
+                      sequence:
+                        - action: cover.close_cover
+                          metadata: {}
+                          data: {}
+                          target:
+                            entity_id:
+                              - cover.kantoor_links_low_speed
+                              - cover.kantoor_rechts_low_speed
+                              - cover.badkamer_rolluik_low_speed
+                              - cover.slaapkamer_rolluik_low_speed
+                              - cover.slaapkamer_maxi_links_low_speed
+                              - cover.slaapkamer_maxi_rechts_low_speed
+                              - cover.slaapkamer_mini
+                    - conditions:
+                        - condition: numeric_state
+                          entity_id: sensor.voortuin_zon_luminance
+                          above: 15000
+                          alias: Sunny frontyard
+                      sequence:
+                        - action: cover.close_cover
+                          metadata: {}
+                          data: {}
+                          target:
+                            entity_id:
+                              - cover.keuken_screen_links
+                              - cover.keuken_screen_rechts
+                        - if:
+                            - condition: state
+                              entity_id: binary_sensor.keuken_raam_klein_contact
+                              state: "off"
+                          then:
+                            - action: cover.close_cover
+                              metadata: {}
+                              data: {}
+                              target:
+                                entity_id: cover.rollerblind_0002
+                          alias: Rolgordijn rechts dicht
+                        - if:
+                            - condition: state
+                              entity_id: binary_sensor.keuken_raam_groot_contact
+                              state: "off"
+                          then:
+                            - action: cover.close_cover
+                              metadata: {}
+                              data: {}
+                              target:
+                                entity_id: cover.rollerblind_0001
+                          alias: Rolgordijn links dicht
+                        - action: cover.set_cover_position
+                          metadata: {}
+                          data:
+                            position: 15
+                          target:
+                            entity_id:
+                              - cover.slaapkamer_maxi_rechts_low_speed
+                              - cover.slaapkamer_maxi_links_low_speed
+                              - cover.kantoor_links_low_speed
+                              - cover.kantoor_rechts_low_speed
+                              - cover.slaapkamer_mini
+                        - action: cover.open_cover
+                          metadata: {}
+                          data: {}
+                          target:
+                            entity_id:
+                              - cover.badkamer_rolluik_low_speed
+                              - cover.slaapkamer_rolluik_low_speed
+                    - conditions:
+                        - condition: numeric_state
+                          entity_id: sensor.achtertuin_zon_luminance
+                          above: 15000
+                          alias: Sunny Backyard
+                      sequence:
+                        - action: cover.set_cover_position
+                          metadata: {}
+                          data:
+                            position: 15
+                          target:
+                            entity_id:
+                              - cover.badkamer_rolluik_low_speed
+                              - cover.slaapkamer_rolluik_low_speed
+                              - cover.slaapkamer_mini
+                              - cover.kantoor_rechts_low_speed
+                        - action: cover.open_cover
+                          metadata: {}
+                          data: {}
+                          target:
+                            entity_id:
+                              - cover.slaapkamer_maxi_rechts_low_speed
+                              - cover.slaapkamer_maxi_links_low_speed
+                              - cover.kantoor_links_low_speed
+                  default:
+                    - action: cover.open_cover
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id:
+                          - cover.kantoor_links_low_speed
+                          - cover.kantoor_rechts_low_speed
+                          - cover.badkamer_rolluik_low_speed
+                          - cover.slaapkamer_rolluik_low_speed
+                          - cover.slaapkamer_maxi_links_low_speed
+                          - cover.slaapkamer_maxi_rechts_low_speed
+                          - cover.slaapkamer_mini
+                          - cover.keuken_screen_links
+                          - cover.keuken_screen_rechts
+                    - if:
+                        - condition: numeric_state
+                          entity_id: zone.home
+                          above: 0
+                      then:
+                        - action: cover.open_cover
+                          metadata: {}
+                          data: {}
+                          target:
+                            entity_id:
+                              - cover.rollerblind_0001
+                              - cover.rollerblind_0002
+            - conditions:
+                - condition: or
+                  conditions:
+                    - condition: trigger
+                      id:
+                        - midnight
+                    - condition: time
+                      after: "17:00:00"
+                      before: "07:00:00"
+                  alias: Midnight
+              sequence:
+                - action: cover.close_cover
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id:
+                      - cover.slaapkamer_maxi_rechts_low_speed
+                      - cover.slaapkamer_maxi_links_low_speed
+                      - cover.slaapkamer_mini
+                - if:
+                    - condition: numeric_state
+                      entity_id: weather.forecast_thuis
+                      attribute: temperature
+                      below: 20
+                  then:
+                    - action: cover.set_cover_position
+                      metadata: {}
+                      data:
+                        position: 15
+                      target:
+                        entity_id:
+                          - cover.kantoor_links_low_speed
+                          - cover.kantoor_rechts_low_speed
+                          - cover.badkamer_rolluik_low_speed
+                          - cover.slaapkamer_rolluik_low_speed
+                  else:
+                    - action: cover.close_cover
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id:
+                          - cover.kantoor_links_low_speed
+                          - cover.kantoor_rechts_low_speed
+                          - cover.badkamer_rolluik_low_speed
+                          - cover.slaapkamer_rolluik_low_speed
+              alias: Midnight

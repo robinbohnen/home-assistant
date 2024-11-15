@@ -1,0 +1,76 @@
+toilet_lights_package:
+
+  input_number:
+    lights_toilet_percentage:
+      name: "Lights Toilet - Percentage"
+      min: 0
+      max: 100
+      step: 1
+      initial: 80
+      icon: mdi:lightbulb-on-70
+
+  input_boolean:
+    enable_pir_toilet:
+      name: "PIR in Toilet"
+      initial: on
+      icon: mdi:motion-sensor
+
+  automation:
+    - id: lights_movement_toilet
+      alias: Toilet - Lights
+      description: "Turn on the lights in the toilet if there is movement detected"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.toilet_beweging_occupancy
+          to: "on"
+          id: beweging
+        - trigger: state
+          entity_id: binary_sensor.toilet_beweging_occupancy
+          to: "off"
+          for:
+            hours: 0
+            minutes: 2
+            seconds: 0
+          id: geenbeweging
+        - trigger: state
+          entity_id: binary_sensor.toilet_deur_contact
+          to: "on"
+          id: deur_open
+      conditions:
+        - condition: state
+          entity_id: input_boolean.enable_pir_toilet
+          state: "on"
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - beweging
+                    - deur_open
+              sequence:
+                - action: light.turn_on
+                  metadata: {}
+                  data:
+                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+                    brightness_pct: "{{ states('input_number.lights_toilet_percentage')|int }}"
+                  target:
+                    entity_id: light.toilet_hanglamp
+            - conditions:
+                - condition: trigger
+                  id:
+                    - geenbeweging
+              sequence:
+                - action: light.turn_off
+                  metadata: {}
+                  data:
+                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+                  target:
+                    entity_id: light.toilet_hanglamp
+          default:
+            - action: light.toggle
+              metadata: {}
+              data:
+                transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+              target:
+                entity_id: light.toilet_hanglamp

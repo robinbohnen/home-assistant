@@ -1,0 +1,767 @@
+title: Home
+path: home
+icon: mdi:home-assistant
+badges:
+  - type: entity
+    show_name: true
+    show_state: true
+    show_icon: true
+    entity: media_player.woonkamer_sonos
+    color: ""
+    state_content:
+      - media_title
+      - media_artist
+    visibility:
+      - condition: state
+        entity: media_player.woonkamer_sonos
+        state: playing
+  - type: entity
+    show_name: true
+    show_state: true
+    show_icon: true
+    entity: !secret person_partner
+    color: pink
+    name: Samantha
+    visibility:
+      - condition: state
+        entity: !secret person_partner
+        state_not: home
+  - type: entity
+    show_name: true
+    show_state: true
+    show_icon: true
+    entity: person.robin_bohnen
+    color: ""
+    name: Robin
+    visibility:
+      - condition: state
+        entity: person.robin_bohnen
+        state_not: home
+  - type: entity
+    show_name: true
+    show_state: true
+    show_icon: true
+    entity: cover.achtertuin_zonnescherm
+    color: yellow
+    visibility:
+      - condition: or
+        conditions:
+          - condition: state
+            entity: cover.achtertuin_zonnescherm
+            state: open
+          - condition: numeric_state
+            entity: sensor.achtertuin_zonnesensor_luminance
+            above: 15000
+    show_entity_picture: false
+    tap_action:
+      action: toggle
+  - type: entity
+    show_name: true
+    show_state: false
+    show_icon: true
+    entity: sensor.slaapkamer_knop_robin_action
+    color: green
+    visibility:
+      - condition: state
+        entity: binary_sensor.slaapkamer_deur_contact
+        state: "off"
+    tap_action:
+      action: perform-action
+      perform_action: automation.trigger
+      target:
+        entity_id: automation.slaapkamer_knoppen_ingedrukt_single
+      data:
+        skip_condition: true
+    name: Slaapkamer Knop
+  - type: entity
+    show_name: false
+    show_state: true
+    show_icon: true
+    color: ""
+    entity: climate.woonkamer
+cards:
+  - type: conditional
+    conditions:
+      - condition: state
+        entity: input_boolean.brandweer_uitgerukt
+        state: "on"
+    card:
+      type: vertical-stack
+      cards:
+        - type: heading
+          icon: mdi:fire
+          heading: Brandweer uitruk
+          heading_style: title
+        - type: horizontal-stack
+          cards:
+            - type: custom:mushroom-entity-card
+              entity: input_boolean.brandweer_uitgerukt
+              icon_color: red
+              layout: vertical
+              secondary_info: none
+              tap_action:
+                action: none
+              hold_action:
+                action: none
+              double_tap_action:
+                action: none
+              icon: ""
+            - type: custom:mushroom-template-card
+              primary: >-
+                Melding op {{
+                as_timestamp(states.input_text.precom_laatste_melding.last_changed)
+                | float | timestamp_custom('%H:%M:%S') }}
+              secondary: ""
+              icon: mdi:message-alert
+              layout: vertical
+              badge_icon: mdi:fire
+              badge_color: orange
+              icon_color: red
+              tap_action:
+                action: none
+              hold_action:
+                action: none
+              double_tap_action:
+                action: none
+        - type: horizontal-stack
+          cards:
+            - type: custom:mushroom-template-card
+              primary: ""
+              secondary: >-
+                Op kazerne om {{
+                as_timestamp(state_attr('sensor.recente_uitruk_in_agenda','start'))
+                | float | timestamp_custom('%H:%M:%S') }}
+              icon: mdi:office-building
+              layout: horizontal
+              multiline_secondary: true
+              tap_action:
+                action: none
+              hold_action:
+                action: none
+              double_tap_action:
+                action: none
+              icon_color: blue
+              fill_container: true
+            - type: custom:mushroom-template-card
+              primary: ""
+              secondary: "{{ states('input_text.precom_laatste_melding') | string }}"
+              icon: mdi:message-text-outline
+              entity: input_text.precom_laatste_melding
+              multiline_secondary: true
+              fill_container: true
+              tap_action:
+                action: none
+              icon_color: ""
+              hold_action:
+                action: none
+              double_tap_action:
+                action: none
+  - type: vertical-stack
+    cards:
+      - type: heading
+        icon: mdi:calendar-blank
+        heading: Vandaag
+        heading_style: title
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: sensor.electricity_meter_energieverbruik
+            icon_color: red
+            name: Stroomverbruik nu
+          - type: custom:mushroom-entity-card
+            entity: sensor.electricity_meter_energieproductie
+            name: Zonnepanelen nu
+            icon_color: green
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: sensor.zonneplan_electricity_consumption_today
+            name: Stroom vandaag
+            icon_color: indigo
+          - type: custom:mushroom-entity-card
+            entity: sensor.zonneplan_gas_consumption_today
+            name: Gas vandaag
+            icon_color: orange
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: weather.buienradar
+          - type: custom:mushroom-entity-card
+            entity: switch.adguard_home_filteren
+            icon_color: pink
+            name: AdGuard Filtering
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: sensor.samrob_gasten
+            name: Gasten Wifi
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.wasmachine_duration
+                state_not: unavailable
+            card:
+              type: custom:mushroom-entity-card
+              entity: sensor.wasmachine_duration
+              name: Wasmachine
+              primary_info: name
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.droger_duration
+                state_not: unavailable
+            card:
+              type: custom:mushroom-entity-card
+              entity: sensor.droger_duration
+              name: Droger
+              primary_info: name
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-entity-card
+            icon_color: green
+            entity: sensor.afvalinfo_home_trash_type_today
+      - type: heading
+        icon: mdi:fridge
+        heading: Agenda
+        heading_style: subtitle
+      - initial_view: dayGridDay
+        type: calendar
+        entities:
+          - calendar.agenda_private
+          - calendar.agenda
+          - calendar.brandweer
+          - calendar.brandweer_uitrukken_private
+          - calendar.mini
+          - calendar.feestdagen_in_nederland
+          - calendar.maxi
+          - calendar.robin_en_sam
+          - calendar.verjaardagen_private
+          - calendar.agenda_business
+        theme: minimalist-desktop
+        card_mod:
+          style:
+            ha-full-calendar:
+              $: |
+                #calendar {
+                  min-height: 50px !important;
+                }
+      - type: heading
+        icon: mdi:fridge
+        heading: Stroomprijzen
+        heading_style: subtitle
+        badges:
+          - type: entity
+            show_state: true
+            show_icon: true
+            entity: sensor.electricity_meter_actief_tarief
+      - type: custom:apexcharts-card
+        update_interval: 15m
+        experimental:
+          color_threshold: true
+        graph_span: 24h
+        span:
+          start: day
+        now:
+          show: true
+          label: Now
+          color: black
+        header:
+          show: true
+          title: Electriciteitsprijzen vandaag
+        yaxis:
+          - id: kwh_prijs
+            min: ~0
+            max: ~0.4
+            decimals: 2
+            apex_config:
+              title:
+                text: Prijs €/kWh
+          - id: kw_gebruik
+            opposite: true
+            min: -7
+            max: ~17
+            decimals: 1
+            apex_config:
+              title:
+                text: Gebruik kW
+        apex_config:
+          tooltip:
+            x:
+              show: false
+        series:
+          - entity: sensor.dynamische_prijzen_average_electricity_price
+            color_threshold:
+              - value: 0
+                color: "#04822e"
+              - value: 0.1
+                color: "#12A141"
+              - value: 0.15
+                color: "#79B92C"
+              - value: 0.2
+                color: "#C4D81D"
+              - value: 0.25
+                color: "#F3DC0C"
+              - value: 0.3
+                color: "#EFA51E"
+              - value: 0.35
+                color: "#E76821"
+              - value: 0.4
+                color: "#DC182F"
+            name: Uurprijs vandaag
+            stroke_width: -8
+            float_precision: 3
+            type: column
+            show:
+              legend_value: false
+            data_generator: |
+              return entity.attributes.prices.map((entry) => {
+              return [new Date(entry.time), entry.price];
+              });
+            yaxis_id: kwh_prijs
+          - entity: sensor.dynamische_prijzen_average_electricity_price
+            name: Gemiddelde prijs vandaag
+            curve: stepline
+            stroke_width: 2
+            color: orange
+            type: line
+            float_precision: 3
+            group_by:
+              duration: 1d
+              func: avg
+            show:
+              legend_value: false
+            data_generator: |
+              return entity.attributes.prices.map((entry) => {
+              return [new Date(entry.time), entry.price];
+              });
+            yaxis_id: kwh_prijs
+          - entity: sensor.electricity_meter_energieverbruik
+            statistics:
+              type: mean
+              period: 5minute
+            group_by:
+              duration: 15m
+              func: avg
+            yaxis_id: kw_gebruik
+            stroke_width: 2
+            curve: smooth
+            extend_to: now
+          - entity: sensor.electricity_meter_energieproductie
+            statistics:
+              type: mean
+              period: 5minute
+            group_by:
+              duration: 15m
+              func: avg
+            yaxis_id: kw_gebruik
+            stroke_width: 2
+            curve: smooth
+            extend_to: now
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: switch.electricity_prices_for_tomorrow_known
+            state: "on"
+        card:
+          type: custom:apexcharts-card
+          update_interval: 15m
+          experimental:
+            color_threshold: true
+          graph_span: 24h
+          span:
+            start: day
+            offset: +24h
+          header:
+            show: true
+            title: Electriciteitsprijzen morgen
+          yaxis:
+            - id: kwh_prijs
+              min: ~0
+              max: ~0.4
+              decimals: 2
+              apex_config:
+                title:
+                  text: Prijs €/kWh
+          apex_config:
+            tooltip:
+              x:
+                show: false
+          series:
+            - entity: sensor.dynamische_prijzen_average_electricity_price
+              color_threshold:
+                - value: 0
+                  color: "#04822e"
+                - value: 0.1
+                  color: "#12A141"
+                - value: 0.15
+                  color: "#79B92C"
+                - value: 0.2
+                  color: "#C4D81D"
+                - value: 0.25
+                  color: "#F3DC0C"
+                - value: 0.3
+                  color: "#EFA51E"
+                - value: 0.35
+                  color: "#E76821"
+                - value: 0.4
+                  color: "#DC182F"
+              name: Uurprijs morgen
+              stroke_width: 0
+              float_precision: 3
+              type: column
+              show:
+                legend_value: false
+              data_generator: |
+                return entity.attributes.prices_tomorrow.map((entry) => {
+                return [new Date(entry.time), entry.price];
+                });
+              yaxis_id: kwh_prijs
+            - entity: sensor.dynamische_prijzen_average_electricity_price
+              name: Gemiddelde prijs morgen
+              curve: stepline
+              stroke_width: 2
+              color: orange
+              type: line
+              float_precision: 3
+              group_by:
+                duration: 1d
+                func: avg
+              show:
+                legend_value: false
+              data_generator: |
+                return entity.attributes.prices_tomorrow.map((entry) => {
+                return [new Date(entry.time), entry.price];
+                });
+              yaxis_id: kwh_prijs
+  - type: vertical-stack
+    cards:
+      - type: heading
+        icon: mdi:home-floor-0
+        heading: Beneden
+        heading_style: title
+        badges:
+          - type: entity
+            show_state: true
+            show_icon: true
+            entity: climate.woonkamer
+            color: red
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-light-card
+            entity: light.woonkamer_lampen
+            name: Woonkamer
+            collapsible_controls: true
+            show_color_control: true
+            use_light_color: true
+            show_brightness_control: true
+            show_color_temp_control: false
+            fill_container: true
+          - type: custom:mushroom-light-card
+            entity: light.eettafel_lampen
+            name: Eettafel
+            collapsible_controls: true
+            show_brightness_control: true
+            fill_container: true
+            use_light_color: true
+            show_color_control: true
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-light-card
+            entity: light.keuken_lampen
+            name: Keuken
+            show_brightness_control: true
+            collapsible_controls: true
+            fill_container: true
+            use_light_color: true
+            show_color_control: true
+          - type: custom:mushroom-light-card
+            entity: light.entree_lampen
+            name: Entree
+            show_brightness_control: true
+            collapsible_controls: true
+            fill_container: true
+            use_light_color: true
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-light-card
+            entity: light.speelkamer_lampen
+            show_brightness_control: true
+            collapsible_controls: true
+            name: Speelkamer
+            fill_container: true
+          - type: custom:mushroom-light-card
+            entity: light.garage_lampen
+            show_brightness_control: true
+            collapsible_controls: true
+            name: Garage
+            fill_container: true
+      - type: heading
+        icon: mdi:button-cursor
+        heading: Beneden Bediening
+        heading_style: subtitle
+      - type: horizontal-stack
+        cards:
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: switch.linea_micra
+                name: Koffieapparaat
+                icon: mdi:coffee
+                icon_color: brown
+                tap_action:
+                  action: toggle
+                hold_action:
+                  action: none
+                double_tap_action:
+                  action: none
+                fill_container: true
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: automation.general_play_default_music
+            name: Sonos Radio aan
+            icon: mdi:radio-fm
+            icon_color: accent
+            tap_action:
+              action: perform-action
+              perform_action: automation.trigger
+              target:
+                entity_id: automation.general_play_default_music
+              data:
+                skip_condition: true
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-lock-card
+            name: Voordeur Slot
+            entity: lock.kroon18voordeur
+            fill_container: true
+          - type: custom:mushroom-alarm-control-panel-card
+            entity: alarm_control_panel.alarmo
+            states:
+              - armed_home
+              - armed_away
+            name: Alarm
+            fill_container: true
+  - type: vertical-stack
+    cards:
+      - type: heading
+        icon: mdi:shovel
+        heading: Buiten
+        heading_style: title
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-light-card
+            entity: light.carport_lampen
+            name: Carport
+            show_brightness_control: true
+            collapsible_controls: true
+            fill_container: true
+          - type: custom:mushroom-light-card
+            entity: light.voortuin_lampen
+            name: Voortuin
+            show_brightness_control: true
+            collapsible_controls: true
+            fill_container: true
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-light-card
+            entity: light.achtertuin_lampen
+            name: Achtertuin Wandlampen
+            show_brightness_control: true
+            collapsible_controls: true
+            fill_container: true
+            use_light_color: true
+            show_color_control: true
+          - type: custom:mushroom-entity-card
+            entity: switch.intex_purespa_power
+            name: Intex PureSpa
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-light-card
+            entity: light.achtertuin_overkapping_wandlampen
+            name: Overkapping Wandlampen
+            use_light_color: true
+            show_brightness_control: true
+            show_color_control: true
+          - type: custom:mushroom-light-card
+            entity: light.achtertuin_prikspots
+            name: Prikspots
+            use_light_color: true
+            show_brightness_control: true
+            show_color_control: true
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: cover.achtertuin_zonnescherm
+            fill_container: true
+            icon: mdi:awning
+            name: Zonnescherm
+            icon_color: amber
+            tap_action:
+              action: toggle
+          - type: custom:mushroom-entity-card
+            entity: automation.carport_charging_station_charge
+            name: Laadpaal Starten
+            fill_container: true
+            tap_action:
+              action: perform-action
+              perform_action: automation.trigger
+              data:
+                skip_condition: true
+              target:
+                entity_id: automation.carport_charging_station_charge
+            secondary_info: none
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: switch.intex_purespa_power
+            state: "on"
+        card:
+          type: horizontal-stack
+          cards:
+            - type: vertical-stack
+              cards:
+                - type: heading
+                  icon: mdi:hot-tub
+                  heading: Intex Spa Achtertuin
+                  heading_style: title
+                - type: horizontal-stack
+                  cards:
+                    - type: custom:mushroom-climate-card
+                      entity: climate.intex_purespa
+                      fill_container: true
+                      tap_action:
+                        action: more-info
+                - type: horizontal-stack
+                  cards:
+                    - type: custom:mushroom-entity-card
+                      entity: switch.intex_purespa_sanitizer
+                      fill_container: true
+                      name: Zout
+                    - type: custom:mushroom-entity-card
+                      entity: switch.intex_purespa_filter
+                      name: Filter
+                - type: horizontal-stack
+                  cards:
+                    - type: custom:mushroom-entity-card
+                      entity: switch.intex_purespa_bubbles
+                      name: Bubbles
+                    - type: custom:mushroom-entity-card
+                      entity: switch.intex_purespa_jets
+                      name: Jets
+                - type: custom:mini-graph-card
+                  entities:
+                    - entity: climate.intex_purespa
+                      attribute: current_temperature
+                  hours_to_show: 8
+                  points_per_hour: 2
+                  height: 100
+  - type: vertical-stack
+    cards:
+      - type: heading
+        icon: mdi:home-floor-1
+        heading: 1e Etage
+        heading_style: title
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-light-card
+            entity: light.overloop_hanglamp
+            name: Overloop
+            show_brightness_control: true
+            collapsible_controls: true
+            fill_container: true
+          - type: custom:mushroom-light-card
+            entity: light.slaapkamer_lampen
+            name: Slaapkamer
+            show_brightness_control: true
+            collapsible_controls: true
+            fill_container: true
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-light-card
+            entity: light.badkamer_spots
+            name: Badkamer
+            show_brightness_control: true
+            collapsible_controls: true
+            fill_container: true
+          - type: custom:mushroom-light-card
+            entity: light.kantoor_lampen
+            name: Kantoor
+            show_brightness_control: true
+            collapsible_controls: true
+            fill_container: true
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-light-card
+            entity: light.slaapkamer_maxi_hanglamp
+            name: Slaapkamer {{ input_text.naam_maxi }}
+            show_brightness_control: true
+            collapsible_controls: true
+            fill_container: true
+          - type: custom:mushroom-entity-card
+            entity: binary_sensor.slaapkamer_maxi_deur_contact
+            primary_info: name
+            name: Slaapkamer {{ input_text.naam_maxi }} Deur
+            secondary_info: last-changed
+            fill_container: true
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: sensor.slaapkamer_knop_robin_action
+            name: Naar bed knop
+            icon: mdi:bed-double-outline
+            icon_color: pink
+            fill_container: true
+            tap_action:
+              action: perform-action
+              perform_action: automation.trigger
+              target:
+                entity_id: automation.slaapkamer_knoppen_ingedrukt_single
+              data:
+                skip_condition: true
+            secondary_info: last-changed
+  - type: vertical-stack
+    cards:
+      - type: heading
+        icon: mdi:home-floor-2
+        heading: 2e Etage
+        heading_style: title
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-light-card
+            entity: light.overloop_zolder_lampen
+            name: Overloop Zolder
+            show_brightness_control: true
+            collapsible_controls: true
+            fill_container: true
+          - type: custom:mushroom-light-card
+            entity: light.slaapkamer_mini_lampen
+            name: Slaapkamer {{ input_text.naam_mini }}
+            show_brightness_control: true
+            collapsible_controls: true
+            fill_container: true
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: binary_sensor.slaapkamer_mini_deur_contact
+            name: Slaapkamer {{ input_text.naam_mini }} Deur
+            secondary_info: last-changed
+            fill_container: true
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-climate-card
+            entity: climate.airco_zolder
+            show_temperature_control: true
+            collapsible_controls: true
+            hvac_modes:
+              - cool
+              - heat
+            tap_action:
+              action: toggle
+            hold_action:
+              action: none
+            double_tap_action:
+              action: none
+            fill_container: true
+  - type: vertical-stack
+    cards: []

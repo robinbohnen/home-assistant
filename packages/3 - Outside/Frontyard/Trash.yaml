@@ -1,0 +1,39 @@
+frontyard_trash_package:
+  automation:
+    - id: frontyard_trash_notification_today
+      alias: Frontyard Trash - Notification today
+      description: "Notify all parent devices when there is a trash pickup today"
+      mode: single
+      triggers:
+        - at: "08:15:00"
+          trigger: time
+      conditions:
+        - condition: not
+          conditions:
+            - condition: state
+              state: geen
+              entity_id: sensor.afvalinfo_home_trash_type_today
+      actions:
+        - data:
+            message: "Afval vandaag: {{states.sensor.afvalinfo_home_trash_type_today.state}}"
+            title: Afval vandaag
+          action: notify.mobile_devices_adults
+
+    - id: frontyard_trash_notification_tomorrow
+      alias: Frontyard Trash - Notification tomorrow
+      description: "Notify all parent devices when there is a trash pickup tomorow"
+      mode: single
+      triggers:
+        - at: "18:00:00"
+          trigger: time
+      conditions:
+        - condition: not
+          conditions:
+            - condition: state
+              state: geen
+              entity_id: sensor.afvalinfo_home_trash_type_tomorrow
+      actions:
+        - data:
+            title: Afval morgen
+            message: "Afval morgen: {{states.sensor.afvalinfo_home_trash_type_tomorrow.state}}"
+          action: notify.mobile_devices_adults

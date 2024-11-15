@@ -1,0 +1,43 @@
+maxi_opened_door_bedtime_package:
+  automation:
+    - id: maxi_opened_door_bedtime
+      alias: Bedroom Maxi - Opened door during bedtime
+      description: "Maxi has opened her door during bedtime; notice parents by breathe some lights in color"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.slaapkamer_maxi_deur_contact
+          to: "on"
+      conditions:
+        - condition: time
+          after: input_datetime.bedtime_maxi
+      actions:
+        - action: scene.create
+          metadata: {}
+          data:
+            scene_id: maxi_door_sleeping
+            snapshot_entities:
+              - light.woonkamer_tv_kast_hue_bar_links
+              - light.achtertuin_overkapping_spot_rechts_boven
+        - action: light.turn_on
+          metadata: {}
+          data:
+            rgb_color:
+              - 0
+              - 0
+              - 249
+            effect: breathe
+          target:
+            entity_id:
+              - light.woonkamer_tv_kast_hue_bar_links
+              - light.achtertuin_overkapping_spot_rechts_boven
+        - delay:
+            hours: 0
+            minutes: 0
+            seconds: 30
+            milliseconds: 0
+        - action: scene.turn_on
+          metadata: {}
+          target:
+            entity_id: scene.maxi_door_sleeping

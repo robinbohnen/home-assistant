@@ -1,0 +1,63 @@
+toilet_media_package:
+  automation:
+    - id: media_movement_toilet
+      alias: Toilet - Media
+      description: "Turn on the media in the toilet if there is movement detected"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.toilet_beweging_occupancy
+          to: "on"
+          id: beweging
+        - trigger: state
+          entity_id: binary_sensor.toilet_beweging_occupancy
+          to: "off"
+          for:
+            hours: 0
+            minutes: 2
+            seconds: 0
+          id: geenbeweging
+        - trigger: state
+          entity_id: binary_sensor.toilet_deur_contact
+          to: "on"
+          id: deur_open
+      conditions:
+        - condition: state
+          entity_id: input_boolean.enable_pir_toilet
+          state: "on"
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - beweging
+                    - deur_open
+              sequence:
+                - action: media_player.volume_set
+                  metadata: {}
+                  data:
+                    volume_level: 1
+                  target:
+                    entity_id: media_player.toilet_sonos
+                - if:
+                    - condition: state
+                      entity_id: media_player.toilet_sonos
+                      state: idle
+                  then:
+                    - action: media_player.join
+                      metadata: {}
+                      data:
+                        group_members:
+                          - media_player.toilet_sonos
+                      target:
+                        entity_id: media_player.woonkamer_sonos
+            - conditions:
+                - condition: trigger
+                  id:
+                    - geenbeweging
+              sequence:
+                - action: media_player.unjoin
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: media_player.toilet_sonos

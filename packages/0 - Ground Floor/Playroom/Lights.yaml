@@ -1,0 +1,79 @@
+playroom_lights_package:
+
+  group:
+    pir_sensors_playroom:
+      name: PIR Group Playroom
+      icon: mdi:motion-sensor
+      entities:
+        - binary_sensor.speelkamer_beweging_links_occupancy
+        - binary_sensor.speelkamer_beweging_rechts_occupancy
+
+  input_number:
+    lights_playroom_percentage:
+      name: "Lights Playroom - Percentage"
+      min: 0
+      max: 100
+      step: 1
+      initial: 80
+      icon: mdi:lightbulb-on-70
+
+  input_boolean:
+    enable_pir_playroom:
+      name: "PIR in Playroom"
+      initial: on
+      icon: mdi:motion-sensor
+
+  automation:
+    - id: lights_movement_playroom
+      alias: Playroom - Lights
+      description: "Turn on the lights of the playroom if there is movement detected"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: group.pir_sensors_playroom
+          to: "on"
+          id: beweging
+        - trigger: state
+          entity_id: group.pir_sensors_playroom
+          to: "off"
+          for:
+            hours: 0
+            minutes: 5
+            seconds: 0
+          id: geenbeweging
+      conditions:
+        - condition: state
+          entity_id: input_boolean.enable_pir_playroom
+          state: "on"
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - beweging
+              sequence:
+                - action: light.turn_on
+                  metadata: {}
+                  data:
+                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+                    brightness_pct: "{{ states('input_number.lights_playroom_percentage')|int }}"
+                  target:
+                    entity_id: light.speelkamer_lampen
+            - conditions:
+                - condition: trigger
+                  id:
+                    - geenbeweging
+              sequence:
+                - action: light.turn_off
+                  metadata: {}
+                  data:
+                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+                  target:
+                    entity_id: light.speelkamer_lampen
+          default:
+            - action: light.toggle
+              metadata: {}
+              data:
+                transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+              target:
+                entity_id: light.speelkamer_lampen

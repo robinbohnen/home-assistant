@@ -1,0 +1,936 @@
+brandweer_package:
+
+  counter:
+    brandweer_uden_a_ploeg_uitrukken:
+      name: "Brandweer - Uitrukken A Ploeg"
+      icon: mdi:fire-circle
+    brandweer_uden_b_ploeg_uitrukken:
+      name: "Brandweer - Uitrukken B Ploeg"
+      icon: mdi:fire-circle
+    brandweer_uden_c_ploeg_uitrukken:
+      name: "Brandweer - Uitrukken C Ploeg"
+      icon: mdi:fire-circle
+    brandweer_totaal_aantal_uitrukken:
+      name: "Brandweer - Totaal aantal uitrukken"
+      icon: mdi:fire-circle
+
+  input_select:
+    brandweer_dienstdoende_ploeg:
+      name: "Brandweer - Dienstdoende Ploeg"
+      options:
+        - A Ploeg
+        - B Ploeg
+        - C Ploeg
+      initial: B Ploeg
+      icon: mdi:firebase
+    brandweer_mijn_huidige_ploeg:
+      name: "Brandweer - Mijn Huidige Ploeg"
+      options:
+        - A Ploeg
+        - B Ploeg
+        - C Ploeg
+      initial: B Ploeg
+      icon: mdi:firebase
+
+  input_text:
+    brandweer_laatste_melding:
+      name: 'Brandweer - Laatste melding'
+      icon: mdi:fire-circle
+    brandweer_laatste_melding_fonetisch:
+      name: 'Brandweer - Laatste Melding Fonetisch'
+      icon: mdi:account-voice
+    brandweer_laatste_p2000_melding:
+      name: 'Brandweer - Laatste p2000 melding'
+      icon: mdi:police-badge
+    brandweer_laatste_p2000_melding_fonetisch:
+      name: 'Brandweer - Laatste p2000 melding fonetisch'
+      icon: mdi:account-voice
+    brandweer_meldingen_om_uden:
+      name: 'Brandweer - Meldingen Om Uden'
+      icon: mdi:fire-station
+
+  input_datetime:
+    brandweer_laatste_melding:
+      name: 'Brandweer - Laatste datum/tijd Melding'
+      has_date: true
+      has_time: true
+      icon: mdi:fire-circle
+    brandweer_laatste_uitgerukt:
+      name: 'Brandweer - Laatst Uitgerukt op datum/tijd'
+      has_date: true
+      has_time: true
+      icon: mdi:fire-circle
+
+  input_boolean:
+    brandweer_uitgerukt:
+      name: 'Brandweer - Nu uitgerukt'
+      icon: mdi:fire-circle
+    brandweer_uitgerukt_op_laatste_melding:
+      name: 'Brandweer - Uitgerukt op laatste melding'
+      icon: mdi:fire-circle
+
+  template:
+    - binary_sensor:
+        - name: Brandweer - Uitgerukt op laatste melding
+          unique_id: brandweer_uitgerukt_op_laatste_melding
+          state: >-
+            {% if (as_timestamp(states('input_datetime.brandweer_laatste_uitgerukt')) - as_timestamp(states('input_datetime.brandweer_laatste_melding'))) < 360 and (as_timestamp(states('input_datetime.brandweer_laatste_uitgerukt')) - as_timestamp(states('input_datetime.brandweer_laatste_melding'))) > 0 %}
+              on
+            {% else %}
+              off
+            {% endif %}
+
+  automation:
+    - id: brandweer_groepswissel
+      alias: Brandweer - Groepswissel
+      description: "Wissel de dienstdoende ploeg op maandag om 06:00"
+      mode: single
+      triggers:
+        - hours: "6"
+          trigger: time_pattern
+      conditions:
+        - condition: time
+          weekday:
+            - mon
+      actions:
+        - metadata: {}
+          data:
+            cycle: true
+          target:
+            entity_id: input_select.brandweer_dienstdoende_ploeg
+          action: input_select.select_next
+
+    - id: brandweer_webhook_main
+      alias: Brandweer - Webhook MAIN
+      description: Webhook to my firestation and team with p2000 notifications
+      mode: queued
+      max: 10
+      triggers:
+        - allowed_methods:
+            - POST
+            - PUT
+          local_only: false
+          webhook_id: brandweer-webhook-main-tzCp7NLJdkNkHg5mvdYY6EzM
+          trigger: webhook
+      conditions:
+        - condition: template
+          value_template: >-
+            {% if (trigger.json.p2000_message !=
+            states('input_text.brandweer_laatste_melding') and  as_timestamp(now()) -
+            as_timestamp(states.input_text.brandweer_laatste_melding.last_changed) >
+            60) %} true {% else %} false {% endif %}
+      actions:
+        - target:
+            entity_id: input_text.brandweer_laatste_melding
+          data:
+            value: "{{ trigger.json.p2000_message }}"
+          alias: Stel variabele in met de laatste melding erin
+          action: input_text.set_value
+        - target:
+            entity_id: input_text.brandweer_laatste_melding_fonetisch
+          data:
+            value: "{{ trigger.json.p2000_message_phonetic }}"
+          alias: Stel variabele in met de laatste melding erin
+          action: input_text.set_value
+        - target:
+            entity_id: input_text.brandweer_laatste_p2000_melding_fonetisch
+          data:
+            value: "{{ trigger.json.p2000_message_phonetic }}"
+          alias: Stel variabele in met de laatste melding erin
+          action: input_text.set_value
+        - metadata: {}
+          data:
+            timestamp: "{{ now().timestamp() }}"
+          target:
+            entity_id: input_datetime.brandweer_laatste_melding
+          action: input_datetime.set_datetime
+        - alias: Stuur bericht naar Home Assistant gebruikers
+          if:
+            - condition: state
+              entity_id: input_select.brandweer_dienstdoende_ploeg
+              state: input_select.brandweer_mijn_huidige_ploeg
+              alias: Kijk of ik momenteel dienst heb
+          then:
+            - metadata: {}
+              data:
+                title: Brandweer {{ trigger.json.capcode_description }}
+                message: "{{ states.input_text.brandweer_laatste_melding.state }}"
+                data:
+                  push:
+                    sound:
+                      name: default
+                      critical: 1
+                      volume: 1
+              alias: Stuur HA notificatie naar alle gebruikers met hoge prioriteit
+              action: notify.mobile_devices_all
+          else:
+            - metadata: {}
+              data:
+                title: Brandweer {{ trigger.json.capcode_description }}
+                message: "{{ states.input_text.brandweer_laatste_melding.state }}"
+              alias: Stuur HA notificatie naar alle gebruikers met lage prioriteit
+              action: notify.mobile_devices_all
+        - alias: Lampen e.d. aanzetten bij melding
+          if:
+            - condition: state
+              entity_id: light.woonkamer_lampen
+              state: "on"
+              alias: Kijk of de lampen beneden aan zijn
+          then:
+            - parallel:
+                - data:
+                    qos: 0
+                    retain: false
+                    topic: clock_1/notify
+                    payload: >-
+                      {"icon": 555, "repeat": 4, "text": " {{
+                      states.input_text.brandweer_laatste_melding.state }}",
+                      "scrollSpeed": 50, "sound": "alarm", "stack": false}
+                  alias: Zet het bericht op de klok in de keuken
+                  action: mqtt.publish
+                - alias: Lampen bij mijn ploeg
+                  if:
+                    - condition: state
+                      entity_id: input_select.brandweer_dienstdoende_ploeg
+                      state: input_select.brandweer_mijn_huidige_ploeg
+                      alias: Kijk of ik momenteel dienst heb
+                  then:
+                    - metadata: {}
+                      data:
+                        scene_id: brandweer_kantoor_lampen
+                        snapshot_entities:
+                          - light.kantoor_lampen
+                      alias: Kantoor lampen scene aanmaken
+                      action: scene.create
+                    - data:
+                        rgb_color:
+                          - 255
+                          - 0
+                          - 0
+                        effect: breathe
+                      action: light.turn_on
+                      target:
+                        entity_id: light.brw_groep_1
+                    - data:
+                        rgb_color:
+                          - 0
+                          - 0
+                          - 255
+                        effect: breathe
+                      target:
+                        entity_id: light.brw_groep_2
+                      action: light.turn_on
+                    - delay:
+                        hours: 0
+                        minutes: 0
+                        seconds: 15
+                        milliseconds: 0
+                    - alias: Apple TV aan of uit, juiste scene
+                      if:
+                        - condition: state
+                          entity_id: media_player.woonkamer_appletv
+                          state: playing
+                      then:
+                        - data:
+                            skip_condition: true
+                          action: automation.trigger
+                          target:
+                            entity_id: automation.livingroom_media_playing
+                      else:
+                        - data:
+                            skip_condition: true
+                          action: automation.trigger
+                          target:
+                            entity_id: automation.livingroom_media_paused
+                    - target:
+                        entity_id: scene.brandweer_kantoor_lampen
+                      data:
+                        transition: 3
+                      alias: Kantoor lampen terug op eerdere instellingen
+                      action: scene.turn_on
+                  else:
+                    - metadata: {}
+                      data:
+                        scene_id: brandweer_tv_kast_lampen
+                        snapshot_entities:
+                          - light.woonkamer_tv_kast_hue_bar_links
+                          - light.woonkamer_tv_kast_hue_bar_rechts
+                          - light.woonkamer_led_strip_tv_kast
+                      alias: TV Kast scene aanmaken
+                      action: scene.create
+                    - metadata: {}
+                      data:
+                        rgb_color:
+                          - 4
+                          - 51
+                          - 255
+                      target:
+                        entity_id:
+                          - light.woonkamer_tv_kast_hue_bar_links
+                          - light.woonkamer_led_strip_tv_kast
+                      action: light.turn_on
+                    - metadata: {}
+                      data:
+                        rgb_color:
+                          - 255
+                          - 38
+                          - 0
+                      target:
+                        entity_id: light.woonkamer_tv_kast_hue_bar_rechts
+                      action: light.turn_on
+                    - delay:
+                        hours: 0
+                        minutes: 0
+                        seconds: 15
+                        milliseconds: 0
+                    - metadata: {}
+                      target:
+                        entity_id: scene.brandweer_tv_kast_lampen
+                      action: scene.turn_on
+                    - alias: Apple TV aan of uit, juiste scene
+                      if:
+                        - condition: state
+                          entity_id: media_player.woonkamer_appletv
+                          state: playing
+                      then:
+                        - target:
+                            entity_id:
+                              - automation.livingroom_media_playing
+                          data:
+                            skip_condition: true
+                          action: automation.trigger
+                      else:
+                        - target:
+                            entity_id:
+                              - automation.livingroom_media_paused
+                          data:
+                            skip_condition: true
+                          action: automation.trigger
+                - alias: Google Nest Hub uitspreken en beeld terug
+                  sequence:
+                    - alias: Stel het volume van de Google Nest Hub in
+                      data:
+                        volume_level: 0.5
+                      action: media_player.volume_set
+                      target:
+                        entity_id: media_player.woonkamer
+                    - data:
+                        media_player_entity_id: media_player.woonkamer
+                        message: >-
+                          {{
+                          states.input_text.brandweer_laatste_p2000_melding_fonetisch.state
+                          }}
+                        language: nl
+                      target:
+                        entity_id: tts.google_nl_nl
+                      alias: Spreek de melding uit op de Google Nest Hub
+                      action: tts.speak
+                    - wait_for_trigger:
+                        - trigger: state
+                          entity_id:
+                            - media_player.woonkamer
+                          to: idle
+                          from: playing
+                      timeout:
+                        hours: 0
+                        minutes: 0
+                        seconds: 15
+                        milliseconds: 0
+                    - alias: Zet het brandweer dashboard weer op de Google Nest Hub
+                      metadata: {}
+                      data:
+                        entity_id: media_player.woonkamer
+                        dashboard_path: kroon-18
+                        view_path: brandweer
+                      action: cast.show_lovelace_view
+          else:
+            - alias: Alarm en Slaapkamer bij mijn ploeg
+              if:
+                - condition: state
+                  entity_id: input_select.brandweer_dienstdoende_ploeg
+                  state: input_select.brandweer_mijn_huidige_ploeg
+                  alias: Kijk of ik momenteel dienst heb
+              then:
+                - parallel:
+                    - if:
+                        - condition: state
+                          entity_id: alarm_control_panel.alarmo
+                          state: armed_home
+                      then:
+                        - data:
+                            entity_id: alarm_control_panel.alarmo
+                          action: alarmo.disarm
+                      alias: Alarm uitschakelen
+                    - alias: Slaapkamer en andere lampen aan
+                      if:
+                        - condition: and
+                          conditions:
+                            - condition: numeric_state
+                              entity_id: cover.slaapkamer_rolluik
+                              attribute: current_position
+                              below: 16
+                            - condition: time
+                              after: "22:00:00"
+                              before: "09:30:00"
+                      then:
+                        - action: light.turn_on
+                          metadata: {}
+                          data:
+                            brightness_pct: 5
+                            transition: 3
+                          target:
+                            entity_id: light.slaapkamer_lampen
+                        - action: light.turn_on
+                          metadata: {}
+                          data:
+                            transition: 0
+                            brightness_pct: 50
+                          target:
+                            entity_id:
+                              - light.eettafel_lampen
+                              - light.entree_lampen
+                              - light.speelkamer_lampen
+                    - data:
+                        qos: 0
+                        retain: false
+                        topic: clock_1/notify
+                        payload: >-
+                          {"icon": 555, "repeat": 4, "text": " {{
+                          states.input_text.brandweer_laatste_melding.state }}",
+                          "scrollSpeed": 50, "sound": "alarm", "stack": false}
+                      alias: Zet het bericht op de klok in de keuken
+                      action: mqtt.publish
+        - alias: Slaapkamer en andere lampen uit
+          if:
+            - condition: numeric_state
+              entity_id: cover.slaapkamer_rolluik
+              attribute: current_position
+              below: 16
+            - condition: time
+              after: "19:30:00"
+              before: "07:00:00"
+          then:
+            - parallel:
+                - sequence:
+                    - wait_for_trigger:
+                        - trigger: state
+                          entity_id:
+                            - binary_sensor.slaapkamer_deur_contact
+                          from: "on"
+                          to: "off"
+                      timeout:
+                        hours: 0
+                        minutes: 1
+                        seconds: 0
+                        milliseconds: 0
+                    - alias: Slaapkamer licht weer uit
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: light.slaapkamer_lampen
+                      action: light.turn_off
+                - sequence:
+                    - alias: Wacht tot Robin thuis weggaat
+                      wait_for_trigger:
+                        - entity_id: person.robin_bohnen
+                          zone: zone.home
+                          event: leave
+                          trigger: zone
+                      timeout:
+                        hours: 0
+                        minutes: 2
+                        seconds: 30
+                        milliseconds: 0
+                      continue_on_timeout: true
+                    - alias: Licht weer uit
+                      data: {}
+                      target:
+                        entity_id:
+                          - light.slaapkamer_lampen
+                          - light.entree_lampen
+                          - light.eettafel_lampen
+                          - light.speelkamer_lampen
+                      action: light.turn_off
+                    - alias: Alarm weer aanzetten
+                      if:
+                        - condition: zone
+                          entity_id: person.samantha_henkelman
+                          zone: zone.home
+                      then:
+                        - metadata: {}
+                          data: {}
+                          action: alarm_control_panel.alarm_arm_home
+                          target:
+                            entity_id: alarm_control_panel.alarmo
+                      else:
+                        - metadata: {}
+                          data: {}
+                          action: alarm_control_panel.alarm_arm_away
+                          target:
+                            entity_id: alarm_control_panel.alarmo
+        - alias: Wacht of ik op de kazerne aankom of deze verlaat
+          if:
+            - alias: Kijk of ik nog niet op de kazerne ben
+              condition: not
+              conditions:
+                - condition: zone
+                  entity_id: person.robin_bohnen
+                  zone: zone.brandweer_kazerne_uden
+          then:
+            - alias: 6 minuten wachten totdat Robin op kazerne is
+              wait_for_trigger:
+                - entity_id: person.robin_bohnen
+                  zone: zone.brandweer_kazerne_uden
+                  event: enter
+                  trigger: zone
+              timeout:
+                hours: 0
+                minutes: 6
+                seconds: 0
+                milliseconds: 0
+              continue_on_timeout: false
+            - alias: Als Robin op de kazerne is
+              if:
+                - alias: Kijk of ik op de kazerne ben
+                  condition: or
+                  conditions:
+                    - condition: zone
+                      entity_id: person.robin_bohnen
+                      zone: zone.brandweer_kazerne_uden
+              then:
+                - if:
+                    - condition: not
+                      conditions:
+                        - condition: state
+                          entity_id: sensor.recente_uitruk_in_agenda
+                          state: "on"
+                      alias: Kijk of er nog geen melding in de agenda staat
+                  then:
+                    - metadata: {}
+                      data:
+                        subject: "{{ states.input_text.brandweer_laatste_melding.state }}"
+                        start: >-
+                          {{
+                          as_local(states.input_text.brandweer_laatste_melding.last_changed)
+                          }}
+                        end: "{{ now() + timedelta(minutes=60) }}"
+                        body: >
+                          Melding binnen om: {{
+                          as_timestamp(as_local(states.input_text.brandweer_laatste_melding.last_changed))
+                          | timestamp_custom('%H:%M:%S') }}<br>
+
+                          Op kazerne om: {{ as_timestamp(now()) |
+                          timestamp_custom('%H:%M:%S') }}<br>
+
+                          Garagedeur dicht om {{
+                          as_timestamp(as_local(states.binary_sensor.speelkamer_openslaande_deuren_contact.last_changed))
+                          | timestamp_custom('%H:%M:%S') }}
+                      target:
+                        entity_id:
+                          - calendar.brandweer_uitrukken_private
+                          - calendar.agenda_business
+                      action: o365.create_calendar_event
+                    - metadata: {}
+                      data:
+                        title: Robin is uitgerukt
+                        message: >-
+                          Naar deze melding; {{
+                          states.input_text.brandweer_laatste_melding.state }}
+                      action: notify.mobile_devices_all
+                    - metadata: {}
+                      data: {}
+                      target:
+                        entity_id: input_boolean.brandweer_uitgerukt
+                      action: input_boolean.turn_on
+                    - metadata: {}
+                      data:
+                        timestamp: "{{ now().timestamp() }}"
+                      target:
+                        entity_id: input_datetime.brandweer_laatste_uitgerukt
+                      action: input_datetime.set_datetime
+                    - metadata: {}
+                      data:
+                        availability: Away
+                      target:
+                        entity_id:
+                          - sensor.teams_status_r_bohnen_vrbn_nl_2
+                          - sensor.teams_status_robin_bohnen_nl_2
+                      action: o365.update_user_preferred_status
+          else:
+            - alias: Als Robin op de kazerne is
+              if:
+                - alias: Controleer of ik echt op de kazerne ben
+                  condition: or
+                  conditions:
+                    - condition: zone
+                      entity_id: person.robin_bohnen
+                      zone: zone.brandweer_kazerne_uden
+              then:
+                - if:
+                    - condition: not
+                      conditions:
+                        - condition: state
+                          entity_id: sensor.recente_uitruk_in_agenda
+                          state: "on"
+                      alias: Kijk of er nog geen melding in de agenda staat
+                  then:
+                    - metadata: {}
+                      data:
+                        subject: "{{ states.input_text.brandweer_laatste_melding.state }}"
+                        start: >-
+                          {{
+                          as_local(states.input_text.brandweer_laatste_melding.last_changed)
+                          }}
+                        end: "{{ now() + timedelta(minutes=60) }}"
+                        body: >
+                          Melding binnen om: {{
+                          as_timestamp(as_local(states.input_text.brandweer_laatste_melding.last_changed))
+                          | timestamp_custom('%H:%M:%S') }}<br>
+
+                          Op kazerne om: Was op de kazerne
+                      target:
+                        entity_id:
+                          - calendar.brandweer_uitrukken_private
+                          - calendar.agenda_business
+                      action: o365.create_calendar_event
+                    - metadata: {}
+                      data:
+                        title: Robin is uitgerukt
+                        message: >-
+                          Naar deze melding; {{
+                          states.input_text.brandweer_laatste_melding.state }}
+                      action: notify.mobile_devices_all
+                    - metadata: {}
+                      data: {}
+                      target:
+                        entity_id: input_boolean.brandweer_uitgerukt
+                      action: input_boolean.turn_on
+                    - metadata: {}
+                      data:
+                        timestamp: "{{ now().timestamp() }}"
+                      target:
+                        entity_id: input_datetime.brandweer_laatste_uitgerukt
+                      action: input_datetime.set_datetime
+                    - metadata: {}
+                      data:
+                        availability: Away
+                      target:
+                        entity_id:
+                          - sensor.teams_status_r_bohnen_vrbn_nl_2
+                          - sensor.teams_status_robin_bohnen_nl_2
+                      action: o365.update_user_preferred_status
+
+    - id: brandweer_webhook_nearby_locations
+      alias: Brandweer - Webhook - Nearby locations
+      description: "Webhook to nearby locations and p2000 notifications"
+      mode: single
+      triggers:
+        - trigger: webhook
+          allowed_methods:
+            - POST
+            - PUT
+          local_only: false
+          webhook_id: brandweer-webhook-near-locations-7e6Up9-Y9lIHyUlBJgW8B97t
+      conditions:
+        - condition: template
+          value_template: >-
+            {% if (trigger.json.p2000_message != states('input_text.brandweer_meldingen_om_uden') and
+            as_timestamp(now()) - as_timestamp(states.input_text.brandweer_meldingen_om_uden.last_changed) > 60) %}
+            true
+            {% else %}
+            false
+            {% endif %}
+      actions:
+        - target:
+            entity_id: input_text.brandweer_meldingen_om_uden
+          data:
+            value: "{{ trigger.json.p2000_message }}"
+          alias: Stel variabele in
+          action: input_text.set_value
+        - metadata: {}
+          data:
+            title: Brandweer {{ trigger.json.capcode_description }}
+            message: "{{ trigger.json.p2000_message }}"
+          action: notify.notify
+
+    - id: brandweer_webhook_region
+      alias: Brandweer - Webhook - Region
+      description: "Webhook to whole region and p2000 notifications"
+      mode: single
+      triggers:
+        - trigger: webhook
+          allowed_methods:
+            - POST
+            - PUT
+          local_only: false
+          webhook_id: brandweer-webhook-region-tkyn1PPbQpyFtyoE-ltTj3oz
+      conditions:
+        - condition: template
+          value_template: >-
+            {% if (trigger.json.p2000_message != states('input_text.brandweer_laatste_p2000_melding') and
+            as_timestamp(now()) - as_timestamp(states.input_text.brandweer_laatste_p2000_melding.last_changed) > 60) %}
+            true
+            {% else %}
+            false
+            {% endif %}
+      actions:
+        - if:
+            - condition: template
+              value_template: >-
+                {% if trigger.json.p2000_message[:2]|upper != "B1" and
+                trigger.json.p2000_message[:4]|upper != "TEST" and
+                trigger.json.p2000_message[:4]|upper != "TE5T" and
+                trigger.json.p2000_message[:2]|upper != "B2" and
+                trigger.json.p2000_message[:2]|upper != "A2"  %}
+                true
+                {% else %}
+                false
+                {% endif %}
+          then:
+            - action: notify.pushover
+              metadata: {}
+              data:
+                title: "{{ trigger.json.capcode_description }}"
+                message: "{{ trigger.json.p2000_message }}"
+                data:
+                  priority: 0
+            - action: input_text.set_value
+              metadata: {}
+              data:
+                value: "{{ trigger.json.p2000_message }}"
+              target:
+                entity_id: input_text.brandweer_laatste_p2000_melding
+            - action: input_text.set_value
+              metadata: {}
+              data:
+                value: "{{ trigger.json.p2000_message_phonetic }}"
+              target:
+                entity_id: input_text.brandweer_laatste_p2000_melding_fonetisch
+
+    - id: brandweer_tts_nesthub
+      alias: Brandweer - TTS on Nest Hub Livingroom
+      description: "TTS on Nest Hub in the livingroom if door opens"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.entree_deur_contact
+          from: "off"
+          to: "on"
+      conditions:
+        - condition: numeric_state
+          entity_id: cover.slaapkamer_rolluik
+          attribute: current_position
+          below: 16
+        - alias: Kijk of de laatste wijzigingen minder dan 2 minuten geleden was
+          condition: template
+          value_template: >-
+            {{ (now() -
+            states.input_text.brandweer_laatste_melding.last_changed).total_seconds()
+            < 2 * 60 }}
+      actions:
+        - parallel:
+            - alias: Zet het bericht op de klok in de keuken
+              data:
+                qos: 0
+                retain: false
+                topic: clock_1/notify
+                payload: >-
+                  {"icon": 555, "repeat": 4, "text": " {{
+                  states.input_text.brandweer_laatste_melding.state }}",
+                  "scrollSpeed": 50, "stack": false}
+              action: mqtt.publish
+            - alias: Google Nest Hub uitspreken en beeld terug
+              sequence:
+                - alias: Stel het volume van de Google Nest Hub in
+                  target:
+                    entity_id:
+                      - media_player.woonkamer
+                  data:
+                    volume_level: 0.5
+                  action: media_player.volume_set
+                - data:
+                    media_player_entity_id: media_player.woonkamer
+                    message: >-
+                      {{ states.input_text.brandweer_laatste_melding_fonetisch.state
+                      }}
+                    language: nl
+                  target:
+                    entity_id: tts.google_nl_nl
+                  alias: Spreek de melding uit op de Google Nest Hub
+                  action: tts.speak
+                - wait_for_trigger:
+                    - trigger: state
+                      entity_id:
+                        - media_player.woonkamer
+                      to: idle
+                  timeout:
+                    hours: 0
+                    minutes: 0
+                    seconds: 45
+                    milliseconds: 0
+                  alias: Wacht tot Google Nest Hub klaar is met afspelen bericht
+                - alias: Zet het brandweer dashboard weer op de Google Nest Hub
+                  metadata: {}
+                  data:
+                    entity_id: media_player.woonkamer
+                    dashboard_path: kroon-18
+                    view_path: brandweer
+                  action: cast.show_lovelace_view
+
+    - id: brandweer_count_teams
+      alias: Brandweer - Counter Teams
+      description: "Plus counter if team is called"
+      mode: single
+      triggers:
+        - entity_id:
+            - input_text.brandweer_laatste_melding
+          trigger: state
+      conditions:
+        - condition: template
+          value_template: >-
+            {% if 'TESTMELDING' in states.input_text.brandweer_laatste_melding.state %}
+            false
+            {% else %}
+            true
+            {% endif %}
+      actions:
+        - choose:
+            - conditions:
+                - condition: state
+                  entity_id: input_select.brandweer_dienstdoende_ploeg
+                  state: A Ploeg
+              sequence:
+                - action: counter.increment
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: counter.brandweer_uden_a_ploeg_uitrukken
+            - conditions:
+                - condition: state
+                  entity_id: input_select.brandweer_dienstdoende_ploeg
+                  state: B Ploeg
+              sequence:
+                - action: counter.increment
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: counter.brandweer_uden_b_ploeg_uitrukken
+            - conditions:
+                - condition: state
+                  entity_id: input_select.brandweer_dienstdoende_ploeg
+                  state: C Ploeg
+              sequence:
+                - action: counter.increment
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: counter.brandweer_uden_c_ploeg_uitrukken
+
+    - id: brandweer_count_incidents
+      alias: Brandweer - Count my incidents
+      description: "Add 1 to counter of my own incidents"
+      triggers:
+        - entity_id:
+            - input_boolean.brandweer_uitgerukt
+          to: "on"
+          trigger: state
+      conditions:
+        - condition: template
+          value_template: >-
+            {% if 'TESTMELDING' in states.input_text.brandweer_laatste_melding.state %}
+            false
+            {% elif 'INTREKKEN' in states.input_text.brandweer_laatste_melding.state %}
+            false
+            {% else %}
+            true
+            {% endif %}
+      actions:
+        - action: counter.increment
+          metadata: {}
+          data: {}
+          target:
+            entity_id: counter.brandweer_totaal_aantal_uitrukken
+      mode: single
+
+    - id: brandweer_extend_calendar
+      alias: Brandweer - Extend Calendar Appointment
+      description: "Auto extend the appointment if still at incident"
+      mode: single
+      triggers:
+        - minutes: /5
+          trigger: time_pattern
+      conditions:
+        - condition: state
+          entity_id: input_boolean.brandweer_uitgerukt
+          state: "on"
+      actions:
+        - data:
+            event_id: "{{ state_attr('sensor.recente_uitruk_in_agenda','uid') }}"
+            subject: "{{ state_attr('sensor.recente_uitruk_in_agenda','summary') }}"
+            end: >-
+              {{ (as_timestamp(now()) + (60*20)  | float) |
+              timestamp_custom('%Y-%m-%dT%H:%M:%S') }}
+          target:
+            entity_id: calendar.brandweer_uitrukken_private
+          action: o365.modify_calendar_event
+        - data:
+            event_id: "{{ state_attr('sensor.recente_uitruk_in_agenda_vrbn','uid') }}"
+            subject: "{{ state_attr('sensor.recente_uitruk_in_agenda_vrbn','summary') }}"
+            end: >-
+              {{ (as_timestamp(now()) + (60*20)  | float) |
+              timestamp_custom('%Y-%m-%dT%H:%M:%S') }}
+          target:
+            entity_id: calendar.agenda_business
+          action: o365.modify_calendar_event
+
+    - id: brandweer_back_at_station
+      alias: Brandweer - Back at Station
+      description: Cancel incident if back at the firestation
+      mode: single
+      triggers:
+        - entity_id: person.robin_bohnen
+          zone: zone.brandweer_kazerne_uden
+          event: enter
+          trigger: zone
+        - entity_id: person.robin_bohnen
+          zone: zone.home
+          event: enter
+          trigger: zone
+      conditions:
+        - condition: state
+          entity_id: input_boolean.brandweer_uitgerukt
+          state: "on"
+      actions:
+        - metadata: {}
+          data: {}
+          target:
+            entity_id: input_boolean.brandweer_uitgerukt
+          action: input_boolean.turn_off
+        - metadata: {}
+          data:
+            title: Robin is weer terug van de uitruk
+            message: Robin is terug op de kazerne / thuis van de brandweer melding.
+          action: notify.notify
+        - data:
+            event_id: "{{ state_attr('sensor.recente_uitruk_in_agenda_vrbn','uid') }}"
+            end: "{{ now() }}"
+            subject: "{{ state_attr('sensor.recente_uitruk_in_agenda_vrbn','summary') }}"
+          target:
+            entity_id: calendar.agenda_business
+          action: o365.modify_calendar_event
+        - data:
+            event_id: "{{ state_attr('sensor.recente_uitruk_in_agenda','uid') }}"
+            end: "{{ now() }}"
+            subject: "{{ state_attr('sensor.recente_uitruk_in_agenda','summary') }}"
+          target:
+            entity_id: calendar.brandweer_uitrukken_private
+          action: o365.modify_calendar_event
+        - metadata: {}
+          data:
+            availability: Available
+          target:
+            entity_id:
+              - sensor.teams_status_r_bohnen_vrbn_nl_2
+              - sensor.teams_status_robin_bohnen_nl_2
+          action: o365.update_user_preferred_status

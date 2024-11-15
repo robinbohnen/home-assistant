@@ -1,0 +1,81 @@
+corridor_lights_package:
+
+  input_number:
+    lights_corridor_percentage:
+      name: "Lights Corridor - Percentage"
+      min: 0
+      max: 100
+      step: 1
+      initial: 80
+      icon: mdi:lightbulb-on-70
+
+  input_boolean:
+    enable_pir_corridor:
+      name: "PIR in Corridor"
+      initial: on
+      icon: mdi:motion-sensor
+
+  automation:
+    - id: lights_movement_corridor
+      alias: Corridor - Lights
+      description: "Turn on the lights of the corridor if there is movement detected"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.overloop_beweging_occupancy
+          to: "on"
+          id: beweging
+        - trigger: state
+          entity_id: binary_sensor.overloop_beweging_occupancy
+          to: "off"
+          for:
+            hours: 0
+            minutes: 2
+            seconds: 0
+          id: geenbeweging
+      conditions:
+        - condition: state
+          entity_id: input_boolean.enable_pir_corridor
+          state: "on"
+        - condition: not
+          conditions:
+            - condition: time
+              after: input_datetime.bedtime_maxi
+              before: "07:15:00"
+        - condition: not
+          conditions:
+            - condition: time
+              after: input_datetime.bedtime_mini
+              before: "07:15:00"
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - beweging
+              sequence:
+                - action: light.turn_on
+                  metadata: {}
+                  data:
+                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+                    brightness_pct: "{{ states('input_number.lights_corridor_percentage')|int }}"
+                  target:
+                    entity_id: light.overloop_lampen
+            - conditions:
+                - condition: trigger
+                  id:
+                    - geenbeweging
+              sequence:
+                - action: light.turn_off
+                  metadata: {}
+                  data:
+                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+                  target:
+                    entity_id: light.overloop_lampen
+          default:
+            - action: light.toggle
+              metadata: {}
+              data:
+                transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+              target:
+                entity_id: light.overloop_lampen

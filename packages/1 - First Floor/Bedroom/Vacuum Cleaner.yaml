@@ -1,0 +1,30 @@
+vacuum_bedroom_package:
+  automation:
+    - id: vacuum_bedroom_docked
+      alias: Bedroom - Vacuum undocked
+      description: "Notify if vacuum is not docked"
+      triggers:
+        - at: "18:15:00"
+          trigger: time
+      conditions:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: vacuum.roombaslaapkamer
+              state: docked
+        - condition: or
+          conditions:
+            - condition: zone
+              entity_id: person.robin_bohnen
+              zone: zone.home
+            - condition: zone
+              entity_id: !secret person_partner
+              zone: zone.home
+      actions:
+        - action: notify.mobile_devices_adults
+          data:
+            title: Slaapkamer Stofzuiger
+            message: >-
+              De Roomba stofzuiger op de slaapkamer staat niet op zijn dock. Zet deze
+              goed op het dock om morgen te stofzuigen.
+      mode: single

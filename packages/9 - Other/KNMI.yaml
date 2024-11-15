@@ -1,0 +1,28 @@
+knmi_package:
+  automation:
+    id: 'knmi_weeralarm'
+    alias: General - KNMI Weather alarm
+    description: ""
+    triggers:
+      - trigger: state
+        entity_id:
+          - binary_sensor.knmi_waarschuwing
+    conditions:
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: binary_sensor.knmi_waarschuwing
+            state: " Er zijn momenteel geen waarschuwingen van kracht."
+            attribute: description
+          - condition: state
+            entity_id: binary_sensor.knmi_waarschuwing
+            state: Er zijn momenteel geen waarschuwingen van kracht.
+            attribute: description
+        alias: Als er wel een waarschuwing is
+    actions:
+      - action: notify.mobile_devices_adults
+        metadata: {}
+        data:
+          title: KNMI geeft een weeralarm af
+          message: "{{ state_attr('binary_sensor.knmi_waarschuwing','description') }}"
+    mode: single

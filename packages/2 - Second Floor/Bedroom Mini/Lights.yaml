@@ -1,0 +1,85 @@
+bedroom_mini_lights_package:
+
+  input_number:
+    lights_bedroom_mini_percentage:
+      name: "Lights Bedroom Mini - Percentage"
+      min: 0
+      max: 100
+      step: 1
+      initial: 80
+      icon: mdi:lightbulb-on-70
+
+  automation:
+    - id: bedroom_mini_lights
+      alias: Bedroom Mini - Lights
+      description: "Switch the lights in minis bedroom"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - sensor.knop_slaapkamer_mini_action
+          to: single
+        - trigger: state
+          entity_id:
+            - sensor.knop_slaapkamer_mini_action
+          to: double
+        - trigger: state
+          entity_id:
+            - sensor.knop_slaapkamer_mini_action
+          to: hold
+      conditions: []
+      actions:
+        - action: light.toggle
+          metadata: {}
+          data: {}
+          target:
+            entity_id: light.slaapkamer_mini_lampen
+
+    - id: bedroom_mini_lights_doors_closed
+      alias: Bedroom Mini - Lights off door closed
+      description: "When mini closed her door turn off the lights during sunset"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.slaapkamer_mini_deur_contact
+          to: "off"
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.badkamer_deur_contact
+          state: "off"
+        - condition: sun
+          before: sunrise
+          after: sunset
+      actions:
+        - action: light.turn_off
+          metadata: {}
+          data: {}
+          target:
+            entity_id:
+              - light.overloop_lampen
+              - light.overloop_zolder_lampen
+
+    - id: bedroom_mini_lights_doors_open
+      alias: Bedroom Mini - Lights on door opened
+      description: "When mini opens her door turn on the lights during sunset"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.slaapkamer_mini_deur_contact
+          to: "on"
+      conditions:
+        - condition: sun
+          before: sunrise
+          after: sunset
+      actions:
+        - action: light.turn_on
+          metadata: {}
+          data:
+            transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+            brightness_pct: "{{ states('input_number.lights_bedroom_mini_percentage')|int }}"
+          target:
+            entity_id:
+              - light.overloop_lampen
+              - light.overloop_zolder_lampen

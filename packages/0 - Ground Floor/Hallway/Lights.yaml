@@ -1,0 +1,134 @@
+hallway_lights_package:
+
+  group:
+    door_sensors_hallway:
+      name: Door Group Hallway
+      icon: mdi:door-open
+      entities:
+        - binary_sensor.entree_deur_contact
+        - binary_sensor.toilet_deur_contact
+        - binary_sensor.entree_voordeur_contact
+
+  input_number:
+    lights_hallway_percentage:
+      name: "Lights Hallway - Percentage"
+      min: 0
+      max: 100
+      step: 1
+      initial: 80
+      icon: mdi:lightbulb-on-70
+
+  input_boolean:
+    enable_pir_hallway:
+      name: "PIR in Hallway"
+      initial: on
+      icon: mdi:motion-sensor
+
+  automation:
+    - id: lights_movement_hallway
+      alias: Hallway - Lights
+      description: "Turn on the lights of the hallway if there is movement detected"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.entree_beweging_occupancy
+          to: "on"
+          id: beweging
+        - trigger: state
+          entity_id: binary_sensor.entree_beweging_occupancy
+          to: "off"
+          for:
+            hours: 0
+            minutes: 2
+            seconds: 0
+          id: geenbeweging
+        - trigger: state
+          entity_id: binary_sensor.badkamer_deur_contact
+          to: "on"
+          id: deur_open
+      conditions:
+        - condition: state
+          entity_id: input_boolean.enable_pir_hallway
+          state: "on"
+        - condition: not
+          conditions:
+            - condition: time
+              after: "03:00:00"
+              before: "07:15:00"
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: media_player.woonkamer_appletv
+              state: playing
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - beweging
+                    - deur_open
+              sequence:
+                - action: light.turn_on
+                  metadata: {}
+                  data:
+                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+                    brightness_pct: "{{ states('input_number.lights_hallway_percentage')|int }}"
+                  target:
+                    entity_id: light.entree_lampen
+            - conditions:
+                - condition: trigger
+                  id:
+                    - geenbeweging
+              sequence:
+                - action: light.turn_off
+                  metadata: {}
+                  data:
+                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+                  target:
+                    entity_id: light.entree_lampen
+          default:
+            - action: light.toggle
+              metadata: {}
+              data:
+                transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+              target:
+                entity_id: light.entree_lampen
+
+    - id: lights_change_brightness_hallway
+      alias: Hallway - Lights Change Brightness
+      description: "Change the brightness at sunset and sunrise in the hallway"
+      mode: single
+      triggers:
+        - trigger: sun
+          event: sunset
+          offset: 0
+          id: sunset
+        - trigger: sun
+          event: sunrise
+          offset: 0
+          id: sunrise
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - sunset
+              sequence:
+                - action: input_number.set_value
+                  metadata: {}
+                  data:
+                    value: 5
+                  target:
+                    entity_id: input_number.lights_hallway_percentage
+            - conditions:
+                - condition: trigger
+                  id:
+                    - sunrise
+              sequence:
+                - action: input_number.set_value
+                  metadata: {}
+                  data:
+                    value: 80
+                  target:
+                    entity_id: input_number.lights_hallway_percentage

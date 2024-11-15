@@ -1,0 +1,40 @@
+frontyard_movement_package:
+  automation:
+    - id: lights_movement_carport
+      alias: Frontyard - Movement Lights
+      description: "Turn up the brightness of the lights at the frontyard"
+      triggers:
+        - trigger: state
+          entity_id:
+            - switch.g5_ultra_turret_voortuin_detections_person
+          to: "on"
+      conditions:
+        - condition: state
+          entity_id: light.carport_lampen
+          state: "on"
+      actions:
+        - action: scene.create
+          metadata: {}
+          data:
+            scene_id: carport_previous_state
+            snapshot_entities:
+              - light.carport_lampen
+              - light.voortuin_lampen
+        - action: light.turn_on
+          metadata: {}
+          data:
+            brightness_pct: 100
+          target:
+            entity_id:
+              - light.carport_lampen
+              - light.voortuin_lampen
+        - delay:
+            hours: 0
+            minutes: 0
+            seconds: 30
+            milliseconds: 0
+        - action: scene.turn_on
+          metadata: {}
+          target:
+            entity_id: scene.carport_previous_state
+      mode: single

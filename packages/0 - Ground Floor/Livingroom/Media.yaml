@@ -1,0 +1,174 @@
+livingroom_media_package:
+
+  input_number:
+    tv_playing_percentage:
+      name: "TV Playing Lights Percentage"
+      min: 0
+      max: 100
+      step: 1
+      initial: 20
+      icon: mdi:lightbulb-on-70
+
+  input_boolean:
+    changed_tv_volume:
+      name: "TV Volume changed"
+      initial: off
+      icon: mdi:remote-tv
+
+  automation:
+
+    - id: livingroom_media_playing
+      alias: Livingroom - Media Playing
+      description: "When Apple TV starts playing, dim all lights"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - media_player.woonkamer_appletv
+          to: playing
+      conditions:
+        - condition: or
+          conditions:
+            - condition: not
+              conditions:
+                - condition: sun
+                  before: sunset
+                  before_offset: "-01:00:00"
+                  after: sunrise
+                  after_offset: "-01:00:00"
+            - condition: time
+              after: "18:30:00"
+              before: "05:00:00"
+      actions:
+        - action: media_player.unjoin
+          metadata: {}
+          data: {}
+          target:
+            entity_id:
+              - media_player.badkamer_sonos
+              - media_player.eettafel_sonos
+              - media_player.entree_sonos
+              - media_player.garage_sonos
+              - media_player.kantoor_sonos
+              - media_player.keuken_sonos
+              - media_player.keuken_sonos_2
+              - media_player.slaapkamer_mini_sonos
+              - media_player.slaapkamer_maxi_sonos
+              - media_player.speelkamer_sonos
+              - media_player.toilet_sonos
+        - if:
+            - condition: state
+              entity_id: input_boolean.changed_tv_volume
+              state: "off"
+          then:
+            - action: media_player.volume_set
+              metadata: {}
+              data:
+                volume_level: 0.15
+              target:
+                entity_id: media_player.woonkamer_sonos
+            - action: input_boolean.turn_on
+              metadata: {}
+              data: {}
+              target:
+                entity_id: input_boolean.changed_tv_volume
+        - action: light.turn_on
+          metadata: {}
+          data:
+            transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+            brightness_pct: "{{ states('input_number.tv_playing_percentage')|int }}"
+          target:
+            entity_id:
+              - light.woonkamer_lampen
+              - light.keuken_lampen
+              - light.eettafel_lampen
+        - action: light.turn_off
+          metadata: {}
+          data: {}
+          target:
+            entity_id:
+              - light.entree_lampen
+              - light.speelkamer_lampen
+              - light.garage_lampen
+              - light.trapkast_lampen
+              - light.woonkamer_salontafel_humble
+        - action: light.turn_on
+          metadata: {}
+          data:
+            brightness_pct: 1
+          target:
+            entity_id: light.awtrix_121d6c_matrix
+        - if:
+            - condition: state
+              entity_id: switch.speelkamer_aquarium_zuurstofpomp
+              state: "on"
+          then:
+            - action: switch.turn_off
+              metadata: {}
+              data: {}
+              target:
+                entity_id: switch.speelkamer_aquarium_zuurstofpomp
+
+    - id: livingroom_media_paused
+      alias: Livingroom - Media Paused
+      description: "When Apple TV is paused, reset all lights"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - media_player.woonkamer_appletv
+          to: paused
+        - trigger: state
+          entity_id:
+            - media_player.woonkamer_appletv
+          to: idle
+      conditions: []
+      actions:
+        - action: light.turn_on
+          metadata: {}
+          data:
+            transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+            brightness_pct: "{{ states('input_number.lights_livingroom_percentage')|int }}"
+          target:
+            entity_id:
+              - light.woonkamer_lampen
+              - light.eettafel_lampen
+              - light.keuken_lampen
+        - action: light.turn_on
+          metadata: {}
+          data:
+            brightness_pct: 50
+          target:
+            entity_id: light.awtrix_121d6c_matrix
+
+    - id: livingroom_tv_on
+      alias: Livingroom - Media TV On
+      description: 'Unjoin everything if TV is turned on'
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - media_player.samsung_tv_woonkamer_2
+          to: "on"
+        - trigger: state
+          entity_id:
+            - media_player.woonkamer_appletv
+          to: playing
+      conditions: []
+      actions:
+        - action: media_player.unjoin
+          metadata: {}
+          data: {}
+          target:
+            entity_id:
+              - media_player.entree_sonos
+              - media_player.badkamer_sonos
+              - media_player.eettafel_sonos
+              - media_player.garage_sonos
+              - media_player.kantoor_sonos
+              - media_player.keuken_sonos
+              - media_player.keuken_sonos_2
+              - media_player.slaapkamer_mini_sonos
+              - media_player.slaapkamer_maxi_sonos
+              - media_player.speelkamer_sonos
+              - media_player.toilet_sonos

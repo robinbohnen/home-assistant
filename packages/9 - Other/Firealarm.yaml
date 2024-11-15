@@ -1,0 +1,134 @@
+firealarm_package:
+
+  group:
+
+    nest_protects:
+      name: All Nest Protect firealarms
+      icon: mdi:smoke-detector-variant
+      entities:
+        - binary_sensor.nest_protect_hallway_smoke_status
+        - binary_sensor.nest_protect_garage_smoke_status
+        - binary_sensor.nest_protect_upstairs_smoke_status
+        - binary_sensor.nest_protect_cv_kast_smoke_status
+        - binary_sensor.nest_protect_zolder_smoke_status
+        - binary_sensor.nest_protect_hallway_co_status
+        - binary_sensor.nest_protect_garage_co_status
+        - binary_sensor.nest_protect_upstairs_co_status
+        - binary_sensor.nest_protect_cv_kast_co_status
+        - binary_sensor.nest_protect_zolder_co_status
+
+    all_lights:
+      name: All Lights
+      icon: mdi:alarm-light-outline
+      entities:
+        - light.achtertuin_lampen
+        - light.badkamer_lampen
+        - light.carport_lampen
+        - light.eettafel_lampen
+        - light.entree_lampen
+        - light.garage_lampen
+        - light.kantoor_lampen
+        - light.keuken_lampen
+        - light.overloop_lampen
+        - light.overloop_zolder_lampen
+        - light.slaapkamer_lampen
+        - light.slaapkamer_mini_lampen
+        - light.slaapkamer_maxi_lampen
+        - light.speelkamer_lampen
+        - light.trapkast_lampen
+        - light.voortuin_lampen
+        - light.beneden_lampen
+        - light.woonkamer_lampen
+
+    all_windows:
+      name: All Windows
+      icon: mdi:window-open
+      entities:
+        - binary_sensor.badkamer_raam_contact
+        - binary_sensor.kantoor_raam_links_contact
+        - binary_sensor.kantoor_raam_rechts_contact
+        - binary_sensor.keuken_raam_groot_contact
+        - binary_sensor.keuken_raam_klein_contact
+        - binary_sensor.slaapkamer_raam_links_contact
+        - binary_sensor.slaapkamer_raam_rechts_contact
+        - binary_sensor.slaapkamer_mini_dakraam_contact
+        - binary_sensor.slaapkamer_mini_raam_contact
+        - binary_sensor.slaapkamer_maxi_raam_links_contact
+        - binary_sensor.slaapkamer_maxi_raam_rechts_contact
+
+    all_doors:
+      name: All Doors
+      icon: mdi:door-open
+      entities:
+        - binary_sensor.badkamer_deur_contact
+        - binary_sensor.entree_deur_contact
+        - binary_sensor.kantoor_deur_contact
+        - binary_sensor.slaapkamer_deur_contact
+        - binary_sensor.slaapkamer_mini_deur_contact
+        - binary_sensor.slaapkamer_maxi_deur_contact
+        - binary_sensor.toilet_deur_contact
+        - binary_sensor.entree_voordeur_contact
+        - binary_sensor.garage_achterdeur_contact
+        - binary_sensor.woonkamer_achterdeur_buiten_contact
+        - binary_sensor.speelkamer_openslaande_deuren_contact
+        - binary_sensor.woonkamer_openslaande_deuren_contact
+
+  automation:
+    - id: open_covers_firealarm
+      alias: General - Fire or CO alarm
+      description: "Do a lot of things when firealarm is triggered to make sure everyone stays safe"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - group.nest_protects
+          to: "on"
+      conditions: []
+      actions:
+        - action: cover.open_cover
+          metadata: {}
+          data: {}
+          target:
+            entity_id: group.covers_upstairs
+        - action: light.turn_on
+          metadata: {}
+          data:
+            brightness_pct: "100"
+          target:
+            entity_id: group.all_lights
+        - if:
+            - condition: state
+              entity_id: group.all_windows
+              state: "on"
+          then:
+            - action: notify.mobile_devices_adults
+              metadata: {}
+              data:
+                message: >-
+                  Er zijn nog ramen open, sluit deze en ga zo snel mogelijk naar
+                  buiten.
+                title: Brandalarm!
+                data:
+                  push:
+                    sound:
+                      name: default
+                      critical: 1
+                      volume: 1
+        - if:
+            - condition: state
+              entity_id: group.all_doors
+              state: "on"
+          then:
+            - action: notify.mobile_devices_adults
+              metadata: {}
+              data:
+                message: >-
+                  Er zijn nog deuren open, sluit deze en ga zo snel mogelijk naar
+                  buiten.
+                title: Brandalarm!
+                data:
+                  push:
+                    sound:
+                      name: default
+                      critical: 1
+                      volume: 1

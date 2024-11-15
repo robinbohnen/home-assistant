@@ -1,0 +1,253 @@
+general_alarm_automations_package:
+  automation:
+    - id: 'automate_stuff_alarm_on'
+      alias: General - Alarm or lock on Automate Stuff
+      description: "When alarm is turned on; automate a lot of different things (maybe relocate later)"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_away
+          id: armed_away
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_home
+          id: armed_home
+        - trigger: state
+          entity_id:
+            - lock.kroon18voordeur
+          to: locked
+          id: locked
+          for:
+            hours: 0
+            minutes: 1
+            seconds: 0
+      conditions:
+        - condition: or
+          conditions:
+            - condition: and
+              conditions:
+                - condition: numeric_state
+                  entity_id: zone.home
+                  below: 1
+                - condition: trigger
+                  id:
+                    - locked
+                    - armed_away
+            - condition: and
+              conditions:
+                - condition: numeric_state
+                  entity_id: zone.home
+                  above: 0
+                - condition: trigger
+                  id:
+                    - armed_home
+      actions:
+        - action: light.turn_off
+          metadata: {}
+          data: {}
+          target:
+            entity_id:
+              - light.woonkamer_lampen
+              - light.speelkamer_lampen
+              - light.garage_lampen
+              - light.badkamer_lampen
+              - light.keuken_lampen
+              - light.eettafel_lampen
+              - light.slaapkamer_lampen
+              - light.overloop_lampen
+              - light.overloop_zolder_lampen
+              - light.slaapkamer_mini_lampen
+              - light.slaapkamer_maxi_lampen
+              - light.toilet_lampen
+              - light.entree_lampen
+              - light.trapkast_lampen
+              - light.kantoor_lampen
+          alias: Turn off all lights
+        - if:
+            - condition: state
+              entity_id: lock.kroon18voordeur
+              state: unlocked
+          then:
+            - action: lock.lock
+              metadata: {}
+              data: {}
+              target:
+                entity_id: lock.kroon18voordeur
+          alias: Lock door
+        - if:
+            - condition: state
+              entity_id: switch.luchtreinigers_stopcontacten
+              state: "off"
+          then:
+            - action: switch.turn_on
+              metadata: {}
+              data: {}
+              target:
+                entity_id: switch.luchtreinigers_stopcontacten
+          alias: Air cleaners on
+        - if:
+            - condition: state
+              entity_id: switch.linea_micra
+              state: "on"
+          then:
+            - action: switch.turn_off
+              metadata: {}
+              data: {}
+              target:
+                entity_id: switch.linea_micra
+          alias: Turn off coffee machine
+        - action: media_player.turn_off
+          metadata: {}
+          data: {}
+          target:
+            entity_id: media_player.woonkamer
+        - if:
+            - condition: state
+              entity_id: binary_sensor.keuken_raam_groot_contact
+              state: "off"
+          then:
+            - action: cover.close_cover
+              metadata: {}
+              data: {}
+              target:
+                entity_id:
+                  - cover.rollerblind_0001
+          alias: Close curtains left
+        - if:
+            - condition: state
+              entity_id: binary_sensor.keuken_raam_klein_contact
+              state: "off"
+          then:
+            - action: cover.close_cover
+              metadata: {}
+              data: {}
+              target:
+                entity_id:
+                  - cover.rollerblind_0002
+          alias: Close curtains right
+        - action: automation.trigger
+          metadata: {}
+          data:
+            skip_condition: true
+          target:
+            entity_id: automation.general_open_or_close_all_covers
+        - action: media_player.media_stop
+          metadata: {}
+          data: {}
+          target:
+            entity_id:
+              - media_player.badkamer_sonos
+              - media_player.eettafel_sonos
+              - media_player.entree_sonos
+              - media_player.garage_sonos
+              - media_player.keuken_sonos
+              - media_player.keuken_sonos_2
+              - media_player.toilet_sonos
+              - media_player.kantoor_sonos
+              - media_player.woonkamer_sonos
+              - media_player.speelkamer_sonos
+              - media_player.slaapkamer_mini_sonos
+              - media_player.slaapkamer_maxi_sonos
+          alias: Turn off all media
+
+    - id: 'automate_stuff_alarm_off'
+      alias: General - Alarm or lock off Automate Stuff
+      description: >-
+        When alarm is turned off; automate a lot of different things (maybe relocate
+        later)
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - lock.kroon18voordeur
+          to: unlocked
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: disarmed
+      conditions:
+        - condition: numeric_state
+          entity_id: zone.home
+          above: 0
+      actions:
+        - if:
+            - condition: or
+              conditions:
+                - condition: state
+                  entity_id: alarm_control_panel.alarmo
+                  state: armed_away
+                - condition: state
+                  entity_id: alarm_control_panel.alarmo
+                  state: armed_home
+          then:
+            - action: alarm_control_panel.alarm_disarm
+              metadata: {}
+              data: {}
+              target:
+                entity_id: alarm_control_panel.alarmo
+          alias: Turn off alarm
+
+        - if:
+            - condition: state
+              entity_id: light.woonkamer_lampen
+              state: "off"
+          then:
+            - action: light.turn_on
+              metadata: {}
+              data:
+                transition: 3
+              target:
+                entity_id:
+                  - light.woonkamer_lampen
+                  - light.keuken_lampen
+                  - light.eettafel_lampen
+              alias: Turn on lights
+          alias: Turn on lights
+
+        - action: automation.trigger
+          metadata: {}
+          data:
+            skip_condition: true
+          target:
+            entity_id: automation.general_open_or_close_all_covers
+
+        - if:
+            - condition: and
+              conditions:
+                - condition: sun
+                  before: sunset
+                - condition: time
+                  after: "07:15:00"
+          then:
+            - if:
+                - condition: or
+                  conditions:
+                    - condition: state
+                      entity_id: media_player.woonkamer_sonos
+                      state: idle
+                    - condition: state
+                      entity_id: media_player.woonkamer_sonos
+                      state: paused
+              then:
+                - action: automation.trigger
+                  metadata: {}
+                  data:
+                    skip_condition: true
+                  target:
+                    entity_id: automation.general_play_default_music
+              alias: Speel muziek
+          alias: Als de zon nog niet onder is
+        - if:
+            - condition: state
+              entity_id: switch.luchtreinigers_stopcontacten
+              state: "on"
+          then:
+            - action: switch.turn_off
+              metadata: {}
+              data: {}
+              target:
+                entity_id: switch.luchtreinigers_stopcontacten
+          alias: Air cleaners off

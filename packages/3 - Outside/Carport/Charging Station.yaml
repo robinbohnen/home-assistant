@@ -1,0 +1,60 @@
+carport_charging_station_package:
+  rest_command:
+    start_charging:
+      url: "https://slimhuys.nl/laadpaal24.php?action=start"
+    stop_charging:
+      url: "https://slimhuys.nl/laadpaal24.php?action=stop"
+    stop_charging_if_full:
+      url: "https://slimhuys.nl/laadpaal24.php?action=stop_if_full"
+    112hooktest:
+      url: "https://112hook.nl/send_test/1/lpd0q615vqmqr7rp69t5nxrpzpldz1zm"
+
+  automation:
+    - id: carport_charging_station_charge
+      alias: Carport - Charging Station Charge
+      description: Start and stop charging at certain times
+      mode: single
+      triggers:
+        - at: "22:00:00"
+          trigger: time
+          id: start
+        - trigger: time
+          at: "06:15:00"
+          id: stop_6
+        - trigger: time
+          at: "08:00:00"
+          id: stop_8
+        - trigger: time_pattern
+          hours: /1
+          id: get_usage
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - start
+              sequence:
+                - data: {}
+                  action: rest_command.start_charging
+            - conditions:
+                - condition: trigger
+                  id:
+                    - stop_6
+                    - stop_8
+              sequence:
+                - data: {}
+                  action: rest_command.stop_charging_if_full
+            - conditions:
+                - condition: trigger
+                  id:
+                    - get_usage
+              sequence:
+                - action: homeassistant.update_entity
+                  metadata: {}
+                  data:
+                    entity_id:
+                      - sensor.laadpaal_verbruik
+          default:
+            - data: {}
+              action: rest_command.start_charging

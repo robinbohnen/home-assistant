@@ -1,0 +1,90 @@
+music_package:
+  automation:
+    - id: play_music
+      alias: General - Play Default Music
+      description: "Play default music automation"
+      mode: single
+      triggers:
+        - trigger: time
+          at: "09:00:00"
+      conditions:
+        - condition: numeric_state
+          entity_id: zone.home
+          above: 0
+      actions:
+        - action: media_player.volume_set
+          metadata: {}
+          data:
+            volume_level: 0.05
+          target:
+            entity_id:
+              - media_player.badkamer_sonos
+              - media_player.garage_sonos
+              - media_player.keuken_sonos
+              - media_player.keuken_sonos_2
+              - media_player.kantoor_sonos
+              - media_player.slaapkamer_mini_sonos
+              - media_player.slaapkamer_maxi_sonos
+              - media_player.speelkamer_sonos
+              - media_player.woonkamer_sonos
+        - action: media_player.volume_set
+          metadata: {}
+          data:
+            volume_level: 0.2
+          target:
+            entity_id:
+              - media_player.entree_sonos
+              - media_player.eettafel_sonos
+        - action: media_player.play_media
+          metadata:
+            title: Qmusic
+            thumbnail: http://cdn-radiotime-logos.tunein.com/s87683q.png
+            media_class: genre
+            children_media_class: null
+            navigateIds:
+              - {}
+              - media_content_type: favorites
+                media_content_id: ""
+              - media_content_type: favorites_folder
+                media_content_id: object.item.audioItem.audioBroadcast
+          data:
+            media_content_id: FV:2/20
+            media_content_type: favorite_item_id
+          target:
+            entity_id: media_player.woonkamer_sonos
+        - action: media_player.join
+          metadata: {}
+          data:
+            group_members:
+              - media_player.garage_sonos
+              - media_player.speelkamer_sonos
+              - media_player.woonkamer_sonos
+              - media_player.eettafel_sonos
+              - media_player.entree_sonos
+              - media_player.kantoor_sonos
+              - media_player.slaapkamer_maxi_sonos
+              - media_player.slaapkamer_mini_sonos
+              - media_player.keuken_sonos
+              - media_player.keuken_sonos_2
+          target:
+            entity_id: media_player.woonkamer_sonos
+    - id: play_music_tv_off
+      alias: General - Play Default Music TV Off
+      description: "When TV is turned off; play default music"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - media_player.samsung_tv_woonkamer_2
+          to: "off"
+      conditions:
+        - condition: sun
+          before: sunset
+          after: sunrise
+      actions:
+        - action: automation.trigger
+          metadata: {}
+          data:
+            skip_condition: true
+          target:
+            entity_id: automation.general_play_default_music

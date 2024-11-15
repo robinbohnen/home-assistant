@@ -1,0 +1,79 @@
+garage_lights_package:
+
+  group:
+    pir_sensors_garage:
+      name: PIR Group Garage
+      icon: mdi:motion-sensor
+      entities:
+        - binary_sensor.garage_beweging_achter_occupancy
+        - binary_sensor.garage_beweging_voor_occupancy
+
+  input_number:
+    lights_garage_percentage:
+      name: "Lights Garage - Percentage"
+      min: 0
+      max: 100
+      step: 1
+      initial: 80
+      icon: mdi:lightbulb-on-70
+
+  input_boolean:
+    enable_pir_garage:
+      name: "PIR in Garage"
+      initial: on
+      icon: mdi:motion-sensor
+
+  automation:
+    - id: lights_movement_garage
+      alias: Garage - Lights
+      description: "Turn on the lights of the garage if there is movement detected"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: group.pir_sensors_garage
+          to: "on"
+          id: beweging
+        - trigger: state
+          entity_id: group.pir_sensors_garage
+          to: "off"
+          for:
+            hours: 0
+            minutes: 2
+            seconds: 0
+          id: geenbeweging
+      conditions:
+        - condition: state
+          entity_id: input_boolean.enable_pir_garage
+          state: "on"
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - beweging
+              sequence:
+                - action: light.turn_on
+                  metadata: {}
+                  data:
+                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+                    brightness_pct: "{{ states('input_number.lights_garage_percentage')|int }}"
+                  target:
+                    entity_id: light.garage_lampen
+            - conditions:
+                - condition: trigger
+                  id:
+                    - geenbeweging
+              sequence:
+                - action: light.turn_off
+                  metadata: {}
+                  data:
+                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+                  target:
+                    entity_id: light.garage_lampen
+          default:
+            - action: light.toggle
+              metadata: {}
+              data:
+                transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+              target:
+                entity_id: light.garage_lampen

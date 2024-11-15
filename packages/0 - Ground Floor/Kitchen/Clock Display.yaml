@@ -1,0 +1,305 @@
+kitchen_clock_display_package:
+  automation:
+    - id: kitchen_clock_display_onoff
+      alias: Kitchen - Clock Turn on/off
+      description: "Turn on or off the display in the kitchen"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: disarming
+          id: alarm_off
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_away
+          id: alarm_away
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_home
+          id: alarm_home
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - alarm_away
+                    - alarm_home
+              sequence:
+                - data:
+                    qos: 0
+                    retain: false
+                    topic: clock_1/power
+                    payload: "{\"power\": false}"
+                  action: mqtt.publish
+            - conditions:
+                - condition: trigger
+                  id:
+                    - alarm_off
+              sequence:
+                - data:
+                    qos: 0
+                    retain: false
+                    topic: clock_1/power
+                    payload: "{\"power\": true}"
+                  action: mqtt.publish
+          default:
+            - action: light.toggle
+              metadata: {}
+              data: {}
+              target:
+                entity_id: light.awtrix_121d6c_matrix
+    - id: kitchen_clock_display_partner_home
+      alias: Kitchen - Clock Locations Family
+      description: "Display message on clock when someone return home"
+      mode: single
+      triggers:
+        - entity_id: person.samantha_henkelman
+          zone: zone.home
+          event: enter
+          trigger: zone
+          id: partner
+        - trigger: zone
+          entity_id: person.robin_bohnen
+          zone: zone.home
+          event: enter
+          id: robin
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - partner
+              sequence:
+                - data:
+                    topic: clock_1/notify
+                    payload: >-
+                      { "icon": 22078, "color":"FFFFFF", "sound": "notify", "repeat":
+                      2, "text": "{{ states['input_text.naam_partner'].state }} komt
+                      thuis", "stack": false, "scrollSpeed": 75 }
+                  action: mqtt.publish
+            - conditions:
+                - condition: trigger
+                  id:
+                    - robin
+              sequence:
+                - data:
+                    topic: clock_1/notify
+                    payload: >-
+                      { "icon": 22078, "color":"FFFFFF", "sound": "notify", "repeat":
+                      2, "text": "Robin komt thuis", "stack": false, "scrollSpeed": 75
+                      }
+                  action: mqtt.publish
+    - id: kitchen_clock_display_traveltime
+      alias: Kitchen - Clock Time to Travel Work Robin
+      description: 'Display the time it takes to travel to the office for Robin'
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.entree_deur_contact
+          to: "on"
+      conditions:
+        - condition: time
+          after: "06:00:00"
+          before: "07:00:00"
+          weekday:
+            - mon
+            - tue
+            - thu
+            - wed
+      actions:
+        - data:
+            qos: 0
+            retain: true
+            topic: clock_1/power
+            payload: "{\"power\": true}"
+          action: mqtt.publish
+        - data:
+            qos: 0
+            retain: true
+            topic: clock_1/notify
+            payload: >-
+              {"icon": 1635,"duration": 60, "scrollSpeed": 50, "text": "{{
+              states('sensor.robin_reistijd_naar_werk') }} min naar werk"}
+          action: mqtt.publish
+        - delay:
+            hours: 0
+            minutes: 1
+            seconds: 0
+            milliseconds: 0
+        - data:
+            qos: 0
+            retain: true
+            topic: clock_1/power
+            payload: "{\"power\": false}"
+          action: mqtt.publish
+
+    - id: kitchen_clock_display_apps
+      alias: Kitchen - Clock Display all Apps
+      description: Display apps in rotation with all kinds of useful information
+      triggers:
+        - seconds: /30
+          trigger: time_pattern
+      conditions:
+        - condition: state
+          entity_id: light.awtrix_121d6c_matrix
+          state: "on"
+      actions:
+        - data:
+            qos: 0
+            retain: true
+            topic: clock_1/custom/temperature_living
+            payload: >-
+              {"icon": 7112,"color":"FFFFFF","repeat": 2,"text": "{{
+              states('sensor.woonkamer_temperatuur_temperature') | round(1) }}"}
+          action: mqtt.publish
+          alias: Display temperature
+        - data:
+            qos: 0
+            retain: true
+            topic: clock_1/custom/power_usage
+            payload: >-
+              {"icon": 54077,"color":"FFFFFF","repeat": 2,"text": "{{
+              states('sensor.electricity_meter_energieverbruik') | round(2) }}"}
+          action: mqtt.publish
+          alias: Display power usage
+        - if:
+            - condition: and
+              conditions:
+                - condition: state
+                  entity_id: media_player.woonkamer_sonos
+                  state: playing
+                - condition: not
+                  conditions:
+                    - condition: state
+                      entity_id: media_player.woonkamer_sonos
+                      attribute: source
+                      state: TV
+          then:
+            - data:
+                qos: 0
+                retain: true
+                topic: clock_1/custom/music
+                payload: >-
+                  {"icon": 29944,"color":"FFFFFF","repeat": 2, "scrollSpeed": 50,
+                  "text": "{{ state_attr('media_player.woonkamer_sonos','media_title')
+                  }} - {{ state_attr('media_player.woonkamer_sonos','media_artist') }}
+                  "}
+              action: mqtt.publish
+          else:
+            - data:
+                qos: 0
+                retain: true
+                topic: clock_1/custom/music
+              action: mqtt.publish
+          alias: Display current song
+        - if:
+            - condition: not
+              conditions:
+                - condition: state
+                  entity_id: sensor.afvalinfo_home_trash_type_today
+                  state: geen
+          then:
+            - data:
+                qos: 0
+                retain: false
+                topic: clock_1/custom/afval
+                payload: >-
+                  { "icon": 9399,"color":"FFFFFF", "repeat": 2, "scrollSpeed": 50,
+                  "text": "{{ states('sensor.afvalinfo_home_trash_type_today') }}" }
+              action: mqtt.publish
+          else:
+            - data:
+                qos: 0
+                retain: false
+                topic: clock_1/custom/afval
+                payload: "{}"
+              action: mqtt.publish
+          alias: Display todays trash
+        - if:
+            - condition: not
+              conditions:
+                - condition: state
+                  entity_id: person.robin_bohnen
+                  state: home
+          then:
+            - data:
+                qos: 0
+                retain: false
+                topic: clock_1/custom/robin
+                payload: >-
+                  { "icon": 27335,"color":"FFFFFF", "repeat": 2, "scrollSpeed": 50,
+                  "text": "R: {% if states('person.robin_bohnen') == 'not_home'
+                  %}{{state_attr('sensor.robin_bohnen_geo','street')}} in
+                  {{state_attr('sensor.robin_bohnen_geo','city')}}{% else %} {{
+                  states('person.robin_bohnen') }} {% endif %}" }
+              action: mqtt.publish
+          else:
+            - data:
+                qos: 0
+                retain: false
+                topic: clock_1/custom/robin
+              action: mqtt.publish
+          alias: Display location Robin
+        - if:
+            - condition: not
+              conditions:
+                - condition: state
+                  entity_id: !secret person_partner
+                  state: home
+          then:
+            - data:
+                qos: 0
+                retain: false
+                topic: clock_1/custom/samantha
+                payload: >-
+                  { "icon": 27335,"color":"FFFFFF", "repeat": 2, "scrollSpeed": 50,
+                  "text": "S: {% if states('person.samantha_henkelman_bohnen') ==
+                  'not_home'
+                  %}{{state_attr('sensor.samantha_henkelman_geo','street')}} in
+                  {{state_attr('sensor.samantha_henkelman_geo','city')}}{% else %} {{
+                  states('person.samantha_henkelman_bohnen') }} {% endif %}" }
+              action: mqtt.publish
+          else:
+            - data:
+                qos: 0
+                retain: false
+                topic: clock_1/custom/samantha
+              action: mqtt.publish
+          alias: Display location Partner
+        - data:
+            qos: 0
+            retain: true
+            topic: clock_1/custom/next_cal_event
+            payload: >-
+              {"icon": 10498,"color":"FFFFFF","repeat": 2,"text": "{{
+              state_attr('calendar.robin_en_sam', 'message') }} - {{
+              as_timestamp(states.calendar.robin_en_sam.attributes.start_time) |
+              timestamp_custom('%d-%m-%Y om %H:%M') }} "}
+          action: mqtt.publish
+          alias: Display next calendar event
+      mode: single
+
+    - id: kitchen_clock_turn_on
+      alias: Kitchen - Clock turn on
+      description: "Turn on clock when livingroom lights turned on"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - light.woonkamer_lampen
+          to: "on"
+          from: "off"
+      conditions: []
+      actions:
+        - action: light.turn_on
+          metadata: {}
+          data:
+            brightness_pct: 50
+          target:
+            entity_id: light.awtrix_121d6c_matrix

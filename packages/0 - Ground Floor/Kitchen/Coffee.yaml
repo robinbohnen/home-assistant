@@ -1,0 +1,131 @@
+coffee_package:
+
+  input_datetime:
+    coffee_backflush_date:
+      name: "Kitchen Coffee - Backflush Date"
+      has_date: true
+      icon: mdi:calendar
+
+  timer:
+    coffee_shottimer:
+      name: Kitchen Coffee - Shottimer
+      duration: 33
+      icon: mdi:coffee-to-go
+
+  automation:
+    - id: turn_on_coffee_machine
+      alias: Kitchen - Coffee On
+      description: "Turn on the coffee machine when someone is or comes home"
+      mode: single
+      triggers:
+        - trigger: time
+          at: "07:00:00"
+        - trigger: state
+          entity_id:
+            - switch.linea_micra
+          to: "off"
+        - trigger: zone
+          entity_id: person.robin_bohnen
+          zone: zone.home
+          event: enter
+        - trigger: zone
+          entity_id: person.samantha_henkelman
+          zone: zone.home
+          event: enter
+      conditions:
+        - condition: time
+          after: "07:00:00"
+          before: "19:30:00"
+        - condition: state
+          entity_id: group.all_adults
+          state: home
+      actions:
+        - action: switch.turn_on
+          metadata: {}
+          data: {}
+          target:
+            entity_id: switch.linea_micra
+
+    - id: backflush_coffee
+      alias: Kitchen - Coffee Backflushed
+      description: "Set the new backflush date when backflush is active on coffee machine"
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.linea_micra_backflush_active
+          to: "on"
+      conditions: []
+      actions:
+        - action: input_datetime.set_datetime
+          metadata: {}
+          data:
+            datetime: "{{ (now() + timedelta(days=14)).strftime('%Y-%m-%d %H:%M:%S') }}"
+          target:
+            entity_id: input_datetime.coffee_backflush_date
+
+    - id: backflush_coffee_notification
+      alias: Kitchen - Coffee need Backflush Notification
+      description: "Send a notification to all parents when coffee machine needs backflush"
+      triggers:
+        - at: "19:00:00"
+          trigger: time
+      conditions:
+        - condition: template
+          value_template: "{{ now() >= states('input_datetime.coffee_backflush_date') | as_datetime | as_local }}"
+        - condition: zone
+          entity_id: person.robin_bohnen
+          zone: zone.home
+      actions:
+        - data:
+            message: "Koffie moet worden gereinigd "
+            title: La Marzocco
+          action: notify.mobile_devices_adults
+
+    - id: shottimer_coffee
+      alias: Kitchen - Coffee Shottimer
+      description: "Set the shottimer on the clock in the kitchen"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.linea_micra_brewing_active
+          to: "on"
+      conditions: []
+      actions:
+        - data:
+            topic: clock_1/notify
+            payload: >-
+              { "icon": 19109, "color":"FFFFFF", "sound": "notify", "repeat": 2,
+              "text": "Prebrewing", "stack": false, "scrollSpeed": 75 }
+          action: mqtt.publish
+        - action: timer.start
+          metadata: {}
+          data: {}
+          target:
+            entity_id: timer.coffee_shottimer
+        - repeat:
+            sequence:
+              - delay:
+                  hours: 0
+                  minutes: 0
+                  seconds: 1
+                  milliseconds: 0
+              - data:
+                  topic: clock_1/notify
+                  payload: >-
+                    { "icon": 19109, "color":"FFFFFF", "repeat": 1, "text": "{{
+                    (as_datetime(state_attr('timer.coffee_shottimer', 'finishes_at'))
+                    - now()).total_seconds() | timestamp_custom('%S', false) }} s",
+                    "stack": false, "scrollSpeed": 75 }
+                action: mqtt.publish
+            until:
+              - condition: template
+                value_template: >-
+                  {% set f = state_attr('timer.coffee_shottimer', 'finishes_at') %}
+                  {{ 'true' if ((f == None) or (states['binary_sensor.linea_micra_brewing_active'].state == "off" )) else (as_datetime(f) - now()).total_seconds() | timestamp_custom('%S', false) }}
+        - data:
+            topic: clock_1/notify
+            payload: >-
+              { "icon": 19109, "color":"FFFFFF", "sound": "notify", "repeat": 2,
+              "text": "Klaar", "stack": false, "scrollSpeed": 75 }
+          action: mqtt.publish

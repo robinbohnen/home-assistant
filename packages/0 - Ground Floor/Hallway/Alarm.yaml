@@ -1,0 +1,108 @@
+hallway_alarm_package:
+
+  automation:
+    - id: 'alarm_on_automatically'
+      alias: Hallway Alarm - On Automatically
+      description: "Turn on the alarm Automatically if everyone left the house"
+      mode: single
+      triggers:
+        - trigger: numeric_state
+          entity_id:
+            - zone.home
+          below: 1
+      conditions: []
+      actions:
+        - data:
+            mode: away
+            skip_delay: true
+            force: true
+            entity_id: alarm_control_panel.alarmo
+          action: alarmo.arm
+    - id: 'alarm_off_automatically'
+      alias: Hallway Alarm - Off Automatically
+      description: "Turn off the alarm Automatically someone comes home"
+      mode: single
+      triggers:
+        - trigger: numeric_state
+          entity_id:
+            - zone.home
+          above: 0
+      conditions: []
+      actions:
+        - action: alarm_control_panel.alarm_disarm
+          metadata: {}
+          data: {}
+          target:
+            entity_id: alarm_control_panel.alarmo
+    - id: 'alarm_on_automatically_robin_to_work'
+      alias: Hallway Alarm - On Automatically Robin to Work
+      description: "If Robin left to work turn on alarm automatically"
+      mode: single
+      triggers:
+        - entity_id: person.robin_bohnen
+          zone: zone.home
+          event: leave
+          trigger: zone
+      conditions:
+        - condition: and
+          conditions:
+            - condition: time
+              after: "05:30:00"
+              before: "07:00:00"
+            - condition: not
+              conditions:
+                - condition: numeric_state
+                  entity_id: cover.slaapkamer_rolluik
+                  attribute: current_position
+                  below: 15
+      actions:
+        - if:
+            - condition: zone
+              entity_id: person.samantha_henkelman
+              zone: zone.home
+          then:
+            - data: {}
+              target:
+                entity_id: alarm_control_panel.alarmo
+              action: alarm_control_panel.alarm_arm_home
+            - if:
+                - condition: state
+                  entity_id: light.eettafel_lampen
+                  state: "on"
+              then:
+                - metadata: {}
+                  data: {}
+                  target:
+                    entity_id: light.eettafel_lampen
+                  action: light.turn_off
+          else:
+            - action: alarm_control_panel.alarm_arm_away
+              target:
+                entity_id: alarm_control_panel.alarmo
+              data: {}
+    - id: 'alarm_off_automatically_morning'
+      alias: Hallway Alarm - Off Automatically Morning
+      description: "Turn off the alarm Automatically when someone wakes up"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.entree_deur_contact
+          to: "on"
+        - trigger: state
+          entity_id:
+            - binary_sensor.woonkamer_beweging_voor_occupancy
+          to: "on"
+      conditions:
+        - condition: numeric_state
+          entity_id: zone.home
+          above: 0
+        - condition: state
+          entity_id: alarm_control_panel.alarmo
+          state: armed_home
+      actions:
+        - action: alarm_control_panel.alarm_disarm
+          metadata: {}
+          data: {}
+          target:
+            entity_id: alarm_control_panel.alarmo

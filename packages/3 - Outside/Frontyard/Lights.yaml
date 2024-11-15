@@ -1,0 +1,52 @@
+frontyard_frontdoor_lights_package:
+  
+  input_number:
+    lights_frontyard_frontdoor_percentage:
+      name: "Lights Frontyard Frontdoor - Percentage"
+      min: 0
+      max: 100
+      step: 1
+      initial: 80
+      icon: mdi:lightbulb-on-70
+
+  automation:
+    - id: lights_frontdoor
+      alias: "Frontyard Frontdoor - Lights"
+      description: "Turn on or off the lights at the frontdoor"
+      triggers:
+        - id: sunset
+          trigger: sun
+          event: sunset
+          offset: "-01:00:00"
+        - trigger: sun
+          event: sunrise
+          offset: "+01:00:00"
+      actions:
+        - choose:
+          - conditions:
+            - condition: trigger
+              id:
+                - sunset
+            sequence:
+              - action: light.turn_on
+                target:
+                  entity_id: light.voortuin_lampen
+                data:
+                  transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+                  brightness_pct: "{{ states('input_number.lights_frontyard_frontdoor_percentage')|int }}"
+          - conditions:
+            - condition: trigger
+              id:
+                - sunrise
+            sequence:
+              - action: light.turn_off
+                target:
+                  entity_id: light.voortuin_lampen
+                data:
+                  transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+          default:
+            - action: light.toggle
+              target:
+                entity_id: light.voortuin_lampen
+              data:
+                transition: "{{ states('input_number.lights_transition_seconds')|int }}"

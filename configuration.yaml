@@ -1,0 +1,166 @@
+#################################################################
+## Home Assistant Core
+#################################################################
+
+homeassistant:
+  auth_providers:
+    - type: homeassistant
+  auth_mfa_modules:
+    - type: totp
+      name: Authenticator app
+  packages: !include_dir_merge_named packages/
+  external_url: !secret homeassistant_url
+  internal_url: !secret homeassistant_url
+
+frontend:
+  themes: !include_dir_merge_named themes/
+
+history:
+
+http:
+  ip_ban_enabled: true
+  login_attempts_threshold: 2
+  use_x_forwarded_for: true
+  trusted_proxies: !secret http_trusted_proxies
+
+logbook:
+  exclude:
+#    entities:
+    entity_globs:
+      - binary_sensor.pir*
+    domains:
+      - automation
+      - input_boolean
+      - media_player
+
+logger:
+  default: warn
+  logs:
+    homeassistant.components.analytics: info # I'd like to see what is sent
+  filters:
+    homeassistant.components.goodwe.coordinator:
+      - "No valid response received even after 10 retries"
+    py.warnings:
+      - "InsecureRequestWarning"
+
+lovelace:
+  mode: yaml
+  resources: !include dashboards/resources.yaml
+  dashboards:
+    lovelace-admin:
+      mode: yaml
+      filename: dashboards/admin/admin.yaml
+      title: Admin
+      icon: mdi:security
+      show_in_sidebar: true
+      require_admin: true
+    lovelace-map:
+      mode: yaml
+      filename: dashboards/map/map.yaml
+      title: Map
+      icon: mdi:map
+      show_in_sidebar: true
+      require_admin: false
+
+recorder:
+  exclude:
+    domains:
+      - camera
+      - media_player
+      - sun
+      - update
+    entity_globs:
+      - sensor.sun_*
+#    entities:
+
+#################################################################
+## Includes
+#################################################################
+automation: !include automations.yaml
+script: !include scripts.yaml
+
+#################################################################
+## default_config items not included elsewhere
+#################################################################
+#default_config:
+application_credentials:
+backup:
+bluetooth:
+cloud:
+dhcp:
+diagnostics:
+energy:
+homeassistant_alerts:
+media_source:
+mobile_app:
+my:
+ssdp:
+stream:
+sun:
+webhook:
+zeroconf:
+
+#################################################################
+## Components not using includes
+#################################################################
+command_line:
+  notify:
+    # Notify bogus service
+    # Used to let automations not error out
+    name: bogus
+    command: ":" # bash no-op command
+
+climate:
+  - platform: intesishome
+    username: !secret intesishome_username
+    password: !secret intesishome_password
+    device: airconwithme
+
+proxmoxve:
+  - host: !secret proxmoxve_hostname
+    username: !secret proxmoxve_username
+    password: !secret proxmoxve_password
+    nodes:
+      - node: intel
+        vms:
+          - 100
+          - 101
+          - 102
+          - 103
+          - 104
+          - 105
+          - 107
+          - 110
+          - 111
+    verify_ssl: false
+
+o365:
+  accounts:
+    - account_name: !secret o365_accountnameprivate
+      client_id: !secret o365_clientid
+      client_secret: !secret o365_clientsecret
+      alt_auth_method: True
+      enable_update: True
+      todo_sensors:
+        enabled: true
+        enable_update: true
+      status_sensors:
+        - name: !secret o365_private_statusname
+          enable_update: true
+      chat_sensors:
+        - name: !secret o365_private_chatname
+          enable_update: true
+    - account_name: !secret o365_accountnamebusiness
+      client_id: !secret o365_clientid
+      client_secret: !secret o365_clientsecret
+      alt_auth_method: True
+      enable_update: True
+      todo_sensors:
+        enabled: true
+        enable_update: true
+      status_sensors:
+        - name: !secret o365_business_statusname
+          enable_update: true
+      chat_sensors:
+        - name: !secret o365_business_chatname
+          enable_update: true

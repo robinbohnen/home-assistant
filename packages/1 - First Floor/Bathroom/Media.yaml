@@ -1,0 +1,75 @@
+bathroom_media_package:
+  automation:
+    - id: media_movement_bathroom
+      alias: Bathroom - Media
+      description: "Turn on the media in the bathroom if there is movement detected"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: group.pir_sensors_bathroom
+          to: "on"
+          id: beweging
+        - trigger: state
+          entity_id: group.pir_sensors_bathroom
+          to: "off"
+          for:
+            hours: 0
+            minutes: 2
+            seconds: 0
+          id: geenbeweging
+        - trigger: state
+          entity_id: binary_sensor.badkamer_deur_contact
+          to: "on"
+          id: deur_open
+      conditions:
+        - condition: state
+          entity_id: input_boolean.enable_pir_bathroom
+          state: "on"
+        - condition: time
+          after: "07:15:00"
+          before: input_datetime.bedtime_maxi
+        - condition: time
+          after: "07:15:00"
+          before: input_datetime.bedtime_mini
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - beweging
+                    - deur_open
+              sequence:
+                - if:
+                    - condition: numeric_state
+                      entity_id: media_player.badkamer_sonos
+                      attribute: volume_level
+                      above: 0.15
+                  then:
+                    - action: media_player.volume_set
+                      metadata: {}
+                      data:
+                        volume_level: 0.15
+                      target:
+                        entity_id: media_player.badkamer_sonos
+                - if:
+                    - condition: state
+                      entity_id: media_player.badkamer_sonos
+                      state: idle
+                  then:
+                    - action: media_player.join
+                      metadata: {}
+                      data:
+                        group_members:
+                          - media_player.badkamer_sonos
+                      target:
+                        entity_id: media_player.woonkamer_sonos
+            - conditions:
+                - condition: trigger
+                  id:
+                    - geenbeweging
+              sequence:
+                - action: media_player.unjoin
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: media_player.badkamer_sonos

@@ -1,0 +1,31 @@
+reminders_package:
+  automation:
+    - id: 'maxi_medication_reminder'
+      alias: General - Maxi Medication Reminder
+      description: "Remind parents of medication for Maxi"
+      mode: single
+      triggers:
+        - at: "08:00:00"
+          trigger: time
+        - at: "12:30:00"
+          trigger: time
+      conditions:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: calendar.maxi
+              attribute: message
+              state: "{{ states['input_text.naam_maxi'].state }} bij ons"
+          enabled: false
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: calendar.maxi
+              attribute: message
+              state: "{{ states['input_text.naam_maxi'].state }} bij Stefan"
+      actions:
+        - metadata: {}
+          data:
+            title: "{{ states['input_text.naam_maxi'].state }} medicatie"
+            message: "Het is tijd voor {{ states['input_text.naam_maxi'].state }}'s pilletje, vergeet die niet. "
+          action: notify.mobile_devices_adults

@@ -1,0 +1,51 @@
+bedtime_mini_package:
+
+  input_datetime:
+    bedtime_mini:
+      name: "Bedroom Mini - Bedtime Mini"
+      has_time: true
+      icon: mdi:clock-time-eight
+      initial: '20:00:00'
+
+  automation:
+    - id: bedtime_for_mini_lights_off
+      alias: 'Bedroom Mini - Bedtime Lights Off'
+      description: 'Turn off the lights at minis bedroom after bedtime'
+      triggers:
+        - at: input_datetime.bedtime_mini
+          trigger: time
+      conditions:
+          - condition: state
+            entity_id: light.slaapkamer_mini_lampen
+            state: "on"
+            for:
+              hours: 0
+              minutes: 10
+              seconds: 0
+      actions:
+        - action: light.turn_off
+          metadata: {}
+          data: {}
+          target:
+            entity_id: light.slaapkamer_mini_lampen
+      mode: single
+
+    - id: bedtime_for_mini_media_off
+      alias: 'Bedroom Mini - Bedtime Media Off'
+      description: "Turn off all media when bedtime is due"
+      mode: single
+      triggers:
+        - trigger: time
+          at: input_datetime.bedtime_mini
+        - trigger: time
+          at: "19:00:00"
+      conditions:
+        - condition: state
+          entity_id: media_player.slaapkamer_mini_sonos
+          state: playing
+      actions:
+        - action: media_player.unjoin
+          metadata: {}
+          data: {}
+          target:
+            entity_id: media_player.slaapkamer_mini_sonos

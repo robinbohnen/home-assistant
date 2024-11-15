@@ -1,0 +1,18 @@
+network_package:
+  automation:
+    - id: network_new_device
+      alias: General - New network device
+      description: "Send notification when new network device is added"
+      initial_state: true
+      triggers:
+        - event_type: entity_registry_updated
+          trigger: event
+      conditions:
+        - condition: template
+          value_template: "{{trigger.event.data.entity_id.split('.')[0] == 'device_tracker' }}"
+      actions:
+        - data_template:
+            title: Netwerk apparaat
+            message: >-
+              {{ trigger.event.data.entity_id }} is een nieuw apparaat op ons netwerk.
+          action: notify.mobile_devices_adults

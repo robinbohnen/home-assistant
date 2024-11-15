@@ -1,0 +1,68 @@
+livingroom_cast_package:
+  automation:
+    - id: livingroom_always_cast_nest_hub
+      alias: Livingroom - Always cast on Nest Hub
+      description: "Cast again when casting stops"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - media_player.woonkamer
+          to: idle
+        - trigger: state
+          entity_id:
+            - light.woonkamer_lampen
+          to: "on"
+      conditions: []
+      actions:
+        - action: media_player.turn_on
+          metadata: {}
+          data: {}
+          target:
+            entity_id: media_player.woonkamer
+        - delay:
+            hours: 0
+            minutes: 0
+            seconds: 5
+            milliseconds: 0
+        - action: cast.show_lovelace_view
+          metadata: {}
+          data:
+            entity_id: media_player.woonkamer
+            dashboard_path: lovelace
+            view_path: brandweer-uden
+
+    - id: livingroom_doorbell_tts
+      alias: Livingroom - TTS Doorbell
+      description: "TTS to doorbell to announce someone is there"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - event.entree_voordeur_deurbel_ding
+          attribute: event_type
+          to: ding
+      conditions:
+        - condition: time
+          after: "09:00:00"
+          before: "19:30:00"
+      actions:
+        - action: tts.speak
+          metadata: {}
+          data:
+            cache: true
+            media_player_entity_id: media_player.woonkamer
+            message: Er is iemand aan de deur!
+            language: nl
+          target:
+            entity_id: tts.google_translate_nl_nl
+        - if:
+            - condition: state
+              entity_id: media_player.woonkamer_appletv
+              state: playing
+          then:
+            - action: media_player.media_pause
+              metadata: {}
+              data: {}
+              target:
+                entity_id: media_player.woonkamer_appletv

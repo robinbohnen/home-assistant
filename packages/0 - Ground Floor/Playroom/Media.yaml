@@ -1,0 +1,42 @@
+playroom_media_package:
+  automation:
+    - id: playroom_tv_off
+      alias: Playroom - Media Join Unjoin
+      description: "Join or unjoin the Sonos when tv status changes"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - media_player.speelkamer_tv
+          to: "on"
+          id: tv_on
+        - trigger: state
+          entity_id:
+            - media_player.speelkamer_tv
+          to: "off"
+          id: tv_off
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - tv_on
+              sequence:
+                - action: media_player.unjoin
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: media_player.speelkamer_sonos
+            - conditions:
+                - condition: trigger
+                  id:
+                    - tv_off
+              sequence:
+                - action: media_player.join
+                  metadata: {}
+                  data:
+                    group_members:
+                      - media_player.speelkamer_sonos
+                  target:
+                    entity_id: media_player.woonkamer_sonos

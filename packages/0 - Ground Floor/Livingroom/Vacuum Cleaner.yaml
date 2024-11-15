@@ -1,0 +1,47 @@
+livingroom_vacuum_cleaner_package:
+  automation:
+    - id: livingroom_vacuum_undocked
+      alias: Livingroom - Vacuum undocked
+      description: "Notify if vacuum is not docked"
+      triggers:
+        - at: "18:15:00"
+          trigger: time
+      conditions:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: vacuum.roborock_s5
+              state: docked
+        - condition: or
+          conditions:
+            - condition: zone
+              entity_id: person.robin_bohnen
+              zone: zone.home
+            - condition: zone
+              entity_id: person.samantha_henkelman
+              zone: zone.home
+      actions:
+        - data:
+            title: Stofzuiger Woonkamer
+            message: >-
+              De Roborock stofzuiger in de Woonkamer staat niet op zijn dock. Zet deze
+              op zijn dock om vannacht te stofzuigen.
+          action: notify.mobile_devices_adults
+      mode: single
+    - id: livingroom_vacuum_start
+      alias: Livingroom - Vacuum Start
+      description: Start vacuum cleaning during night
+      mode: single
+      triggers:
+        - at: "02:15:00"
+          trigger: time
+      conditions:
+        - condition: numeric_state
+          entity_id: vacuum.roborock_s5
+          attribute: battery_level
+          above: 99
+      actions:
+        - data: {}
+          action: vacuum.start
+          target:
+            entity_id: vacuum.roborock_s5
