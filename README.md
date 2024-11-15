@@ -118,6 +118,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | [Aqara Temperature Sensor](https://amzn.to/3CnNmqB) | 8 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Temperature and humidity sensor for indoor use |
 | [Aqara Wireless Mini Switch](https://amzn.to/3AJqMYM) | 6 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Mini button to control things that can't be automated (for now) |
 | [Roborock S5](https://amzn.to/3OcPELC) | 1 | Wi-Fi | [Xiaomi Miio](https://www.home-assistant.io/integrations/xiaomi_miio/) | Robot Vacuum cleaner for the living room |
+| [iRobot I5](https://amzn.to/3YN0ZXT) | 1 | Wi-Fi | [iRobot Roomba and Braava](https://www.home-assistant.io/integrations/roomba) | Robot Vacuum cleaner for the 1st floor |
 
 ## <a name="vms">Virtual Machines</a>
 | [Menu](#menu) |
