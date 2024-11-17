@@ -43,6 +43,12 @@ brandweer_package:
     brandweer_laatste_p2000_melding_fonetisch:
       name: 'Brandweer - Laatste p2000 melding fonetisch'
       icon: mdi:account-voice
+    brandweer_laatste_p2000_brandweer_melding:
+      name: 'Brandweer - Laatste p2000 Brandweer melding'
+      icon: mdi:police-badge
+    brandweer_laatste_p2000_brandweer_melding_fonetisch:
+      name: 'Brandweer - Laatste p2000 Brandweer melding fonetisch'
+      icon: mdi:account-voice
     brandweer_meldingen_om_uden:
       name: 'Brandweer - Meldingen Om Uden'
       icon: mdi:fire-station
@@ -652,7 +658,7 @@ brandweer_package:
           action: notify.notify
 
     - id: brandweer_webhook_region
-      alias: Brandweer - Webhook - Region
+      alias: Brandweer - Webhook - Region (ALL)
       description: "Webhook to whole region and p2000 notifications"
       mode: single
       triggers:
@@ -704,6 +710,60 @@ brandweer_package:
                 value: "{{ trigger.json.p2000_message_phonetic }}"
               target:
                 entity_id: input_text.brandweer_laatste_p2000_melding_fonetisch
+
+    - id: brandweer_webhook_region
+      alias: Brandweer - Webhook - Brandweer Region (Brandweer)
+      description: "Webhook to whole region and p2000 notifications"
+      mode: single
+      triggers:
+        - trigger: webhook
+          allowed_methods:
+            - POST
+            - PUT
+          local_only: false
+          webhook_id: brandweer-webhook-region-wM42IsN4I8BQpviykGsBph7i
+      conditions:
+        - condition: template
+          value_template: >-
+            {% if (trigger.json.p2000_message != states('input_text.brandweer_laatste_p2000_brandweer_melding') and
+            as_timestamp(now()) - as_timestamp(states.input_text.brandweer_laatste_p2000_brandweer_melding.last_changed) > 60) %}
+            true
+            {% else %}
+            false
+            {% endif %}
+      actions:
+        - if:
+            - condition: template
+              value_template: >-
+                {% if trigger.json.p2000_message[:2]|upper != "B1" and
+                trigger.json.p2000_message[:4]|upper != "TEST" and
+                trigger.json.p2000_message[:4]|upper != "TE5T" and
+                trigger.json.p2000_message[:2]|upper != "B2" and
+                trigger.json.p2000_message[:2]|upper != "A2"  %}
+                true
+                {% else %}
+                false
+                {% endif %}
+          then:
+            - action: notify.pushover_brandweer
+              metadata: {}
+              data:
+                title: "{{ trigger.json.capcode_description }}"
+                message: "{{ trigger.json.p2000_message }}"
+                data:
+                  priority: 0
+            - action: input_text.set_value
+              metadata: {}
+              data:
+                value: "{{ trigger.json.p2000_message }}"
+              target:
+                entity_id: input_text.brandweer_laatste_p2000_brandweer_melding
+            - action: input_text.set_value
+              metadata: {}
+              data:
+                value: "{{ trigger.json.p2000_message_phonetic }}"
+              target:
+                entity_id: input_text.brandweer_laatste_p2000_brandweer_melding_fonetisch
 
     - id: brandweer_tts_nesthub
       alias: Brandweer - TTS on Nest Hub Livingroom
