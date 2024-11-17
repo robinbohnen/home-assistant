@@ -2,8 +2,8 @@ firealarm_package:
 
   group:
 
-    nest_protects:
-      name: All Nest Protect firealarms
+    nest_protects_smoke:
+      name: All Nest Protect Fire Alarms
       icon: mdi:smoke-detector-variant
       entities:
         - binary_sensor.nest_protect_hallway_smoke_status
@@ -11,11 +11,16 @@ firealarm_package:
         - binary_sensor.nest_protect_upstairs_smoke_status
         - binary_sensor.nest_protect_cv_kast_smoke_status
         - binary_sensor.nest_protect_zolder_smoke_status
+    nest_protects_co:
+      name: All Nest Protect CO Alarms
+      icon: mdi:smoke-detector-variant
+      entities:
         - binary_sensor.nest_protect_hallway_co_status
         - binary_sensor.nest_protect_garage_co_status
         - binary_sensor.nest_protect_upstairs_co_status
         - binary_sensor.nest_protect_cv_kast_co_status
         - binary_sensor.nest_protect_zolder_co_status
+
 
     all_lights:
       name: All Lights
@@ -75,13 +80,13 @@ firealarm_package:
 
   automation:
     - id: open_covers_firealarm
-      alias: General - Fire or CO alarm
+      alias: General - Fire alarm
       description: "Do a lot of things when firealarm is triggered to make sure everyone stays safe"
       mode: single
       triggers:
         - trigger: state
           entity_id:
-            - group.nest_protects
+            - group.nest_protects_smoke
           to: "on"
       conditions: []
       actions:
@@ -126,6 +131,64 @@ firealarm_package:
                   Er zijn nog deuren open, sluit deze en ga zo snel mogelijk naar
                   buiten.
                 title: Brandalarm!
+                data:
+                  push:
+                    sound:
+                      name: default
+                      critical: 1
+                      volume: 1
+    - id: open_covers_firealarm
+      alias: General - CO alarm
+      description: "Do a lot of things when CO alarm is triggered to make sure everyone stays safe"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - group.nest_protects_co
+          to: "on"
+      conditions: []
+      actions:
+        - action: cover.open_cover
+          metadata: {}
+          data: {}
+          target:
+            entity_id: group.covers_upstairs
+        - action: light.turn_on
+          metadata: {}
+          data:
+            brightness_pct: "100"
+          target:
+            entity_id: group.all_lights
+        - if:
+            - condition: state
+              entity_id: group.all_windows
+              state: "off"
+          then:
+            - action: notify.mobile_devices_adults
+              metadata: {}
+              data:
+                message: >-
+                  Er zijn nog ramen dicht, open deze en ga zo snel mogelijk naar
+                  buiten.
+                title: CO Alarm!
+                data:
+                  push:
+                    sound:
+                      name: default
+                      critical: 1
+                      volume: 1
+        - if:
+            - condition: state
+              entity_id: group.all_doors
+              state: "off"
+          then:
+            - action: notify.mobile_devices_adults
+              metadata: {}
+              data:
+                message: >-
+                  Er zijn nog deuren gesloten, open deze en ga zo snel mogelijk naar
+                  buiten.
+                title: CO Alarm!
                 data:
                   push:
                     sound:
