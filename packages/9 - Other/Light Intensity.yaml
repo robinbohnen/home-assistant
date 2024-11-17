@@ -2,7 +2,7 @@ light_intensity_package:
   automation:
     - id: light_intensity_changes
       alias: General - Light Intensity
-      description: 'Change Light Intensity on sunset and sunrise'
+      description: Change Light Intensity on sunset and sunrise
       mode: single
       triggers:
         - trigger: sun
@@ -52,3 +52,43 @@ light_intensity_package:
                       - input_number.lights_playroom_percentage
                       - input_number.lights_corridor_percentage
                       - input_number.lights_hallway_percentage
+          default:
+            - choose:
+                - conditions:
+                    - condition: sun
+                      before: sunrise
+                      after: sunset
+                  sequence:
+                    - action: input_number.set_value
+                      metadata: {}
+                      data:
+                        value: 40
+                      target:
+                        entity_id:
+                          - input_number.lights_garage_percentage
+                          - input_number.lights_attic_corridor_percentage
+                          - input_number.lights_toilet_percentage
+                          - input_number.lights_bathroom_percentage
+                          - input_number.lights_playroom_percentage
+                          - input_number.lights_corridor_percentage
+                          - input_number.lights_hallway_percentage
+                  alias: sunset
+                - conditions:
+                    - condition: sun
+                      before: sunset
+                      after: sunrise
+                  sequence:
+                    - action: input_number.set_value
+                      metadata: {}
+                      data:
+                        value: 80
+                      target:
+                        entity_id:
+                          - input_number.lights_garage_percentage
+                          - input_number.lights_attic_corridor_percentage
+                          - input_number.lights_toilet_percentage
+                          - input_number.lights_bathroom_percentage
+                          - input_number.lights_playroom_percentage
+                          - input_number.lights_corridor_percentage
+                          - input_number.lights_hallway_percentage
+                  alias: sunrise
