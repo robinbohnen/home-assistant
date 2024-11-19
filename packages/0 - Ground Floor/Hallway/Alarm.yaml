@@ -6,10 +6,10 @@ hallway_alarm_package:
       description: "Turn on the alarm Automatically if everyone left the house"
       mode: single
       triggers:
-        - trigger: numeric_state
+        - trigger: state
           entity_id:
-            - zone.home
-          below: 1
+            - group.all_adults
+          to: not_home
       conditions: []
       actions:
         - data:
@@ -18,15 +18,16 @@ hallway_alarm_package:
             force: true
             entity_id: alarm_control_panel.alarmo
           action: alarmo.arm
+
     - id: 'alarm_off_automatically'
       alias: Hallway Alarm - Off Automatically
       description: "Turn off the alarm Automatically someone comes home"
       mode: single
       triggers:
-        - trigger: numeric_state
+        - trigger: state
           entity_id:
-            - zone.home
-          above: 0
+            - group.all_adults
+          to: home
       conditions: []
       actions:
         - action: alarm_control_panel.alarm_disarm
@@ -34,6 +35,7 @@ hallway_alarm_package:
           data: {}
           target:
             entity_id: alarm_control_panel.alarmo
+
     - id: 'alarm_on_automatically_robin_to_work'
       alias: Hallway Alarm - On Automatically Robin to Work
       description: "If Robin left to work turn on alarm automatically"
@@ -80,6 +82,7 @@ hallway_alarm_package:
               target:
                 entity_id: alarm_control_panel.alarmo
               data: {}
+
     - id: 'alarm_off_automatically_morning'
       alias: Hallway Alarm - Off Automatically Morning
       description: "Turn off the alarm Automatically when someone wakes up"
@@ -94,9 +97,9 @@ hallway_alarm_package:
             - binary_sensor.woonkamer_beweging_voor_occupancy
           to: "on"
       conditions:
-        - condition: numeric_state
-          entity_id: zone.home
-          above: 0
+        - condition: state
+          entity_id: group.all_adults
+          state: home
         - condition: state
           entity_id: alarm_control_panel.alarmo
           state: armed_home
