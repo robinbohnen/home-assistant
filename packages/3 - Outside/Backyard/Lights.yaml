@@ -32,6 +32,16 @@ backyard_lights_package:
             - alarm_control_panel.alarmo
           to: disarmed
           id: alarm_off
+        - trigger: numeric_state
+          entity_id:
+            - sensor.achtertuin_zon_luminance
+          below: 1000
+          id: dark_outside
+        - trigger: numeric_state
+          entity_id:
+            - sensor.achtertuin_zon_luminance
+          above: 1000
+          id: light_outside
       actions:
         - choose:
             - conditions:
@@ -42,7 +52,7 @@ backyard_lights_package:
                 - action: light.turn_on
                   target:
                     entity_id:
-                      - light.achtertuin_lampen
+                      - light.achtertuin_huislampen
                       - light.achtertuin_overkapping_wandlampen
                   data:
                     transition: "{{ states('input_number.lights_transition_seconds')|int }}"
@@ -73,16 +83,8 @@ backyard_lights_package:
                   target:
                     entity_id:
                       - light.achtertuin_lampen
-                      - light.achtertuin_overkapping_wandlampen
-                      - light.achtertuin_prikspots
                   data:
                     transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                - action: switch.turn_off
-                  target:
-                    entity_id:
-                      - switch.achtertuin_overkapping_stopcontact
-                      - switch.achtertuin_overkapping_stopcontact_kerst
-                  data: {}
             - conditions:
                 - condition: trigger
                   id:
@@ -102,7 +104,7 @@ backyard_lights_package:
                         brightness_pct: "{{ states('input_number.lights_backyard_plants_percentage')|int }}"
                       target:
                         entity_id:
-                          - light.achtertuin_lampen
+                          - light.achtertuin_huislampen
                           - light.achtertuin_overkapping_wandlampen
                           - light.achtertuin_prikspots
                     - action: switch.turn_on
@@ -112,21 +114,42 @@ backyard_lights_package:
                         entity_id:
                           - switch.achtertuin_overkapping_stopcontact
                           - switch.achtertuin_overkapping_stopcontact_kerst
+            - conditions:
+                - condition: trigger
+                  id:
+                    - dark_outside
+                - condition: time
+                  after: "09:00:00"
+                  before: "17:00:00"
+              sequence:
+                - action: light.turn_on
+                  metadata: {}
+                  data:
+                    transition: 3
+                    brightness_pct: 80
+                  target:
+                    entity_id: light.achtertuin_lampen
+            - conditions:
+                - condition: trigger
+                  id:
+                    - light_outside
+                - condition: time
+                  after: "09:00:00"
+                  before: "17:00:00"
+              sequence:
+                - action: light.turn_off
+                  metadata: {}
+                  data:
+                    transition: 3
+                  target:
+                    entity_id: light.achtertuin_lampen
           default:
             - action: light.toggle
               target:
                 entity_id:
                   - light.achtertuin_lampen
-                  - light.achtertuin_overkapping_wandlampen
-                  - light.achtertuin_prikspots
               data:
                 transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-            - action: switch.toggle
-              target:
-                entity_id:
-                  - switch.achtertuin_overkapping_stopcontact
-                  - switch.achtertuin_overkapping_stopcontact_kerst
-              data: {}
 
 
     - id: backyard_lights_bedroom_button_single_press
@@ -159,12 +182,4 @@ backyard_lights_package:
                   target:
                     entity_id:
                       - light.achtertuin_lampen
-                      - light.achtertuin_prikspots
-                      - light.achtertuin_overkapping_wandlampen
-                - action: switch.turn_off
-                  target:
-                    entity_id:
-                      - switch.achtertuin_overkapping_stopcontact
-                      - switch.achtertuin_overkapping_stopcontact_kerst
-                  data: {}
               alias: Naar bed gaan
