@@ -2,7 +2,7 @@ covers_package:
   automation:
     - id: covers_open_close
       alias: General - Open or Close all Covers
-      description: "Open or Close all covers based on time, temperature and sun"
+      description: Open or Close all covers based on time, temperature and sun
       mode: single
       triggers:
         - trigger: time
@@ -37,6 +37,16 @@ covers_package:
             - sensor.slaapkamer_knop_samantha_action
           to: single
           id: bedroom_buttons_pressed
+        - trigger: state
+          entity_id:
+            - lock.kroon18voordeur
+          to: unlocked
+          id: lock_unlocked
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: disarmed
+          id: alarm_off
       conditions: []
       actions:
         - choose:
@@ -65,6 +75,24 @@ covers_package:
                               - cover.slaapkamer_mini
                               - cover.rollerblind_0001
                               - cover.rollerblind_0002
+            - conditions:
+                - condition: trigger
+                  id:
+                    - lock_unlocked
+                    - alarm_off
+              sequence:
+                - if:
+                    - condition: time
+                      after: "08:30:00"
+                      before: "19:00:00"
+                  then:
+                    - action: cover.open_cover
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id:
+                          - cover.rollerblind_0001
+                          - cover.rollerblind_0002
             - conditions:
                 - alias: Morning
                   condition: or
