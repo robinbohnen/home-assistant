@@ -2,11 +2,16 @@ music_package:
   automation:
     - id: play_music
       alias: General - Play Default Music
-      description: "Play default music automation"
+      description: Play default music automation
       mode: single
       triggers:
         - trigger: time
           at: "09:00:00"
+        - trigger: state
+          entity_id:
+            - light.woonkamer_lampen
+          to: "on"
+          id: lights_on
       conditions:
         - condition: state
           entity_id: group.all_adults
@@ -17,6 +22,13 @@ music_package:
               entity_id: media_player.woonkamer_sonos
               state: playing
       actions:
+        - alias: Stop if too early
+          if:
+            - condition: time
+              before: "07:15:00"
+          then:
+            - stop: ""
+              error: false
         - action: media_player.volume_set
           metadata: {}
           data:
@@ -73,6 +85,7 @@ music_package:
               - media_player.keuken_sonos_2
           target:
             entity_id: media_player.woonkamer_sonos
+
     - id: play_music_tv_off
       alias: General - Play Default Music TV Off
       description: "When TV is turned off; play default music"

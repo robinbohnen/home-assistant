@@ -1,0 +1,64 @@
+livingroom_aircleaners_package:
+  automation:
+    - id: livingroom_aircleaners_onoff
+      name: Livingroom - Aircleaners
+      description: Automate aircleaners when certain conditions are met
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - lock.kroon18voordeur
+          to: unlocked
+          id: lock_unlocked
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: disarmed
+          id: alarm_disarmed
+        - trigger: state
+          entity_id:
+            - lock.kroon18voordeur
+          to: locked
+          id: lock_locked
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_away
+          id: alarm_armed_away
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_home
+          id: alarm_armed_home
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - lock_unlocked
+                    - alarm_disarmed
+              sequence:
+                - action: switch.turn_off
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: switch.luchtreinigers_stopcontacten
+            - conditions:
+                - condition: trigger
+                  id:
+                    - lock_locked
+                    - alarm_armed_away
+                    - alarm_armed_home
+              sequence:
+                - action: switch.turn_on
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: switch.luchtreinigers_stopcontacten
+          default:
+            - action: switch.toggle
+              metadata: {}
+              data: {}
+              target:
+                entity_id: switch.luchtreinigers_stopcontacten

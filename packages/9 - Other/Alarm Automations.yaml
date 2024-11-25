@@ -170,22 +170,6 @@ general_alarm_automations_package:
           entity_id: group.all_adults
           state: home
       actions:
-        - if:
-            - condition: or
-              conditions:
-                - condition: state
-                  entity_id: alarm_control_panel.alarmo
-                  state: armed_away
-                - condition: state
-                  entity_id: alarm_control_panel.alarmo
-                  state: armed_home
-          then:
-            - action: alarm_control_panel.alarm_disarm
-              metadata: {}
-              data: {}
-              target:
-                entity_id: alarm_control_panel.alarmo
-          alias: Turn off alarm
 
         - action: automation.trigger
           metadata: {}
@@ -193,41 +177,3 @@ general_alarm_automations_package:
             skip_condition: true
           target:
             entity_id: automation.general_open_or_close_all_covers
-
-        - if:
-            - condition: and
-              conditions:
-                - condition: sun
-                  before: sunset
-                - condition: time
-                  after: "07:15:00"
-          then:
-            - if:
-                - condition: or
-                  conditions:
-                    - condition: state
-                      entity_id: media_player.woonkamer_sonos
-                      state: idle
-                    - condition: state
-                      entity_id: media_player.woonkamer_sonos
-                      state: paused
-              then:
-                - action: automation.trigger
-                  metadata: {}
-                  data:
-                    skip_condition: true
-                  target:
-                    entity_id: automation.general_play_default_music
-              alias: Speel muziek
-          alias: Als de zon nog niet onder is
-        - if:
-            - condition: state
-              entity_id: switch.luchtreinigers_stopcontacten
-              state: "on"
-          then:
-            - action: switch.turn_off
-              metadata: {}
-              data: {}
-              target:
-                entity_id: switch.luchtreinigers_stopcontacten
-          alias: Air cleaners off
