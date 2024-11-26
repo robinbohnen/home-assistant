@@ -14,24 +14,50 @@ coffee_package:
 
   automation:
     - id: turn_on_coffee_machine
-      alias: Kitchen - Coffee On
-      description: "Turn on the coffee machine when someone is or comes home"
+      alias: Kitchen - Coffee
+      description: Turn on/off the coffee machine when someone is or comes or leaves home
       mode: single
       triggers:
         - trigger: time
           at: "07:00:00"
+          id: time_0700
         - trigger: state
           entity_id:
             - switch.linea_micra
           to: "off"
+          id: unexepected_off
         - trigger: zone
           entity_id: person.robin_bohnen
           zone: zone.home
           event: enter
+          id: person_enters_zone
         - trigger: zone
           entity_id: person.samantha_henkelman
           zone: zone.home
           event: enter
+          id: partner_enters_zone
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_away
+          id: alarm_on_not_home
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_home
+          id: alarm_on_home
+        - trigger: state
+          entity_id:
+            - lock.kroon18voordeur
+          to: locked
+          for:
+            hours: 0
+            minutes: 2
+            seconds: 0
+          id: lock_locked
+        - trigger: time
+          at: "19:00:00"
+          id: time_1900
       conditions:
         - condition: time
           after: "07:00:00"
@@ -40,11 +66,39 @@ coffee_package:
           entity_id: group.all_adults
           state: home
       actions:
-        - action: switch.turn_on
-          metadata: {}
-          data: {}
-          target:
-            entity_id: switch.linea_micra
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - time_0700
+                    - unexepected_off
+                    - person_enters_zone
+                    - partner_enters_zone
+              sequence:
+                - action: switch.turn_on
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: switch.linea_micra
+            - conditions:
+                - condition: trigger
+                  id:
+                    - alarm_on_not_home
+                    - alarm_on_home
+                    - lock_locked
+                    - time_1900
+              sequence:
+                - if:
+                    - condition: state
+                      entity_id: switch.linea_micra
+                      state: "on"
+                  then:
+                    - action: switch.turn_off
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: switch.linea_micra
+
 
     - id: backflush_coffee
       alias: Kitchen - Coffee Backflushed
