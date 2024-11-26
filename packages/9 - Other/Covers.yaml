@@ -47,6 +47,21 @@ covers_package:
             - alarm_control_panel.alarmo
           to: disarmed
           id: alarm_off
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_away
+          id: alarm_on_not_home
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_home
+          id: alarm_on_home
+        - trigger: state
+          entity_id:
+            - lock.kroon18voordeur
+          to: locked
+          id: lock_locked
       conditions: []
       actions:
         - choose:
@@ -93,6 +108,41 @@ covers_package:
                         entity_id:
                           - cover.rollerblind_0001
                           - cover.rollerblind_0002
+            - conditions:
+                - condition: trigger
+                  id:
+                    - alarm_on_not_home
+                    - alarm_on_home
+                    - lock_locked
+              sequence:
+                - if:
+                    - condition: not
+                      conditions:
+                        - condition: state
+                          entity_id: group.all_adults
+                          state: home
+                  then:
+                    - if:
+                        - condition: state
+                          entity_id: binary_sensor.keuken_raam_groot_contact
+                          state: "off"
+                      then:
+                        - action: cover.close_cover
+                          metadata: {}
+                          data: {}
+                          target:
+                            entity_id: cover.rollerblind_0001
+                    - if:
+                        - condition: state
+                          entity_id: binary_sensor.keuken_raam_klein_contact
+                          state: "off"
+                      then:
+                        - action: cover.close_cover
+                          metadata: {}
+                          data: {}
+                          target:
+                            entity_id: cover.rollerblind_0002
+                  alias: Close covers when windows are closed and no-one is home
             - conditions:
                 - alias: Morning
                   condition: or
