@@ -32,6 +32,57 @@ livingroom_cast_package:
             dashboard_path: lovelace
             view_path: brandweer-uden
 
+    - id: 'livingroom_cast_off'
+      alias: Livingroom - Turn off Google Cast
+      description: "When alarm is turned on; turn off Google Cast"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_away
+          id: armed_away
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_home
+          id: armed_home
+        - trigger: state
+          entity_id:
+            - lock.kroon18voordeur
+          to: locked
+          id: locked
+          for:
+            hours: 0
+            minutes: 1
+            seconds: 0
+      conditions:
+        - condition: or
+          conditions:
+            - condition: and
+              conditions:
+                - condition: state
+                  entity_id: group.all_adults
+                  state: not_home
+                - condition: trigger
+                  id:
+                    - locked
+                    - armed_away
+            - condition: and
+              conditions:
+                - condition: state
+                  entity_id: group.all_adults
+                  state: home
+                - condition: trigger
+                  id:
+                    - armed_home
+      actions:
+        - action: media_player.turn_off
+          metadata: {}
+          data: {}
+          target:
+            entity_id: media_player.woonkamer
+
     - id: livingroom_doorbell_tts
       alias: Livingroom - TTS Doorbell
       description: "TTS to doorbell to announce someone is there"
