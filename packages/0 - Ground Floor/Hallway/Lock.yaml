@@ -2,7 +2,7 @@ hallway_lock_package:
   automation:
     - id: hallway_auto_lock
       alias: Hallway - Lock
-      description: 'Auto lock and unlock hallway lock'
+      description: Auto lock and unlock hallway lock
       mode: single
       triggers:
         - trigger: time
@@ -17,6 +17,16 @@ hallway_lock_package:
         - trigger: time
           at: "09:30:00"
           id: morning
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_away
+          id: alarm_on_not_home
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_home
+          id: alarm_on_home
       conditions: []
       actions:
         - choose:
@@ -24,6 +34,8 @@ hallway_lock_package:
                 - condition: trigger
                   id:
                     - bedtime
+                    - alarm_on_not_home
+                    - alarm_on_home
               sequence:
                 - if:
                     - condition: state
