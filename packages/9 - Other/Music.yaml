@@ -106,3 +106,53 @@ music_package:
             skip_condition: true
           target:
             entity_id: automation.general_play_default_music
+
+    - id: 'music_stop_gone'
+      alias: General - Stop music if everyone is gone
+      description: "When alarm is turned or or lock is locked stop music everywhere"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_away
+          id: armed_away
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_home
+          id: armed_home
+        - trigger: state
+          entity_id:
+            - lock.kroon18voordeur
+          to: locked
+          id: locked
+          for:
+            hours: 0
+            minutes: 1
+            seconds: 0
+      conditions:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: group.all_adults
+              state: home
+      actions:
+        - action: media_player.media_stop
+          metadata: {}
+          data: {}
+          target:
+            entity_id:
+              - media_player.badkamer_sonos
+              - media_player.eettafel_sonos
+              - media_player.entree_sonos
+              - media_player.garage_sonos
+              - media_player.keuken_sonos
+              - media_player.keuken_sonos_2
+              - media_player.toilet_sonos
+              - media_player.kantoor_sonos
+              - media_player.woonkamer_sonos
+              - media_player.speelkamer_sonos
+              - media_player.slaapkamer_mini_sonos
+              - media_player.slaapkamer_maxi_sonos
+          alias: Turn off all media

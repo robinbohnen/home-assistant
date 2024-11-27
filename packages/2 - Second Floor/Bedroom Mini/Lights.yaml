@@ -18,21 +18,79 @@ bedroom_mini_lights_package:
           entity_id:
             - sensor.knop_slaapkamer_mini_action
           to: single
+          id: button_single
         - trigger: state
           entity_id:
             - sensor.knop_slaapkamer_mini_action
           to: double
+          id: button_double
         - trigger: state
           entity_id:
             - sensor.knop_slaapkamer_mini_action
           to: hold
+          id: button_hold
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_away
+          id: alarm_on_not_home
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_home
+          id: alarm_on_home
+        - trigger: state
+          entity_id:
+            - lock.kroon18voordeur
+          to: locked
+          id: lock_locked
+          for:
+            hours: 0
+            minutes: 1
+            seconds: 0
       conditions: []
       actions:
-        - action: light.toggle
-          metadata: {}
-          data: {}
-          target:
-            entity_id: light.slaapkamer_mini_lampen
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - button_single
+                    - button_double
+                    - button_hold
+              sequence:
+                - action: light.toggle
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: light.slaapkamer_mini_lampen
+            - conditions:
+                - condition: trigger
+                  id:
+                    - alarm_on_not_home
+                    - alarm_on_home
+                    - lock_locked
+              sequence:
+                - if:
+                    - condition: not
+                      conditions:
+                        - condition: state
+                          entity_id: group.all_adults
+                          state: home
+                    - condition: state
+                      entity_id: light.slaapkamer_mini_lampen
+                      state: "on"
+                  then:
+                    - action: light.turn_off
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: light.slaapkamer_mini_lampen
+          default:
+            - action: light.toggle
+              metadata: {}
+              data: {}
+              target:
+                entity_id: light.slaapkamer_maxi_lampen
 
     - id: bedroom_mini_lights_doors_closed
       alias: Bedroom Mini - Lights off door closed

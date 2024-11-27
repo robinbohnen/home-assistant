@@ -39,6 +39,25 @@ garage_lights_package:
             minutes: 2
             seconds: 0
           id: geenbeweging
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_away
+          id: alarm_on_not_home
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_home
+          id: alarm_on_home
+        - trigger: state
+          entity_id:
+            - lock.kroon18voordeur
+          to: locked
+          id: lock_locked
+          for:
+            hours: 0
+            minutes: 1
+            seconds: 0
       conditions:
         - condition: state
           entity_id: input_boolean.enable_pir_garage
@@ -68,6 +87,28 @@ garage_lights_package:
                     transition: "{{ states('input_number.lights_transition_seconds')|int }}"
                   target:
                     entity_id: light.garage_lampen
+            - conditions:
+                - condition: trigger
+                  id:
+                    - alarm_on_not_home
+                    - alarm_on_home
+                    - lock_locked
+              sequence:
+                - if:
+                    - condition: not
+                      conditions:
+                        - condition: state
+                          entity_id: group.all_adults
+                          state: home
+                    - condition: state
+                      entity_id: light.garage_lampen
+                      state: "on"
+                  then:
+                    - action: light.turn_off
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: light.garage_lampen
           default:
             - action: light.toggle
               metadata: {}

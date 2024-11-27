@@ -24,7 +24,7 @@ playroom_lights_package:
   automation:
     - id: lights_movement_playroom
       alias: Playroom - Lights
-      description: "Turn on the lights of the playroom if there is movement detected"
+      description: Turn on the lights of the playroom if there is movement detected
       mode: single
       triggers:
         - trigger: state
@@ -39,6 +39,25 @@ playroom_lights_package:
             minutes: 5
             seconds: 0
           id: geenbeweging
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_away
+          id: alarm_on_not_home
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: armed_home
+          id: alarm_on_home
+        - trigger: state
+          entity_id:
+            - lock.kroon18voordeur
+          to: locked
+          id: lock_locked
+          for:
+            hours: 0
+            minutes: 1
+            seconds: 0
       conditions:
         - condition: state
           entity_id: input_boolean.enable_pir_playroom
@@ -68,6 +87,28 @@ playroom_lights_package:
                     transition: "{{ states('input_number.lights_transition_seconds')|int }}"
                   target:
                     entity_id: light.speelkamer_lampen
+            - conditions:
+                - condition: trigger
+                  id:
+                    - alarm_on_not_home
+                    - alarm_on_home
+                    - lock_locked
+              sequence:
+                - if:
+                    - condition: not
+                      conditions:
+                        - condition: state
+                          entity_id: group.all_adults
+                          state: home
+                    - condition: state
+                      entity_id: light.speelkamer_lampen
+                      state: "on"
+                  then:
+                    - action: light.turn_off
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: light.speelkamer_lampen
           default:
             - action: light.toggle
               metadata: {}
