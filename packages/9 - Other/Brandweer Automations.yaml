@@ -765,7 +765,7 @@ brandweer_package:
 
     - id: brandweer_tts_nesthub
       alias: Brandweer - TTS on Nest Hub Livingroom
-      description: "TTS on Nest Hub in the livingroom if door opens"
+      description: TTS on Nest Hub in the livingroom if door opens
       mode: single
       triggers:
         - trigger: state
@@ -773,6 +773,9 @@ brandweer_package:
             - binary_sensor.entree_deur_contact
           from: "off"
           to: "on"
+        - trigger: state
+          entity_id:
+            - input_text.brandweer_laatste_melding_fonetisch
       conditions:
         - condition: numeric_state
           entity_id: cover.slaapkamer_rolluik
@@ -798,41 +801,37 @@ brandweer_package:
               action: mqtt.publish
             - alias: Google Nest Hub uitspreken en beeld terug
               sequence:
-                - alias: Stel het volume van de Google Nest Hub in
-                  target:
+                - target:
                     entity_id:
-                      - media_player.woonkamer
+                      - media_player.woonkamer_sonos
                   data:
-                    volume_level: 0.5
+                    volume_level: 0.2
                   action: media_player.volume_set
                 - data:
-                    media_player_entity_id: media_player.woonkamer
+                    media_player_entity_id: media_player.woonkamer_sonos
                     message: >-
                       {{ states.input_text.brandweer_laatste_melding_fonetisch.state
                       }}
                     language: nl
                   target:
                     entity_id: tts.google_nl_nl
-                  alias: Spreek de melding uit op de Google Nest Hub
                   action: tts.speak
                 - wait_for_trigger:
                     - trigger: state
                       entity_id:
-                        - media_player.woonkamer
+                        - media_player.woonkamer_sonos
                       to: idle
                   timeout:
                     hours: 0
                     minutes: 0
                     seconds: 45
                     milliseconds: 0
-                  alias: Wacht tot Google Nest Hub klaar is met afspelen bericht
-                - alias: Zet het brandweer dashboard weer op de Google Nest Hub
+                - action: media_player.volume_set
                   metadata: {}
                   data:
-                    entity_id: media_player.woonkamer
-                    dashboard_path: kroon-18
-                    view_path: brandweer
-                  action: cast.show_lovelace_view
+                    volume_level: 0.07
+                  target:
+                    entity_id: media_player.woonkamer_sonos
 
     - id: brandweer_count_teams
       alias: Brandweer - Counter Teams
