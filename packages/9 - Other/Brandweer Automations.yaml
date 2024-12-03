@@ -740,15 +740,11 @@ brandweer_package:
           entity_id:
             - input_text.brandweer_laatste_melding_fonetisch
       conditions:
-        - condition: numeric_state
-          entity_id: cover.slaapkamer_rolluik
-          attribute: current_position
-          below: 16
         - alias: Kijk of de laatste wijzigingen minder dan 2 minuten geleden was
           condition: template
           value_template: >-
             {{ (now() -
-            states.input_text.brandweer_laatste_melding.last_changed).total_seconds()
+            states.input_text.brandweer_laatste_melding_fonetisch.last_changed).total_seconds()
             < 2 * 60 }}
       actions:
         - parallel:
@@ -772,9 +768,7 @@ brandweer_package:
                   action: media_player.volume_set
                 - data:
                     media_player_entity_id: media_player.woonkamer_sonos
-                    message: >-
-                      {{ states.input_text.brandweer_laatste_melding_fonetisch.state
-                      }}
+                    message: {{ states.input_text.brandweer_laatste_melding_fonetisch.state }}
                     language: nl
                   target:
                     entity_id: tts.google_nl_nl
