@@ -308,43 +308,6 @@ brandweer_package:
                           data:
                             skip_condition: true
                           action: automation.trigger
-                - alias: Google Nest Hub uitspreken en beeld terug
-                  sequence:
-                    - alias: Stel het volume van de Google Nest Hub in
-                      data:
-                        volume_level: 0.5
-                      action: media_player.volume_set
-                      target:
-                        entity_id: media_player.woonkamer
-                    - data:
-                        media_player_entity_id: media_player.woonkamer
-                        message: >-
-                          {{
-                          states.input_text.brandweer_laatste_p2000_melding_fonetisch.state
-                          }}
-                        language: nl
-                      target:
-                        entity_id: tts.google_nl_nl
-                      alias: Spreek de melding uit op de Google Nest Hub
-                      action: tts.speak
-                    - wait_for_trigger:
-                        - trigger: state
-                          entity_id:
-                            - media_player.woonkamer
-                          to: idle
-                          from: playing
-                      timeout:
-                        hours: 0
-                        minutes: 0
-                        seconds: 15
-                        milliseconds: 0
-                    - alias: Zet het brandweer dashboard weer op de Google Nest Hub
-                      metadata: {}
-                      data:
-                        entity_id: media_player.woonkamer
-                        dashboard_path: kroon-18
-                        view_path: brandweer
-                      action: cast.show_lovelace_view
           else:
             - alias: Alarm en Slaapkamer bij mijn ploeg
               if:
