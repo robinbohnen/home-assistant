@@ -22,13 +22,32 @@ music_package:
               entity_id: media_player.woonkamer_sonos
               state: playing
       actions:
-        - alias: Stop if too early
-          if:
-            - condition: time
-              before: "07:15:00"
-          then:
-            - stop: ""
-              error: false
+        - choose:
+            - conditions:
+                - condition: time
+                  weekday:
+                    - mon
+                    - tue
+                    - wed
+                    - thu
+                    - fri
+              sequence:
+                - if:
+                    - condition: time
+                      before: "07:29:00"
+                  then:
+                    - stop: Stop omdat het te vroeg is
+            - conditions:
+                - condition: time
+                  weekday:
+                    - sat
+                    - sun
+              sequence:
+                - if:
+                    - condition: time
+                      before: "08:30:00"
+                  then:
+                    - stop: Stop omdat het te vroeg is
         - action: media_player.volume_set
           metadata: {}
           data:
