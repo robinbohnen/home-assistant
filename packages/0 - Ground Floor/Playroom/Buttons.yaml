@@ -2,7 +2,7 @@ playroom_button_package:
   automation:
     - id: playroom_button_disable_alarm
       alias: Playroom - Disable alarm temporary
-      description: "Turn off the automatic alarm when button is pressed"
+      description: Turn off the automatic alarm when button is pressed
       mode: single
       triggers:
         - trigger: state
@@ -19,23 +19,50 @@ playroom_button_package:
           to: hold
       conditions: []
       actions:
-        - action: automation.turn_off
-          metadata: {}
-          data:
-            stop_actions: true
-          target:
-            entity_id:
-              - automation.alarm_on_automatically
-              - automation.hallway_alarm_on_automatically_robin_to_work
-        - delay:
-            hours: 0
-            minutes: 10
-            seconds: 0
-            milliseconds: 0
-        - action: automation.turn_on
-          metadata: {}
-          data: {}
-          target:
-            entity_id:
-              - automation.alarm_on_automatically
-              - automation.hallway_alarm_on_automatically_robin_to_work
+        - choose:
+            - conditions:
+                - condition: state
+                  entity_id: alarm_control_panel.alarmo
+                  state: disarmed
+              sequence:
+                - action: automation.turn_off
+                  metadata: {}
+                  data:
+                    stop_actions: true
+                  target:
+                    entity_id:
+                      - automation.alarm_on_automatically
+                      - automation.hallway_alarm_on_automatically_robin_to_work
+                - delay:
+                    hours: 0
+                    minutes: 10
+                    seconds: 0
+                    milliseconds: 0
+                - action: automation.turn_on
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id:
+                      - automation.alarm_on_automatically
+                      - automation.hallway_alarm_on_automatically_robin_to_work
+              alias: Alarm is off
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {{ (is_state('alarm_control_panel.alarmo', 'armed_away') or
+                    is_state('alarm_control_panel.alarmo', 'armed_home')) and (now() -
+                    states.alarm_control_panel.alarmo.last_changed).total_seconds() <
+                    2*60 }}
+              sequence:
+                - action: alarm_control_panel.alarm_disarm
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: alarm_control_panel.alarmo
+              alias: Alarm is on for max 2 min
+          default:
+            - action: notify.mobile_devices_adults
+              metadata: {}
+              data:
+                title: Foutmelding
+                message: Knop speelkamer ingedrukt maar dit zou niet moeten kunnen
