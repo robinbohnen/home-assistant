@@ -2,7 +2,9 @@ mini_opened_door_bedtime_package:
   automation:
     - id: mini_opened_door_bedtime
       alias: Bedroom Mini - Opened door during bedtime
-      description: "Mini has opened her door during bedtime; notice parents by breathe some lights in color"
+      description: >-
+        Mini has opened her door during bedtime; notice parents by breathe some lights
+        in color
       mode: single
       triggers:
         - trigger: state
@@ -13,9 +15,6 @@ mini_opened_door_bedtime_package:
         - condition: time
           after: input_datetime.bedtime_mini_1h_off
           before: "09:30:00"
-        - condition: state
-          entity_id: light.woonkamer_lampen
-          state: "on"
       actions:
         - action: scene.create
           metadata: {}
@@ -24,18 +23,38 @@ mini_opened_door_bedtime_package:
             snapshot_entities:
               - light.woonkamer_tv_kast_hue_bar_links
               - light.achtertuin_overkapping_spot_rechts_boven
-        - action: light.turn_on
-          metadata: {}
-          data:
-            rgb_color:
-              - 255
-              - 64
-              - 255
-            effect: breathe
-          target:
-            entity_id:
-              - light.woonkamer_tv_kast_hue_bar_links
-              - light.achtertuin_overkapping_spot_rechts_boven
+        - if:
+            - condition: state
+              entity_id: light.woonkamer_lampen
+              state: "on"
+          then:
+            - action: light.turn_on
+              metadata: {}
+              data:
+                rgb_color:
+                  - 255
+                  - 64
+                  - 255
+                effect: breathe
+              target:
+                entity_id:
+                  - light.woonkamer_tv_kast_hue_bar_links
+        - if:
+            - condition: state
+              entity_id: light.achtertuin_overkapping_wandlampen
+              state: "on"
+          then:
+            - action: light.turn_on
+              metadata: {}
+              data:
+                rgb_color:
+                  - 255
+                  - 64
+                  - 255
+                effect: breathe
+              target:
+                entity_id:
+                  - light.achtertuin_overkapping_spot_rechts_boven
         - delay:
             hours: 0
             minutes: 0
@@ -45,3 +64,4 @@ mini_opened_door_bedtime_package:
           metadata: {}
           target:
             entity_id: scene.mini_door_sleeping
+          data: {}
