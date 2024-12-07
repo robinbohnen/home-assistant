@@ -19,13 +19,18 @@ backyard_spa_package:
   automation:
     - id: backyard_spa_error
       alias: Backyard - Spa Error
-      description: "When an error occurs at the spa; notify parents"
+      description: When an error occurs at the spa; notify parents
       mode: single
       triggers:
         - trigger: state
           entity_id:
             - sensor.intex_purespa_error
-      conditions: []
+      conditions:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: climate.intex_purespa
+              state: unavailable
       actions:
         - if:
             - condition: not
@@ -39,6 +44,7 @@ backyard_spa_package:
               data:
                 title: Intex Spa geeft een error
                 message: "{{ states['sensor.intex_purespa_error_description'].state }}"
+
 
     - id: backyard_spa_temperature
       alias: Backyard - Spa Temperature
