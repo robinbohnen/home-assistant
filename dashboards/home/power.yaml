@@ -1,0 +1,194 @@
+type: sections
+max_columns: 3
+title: Power
+path: power
+icon: mdi:power-socket-eu
+sections:
+  - type: grid
+    cards:
+      - type: custom:bubble-card
+        card_type: separator
+        name: Zolder
+        icon: mdi:home-roof
+        card_layout: large
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.inverter_kroon_18_zolder_voorzijde
+        name: Zolder Huidige Opwek
+        icon: mdi:solar-power-variant
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.attic_solar_total_today
+        name: Zolder Opwekking Vandaag
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.energy_production_today_2
+        name: Zolder Geschat Vandaag
+  - type: grid
+    cards:
+      - type: custom:bubble-card
+        card_type: separator
+        name: Overkapping
+        icon: mdi:greenhouse
+        card_layout: large
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.inverter_kroon_18_overkapping
+        name: Overkapping Huidige Opwek
+        icon: mdi:solar-power-variant-outline
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.today_s_pv_generation
+        name: Overkapping Opwekking Vandaag
+        icon: mdi:solar-power-variant-outline
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.energy_production_today
+        name: Overkapping Geschat Vandaag
+  - type: grid
+    cards:
+      - type: custom:bubble-card
+        card_type: separator
+        name: Totaal
+        icon: mdi:home-plus
+        card_layout: large
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.solar_power_generated_now
+        name: Totaal Huidige Opwek
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.solar_power_generated_today
+        name: Totaal Opwekking Vandaag
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.forecast_solar_production_today
+        name: Totaal Geschat Vandaag
+  - type: grid
+    cards:
+      - type: custom:bubble-card
+        card_type: separator
+        card_layout: large
+        name: Stroom
+        icon: mdi:power-plug
+        grid_options:
+          columns: full
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.zonneplan_electricity_consumption_today
+        name: Stroomverbruik Vandaag
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.zonneplan_gas_consumption_today
+        name: Gasverbruik Vandaag
+        icon: mdi:gas-burner
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.zonneplan_electricity_returned_today
+        name: Stroom Teruggeleverd Vandaag
+        icon: mdi:transmission-tower-export
+    column_span: 1
+  - type: grid
+    cards:
+      - type: custom:bubble-card
+        card_type: separator
+        name: Prijzen vandaag
+        icon: mdi:currency-eur
+        card_layout: large
+      - type: custom:apexcharts-card
+        update_interval: 15m
+        experimental:
+          color_threshold: true
+        graph_span: 24h
+        span:
+          start: day
+        now:
+          show: true
+          label: Now
+          color: black
+        header:
+          show: true
+          title: Electriciteitsprijzen vandaag
+        yaxis:
+          - id: kwh_prijs
+            min: ~0
+            max: ~0.4
+            decimals: 2
+            apex_config:
+              title:
+                text: Prijs €/kWh
+          - id: kw_gebruik
+            opposite: true
+            min: -7
+            max: ~17
+            decimals: 1
+            apex_config:
+              title:
+                text: Gebruik kW
+        apex_config:
+          tooltip:
+            x:
+              show: false
+        series:
+          - entity: sensor.dynamische_prijzen_average_electricity_price
+            color_threshold:
+              - value: -0.1
+                color: "#264D59"
+              - value: 0
+                color: "#43978D"
+              - value: 0.26
+                color: "#F9E07F"
+              - value: 0.4
+                color: "#D46C4E"
+            name: Uurprijs vandaag
+            stroke_width: -5
+            float_precision: 3
+            type: column
+            show:
+              legend_value: false
+            data_generator: |
+              return entity.attributes.prices.map((entry) => {
+              return [new Date(entry.time), entry.price];
+              });
+            yaxis_id: kwh_prijs
+          - entity: sensor.dynamische_prijzen_average_electricity_price
+            name: Gemiddelde prijs vandaag
+            curve: stepline
+            stroke_width: 2
+            color: orange
+            type: line
+            float_precision: 3
+            group_by:
+              duration: 1d
+              func: avg
+            show:
+              legend_value: false
+            data_generator: |
+              return entity.attributes.prices.map((entry) => {
+              return [new Date(entry.time), entry.price];
+              });
+            yaxis_id: kwh_prijs
+          - entity: sensor.electricity_meter_energieverbruik
+            statistics:
+              type: mean
+              period: 5minute
+            group_by:
+              duration: 15m
+              func: avg
+            yaxis_id: kw_gebruik
+            stroke_width: 2
+            curve: smooth
+            extend_to: now
+cards: []
