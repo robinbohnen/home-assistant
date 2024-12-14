@@ -145,32 +145,6 @@ brandweer_package:
           target:
             entity_id: input_datetime.brandweer_laatste_melding
           action: input_datetime.set_datetime
-        - alias: Stuur bericht naar Home Assistant gebruikers
-          if:
-            - condition: state
-              entity_id: input_select.brandweer_dienstdoende_ploeg
-              state: input_select.brandweer_mijn_huidige_ploeg
-              alias: Kijk of ik momenteel dienst heb
-          then:
-            - metadata: {}
-              data:
-                title: Brandweer {{ trigger.json.capcode_description }}
-                message: "{{ states.input_text.brandweer_laatste_melding.state }}"
-                data:
-                  push:
-                    sound:
-                      name: default
-                      critical: 1
-                      volume: 1
-              alias: Stuur HA notificatie naar alle gebruikers met hoge prioriteit
-              action: notify.mobile_devices_all
-          else:
-            - metadata: {}
-              data:
-                title: Brandweer {{ trigger.json.capcode_description }}
-                message: "{{ states.input_text.brandweer_laatste_melding.state }}"
-              alias: Stuur HA notificatie naar alle gebruikers met lage prioriteit
-              action: notify.mobile_devices_all
         - alias: Lampen e.d. aanzetten bij melding
           if:
             - condition: state
@@ -947,3 +921,40 @@ brandweer_package:
               - sensor.teams_status_r_bohnen_vrbn_nl_2
               - sensor.teams_status_robin_bohnen_nl_2
           action: o365.update_user_preferred_status
+
+    - id: brandweer_send_message_uden
+      alias: Brandweer - Webhook MAIN - Send messages
+      description: "Send message when input text changes"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - input_text.brandweer_laatste_melding
+      conditions: []
+      actions:
+        - alias: Stuur bericht naar Home Assistant gebruikers
+          if:
+            - condition: state
+              entity_id: input_select.brandweer_dienstdoende_ploeg
+              state: input_select.brandweer_mijn_huidige_ploeg
+              alias: Kijk of ik momenteel dienst heb
+          then:
+            - metadata: {}
+              data:
+                title: Brandweer Uden
+                message: "{{ states.input_text.brandweer_laatste_melding.state }}"
+                data:
+                  push:
+                    sound:
+                      name: default
+                      critical: 1
+                      volume: 1
+              alias: Stuur HA notificatie naar alle gebruikers met hoge prioriteit
+              action: notify.mobile_devices_all
+          else:
+            - metadata: {}
+              data:
+                title: Brandweer Uden
+                message: "{{ states.input_text.brandweer_laatste_melding.state }}"
+              alias: Stuur HA notificatie naar alle gebruikers met lage prioriteit
+              action: notify.mobile_devices_all
