@@ -27,3 +27,24 @@ backyard_solarpanels_package:
           data:
             message: Er zijn errors op de omvormer in de overkapping; {{states.sensor.errors.state}}
             title: Achtertuin Overkapping - Omvormer Error
+
+    - id: restart_solarpanels_backyard
+      alias: Backyard Solarpanels - Restart Integration when needed
+      description: "Restart the integration when unavailable"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - sensor.inverter_kroon_18_overkapping
+          to: unavailable
+        - trigger: time_pattern
+          hours: /1
+      conditions:
+        - condition: state
+          entity_id: sensor.inverter_kroon_18_overkapping
+          state: unavailable
+      actions:
+        - action: homeassistant.reload_config_entry
+          metadata: {}
+          data:
+            entry_id: 01JCBKTQAM72Y8202G7F57WN6Z
