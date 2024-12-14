@@ -22,4 +22,25 @@ solar_panels_package:
         - sensor.inverter_kroon_18_overkapping
       name: Solar Power Generated Now
       unique_id: solar_total_now
-    
+
+  automation:
+    - id: restart_solarpanels_attic
+      alias: Attic Solarpanels - Restart Integration when needed
+      description: "Restart the integration when unavailable"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - sensor.inverter_kroon_18_zolder_voorzijde
+          to: unavailable
+        - trigger: time_pattern
+          hours: /1
+      conditions:
+        - condition: state
+          entity_id: sensor.inverter_kroon_18_zolder_voorzijde
+          state: unavailable
+      actions:
+        - action: homeassistant.reload_config_entry
+          metadata: {}
+          data:
+            entry_id: 01JCBKS8RM752RMKK5RPYZBGSS
