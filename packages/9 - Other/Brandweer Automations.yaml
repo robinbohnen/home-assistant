@@ -145,271 +145,6 @@ brandweer_package:
           target:
             entity_id: input_datetime.brandweer_laatste_melding
           action: input_datetime.set_datetime
-        - alias: Lampen e.d. aanzetten bij melding
-          if:
-            - condition: state
-              entity_id: light.woonkamer_lampen
-              state: "on"
-              alias: Kijk of de lampen beneden aan zijn
-          then:
-            - parallel:
-                - data:
-                    qos: 0
-                    retain: false
-                    topic: clock_1/notify
-                    payload: >-
-                      {"icon": 555, "repeat": 4, "text": " {{
-                      states.input_text.brandweer_laatste_melding.state }}",
-                      "scrollSpeed": 50, "sound": "alarm", "stack": false}
-                  alias: Zet het bericht op de klok in de keuken
-                  action: mqtt.publish
-                - alias: Lampen bij mijn ploeg
-                  if:
-                    - condition: state
-                      entity_id: input_select.brandweer_dienstdoende_ploeg
-                      state: input_select.brandweer_mijn_huidige_ploeg
-                      alias: Kijk of ik momenteel dienst heb
-                  then:
-                    - metadata: {}
-                      data:
-                        scene_id: brandweer_pre_lampen
-                        snapshot_entities:
-                          - light.brw_groep_1
-                          - light.brw_groep_2
-                      alias: Huidige lampen scene aanmaken
-                      action: scene.create
-                    - data:
-                        rgb_color:
-                          - 255
-                          - 0
-                          - 0
-                        effect: breathe
-                      action: light.turn_on
-                      target:
-                        entity_id: light.brw_groep_1
-                    - data:
-                        rgb_color:
-                          - 0
-                          - 0
-                          - 255
-                        effect: breathe
-                      target:
-                        entity_id: light.brw_groep_2
-                      action: light.turn_on
-                    - delay:
-                        hours: 0
-                        minutes: 0
-                        seconds: 15
-                        milliseconds: 0
-                    - alias: Apple TV aan of uit, juiste scene
-                      if:
-                        - condition: state
-                          entity_id: media_player.woonkamer_appletv
-                          state: playing
-                      then:
-                        - data:
-                            skip_condition: true
-                          action: automation.trigger
-                          target:
-                            entity_id: automation.livingroom_media_playing
-                      else:
-                        - data:
-                            skip_condition: true
-                          action: automation.trigger
-                          target:
-                            entity_id: automation.livingroom_media_paused
-                    - target:
-                        entity_id: scene.brandweer_pre_lampen
-                      data:
-                        transition: 3
-                      alias: Alle lampen terug op eerdere instellingen
-                      action: scene.turn_on
-                  else:
-                    - metadata: {}
-                      data:
-                        scene_id: brandweer_tv_kast_lampen
-                        snapshot_entities:
-                          - light.woonkamer_tv_kast_hue_bar_links
-                          - light.woonkamer_tv_kast_hue_bar_rechts
-                          - light.woonkamer_led_strip_tv_kast
-                      alias: TV Kast scene aanmaken
-                      action: scene.create
-                    - metadata: {}
-                      data:
-                        rgb_color:
-                          - 4
-                          - 51
-                          - 255
-                      target:
-                        entity_id:
-                          - light.woonkamer_tv_kast_hue_bar_links
-                          - light.woonkamer_led_strip_tv_kast
-                      action: light.turn_on
-                    - metadata: {}
-                      data:
-                        rgb_color:
-                          - 255
-                          - 38
-                          - 0
-                      target:
-                        entity_id: light.woonkamer_tv_kast_hue_bar_rechts
-                      action: light.turn_on
-                    - delay:
-                        hours: 0
-                        minutes: 0
-                        seconds: 15
-                        milliseconds: 0
-                    - metadata: {}
-                      target:
-                        entity_id: scene.brandweer_tv_kast_lampen
-                      action: scene.turn_on
-                    - alias: Apple TV aan of uit, juiste scene
-                      if:
-                        - condition: state
-                          entity_id: media_player.woonkamer_appletv
-                          state: playing
-                      then:
-                        - target:
-                            entity_id:
-                              - automation.livingroom_media_playing
-                          data:
-                            skip_condition: true
-                          action: automation.trigger
-                      else:
-                        - target:
-                            entity_id:
-                              - automation.livingroom_media_paused
-                          data:
-                            skip_condition: true
-                          action: automation.trigger
-          else:
-            - alias: Alarm en Slaapkamer bij mijn ploeg
-              if:
-                - condition: state
-                  entity_id: input_select.brandweer_dienstdoende_ploeg
-                  state: input_select.brandweer_mijn_huidige_ploeg
-                  alias: Kijk of ik momenteel dienst heb
-              then:
-                - parallel:
-                    - if:
-                        - condition: state
-                          entity_id: alarm_control_panel.alarmo
-                          state: armed_home
-                      then:
-                        - data:
-                            entity_id: alarm_control_panel.alarmo
-                          action: alarmo.disarm
-                      alias: Alarm uitschakelen
-                    - alias: Slaapkamer en andere lampen aan
-                      if:
-                        - condition: and
-                          conditions:
-                            - condition: numeric_state
-                              entity_id: cover.slaapkamer_rolluik
-                              attribute: current_position
-                              below: 16
-                            - condition: time
-                              after: "22:00:00"
-                              before: "09:30:00"
-                      then:
-                        - action: light.turn_on
-                          metadata: {}
-                          data:
-                            brightness_pct: 5
-                            transition: 3
-                          target:
-                            entity_id: light.slaapkamer_lampen
-                        - action: light.turn_on
-                          metadata: {}
-                          data:
-                            transition: 0
-                            brightness_pct: 50
-                          target:
-                            entity_id:
-                              - light.eettafel_lampen
-                              - light.entree_lampen
-                              - light.speelkamer_lampen
-                    - data:
-                        qos: 0
-                        retain: false
-                        topic: clock_1/notify
-                        payload: >-
-                          {"icon": 555, "repeat": 4, "text": " {{
-                          states.input_text.brandweer_laatste_melding.state }}",
-                          "scrollSpeed": 50, "sound": "alarm", "stack": false}
-                      alias: Zet het bericht op de klok in de keuken
-                      action: mqtt.publish
-        - alias: Slaapkamer en andere lampen uit
-          if:
-            - condition: numeric_state
-              entity_id: cover.slaapkamer_rolluik
-              attribute: current_position
-              below: 16
-            - condition: time
-              after: "19:30:00"
-              before: "07:00:00"
-          then:
-            - parallel:
-                - sequence:
-                    - wait_for_trigger:
-                        - trigger: state
-                          entity_id:
-                            - binary_sensor.slaapkamer_deur_contact
-                          from: "on"
-                          to: "off"
-                      timeout:
-                        hours: 0
-                        minutes: 1
-                        seconds: 0
-                        milliseconds: 0
-                    - alias: Slaapkamer licht weer uit
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: light.slaapkamer_lampen
-                      action: light.turn_off
-                - sequence:
-                    - alias: Wacht tot Robin thuis weggaat
-                      wait_for_trigger:
-                        - entity_id: person.robin_bohnen
-                          zone: zone.home
-                          event: leave
-                          trigger: zone
-                      timeout:
-                        hours: 0
-                        minutes: 2
-                        seconds: 30
-                        milliseconds: 0
-                      continue_on_timeout: true
-                    - alias: Licht weer uit
-                      data: {}
-                      target:
-                        entity_id:
-                          - light.slaapkamer_lampen
-                          - light.entree_lampen
-                          - light.eettafel_lampen
-                          - light.speelkamer_lampen
-                      action: light.turn_off
-                    - alias: Alarm weer aanzetten
-                      if:
-                        - condition: zone
-                          entity_id: person.samantha_henkelman
-                          zone: zone.home
-                        - condition: state
-                          entity_id: alarm_control_panel.alarmo
-                          state: disarmed
-                      then:
-                        - metadata: {}
-                          data: {}
-                          action: alarm_control_panel.alarm_arm_home
-                          target:
-                            entity_id: alarm_control_panel.alarmo
-                      else:
-                        - metadata: {}
-                          data: {}
-                          action: alarm_control_panel.alarm_arm_away
-                          target:
-                            entity_id: alarm_control_panel.alarmo
         - alias: Wacht of ik op de kazerne aankom of deze verlaat
           if:
             - alias: Kijk of ik nog niet op de kazerne ben
@@ -431,136 +166,6 @@ brandweer_package:
                 seconds: 0
                 milliseconds: 0
               continue_on_timeout: false
-            - alias: Als Robin op de kazerne is
-              if:
-                - alias: Kijk of ik op de kazerne ben
-                  condition: or
-                  conditions:
-                    - condition: zone
-                      entity_id: person.robin_bohnen
-                      zone: zone.brandweer_kazerne_uden
-              then:
-                - if:
-                    - condition: not
-                      conditions:
-                        - condition: state
-                          entity_id: sensor.recente_uitruk_in_agenda
-                          state: "on"
-                      alias: Kijk of er nog geen melding in de agenda staat
-                  then:
-                    - metadata: {}
-                      data:
-                        subject: "{{ states.input_text.brandweer_laatste_melding.state }}"
-                        start: >-
-                          {{
-                          as_local(states.input_text.brandweer_laatste_melding.last_changed)
-                          }}
-                        end: "{{ now() + timedelta(minutes=60) }}"
-                        body: >
-                          Melding binnen om: {{
-                          as_timestamp(as_local(states.input_text.brandweer_laatste_melding.last_changed))
-                          | timestamp_custom('%H:%M:%S') }}<br>
-
-                          Op kazerne om: {{ as_timestamp(now()) |
-                          timestamp_custom('%H:%M:%S') }}<br>
-
-                          Garagedeur dicht om {{
-                          as_timestamp(as_local(states.binary_sensor.speelkamer_openslaande_deuren_contact.last_changed))
-                          | timestamp_custom('%H:%M:%S') }}
-                      target:
-                        entity_id:
-                          - calendar.brandweer_uitrukken_private
-                          - calendar.agenda_business
-                      action: o365.create_calendar_event
-                    - metadata: {}
-                      data:
-                        title: Robin is uitgerukt
-                        message: >-
-                          Naar deze melding; {{
-                          states.input_text.brandweer_laatste_melding.state }}
-                      action: notify.mobile_devices_all
-                    - metadata: {}
-                      data: {}
-                      target:
-                        entity_id: input_boolean.brandweer_uitgerukt
-                      action: input_boolean.turn_on
-                    - metadata: {}
-                      data:
-                        timestamp: "{{ now().timestamp() }}"
-                      target:
-                        entity_id: input_datetime.brandweer_laatste_uitgerukt
-                      action: input_datetime.set_datetime
-                    - metadata: {}
-                      data:
-                        availability: Away
-                      target:
-                        entity_id:
-                          - sensor.teams_status_r_bohnen_vrbn_nl_2
-                          - sensor.teams_status_robin_bohnen_nl_2
-                      action: o365.update_user_preferred_status
-          else:
-            - alias: Als Robin op de kazerne is
-              if:
-                - alias: Controleer of ik echt op de kazerne ben
-                  condition: or
-                  conditions:
-                    - condition: zone
-                      entity_id: person.robin_bohnen
-                      zone: zone.brandweer_kazerne_uden
-              then:
-                - if:
-                    - condition: not
-                      conditions:
-                        - condition: state
-                          entity_id: sensor.recente_uitruk_in_agenda
-                          state: "on"
-                      alias: Kijk of er nog geen melding in de agenda staat
-                  then:
-                    - metadata: {}
-                      data:
-                        subject: "{{ states.input_text.brandweer_laatste_melding.state }}"
-                        start: >-
-                          {{
-                          as_local(states.input_text.brandweer_laatste_melding.last_changed)
-                          }}
-                        end: "{{ now() + timedelta(minutes=60) }}"
-                        body: >
-                          Melding binnen om: {{
-                          as_timestamp(as_local(states.input_text.brandweer_laatste_melding.last_changed))
-                          | timestamp_custom('%H:%M:%S') }}<br>
-
-                          Op kazerne om: Was op de kazerne
-                      target:
-                        entity_id:
-                          - calendar.brandweer_uitrukken_private
-                          - calendar.agenda_business
-                      action: o365.create_calendar_event
-                    - metadata: {}
-                      data:
-                        title: Robin is uitgerukt
-                        message: >-
-                          Naar deze melding; {{
-                          states.input_text.brandweer_laatste_melding.state }}
-                      action: notify.mobile_devices_all
-                    - metadata: {}
-                      data: {}
-                      target:
-                        entity_id: input_boolean.brandweer_uitgerukt
-                      action: input_boolean.turn_on
-                    - metadata: {}
-                      data:
-                        timestamp: "{{ now().timestamp() }}"
-                      target:
-                        entity_id: input_datetime.brandweer_laatste_uitgerukt
-                      action: input_datetime.set_datetime
-                    - metadata: {}
-                      data:
-                        availability: Away
-                      target:
-                        entity_id:
-                          - sensor.teams_status_r_bohnen_vrbn_nl_2
-                          - sensor.teams_status_robin_bohnen_nl_2
-                      action: o365.update_user_preferred_status
 
     - id: brandweer_webhook_nearby_locations
       alias: Brandweer - Webhook - Nearby locations
@@ -958,3 +563,397 @@ brandweer_package:
                 message: "{{ states.input_text.brandweer_laatste_melding.state }}"
               alias: Stuur HA notificatie naar alle gebruikers met lage prioriteit
               action: notify.mobile_devices_all
+
+    - id: brandweer_webhook_main_automations
+      alias: Brandweer - Webhook MAIN - Light and Alarm
+      description: "Change all lights based on service or not and turn off and on Alarm"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - input_text.brandweer_laatste_melding
+      conditions: []
+      actions:
+        - parallel:
+            - if:
+                - condition: state
+                  entity_id: light.woonkamer_lampen
+                  state: "on"
+              then:
+                - data:
+                    qos: 0
+                    retain: false
+                    topic: clock_1/notify
+                    payload: >-
+                      {"icon": 555, "repeat": 4, "text": " {{
+                      states.input_text.brandweer_laatste_melding.state }}",
+                      "scrollSpeed": 50, "sound": "alarm", "stack": false}
+                  action: mqtt.publish
+              alias: Zet bericht op led klok
+            - if:
+                - condition: state
+                  entity_id: light.woonkamer_lampen
+                  state: "on"
+              then:
+                - if:
+                    - condition: state
+                      entity_id: input_select.brandweer_dienstdoende_ploeg
+                      state: input_select.brandweer_mijn_huidige_ploeg
+                      alias: Kijk of ik momenteel dienst heb
+                  then:
+                    - metadata: {}
+                      data:
+                        scene_id: brandweer_pre_lampen
+                        snapshot_entities:
+                          - light.brw_groep_1
+                          - light.brw_groep_2
+                      alias: Huidige lampen scene aanmaken
+                      action: scene.create
+                    - data:
+                        rgb_color:
+                          - 255
+                          - 0
+                          - 0
+                        effect: breathe
+                      action: light.turn_on
+                      target:
+                        entity_id: light.brw_groep_1
+                    - data:
+                        rgb_color:
+                          - 0
+                          - 0
+                          - 255
+                        effect: breathe
+                      target:
+                        entity_id: light.brw_groep_2
+                      action: light.turn_on
+                    - delay:
+                        hours: 0
+                        minutes: 0
+                        seconds: 15
+                        milliseconds: 0
+                    - alias: Apple TV aan of uit, juiste scene
+                      if:
+                        - condition: state
+                          entity_id: media_player.woonkamer_appletv
+                          state: playing
+                      then:
+                        - data:
+                            skip_condition: true
+                          action: automation.trigger
+                          target:
+                            entity_id: automation.livingroom_media_playing
+                      else:
+                        - data:
+                            skip_condition: true
+                          action: automation.trigger
+                          target:
+                            entity_id: automation.livingroom_media_paused
+                    - target:
+                        entity_id: scene.brandweer_pre_lampen
+                      data:
+                        transition: 3
+                      alias: Alle lampen terug op eerdere instellingen
+                      action: scene.turn_on
+                  else:
+                    - metadata: {}
+                      data:
+                        scene_id: brandweer_tv_kast_lampen
+                        snapshot_entities:
+                          - light.woonkamer_tv_kast_hue_bar_links
+                          - light.woonkamer_tv_kast_hue_bar_rechts
+                          - light.woonkamer_led_strip_tv_kast
+                      alias: TV Kast scene aanmaken
+                      action: scene.create
+                    - metadata: {}
+                      data:
+                        rgb_color:
+                          - 4
+                          - 51
+                          - 255
+                      target:
+                        entity_id:
+                          - light.woonkamer_tv_kast_hue_bar_links
+                          - light.woonkamer_led_strip_tv_kast
+                      action: light.turn_on
+                    - metadata: {}
+                      data:
+                        rgb_color:
+                          - 255
+                          - 38
+                          - 0
+                      target:
+                        entity_id: light.woonkamer_tv_kast_hue_bar_rechts
+                      action: light.turn_on
+                    - delay:
+                        hours: 0
+                        minutes: 0
+                        seconds: 15
+                        milliseconds: 0
+                    - metadata: {}
+                      target:
+                        entity_id: scene.brandweer_tv_kast_lampen
+                      action: scene.turn_on
+                      data: {}
+                    - alias: Apple TV aan of uit, juiste scene
+                      if:
+                        - condition: state
+                          entity_id: media_player.woonkamer_appletv
+                          state: playing
+                      then:
+                        - target:
+                            entity_id:
+                              - automation.livingroom_media_playing
+                          data:
+                            skip_condition: true
+                          action: automation.trigger
+                      else:
+                        - target:
+                            entity_id:
+                              - automation.livingroom_media_paused
+                          data:
+                            skip_condition: true
+                          action: automation.trigger
+              alias: Stel lampen in op kleur
+            - if:
+                - condition: numeric_state
+                  entity_id: cover.slaapkamer_rolluik
+                  attribute: current_position
+                  below: 16
+                - condition: time
+                  after: "19:30:00"
+                  before: "07:00:00"
+              then:
+                - sequence:
+                    - wait_for_trigger:
+                        - trigger: state
+                          entity_id:
+                            - binary_sensor.slaapkamer_deur_contact
+                          from: "on"
+                          to: "off"
+                      timeout:
+                        hours: 0
+                        minutes: 1
+                        seconds: 0
+                        milliseconds: 0
+                    - alias: Slaapkamer licht weer uit
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: light.slaapkamer_lampen
+                      action: light.turn_off
+              alias: Slaapkamer licht weer uit
+            - if:
+                - condition: numeric_state
+                  entity_id: cover.slaapkamer_rolluik
+                  attribute: current_position
+                  below: 16
+                - condition: time
+                  after: "19:30:00"
+                  before: "07:00:00"
+              then:
+                - sequence:
+                    - alias: Wacht tot Robin thuis weggaat
+                      wait_for_trigger:
+                        - entity_id: person.robin_bohnen
+                          zone: zone.home
+                          event: leave
+                          trigger: zone
+                      timeout:
+                        hours: 0
+                        minutes: 2
+                        seconds: 30
+                        milliseconds: 0
+                      continue_on_timeout: true
+                    - alias: Licht weer uit
+                      data: {}
+                      target:
+                        entity_id:
+                          - light.slaapkamer_lampen
+                          - light.entree_lampen
+                          - light.eettafel_lampen
+                          - light.speelkamer_lampen
+                      action: light.turn_off
+                    - alias: Alarm weer aanzetten
+                      if:
+                        - condition: zone
+                          entity_id: person.samantha_henkelman
+                          zone: zone.home
+                        - condition: state
+                          entity_id: alarm_control_panel.alarmo
+                          state: disarmed
+                      then:
+                        - metadata: {}
+                          data: {}
+                          action: alarm_control_panel.alarm_arm_home
+                          target:
+                            entity_id: alarm_control_panel.alarmo
+                      else:
+                        - metadata: {}
+                          data: {}
+                          action: alarm_control_panel.alarm_arm_away
+                          target:
+                            entity_id: alarm_control_panel.alarmo
+              alias: Al het licht weer uit en alarm aan
+
+    - id: brandweer_webhook_main_calendar
+      alias: Brandweer - Webhook MAIN - Calendar changes
+      description: "Add appointment to calendar when gone with firestation"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - input_text.brandweer_laatste_melding
+      conditions: []
+      actions:
+        - alias: Wacht of ik op de kazerne aankom of deze verlaat
+          if:
+            - alias: Kijk of ik nog niet op de kazerne ben
+              condition: not
+              conditions:
+                - condition: zone
+                  entity_id: person.robin_bohnen
+                  zone: zone.brandweer_kazerne_uden
+          then:
+            - alias: 6 minuten wachten totdat Robin op kazerne is
+              wait_for_trigger:
+                - entity_id: person.robin_bohnen
+                  zone: zone.brandweer_kazerne_uden
+                  event: enter
+                  trigger: zone
+              timeout:
+                hours: 0
+                minutes: 6
+                seconds: 0
+                milliseconds: 0
+              continue_on_timeout: false
+            - alias: Als Robin op de kazerne is
+              if:
+                - alias: Kijk of ik op de kazerne ben
+                  condition: or
+                  conditions:
+                    - condition: zone
+                      entity_id: person.robin_bohnen
+                      zone: zone.brandweer_kazerne_uden
+              then:
+                - if:
+                    - condition: not
+                      conditions:
+                        - condition: state
+                          entity_id: sensor.recente_uitruk_in_agenda
+                          state: "on"
+                      alias: Kijk of er nog geen melding in de agenda staat
+                  then:
+                    - metadata: {}
+                      data:
+                        subject: "{{ states.input_text.brandweer_laatste_melding.state }}"
+                        start: >-
+                          {{
+                          as_local(states.input_text.brandweer_laatste_melding.last_changed)
+                          }}
+                        end: "{{ now() + timedelta(minutes=60) }}"
+                        body: >
+                          Melding binnen om: {{
+                          as_timestamp(as_local(states.input_text.brandweer_laatste_melding.last_changed))
+                          | timestamp_custom('%H:%M:%S') }}<br>
+
+                          Op kazerne om: {{ as_timestamp(now()) |
+                          timestamp_custom('%H:%M:%S') }}<br>
+
+                          Garagedeur dicht om {{
+                          as_timestamp(as_local(states.binary_sensor.speelkamer_openslaande_deuren_contact.last_changed))
+                          | timestamp_custom('%H:%M:%S') }}
+                      target:
+                        entity_id:
+                          - calendar.brandweer_uitrukken_private
+                          - calendar.agenda_business
+                      action: o365.create_calendar_event
+                    - metadata: {}
+                      data:
+                        title: Robin is uitgerukt
+                        message: >-
+                          Naar deze melding; {{
+                          states.input_text.brandweer_laatste_melding.state }}
+                      action: notify.mobile_devices_all
+                    - metadata: {}
+                      data: {}
+                      target:
+                        entity_id: input_boolean.brandweer_uitgerukt
+                      action: input_boolean.turn_on
+                    - metadata: {}
+                      data:
+                        timestamp: "{{ now().timestamp() }}"
+                      target:
+                        entity_id: input_datetime.brandweer_laatste_uitgerukt
+                      action: input_datetime.set_datetime
+                    - metadata: {}
+                      data:
+                        availability: Away
+                      target:
+                        entity_id:
+                          - sensor.teams_status_r_bohnen_vrbn_nl_2
+                          - sensor.teams_status_robin_bohnen_nl_2
+                      action: o365.update_user_preferred_status
+          else:
+            - alias: Als Robin op de kazerne is
+              if:
+                - alias: Controleer of ik echt op de kazerne ben
+                  condition: or
+                  conditions:
+                    - condition: zone
+                      entity_id: person.robin_bohnen
+                      zone: zone.brandweer_kazerne_uden
+              then:
+                - if:
+                    - condition: not
+                      conditions:
+                        - condition: state
+                          entity_id: sensor.recente_uitruk_in_agenda
+                          state: "on"
+                      alias: Kijk of er nog geen melding in de agenda staat
+                  then:
+                    - metadata: {}
+                      data:
+                        subject: "{{ states.input_text.brandweer_laatste_melding.state }}"
+                        start: >-
+                          {{
+                          as_local(states.input_text.brandweer_laatste_melding.last_changed)
+                          }}
+                        end: "{{ now() + timedelta(minutes=60) }}"
+                        body: >
+                          Melding binnen om: {{
+                          as_timestamp(as_local(states.input_text.brandweer_laatste_melding.last_changed))
+                          | timestamp_custom('%H:%M:%S') }}<br>
+
+                          Op kazerne om: Was op de kazerne
+                      target:
+                        entity_id:
+                          - calendar.brandweer_uitrukken_private
+                          - calendar.agenda_business
+                      action: o365.create_calendar_event
+                    - metadata: {}
+                      data:
+                        title: Robin is uitgerukt
+                        message: >-
+                          Naar deze melding; {{
+                          states.input_text.brandweer_laatste_melding.state }}
+                      action: notify.mobile_devices_all
+                    - metadata: {}
+                      data: {}
+                      target:
+                        entity_id: input_boolean.brandweer_uitgerukt
+                      action: input_boolean.turn_on
+                    - metadata: {}
+                      data:
+                        timestamp: "{{ now().timestamp() }}"
+                      target:
+                        entity_id: input_datetime.brandweer_laatste_uitgerukt
+                      action: input_datetime.set_datetime
+                    - metadata: {}
+                      data:
+                        availability: Away
+                      target:
+                        entity_id:
+                          - sensor.teams_status_r_bohnen_vrbn_nl_2
+                          - sensor.teams_status_robin_bohnen_nl_2
+                      action: o365.update_user_preferred_status
