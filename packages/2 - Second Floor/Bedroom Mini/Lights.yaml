@@ -122,7 +122,7 @@ bedroom_mini_lights_package:
 
     - id: bedroom_mini_lights_doors_open
       alias: Bedroom Mini - Lights on door opened
-      description: "When mini opens her door turn on the lights during sunset"
+      description: When mini opens her door turn on the lights during sunset
       mode: single
       triggers:
         - trigger: state
@@ -143,3 +143,25 @@ bedroom_mini_lights_package:
             entity_id:
               - light.overloop_lampen
               - light.overloop_zolder_lampen
+        - delay:
+            hours: 0
+            minutes: 5
+            seconds: 0
+            milliseconds: 0
+        - if:
+            - condition: or
+              conditions:
+                - condition: state
+                  entity_id: light.overloop_zolder_lampen
+                  state: "on"
+                - condition: state
+                  entity_id: light.overloop_lampen
+                  state: "on"
+          then:
+            - action: light.turn_off
+              metadata: {}
+              data: {}
+              target:
+                entity_id:
+                  - light.overloop_lampen
+                  - light.overloop_zolder_lampen
