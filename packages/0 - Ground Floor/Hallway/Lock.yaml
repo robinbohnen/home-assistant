@@ -104,7 +104,7 @@ hallway_lock_package:
 
     - id: hallway_lock_unlock_fingerprint
       alias: Hallway - Lock Unlock on Fingerprint
-      description: "Unlock lock when known fingerprint is detected"
+      description: Unlock lock when known fingerprint is detected
       mode: single
       triggers:
         - trigger: state
@@ -118,6 +118,15 @@ hallway_lock_package:
               entity_id: event.g4_doorbell_voortuin_fingerprint
               attribute: ulp_id
               state: 2a13d91c-1f4f-4f03-83a5-b8eb61d27c4c
+        - condition: template
+          value_template: |-
+            {{
+               not trigger.event.data.old_state.attributes.get('restored', false) and
+               not trigger.event.data.old_state.state == 'unavailable' and
+               trigger.event.data.new_state is not none and
+               trigger.event.data.new_state.attributes.event_type == 'identified' and
+               (trigger.event.data.new_state.attributes.ulp_id|default('')) != ''
+            }}
       actions:
         - action: lock.open
           metadata: {}
