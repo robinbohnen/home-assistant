@@ -23,6 +23,15 @@ livingroom_aquarium_package:
           to: "off"
           from: "on"
           id: living_room_lights_off
+        - trigger: state
+          entity_id:
+            - switch.aquarium_co2_en_verlichting
+          to: "on"
+          for:
+            hours: 6
+            minutes: 0
+            seconds: 0
+          id: aquarium_on_0600
       conditions: []
       actions:
         - choose:
@@ -72,6 +81,28 @@ livingroom_aquarium_package:
                       data: {}
                       target:
                         entity_id: switch.aquarium_co2_en_verlichting
+            - conditions:
+                - condition: trigger
+                  id:
+                    - aquarium_on_0600
+              sequence:
+                - if:
+                    - condition: not
+                      conditions:
+                        - condition: state
+                          entity_id: group.all_adults
+                          state: home
+                  then:
+                    - if:
+                        - condition: state
+                          entity_id: switch.aquarium_co2_en_verlichting
+                          state: "on"
+                      then:
+                        - action: switch.turn_off
+                          metadata: {}
+                          data: {}
+                          target:
+                            entity_id: switch.aquarium_co2_en_verlichting
           default:
             - action: switch.toggle
               metadata: {}
