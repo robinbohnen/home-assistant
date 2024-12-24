@@ -54,3 +54,29 @@ bedroom_lights_package:
                 transition: "{{ states('input_number.lights_transition_seconds')|int }}"
               target:
                 entity_id: light.slaapkamer_lampen
+
+    - id: bedroom_lights_doorbell
+      alias: Bedroom - Lights on Doorbell Ring
+      description: "Flash lights when we are in bed and doorbell is ringed"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.g4_doorbell_voortuin_doorbell
+          to: "on"
+      conditions:
+        - condition: numeric_state
+          entity_id: cover.slaapkamer_rolluik
+          attribute: current_position
+          below: 16
+        - condition: time
+          after: "19:30:00"
+          before: "09:30:00"
+      actions:
+        - action: light.turn_on
+          metadata: {}
+          data:
+            effect: breathe
+            brightness_pct: 25
+          target:
+            entity_id: light.slaapkamer_lampen

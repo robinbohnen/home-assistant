@@ -83,36 +83,49 @@ livingroom_cast_package:
           target:
             entity_id: media_player.woonkamer
 
-    - id: livingroom_doorbell_tts
-      alias: Livingroom - TTS Doorbell
-      description: "TTS to doorbell to announce someone is there"
+    - id: livingroom_doorbell
+      alias: Livingroom - Doorbell
+      description: "Play doorbell to Sonos to announce someone is there"
       mode: single
       triggers:
         - trigger: state
           entity_id:
             - binary_sensor.g4_doorbell_voortuin_doorbell
           to: "on"
-      conditions:
-        - condition: time
-          after: "09:00:00"
-          before: "19:30:00"
+      conditions: []
       actions:
-        - action: tts.speak
+        - action: sonos.snapshot
           metadata: {}
           data:
-            cache: true
-            media_player_entity_id: media_player.woonkamer_sonos
-            message: Er is iemand aan de deur!
-            language: nl
+            with_group: true
+            entity_id: media_player.woonkamer_sonos
+        - action: media_player.volume_set
+          metadata: {}
+          data:
+            volume_level: 0.65
           target:
-            entity_id: tts.google_translate_nl_nl
-        - if:
-            - condition: state
-              entity_id: media_player.woonkamer_appletv
-              state: playing
-          then:
-            - action: media_player.media_pause
-              metadata: {}
-              data: {}
-              target:
-                entity_id: media_player.woonkamer_appletv
+            entity_id: media_player.woonkamer_sonos
+        - action: media_player.play_media
+          metadata: {}
+          data:
+            media_content_id: https://home-assistant.kroon18.slimhuys.nl/local/chime.mp3
+            media_content_type: music
+          target:
+            entity_id: media_player.woonkamer_sonos
+        - action: media_player.play_media
+          metadata: {}
+          data:
+            media_content_id: https://home-assistant.kroon18.slimhuys.nl/local/chime.mp3
+            media_content_type: music
+          target:
+            entity_id: media_player.woonkamer_sonos
+        - delay:
+            hours: 0
+            minutes: 0
+            seconds: 8
+            milliseconds: 0
+        - action: sonos.restore
+          metadata: {}
+          data:
+            with_group: true
+            entity_id: media_player.woonkamer_sonos
