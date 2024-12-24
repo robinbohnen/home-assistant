@@ -1,0 +1,80 @@
+livingroom_aquarium_package:
+  automation:
+    - id: livingroom_aquarium_onoff
+      alias: Livingroom - Aquarium Off/On
+      description: "Turn on or off the aquarium thingies"
+      mode: single
+      triggers:
+        - trigger: time
+          at: "09:00:00"
+          id: time_morning
+        - trigger: time
+          at: "23:00:00"
+          id: time_evening
+        - trigger: state
+          entity_id:
+            - light.woonkamer_lampen
+          to: "on"
+          from: "off"
+          id: living_room_lights_on
+        - trigger: state
+          entity_id:
+            - light.woonkamer_lampen
+          to: "off"
+          from: "on"
+          id: living_room_lights_off
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - time_morning
+                    - living_room_lights_on
+              sequence:
+                - if:
+                    - condition: state
+                      entity_id: switch.aquarium_co2_en_verlichting
+                      state: "off"
+                  then:
+                    - action: switch.turn_on
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: switch.aquarium_co2_en_verlichting
+            - conditions:
+                - condition: trigger
+                  id:
+                    - time_evening
+              sequence:
+                - if:
+                    - condition: state
+                      entity_id: switch.aquarium_co2_en_verlichting
+                      state: "on"
+                  then:
+                    - action: switch.turn_off
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: switch.aquarium_co2_en_verlichting
+            - conditions:
+                - condition: trigger
+                  id:
+                    - living_room_lights_off
+              sequence:
+                - if:
+                    - condition: state
+                      entity_id: group.all_adults
+                      state: home
+                  then:
+                    - action: switch.turn_off
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: switch.aquarium_co2_en_verlichting
+          default:
+            - action: switch.toggle
+              metadata: {}
+              data: {}
+              target:
+                entity_id: switch.aquarium_co2_en_verlichting
