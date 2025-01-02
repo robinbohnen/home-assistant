@@ -754,25 +754,35 @@ brandweer_package:
                           - light.speelkamer_lampen
                       action: light.turn_off
                     - alias: Alarm weer aanzetten
-                      if:
-                        - condition: zone
-                          entity_id: person.samantha_henkelman
-                          zone: zone.home
-                        - condition: state
-                          entity_id: alarm_control_panel.alarmo
-                          state: disarmed
-                      then:
-                        - metadata: {}
-                          data: {}
-                          action: alarm_control_panel.alarm_arm_home
-                          target:
-                            entity_id: alarm_control_panel.alarmo
-                      else:
-                        - metadata: {}
-                          data: {}
-                          action: alarm_control_panel.alarm_arm_away
-                          target:
-                            entity_id: alarm_control_panel.alarmo
+                      choose:
+                        - conditions:
+                            - condition: state
+                              entity_id: alarm_control_panel.alarmo
+                              state: disarmed
+                            - condition: zone
+                              entity_id: person.samantha_henkelman
+                              zone: zone.home
+                          sequence:
+                            - metadata: {}
+                              data: {}
+                              action: alarm_control_panel.alarm_arm_home
+                              target:
+                                entity_id: alarm_control_panel.alarmo
+                        - conditions:
+                            - condition: state
+                              entity_id: alarm_control_panel.alarmo
+                              state: disarmed
+                            - condition: not
+                              conditions:
+                                - condition: zone
+                                  entity_id: person.samantha_henkelman
+                                  zone: zone.home
+                          sequence:
+                            - action: alarm_control_panel.alarm_arm_away
+                              metadata: {}
+                              data: {}
+                              target:
+                                entity_id: alarm_control_panel.alarmo
               alias: Al het licht weer uit en alarm aan
 
     - id: brandweer_webhook_main_calendar
