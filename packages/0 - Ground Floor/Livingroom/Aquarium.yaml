@@ -32,6 +32,9 @@ livingroom_aquarium_package:
             minutes: 0
             seconds: 0
           id: aquarium_on_0600
+        - trigger: time_pattern
+          hours: /1
+          id: every_hour
       conditions: []
       actions:
         - choose:
@@ -110,6 +113,29 @@ livingroom_aquarium_package:
                           data: {}
                           target:
                             entity_id: switch.aquarium_co2_en_verlichting
+            - conditions:
+                - condition: trigger
+                  id:
+                    - every_hour
+              sequence:
+                - if:
+                    - condition: template
+                      value_template: >-
+                        {{ (as_timestamp(now()) | int(0) -
+                        as_timestamp(states.switch.aquarium_co2_en_verlichting.last_changed))|int(0)
+                        > 21600 and states('switch.aquarium_co2_en_verlichting') ==
+                        'on'}}
+                    - condition: not
+                      conditions:
+                        - condition: state
+                          entity_id: group.all_adults
+                          state: home
+                  then:
+                    - action: switch.turn_off
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: switch.aquarium_co2_en_verlichting
           default:
             - action: switch.toggle
               metadata: {}
