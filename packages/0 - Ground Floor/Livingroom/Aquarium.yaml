@@ -6,54 +6,37 @@ livingroom_aquarium_package:
       mode: single
       triggers:
         - trigger: time
-          at: "09:00:00"
+          at: "12:00:00"
+          id: time_pre_morning
+        - trigger: time
+          at: "13:00:00"
           id: time_morning
         - trigger: time
-          at: "23:00:00"
+          at: "22:00:00"
           id: time_evening
-        - trigger: state
-          entity_id:
-            - light.woonkamer_lampen
-          to: "on"
-          from: "off"
-          id: living_room_lights_on
-        - trigger: state
-          entity_id:
-            - light.woonkamer_lampen
-          to: "off"
-          from: "on"
-          id: living_room_lights_off
-        - trigger: state
-          entity_id:
-            - switch.aquarium_stopcontact_licht_co2
-          to: "on"
-          for:
-            hours: 6
-            minutes: 0
-            seconds: 0
-          id: aquarium_on_0600
-        - trigger: time_pattern
-          hours: /1
-          id: every_hour
       conditions: []
       actions:
         - choose:
             - conditions:
                 - condition: trigger
                   id:
-                    - time_morning
-                    - living_room_lights_on
+                    - time_pre_morning
               sequence:
-                - if:
-                    - condition: state
-                      entity_id: switch.aquarium_stopcontact_licht_co2
-                      state: "off"
-                  then:
-                    - action: switch.turn_on
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: switch.aquarium_stopcontact_licht_co2
+                - action: switch.turn_on
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: switch.aquarium_stopcontact_licht_co2
+            - conditions:
+                - condition: trigger
+                  id:
+                    - time_morning
+              sequence:
+                - action: switch.turn_on
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: switch.aquarium_stopcontact_licht_co2
             - conditions:
                 - condition: trigger
                   id:
@@ -69,79 +52,13 @@ livingroom_aquarium_package:
                       data: {}
                       target:
                         entity_id: switch.aquarium_stopcontact_licht_co2
-            - conditions:
-                - condition: trigger
-                  id:
-                    - living_room_lights_off
-              sequence:
-                - if:
-                    - condition: state
-                      entity_id: group.all_adults
-                      state: home
-                    - condition: state
-                      entity_id: switch.aquarium_stopcontact_licht_co2
-                      state: "on"
-                      for:
-                        hours: 6
-                        minutes: 0
-                        seconds: 0
-                  then:
-                    - action: switch.turn_off
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: switch.aquarium_stopcontact_licht_co2
-            - conditions:
-                - condition: trigger
-                  id:
-                    - aquarium_on_0600
-              sequence:
-                - if:
-                    - condition: not
-                      conditions:
-                        - condition: state
-                          entity_id: group.all_adults
-                          state: home
-                  then:
-                    - if:
-                        - condition: state
-                          entity_id: switch.aquarium_stopcontact_licht_co2
-                          state: "on"
-                      then:
-                        - action: switch.turn_off
-                          metadata: {}
-                          data: {}
-                          target:
-                            entity_id: switch.aquarium_stopcontact_licht_co2
-            - conditions:
-                - condition: trigger
-                  id:
-                    - every_hour
-              sequence:
-                - if:
-                    - condition: template
-                      value_template: >-
-                        {{ (as_timestamp(now()) | int(0) -
-                        as_timestamp(states.switch.aquarium_stopcontact_licht_co2.last_changed))|int(0)
-                        > 21600 and states('switch.aquarium_stopcontact_licht_co2') ==
-                        'on'}}
-                    - condition: not
-                      conditions:
-                        - condition: state
-                          entity_id: group.all_adults
-                          state: home
-                  then:
-                    - action: switch.turn_off
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: switch.aquarium_stopcontact_licht_co2
           default:
             - action: switch.toggle
               metadata: {}
               data: {}
               target:
                 entity_id: switch.aquarium_stopcontact_licht_co2
+
 
     - id: livingroom_aquarium_feed
       alias: Livingroom - Aquarium On after Feeding
@@ -173,7 +90,7 @@ livingroom_aquarium_package:
           data: {}
           target:
             device_id: 7164e62fd79d4bcb899cc522b71b881f
-            
+
     - id: livingroom_aquarium_buttons
       alias: Livingroom - Aquarium Toggle Pumps
       description: "Toggle pumps on button press"
@@ -191,4 +108,3 @@ livingroom_aquarium_package:
           data: {}
           target:
             entity_id: switch.aquarium_stopcontact_pomp_skimmer
- 
