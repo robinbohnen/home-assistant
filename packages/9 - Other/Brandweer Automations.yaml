@@ -705,13 +705,19 @@ brandweer_package:
                   before: "07:00:00"
               then:
                 - sequence:
-                    - action: light.turn_on
-                      metadata: {}
-                      data:
-                        brightness_pct: 10
-                        transition: 2
-                      target:
-                        entity_id: light.slaapkamer_lampen
+                    - if:
+                        - condition: state
+                          entity_id: input_select.brandweer_dienstdoende_ploeg
+                          state: input_select.brandweer_mijn_huidige_ploeg
+                          alias: Kijk of ik momenteel dienst heb
+                      then:
+                        - action: light.turn_on
+                          metadata: {}
+                          data:
+                            brightness_pct: 10
+                            transition: 2
+                          target:
+                            entity_id: light.slaapkamer_lampen
                     - wait_for_trigger:
                         - trigger: state
                           entity_id:
@@ -741,21 +747,54 @@ brandweer_package:
                   before: "07:00:00"
               then:
                 - sequence:
-                    - action: alarm_control_panel.alarm_disarm
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: alarm_control_panel.alarmo
-                    - action: light.turn_on
-                      metadata: {}
-                      data:
-                        transition: 3
-                        brightness_pct: 50
-                      target:
-                        entity_id:
-                          - light.eettafel_lampen
-                          - light.entree_lampen
-                          - light.speelkamer_lampen
+                    - if:
+                        - condition: state
+                          entity_id: input_select.brandweer_dienstdoende_ploeg
+                          state: input_select.brandweer_mijn_huidige_ploeg
+                          alias: Kijk of ik momenteel dienst heb
+                      then:
+                        - action: alarm_control_panel.alarm_disarm
+                          metadata: {}
+                          data: {}
+                          target:
+                            entity_id: alarm_control_panel.alarmo
+                        - action: light.turn_on
+                          metadata: {}
+                          data: {}
+                          target:
+                            entity_id:
+                              - light.eettafel_lampen
+                              - light.entree_lampen
+                              - light.speelkamer_lampen
+                      alias: Als ik wel dienst heb
+                    - if:
+                        - condition: not
+                          conditions:
+                            - condition: state
+                              entity_id: input_select.brandweer_dienstdoende_ploeg
+                              state: input_select.brandweer_mijn_huidige_ploeg
+                              alias: Kijk of ik momenteel dienst heb
+                      then:
+                        - wait_for_trigger: []
+                          timeout:
+                            hours: 2
+                            minutes: 30
+                            seconds: 0
+                          continue_on_timeout: false
+                        - action: alarm_control_panel.alarm_disarm
+                          metadata: {}
+                          data: {}
+                          target:
+                            entity_id: alarm_control_panel.alarmo
+                        - action: light.turn_on
+                          metadata: {}
+                          data: {}
+                          target:
+                            entity_id:
+                              - light.eettafel_lampen
+                              - light.entree_lampen
+                              - light.speelkamer_lampen
+                      alias: Als ik geen dienst heb
                     - alias: Wacht tot Robin thuis weggaat
                       wait_for_trigger:
                         - entity_id: person.robin_bohnen
