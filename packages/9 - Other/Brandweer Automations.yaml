@@ -545,7 +545,7 @@ brandweer_package:
 
     - id: brandweer_webhook_main_automations
       alias: Brandweer - Webhook MAIN - Light and Alarm
-      description: "Change all lights based on service or not and turn off and on Alarm"
+      description: Change all lights based on service or not and turn off and on Alarm
       mode: single
       triggers:
         - trigger: state
@@ -694,7 +694,8 @@ brandweer_package:
                             skip_condition: true
                           action: automation.trigger
               alias: Stel lampen in op kleur
-            - if:
+            - alias: Slaapkamer licht weer uit
+              if:
                 - condition: numeric_state
                   entity_id: cover.slaapkamer_rolluik
                   attribute: current_position
@@ -704,6 +705,13 @@ brandweer_package:
                   before: "07:00:00"
               then:
                 - sequence:
+                    - action: light.turn_on
+                      metadata: {}
+                      data:
+                        brightness_pct: 10
+                        transition: 2
+                      target:
+                        entity_id: light.slaapkamer_lampen
                     - wait_for_trigger:
                         - trigger: state
                           entity_id:
@@ -717,12 +725,13 @@ brandweer_package:
                         milliseconds: 0
                     - alias: Slaapkamer licht weer uit
                       metadata: {}
-                      data: {}
+                      data:
+                        transition: 1
                       target:
                         entity_id: light.slaapkamer_lampen
                       action: light.turn_off
-              alias: Slaapkamer licht weer uit
-            - if:
+            - alias: Al het licht weer uit en alarm aan
+              if:
                 - condition: numeric_state
                   entity_id: cover.slaapkamer_rolluik
                   attribute: current_position
@@ -732,6 +741,21 @@ brandweer_package:
                   before: "07:00:00"
               then:
                 - sequence:
+                    - action: alarm_control_panel.alarm_disarm
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: alarm_control_panel.alarmo
+                    - action: light.turn_on
+                      metadata: {}
+                      data:
+                        transition: 3
+                        brightness_pct: 50
+                      target:
+                        entity_id:
+                          - light.eettafel_lampen
+                          - light.entree_lampen
+                          - light.speelkamer_lampen
                     - alias: Wacht tot Robin thuis weggaat
                       wait_for_trigger:
                         - entity_id: person.robin_bohnen
@@ -783,7 +807,6 @@ brandweer_package:
                               data: {}
                               target:
                                 entity_id: alarm_control_panel.alarmo
-              alias: Al het licht weer uit en alarm aan
 
     - id: brandweer_webhook_main_calendar
       alias: Brandweer - Webhook MAIN - Calendar changes
