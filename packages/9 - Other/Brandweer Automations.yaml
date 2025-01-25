@@ -767,7 +767,8 @@ brandweer_package:
                               - light.entree_lampen
                               - light.speelkamer_lampen
                       alias: Als ik wel dienst heb
-                    - if:
+                    - alias: Als ik geen dienst heb
+                      if:
                         - condition: not
                           conditions:
                             - condition: state
@@ -775,11 +776,16 @@ brandweer_package:
                               state: input_select.brandweer_mijn_huidige_ploeg
                               alias: Kijk of ik momenteel dienst heb
                       then:
-                        - wait_for_trigger: []
+                        - wait_for_trigger:
+                            - trigger: state
+                              entity_id:
+                                - binary_sensor.slaapkamer_deur_contact
+                              from: "off"
+                              to: "on"
                           timeout:
-                            hours: 2
-                            minutes: 30
-                            seconds: 0
+                            hours: 0
+                            minutes: 2
+                            seconds: 30
                           continue_on_timeout: false
                         - action: alarm_control_panel.alarm_disarm
                           metadata: {}
@@ -794,7 +800,6 @@ brandweer_package:
                               - light.eettafel_lampen
                               - light.entree_lampen
                               - light.speelkamer_lampen
-                      alias: Als ik geen dienst heb
                     - alias: Wacht tot Robin thuis weggaat
                       wait_for_trigger:
                         - entity_id: person.robin_bohnen
@@ -846,6 +851,7 @@ brandweer_package:
                               data: {}
                               target:
                                 entity_id: alarm_control_panel.alarmo
+
 
     - id: brandweer_webhook_main_calendar
       alias: Brandweer - Webhook MAIN - Calendar changes
