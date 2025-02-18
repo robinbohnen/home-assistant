@@ -51,16 +51,39 @@ backyard_solarpanels_package:
       triggers:
         - trigger: state
           entity_id:
-            - sensor.inverter_kroon_18_overkapping
+            - sensor.inverter_kroon_18_overkapping_energy
           to: unavailable
+          for:
+            hours: 0
+            minutes: 2
+            seconds: 30
+        - trigger: state
+          entity_id:
+            - sensor.inverter_kroon_18_zolder_voorzijde_energy
+          to: unavailable
+          for:
+            hours: 0
+            minutes: 2
+            seconds: 30
         - trigger: time_pattern
-          hours: /1
-      conditions:
-        - condition: state
-          entity_id: sensor.inverter_kroon_18_overkapping
-          state: unavailable
+          minutes: /5
+      conditions: []
       actions:
-        - action: homeassistant.reload_config_entry
-          metadata: {}
-          data:
-            entry_id: 01JCBKTQAM72Y8202G7F57WN6Z
+        - if:
+            - condition: state
+              entity_id: sensor.inverter_kroon_18_overkapping_energy
+              state: unavailable
+          then:
+            - action: homeassistant.reload_config_entry
+              metadata: {}
+              data:
+                entry_id: 01JCBKTQAM72Y8202G7F57WN6Z
+        - if:
+            - condition: state
+              entity_id: sensor.inverter_kroon_18_zolder_voorzijde_energy
+              state: unavailable
+          then:
+            - action: homeassistant.reload_config_entry
+              metadata: {}
+              data:
+                entry_id: 01JCBKS8RM752RMKK5RPYZBGSS
