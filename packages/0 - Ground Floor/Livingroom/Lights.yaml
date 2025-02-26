@@ -157,3 +157,60 @@ livingsroom_lights_package:
                 entity_id:
                   - light.woonkamer_spot_midden_voor
                   - light.woonkamer_spot_voor
+
+    - id: livingroom_lights_humble
+      alias: Livingroom - Lights Humble
+      description: "Turn on or off the Humble light in the Livingroom"
+      mode: single
+      triggers:
+        - trigger: sun
+          event: sunset
+          offset: 0
+          id: zonsondergang
+        - trigger: sun
+          event: sunrise
+          offset: 0
+          id: zonsopkomst
+        - trigger: state
+          entity_id:
+            - light.woonkamer_lampen
+          to: "off"
+          id: licht_uit
+        - trigger: state
+          entity_id:
+            - light.woonkamer_lampen
+          to: "on"
+          id: licht_aan
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - zonsondergang
+                    - licht_aan
+                - condition: sun
+                  before: sunset
+              sequence:
+                - action: light.turn_on
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: light.woonkamer_humble
+            - conditions:
+                - condition: trigger
+                  id:
+                    - zonsopkomst
+                    - licht_uit
+              sequence:
+                - action: light.turn_off
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: light.woonkamer_humble
+          default:
+            - action: light.toggle
+              metadata: {}
+              data: {}
+              target:
+                entity_id: light.woonkamer_humble
