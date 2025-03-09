@@ -1,0 +1,74 @@
+backyard_sunscreen_package:
+  automation:
+    - id: backyard_sunscreen
+      alias: Backyard - Sunscreen open or close
+      description: Backyard sunscreen close when sun is gone or open when sun is there
+      mode: single
+      triggers:
+        - trigger: numeric_state
+          entity_id:
+            - sensor.achtertuin_zon_luminance
+          for:
+            hours: 0
+            minutes: 30
+            seconds: 0
+          below: 15000
+          id: sun_gone_30m
+        - trigger: numeric_state
+          entity_id:
+            - sensor.achtertuin_zon_luminance
+          for:
+            hours: 0
+            minutes: 30
+            seconds: 0
+          above: 15000
+          id: sun_above_30m
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - sun_gone_30m
+              sequence:
+                - if:
+                    - condition: state
+                      entity_id: cover.achtertuin_zonnescherm
+                      state: closed
+                  then:
+                    - action: cover.close_cover
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: cover.achtertuin_zonnescherm
+            - conditions:
+                - condition: trigger
+                  id:
+                    - sun_above_30m
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    message: Zon in de achtertuin, wil je het zonnescherm uit?
+                    title: Zon achter
+                    data:
+                      actions:
+                        - action: "{{ action_sunscreen_open }}"
+                          title: Ja
+                - wait_for_trigger:
+                    - event_type: mobile_app_notification_action
+                      event_data:
+                        action: "{{ action_sunscreen_open }}"
+                      trigger: event
+                - choose:
+                    - conditions:
+                        - condition: template
+                          value_template: >-
+                            {{ wait.trigger.event.data.action == action_sunscreen_open
+                            }}
+                      sequence:
+                        - action: cover.open_cover
+                          metadata: {}
+                          data: {}
+                          target:
+                            entity_id: cover.achtertuin_zonnescherm
