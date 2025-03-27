@@ -1,0 +1,132 @@
+light_package:
+  automation:
+    - id: light_auto_turn_off
+      alias: Lights - Auto turn off all
+      description: "Turn off everything when everyone is clearly asleep"
+      mode: single
+      triggers:
+        - trigger: time_pattern
+          minutes: /5
+      conditions:
+        - condition: state
+          entity_id: light.woonkamer_lampen
+          state: "on"
+        - condition: or
+          conditions:
+            - condition: and
+              conditions:
+                - condition: time
+                  after: "22:00:00"
+                  before: "06:00:00"
+                - condition: state
+                  entity_id: binary_sensor.slaapkamer_deur_contact
+                  state: "off"
+                - condition: not
+                  conditions:
+                    - condition: state
+                      entity_id: media_player.woonkamer_appletv
+                      state: playing
+                  alias: Apple TV is not playing
+                - alias: No movement downtairs
+                  condition: and
+                  conditions:
+                    - condition: state
+                      entity_id: binary_sensor.woonkamer_beweging_achter_occupancy
+                      state: "off"
+                      for:
+                        hours: 0
+                        minutes: 15
+                        seconds: 0
+                    - condition: state
+                      entity_id: binary_sensor.woonkamer_beweging_voor_occupancy
+                      state: "off"
+                      for:
+                        hours: 0
+                        minutes: 15
+                        seconds: 0
+                    - condition: state
+                      entity_id: binary_sensor.keuken_beweging_occupancy
+                      state: "off"
+                      for:
+                        hours: 0
+                        minutes: 15
+                        seconds: 0
+                    - condition: state
+                      entity_id: binary_sensor.entree_beweging_occupancy
+                      state: "off"
+                      for:
+                        hours: 0
+                        minutes: 15
+                        seconds: 0
+                    - condition: state
+                      entity_id: binary_sensor.speelkamer_beweging_links_occupancy
+                      state: "off"
+                      for:
+                        hours: 0
+                        minutes: 15
+                        seconds: 0
+                    - condition: state
+                      entity_id: binary_sensor.toilet_beweging_occupancy
+                      state: "off"
+                      for:
+                        hours: 0
+                        minutes: 15
+                        seconds: 0
+                    - condition: state
+                      entity_id: binary_sensor.g4_instant_woonkamer_motion
+                      state: "off"
+                      for:
+                        hours: 0
+                        minutes: 15
+                        seconds: 0
+                    - condition: state
+                      entity_id: binary_sensor.g4_instant_keuken_motion
+                      state: "off"
+                      for:
+                        hours: 0
+                        minutes: 15
+                        seconds: 0
+              alias: Everyone is sleeping
+      actions:
+        - action: light.turn_off
+          metadata: {}
+          data: {}
+          target:
+            entity_id:
+              - light.woonkamer_lampen
+              - light.garage_lampen
+              - light.speelkamer_lampen
+              - light.keuken_lampen
+              - light.eettafel_lampen
+              - light.entree_lampen
+              - light.toilet_lampen
+              - light.trapkast_lampen
+              - light.overloop_lampen
+              - light.overloop_zolder_lampen
+        - if:
+            - condition: state
+              entity_id: alarm_control_panel.alarmo
+              state: disarmed
+          then:
+            - choose:
+                - conditions:
+                    - condition: numeric_state
+                      entity_id: zone.home
+                      below: 3
+                  sequence:
+                    - action: alarm_control_panel.alarm_arm_away
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: alarm_control_panel.alarmo
+                - conditions:
+                    - condition: numeric_state
+                      entity_id: zone.home
+                      above: 2
+                  sequence:
+                    - action: alarm_control_panel.alarm_arm_home
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: alarm_control_panel.alarmo
+          alias: Turn on alarm

@@ -15,38 +15,43 @@ covers_package:
           entity_id:
             - sensor.samrob_buitentemperatuur
           above: 20
+          id: temperature_above_20
         - trigger: numeric_state
           entity_id:
             - sensor.voortuin_zon_luminance
           above: 15000
           for:
             hours: 0
-            minutes: 5
+            minutes: 15
             seconds: 0
+          id: luminance_frontyard_above_15000
         - trigger: numeric_state
           entity_id:
             - sensor.achtertuin_zon_luminance
           above: 15000
           for:
             hours: 0
-            minutes: 5
+            minutes: 15
             seconds: 0
+          id: luminance_backyard_above_15000
         - trigger: numeric_state
           entity_id:
             - sensor.voortuin_zon_luminance
           below: 15000
           for:
             hours: 0
-            minutes: 5
+            minutes: 15
             seconds: 0
+          id: luminance_frontyard_below_15000
         - trigger: numeric_state
           entity_id:
             - sensor.achtertuin_zon_luminance
           below: 15000
           for:
             hours: 0
-            minutes: 5
+            minutes: 15
             seconds: 0
+          id: luminance_backyard_below_15000
         - domain: mqtt
           device_id: 529832208f6d63cd56f2879a153f216b
           type: action
@@ -98,20 +103,40 @@ covers_package:
                           after: "06:00:00"
                           before: "17:00:00"
                       sequence:
-                        - action: cover.open_cover
-                          metadata: {}
-                          data: {}
-                          target:
-                            entity_id:
-                              - cover.kantoor_links_low_speed
-                              - cover.kantoor_rechts_low_speed
-                              - cover.badkamer_rolluik_low_speed
-                              - cover.slaapkamer_rolluik_low_speed
-                              - cover.slaapkamer_maxi_links_low_speed
-                              - cover.slaapkamer_maxi_rechts_low_speed
-                              - cover.slaapkamer_mini
-                              - cover.rollerblind_0001
-                              - cover.rollerblind_0002
+                        - if:
+                            - condition: numeric_state
+                              entity_id: sensor.voortuin_zon_luminance
+                              above: 15000
+                          then:
+                            - action: cover.open_cover
+                              metadata: {}
+                              data: {}
+                              target:
+                                entity_id:
+                                  - cover.badkamer_rolluik_low_speed
+                                  - cover.slaapkamer_rolluik_low_speed
+                            - action: cover.close_cover
+                              metadata: {}
+                              data: {}
+                              target:
+                                entity_id:
+                                  - cover.keuken_screen_links
+                                  - cover.keuken_screen_rechts
+                          else:
+                            - action: cover.open_cover
+                              metadata: {}
+                              data: {}
+                              target:
+                                entity_id:
+                                  - cover.kantoor_links_low_speed
+                                  - cover.kantoor_rechts_low_speed
+                                  - cover.badkamer_rolluik_low_speed
+                                  - cover.slaapkamer_rolluik_low_speed
+                                  - cover.slaapkamer_maxi_links_low_speed
+                                  - cover.slaapkamer_maxi_rechts_low_speed
+                                  - cover.slaapkamer_mini
+                                  - cover.rollerblind_0001
+                                  - cover.rollerblind_0002
             - conditions:
                 - condition: trigger
                   id:
@@ -231,24 +256,30 @@ covers_package:
                               target:
                                 entity_id: cover.rollerblind_0001
                           alias: Rolgordijn links dicht
-                        - action: cover.set_cover_position
-                          metadata: {}
-                          data:
-                            position: 15
-                          target:
-                            entity_id:
-                              - cover.slaapkamer_maxi_rechts_low_speed
-                              - cover.slaapkamer_maxi_links_low_speed
-                              - cover.kantoor_links_low_speed
-                              - cover.kantoor_rechts_low_speed
-                              - cover.slaapkamer_mini
-                        - action: cover.open_cover
-                          metadata: {}
-                          data: {}
-                          target:
-                            entity_id:
-                              - cover.badkamer_rolluik_low_speed
-                              - cover.slaapkamer_rolluik_low_speed
+                        - if:
+                            - condition: state
+                              entity_id: light.woonkamer_lampen
+                              state: "on"
+                          then:
+                            - action: cover.set_cover_position
+                              metadata: {}
+                              data:
+                                position: 15
+                              target:
+                                entity_id:
+                                  - cover.slaapkamer_maxi_rechts_low_speed
+                                  - cover.slaapkamer_maxi_links_low_speed
+                                  - cover.kantoor_links_low_speed
+                                  - cover.kantoor_rechts_low_speed
+                                  - cover.slaapkamer_mini
+                            - action: cover.open_cover
+                              metadata: {}
+                              data: {}
+                              target:
+                                entity_id:
+                                  - cover.badkamer_rolluik_low_speed
+                                  - cover.slaapkamer_rolluik_low_speed
+                          alias: If we are awake, open covers otherwise leave them closed
                     - conditions:
                         - condition: numeric_state
                           entity_id: sensor.achtertuin_zon_luminance
@@ -346,3 +377,14 @@ covers_package:
                           - cover.badkamer_rolluik_low_speed
                           - cover.slaapkamer_rolluik_low_speed
               alias: Midnight
+            - conditions:
+                - condition: trigger
+                  id:
+                    - luminance_frontyard_above_15000
+              sequence:
+                - action: cover.close_cover
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: cover.covers_kitchen_screens
+              alias: Sunscreens down
