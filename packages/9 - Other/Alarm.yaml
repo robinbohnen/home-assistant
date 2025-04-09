@@ -1,0 +1,52 @@
+alarm_package:
+  automation:
+    - id: alarm_lights_on
+      alias: Alarm - Lichten aan
+      description: Zet de lichten aan als het alarm is afgegaan
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.schuur_deur_contact
+          to: "on"
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: triggered
+      conditions:
+        - condition: or
+          conditions:
+            - condition: state
+              entity_id: alarm_control_panel.alarmo
+              state: armed_home
+            - condition: state
+              entity_id: alarm_control_panel.alarmo
+              state: armed_away
+            - condition: state
+              entity_id: alarm_control_panel.alarmo
+              state: triggered
+      actions:
+        - if:
+            - condition: state
+              entity_id: light.woonkamer_lampen
+              state: "off"
+            - condition: sun
+              before: sunrise
+              after: sunset
+          then:
+            - delay:
+                hours: 0
+                minutes: 0
+                seconds: 15
+                milliseconds: 0
+            - action: light.turn_on
+              metadata: {}
+              data:
+                transition: 3
+                brightness_pct: 100
+              target:
+                entity_id:
+                  - light.woonkamer_lampen
+                  - light.eettafel_lampen
+                  - light.keuken_lampen
+                  - light.achtertuin_lampen
