@@ -162,12 +162,18 @@ covers_package:
                     - alarm_on_home
                     - lock_locked
               sequence:
-                - if:
-                    - condition: not
+                - alias: Close covers when windows are closed and no-one is home
+                  if:
+                    - condition: or
                       conditions:
-                        - condition: state
-                          entity_id: group.all_adults
-                          state: home
+                        - condition: not
+                          conditions:
+                            - condition: state
+                              entity_id: group.all_adults
+                              state: home
+                        - condition: time
+                          after: "18:45:00"
+                          before: "01:00:00"
                   then:
                     - if:
                         - condition: state
@@ -189,7 +195,6 @@ covers_package:
                           data: {}
                           target:
                             entity_id: cover.rollerblind_0002
-                  alias: Close covers when windows are closed and no-one is home
             - conditions:
                 - alias: Morning
                   condition: or
