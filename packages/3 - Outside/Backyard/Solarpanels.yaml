@@ -87,3 +87,55 @@ backyard_solarpanels_package:
               metadata: {}
               data:
                 entry_id: 01JCBKS8RM752RMKK5RPYZBGSS
+    - id: solarpanels_backyard_onoff
+      alias: Solarpanels - Turn off - Energyprice negative
+      description: "Solarpanels off when power price is negative"
+      mode: single
+      triggers:
+        - trigger: numeric_state
+          entity_id:
+            - sensor.zonneplan_current_electricity_tariff
+          below: 0
+          id: solar_panels_off
+        - trigger: numeric_state
+          entity_id:
+            - sensor.zonneplan_current_electricity_tariff
+          above: 0
+          id: solar_panels_on
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - solar_panels_off
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    message: >-
+                      Zonnepanelen zijn uitgezet, hou in de gaten of ze ook weer aan
+                      gaan!
+                    title: Stroomprijs negatief
+                - action: select.select_option
+                  metadata: {}
+                  data:
+                    option: off_grid
+                  target:
+                    entity_id: select.goodwe_bedrijfsmodus_omvormer
+            - conditions:
+                - condition: trigger
+                  id:
+                    - solar_panels_on
+              sequence:
+                - action: select.select_option
+                  metadata: {}
+                  data:
+                    option: general
+                  target:
+                    entity_id: select.goodwe_bedrijfsmodus_omvormer
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    message: Zonnepanelen zijn weer aangezet
+                    title: Stroomprijs positief
