@@ -34,7 +34,7 @@ backyard_sunscreen_package:
                 - if:
                     - condition: state
                       entity_id: cover.achtertuin_zonnescherm
-                      state: closed
+                      state: open
                   then:
                     - action: cover.close_cover
                       metadata: {}
@@ -46,29 +46,34 @@ backyard_sunscreen_package:
                   id:
                     - sun_above_30m
               sequence:
-                - action: notify.mobile_devices_adults
-                  metadata: {}
-                  data:
-                    message: Zon in de achtertuin, wil je het zonnescherm uit?
-                    title: Zon achter
-                    data:
-                      actions:
-                        - action: "{{ action_sunscreen_open }}"
-                          title: Ja
-                - wait_for_trigger:
-                    - event_type: mobile_app_notification_action
-                      event_data:
-                        action: "{{ action_sunscreen_open }}"
-                      trigger: event
-                - choose:
-                    - conditions:
-                        - condition: template
-                          value_template: >-
-                            {{ wait.trigger.event.data.action == action_sunscreen_open
-                            }}
-                      sequence:
-                        - action: cover.open_cover
-                          metadata: {}
-                          data: {}
-                          target:
-                            entity_id: cover.achtertuin_zonnescherm
+                - if:
+                    - condition: state
+                      entity_id: cover.achtertuin_zonnescherm
+                      state: closed
+                  then:
+                    - action: notify.mobile_devices_adults
+                      metadata: {}
+                      data:
+                        message: Zon in de achtertuin, wil je het zonnescherm uit?
+                        title: Zon achter
+                        data:
+                          actions:
+                            - action: "{{ action_sunscreen_open }}"
+                              title: Ja
+                    - wait_for_trigger:
+                        - event_type: mobile_app_notification_action
+                          event_data:
+                            action: "{{ action_sunscreen_open }}"
+                          trigger: event
+                    - choose:
+                        - conditions:
+                            - condition: template
+                              value_template: >-
+                                {{ wait.trigger.event.data.action ==
+                                action_sunscreen_open }}
+                          sequence:
+                            - action: cover.open_cover
+                              metadata: {}
+                              data: {}
+                              target:
+                                entity_id: cover.achtertuin_zonnescherm
