@@ -1,0 +1,86 @@
+airco_livingroom_package:
+  automation:
+    - id: ac_livingroom_on
+      alias: Livingroom - AC Automatically on
+      description: "Turn on AC when hot inside"
+      mode: single
+      triggers:
+        - trigger: numeric_state
+          entity_id:
+            - sensor.woonkamer_temperatuur
+          above: 22.5
+        - trigger: state
+          entity_id:
+            - binary_sensor.woonkamer_openslaande_deuren_contact
+          to: "off"
+      conditions: []
+      actions:
+        - variables:
+            action_ac_living_on: "{{ 'OPEN_' ~ context.id }}"
+        - if:
+            - condition: state
+              entity_id: binary_sensor.woonkamer_openslaande_deuren_contact
+              state: "off"
+          then:
+            - action: notify.mobile_devices_adults
+              metadata: {}
+              data:
+                message: Het is warm binnen in de woonkamer, wil je de airco aanzetten?
+                title: Warm in Woonkamer
+                data:
+                  actions:
+                    - action: "{{ action_ac_living_on }}"
+                      title: Ja
+            - wait_for_trigger:
+                - event_type: mobile_app_notification_action
+                  event_data:
+                    action: "{{ action_ac_living_on }}"
+                  trigger: event
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ wait.trigger.event.data.action == action_ac_living_on }}"
+                  sequence:
+                    - action: climate.turn_on
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: climate.woonkamer_2
+                    - action: climate.set_hvac_mode
+                      metadata: {}
+                      data:
+                        hvac_mode: cool
+                      target:
+                        entity_id: climate.woonkamer_2
+                    - action: climate.set_fan_mode
+                      metadata: {}
+                      data:
+                        fan_mode: auto
+                      target:
+                        entity_id: climate.woonkamer_2
+                    - action: climate.set_swing_mode
+                      metadata: {}
+                      data:
+                        swing_mode: auto
+                      target:
+                        entity_id: climate.woonkamer_2
+                    - action: climate.set_swing_horizontal_mode
+                      metadata: {}
+                      data:
+                        swing_horizontal_mode: auto
+                      target:
+                        entity_id: climate.woonkamer_2
+          else:
+            - if:
+                - condition: numeric_state
+                  entity_id: sensor.woonkamer_temperatuur
+                  above: 22.5
+              then:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    message: >-
+                      Het is warm binnen in de woonkamer, doe de deuren dicht om de
+                      airco aan te zetten.
+                    title: Warm in Woonkamer, deuren open
+                    data: {}
