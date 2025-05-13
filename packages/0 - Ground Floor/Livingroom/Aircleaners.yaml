@@ -7,69 +7,40 @@ livingroom_aircleaners_package:
       triggers:
         - trigger: state
           entity_id:
-            - lock.kroon18voordeur
-          to: unlocked
-          id: lock_unlocked
-        - trigger: state
-          entity_id:
             - alarm_control_panel.alarmo
           to: disarmed
-          id: alarm_disarmed
-        - trigger: state
-          entity_id:
-            - lock.kroon18voordeur
-          to: locked
-          id: lock_locked
-          for:
-            hours: 0
-            minutes: 1
-            seconds: 0
+          id: alarm_off
         - trigger: state
           entity_id:
             - alarm_control_panel.alarmo
           to: armed_away
-          id: alarm_armed_away
+          id: alarm_on_gone
         - trigger: state
           entity_id:
             - alarm_control_panel.alarmo
           to: armed_home
-          id: alarm_armed_home
+          id: alarm_on_home
       conditions: []
       actions:
         - choose:
             - conditions:
                 - condition: trigger
                   id:
-                    - lock_unlocked
-                    - alarm_disarmed
+                    - alarm_off
               sequence:
                 - action: switch.turn_off
                   metadata: {}
                   data: {}
                   target:
-                    entity_id: switch.luchtreinigers_stopcontacten
+                    entity_id: switch.woonkamer_luchtreinigers
             - conditions:
                 - condition: trigger
                   id:
-                    - lock_locked
-                    - alarm_armed_away
-                    - alarm_armed_home
+                    - alarm_on_gone
+                    - alarm_on_home
               sequence:
-                - if:
-                    - condition: not
-                      conditions:
-                        - condition: state
-                          entity_id: group.all_adults
-                          state: home
-                  then:
-                    - action: switch.turn_on
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: switch.luchtreinigers_stopcontacten
-          default:
-            - action: switch.toggle
-              metadata: {}
-              data: {}
-              target:
-                entity_id: switch.luchtreinigers_stopcontacten
+                - action: switch.turn_on
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: switch.woonkamer_luchtreinigers
