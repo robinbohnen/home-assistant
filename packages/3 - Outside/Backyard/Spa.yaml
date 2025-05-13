@@ -226,7 +226,7 @@ backyard_spa_package:
 
     - id: backyard_spa_free_power
       alias: Backyard - Spa free heating
-      description: "Turn on spa when heating is free (overcapacity) or even paid!"
+      description: Turn on spa when heating is free (overcapacity) or even paid!
       mode: single
       triggers:
         - trigger: numeric_state
@@ -305,14 +305,27 @@ backyard_spa_package:
                     temperature: 37
                   target:
                     entity_id: climate.intex_purespa
+                - action: input_boolean.turn_on
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: input_boolean.backyard_spa_free_charging_enabled
             - conditions:
                 - condition: trigger
                   id:
                     - positive_price
                     - no_overcapacity
+                - condition: state
+                  entity_id: input_boolean.backyard_spa_free_charging_enabled
+                  state: "on"
               sequence:
                 - action: climate.turn_off
                   metadata: {}
                   data: {}
                   target:
                     entity_id: climate.intex_purespa
+                - action: input_boolean.turn_off
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: input_boolean.backyard_spa_free_charging_enabled
