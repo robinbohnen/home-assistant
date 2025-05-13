@@ -45,7 +45,6 @@ backyard_spa_package:
                 title: Intex Spa geeft een error
                 message: "{{ states['sensor.intex_purespa_error_description'].state }}"
 
-
     - id: backyard_spa_temperature
       alias: Backyard - Spa Temperature
       description: Automations for Spa Temperature
@@ -222,5 +221,98 @@ backyard_spa_package:
                   metadata: {}
                   data:
                     hvac_mode: heat
+                  target:
+                    entity_id: climate.intex_purespa
+
+    - id: backyard_spa_free_power
+      alias: Backyard - Spa free heating
+      description: "Turn on spa when heating is free (overcapacity) or even paid!"
+      mode: single
+      triggers:
+        - trigger: numeric_state
+          entity_id:
+            - sensor.live_energieverbruik_totaal
+          for:
+            hours: 0
+            minutes: 5
+            seconds: 0
+          below: 1500
+          id: much_overcapacity
+        - trigger: numeric_state
+          entity_id:
+            - sensor.live_energieverbruik_totaal
+          for:
+            hours: 0
+            minutes: 5
+            seconds: 0
+          above: 0
+          id: no_overcapacity
+        - trigger: numeric_state
+          entity_id:
+            - sensor.zonneplan_current_electricity_tariff
+          below: 0
+          id: negative_price
+        - trigger: numeric_state
+          entity_id:
+            - sensor.zonneplan_current_electricity_tariff
+          above: 0
+          id: positive_price
+      conditions:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: climate.intex_purespa
+              state: unavailable
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - much_overcapacity
+                    - negative_price
+              sequence:
+                - alias: Turn on
+                  if:
+                    - condition: state
+                      entity_id: switch.intex_purespa_power
+                      state: "off"
+                  then:
+                    - action: switch.turn_on
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: switch.intex_purespa_power
+                - alias: Turn on climate
+                  if:
+                    - condition: state
+                      entity_id: climate.intex_purespa
+                      state: "off"
+                  then:
+                    - action: climate.turn_on
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: climate.intex_purespa
+                    - action: climate.set_hvac_mode
+                      metadata: {}
+                      data:
+                        hvac_mode: heat
+                      target:
+                        entity_id: climate.intex_purespa
+                - action: climate.set_temperature
+                  metadata: {}
+                  data:
+                    temperature: 37
+                  target:
+                    entity_id: climate.intex_purespa
+            - conditions:
+                - condition: trigger
+                  id:
+                    - positive_price
+                    - no_overcapacity
+              sequence:
+                - action: climate.turn_off
+                  metadata: {}
+                  data: {}
                   target:
                     entity_id: climate.intex_purespa
