@@ -254,6 +254,15 @@ sections:
         icon: mdi:vector-difference-ab
         card_layout: large
       - type: custom:bubble-card
+        card_type: cover
+        modules:
+          - default
+        entity: cover.achtertuin_zonnescherm
+        visibility:
+          - condition: numeric_state
+            entity: sensor.achtertuin_zon_luminance
+            above: 10000
+      - type: custom:bubble-card
         card_type: climate
         entity: climate.woonkamer_2
         sub_button:
@@ -272,15 +281,6 @@ sections:
         modules:
           - default
       - type: custom:bubble-card
-        card_type: cover
-        modules:
-          - default
-        entity: cover.achtertuin_zonnescherm
-        visibility:
-          - condition: numeric_state
-            entity: sensor.achtertuin_zon_luminance
-            above: 10000
-      - type: custom:bubble-card
         card_type: climate
         entity: climate.airco_zolder
         sub_button:
@@ -298,65 +298,43 @@ sections:
       - type: custom:bubble-card
         card_type: button
         button_type: name
-        modules:
-          - default
-        name: Speel Q-Music
-        icon: mdi:music
+        icon: mdi:speaker-stop
+        name: Boxen loskoppelen overkapping
         tap_action:
           action: perform-action
-          perform_action: automation.trigger
+          perform_action: media_player.unjoin
           target:
-            entity_id: automation.general_play_default_music
-          data:
-            skip_condition: true
+            entity_id: media_player.overkapping_sonos
         double_tap_action:
           action: perform-action
-          perform_action: automation.trigger
+          perform_action: media_player.unjoin
           target:
-            entity_id: automation.general_play_default_music
-          data:
-            skip_condition: true
-        hold_action:
-          action: perform-action
-          perform_action: automation.trigger
-          target:
-            entity_id: automation.general_play_default_music
-          data:
-            skip_condition: true
+            entity_id: media_player.overkapping_sonos
+        visibility:
+          - condition: state
+            entity: media_player.overkapping_sonos
+            state_not: paused
+        modules:
+          - default
         button_action:
           tap_action:
             action: perform-action
-            perform_action: automation.trigger
+            perform_action: media_player.unjoin
             target:
-              entity_id: automation.general_play_default_music
-            data:
-              skip_condition: true
+              entity_id: media_player.overkapping_sonos
+            data: {}
           double_tap_action:
             action: perform-action
-            perform_action: automation.trigger
+            perform_action: media_player.unjoin
             target:
-              entity_id: automation.general_play_default_music
-            data:
-              skip_condition: true
+              entity_id: media_player.overkapping_sonos
+            data: {}
           hold_action:
             action: perform-action
-            perform_action: automation.trigger
+            perform_action: media_player.unjoin
             target:
-              entity_id: automation.general_play_default_music
-            data:
-              skip_condition: true
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: media_player.woonkamer_sonos
-                state: idle
-              - condition: state
-                entity: media_player.woonkamer_sonos
-                state: paused
-              - condition: state
-                entity: media_player.woonkamer_sonos
-                state: standby
+              entity_id: media_player.overkapping_sonos
+            data: {}
       - type: custom:bubble-card
         card_type: button
         button_type: name
@@ -434,45 +412,85 @@ sections:
             group_members:
               - media_player.overkapping_sonos
       - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        icon: mdi:speaker-stop
-        name: Boxen loskoppelen overkapping
-        tap_action:
-          action: perform-action
-          perform_action: media_player.unjoin
-          target:
-            entity_id: media_player.overkapping_sonos
-        double_tap_action:
-          action: perform-action
-          perform_action: media_player.unjoin
-          target:
-            entity_id: media_player.overkapping_sonos
-        visibility:
-          - condition: state
-            entity: media_player.overkapping_sonos
-            state_not: paused
+        card_type: climate
         modules:
           - default
+        entity: climate.intex_purespa
+        sub_button:
+          - name: HVAC modes menu
+            select_attribute: hvac_modes
+            state_background: false
+            show_arrow: false
+          - entity: switch.intex_purespa_filter
+          - entity: switch.intex_purespa_sanitizer
+        show_attribute: true
+        attribute: current_temperature
+        visibility:
+          - condition: state
+            entity: switch.intex_purespa_power
+            state: "on"
+      - type: custom:bubble-card
+        card_type: button
+        button_type: name
+        modules:
+          - default
+        name: Speel Q-Music
+        icon: mdi:music
+        tap_action:
+          action: perform-action
+          perform_action: automation.trigger
+          target:
+            entity_id: automation.general_play_default_music
+          data:
+            skip_condition: true
+        double_tap_action:
+          action: perform-action
+          perform_action: automation.trigger
+          target:
+            entity_id: automation.general_play_default_music
+          data:
+            skip_condition: true
+        hold_action:
+          action: perform-action
+          perform_action: automation.trigger
+          target:
+            entity_id: automation.general_play_default_music
+          data:
+            skip_condition: true
         button_action:
           tap_action:
             action: perform-action
-            perform_action: media_player.unjoin
+            perform_action: automation.trigger
             target:
-              entity_id: media_player.overkapping_sonos
-            data: {}
+              entity_id: automation.general_play_default_music
+            data:
+              skip_condition: true
           double_tap_action:
             action: perform-action
-            perform_action: media_player.unjoin
+            perform_action: automation.trigger
             target:
-              entity_id: media_player.overkapping_sonos
-            data: {}
+              entity_id: automation.general_play_default_music
+            data:
+              skip_condition: true
           hold_action:
             action: perform-action
-            perform_action: media_player.unjoin
+            perform_action: automation.trigger
             target:
-              entity_id: media_player.overkapping_sonos
-            data: {}
+              entity_id: automation.general_play_default_music
+            data:
+              skip_condition: true
+        visibility:
+          - condition: or
+            conditions:
+              - condition: state
+                entity: media_player.woonkamer_sonos
+                state: idle
+              - condition: state
+                entity: media_player.woonkamer_sonos
+                state: paused
+              - condition: state
+                entity: media_player.woonkamer_sonos
+                state: standby
       - type: horizontal-stack
         cards:
           - type: custom:bubble-card
@@ -502,31 +520,6 @@ sections:
           - default
         name: Stroomverbruik negatief / Stroomprijs negatief
         icon: mdi:currency-eur
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: switch.live_energieverbruik_totaal_negatief
-                state: "on"
-              - condition: numeric_state
-                entity: sensor.zonneplan_current_electricity_tariff
-                below: 0
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: automation.carport_charging_station_charge
-        name: Laadpaal Starten
-        icon: mdi:ev-station
-        show_last_changed: false
-        show_attribute: false
-        show_state: false
-        tap_action:
-          action: call-service
-          target:
-            entity_id: automation.carport_charging_station_charge
-          service: automation.trigger
-        modules:
-          - default
         visibility:
           - condition: or
             conditions:
@@ -591,6 +584,31 @@ sections:
               - condition: state
                 entity: select.lilygo_rs485_marstek_rs485_control_mode
                 state: enable
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: automation.carport_charging_station_charge
+        name: Laadpaal Starten
+        icon: mdi:ev-station
+        show_last_changed: false
+        show_attribute: false
+        show_state: false
+        tap_action:
+          action: call-service
+          target:
+            entity_id: automation.carport_charging_station_charge
+          service: automation.trigger
+        modules:
+          - default
+        visibility:
+          - condition: or
+            conditions:
+              - condition: state
+                entity: switch.live_energieverbruik_totaal_negatief
+                state: "on"
+              - condition: numeric_state
+                entity: sensor.zonneplan_current_electricity_tariff
+                below: 0
   - type: grid
     cards:
       - type: custom:bubble-card
@@ -599,6 +617,17 @@ sections:
           - default
         name: Vandaag
         icon: mdi:calendar-today
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        modules:
+          - default
+        entity: sensor.afvalinfo_home_trash_type_today
+        visibility:
+          - condition: state
+            entity: sensor.afvalinfo_home_trash_type_today
+            state_not: geen
+        name: Afval vandaag
       - type: custom:bubble-card
         card_type: calendar
         modules:
@@ -620,17 +649,6 @@ sections:
             color: "#8CA02E"
         show_end: true
         show_progress: true
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        modules:
-          - default
-        entity: sensor.afvalinfo_home_trash_type_today
-        visibility:
-          - condition: state
-            entity: sensor.afvalinfo_home_trash_type_today
-            state_not: geen
-        name: Afval vandaag
       - type: custom:bubble-card
         card_type: separator
         name: Brandweer
@@ -815,51 +833,6 @@ sections:
         icon: mdi:power
       - type: custom:bubble-card
         card_type: button
-        button_type: state
-        entity: sensor.marstek_marstek_battery_power
-        sub_button:
-          - entity: sensor.marstek_marstek_battery_remaining_capacity
-            show_name: false
-            show_icon: false
-            show_state: true
-            show_background: true
-            state_background: false
-          - entity: sensor.marstek_marstek_battery_state_of_charge
-            show_name: false
-            show_icon: false
-            show_state: true
-            state_background: false
-            show_background: true
-          - entity: sensor.marstek_marstek_inverter_state
-            show_last_changed: false
-            show_state: true
-            state_background: false
-            show_icon: false
-        name: Marstek Batterij
-        card_layout: large-2-rows
-        modules:
-          - default
-        tap_action:
-          action: navigate
-          navigation_path: "#battery"
-        double_tap_action:
-          action: navigate
-          navigation_path: "#battery"
-        hold_action:
-          action: navigate
-          navigation_path: "#battery"
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#battery"
-          double_tap_action:
-            action: navigate
-            navigation_path: "#battery"
-          hold_action:
-            action: navigate
-            navigation_path: "#battery"
-      - type: custom:bubble-card
-        card_type: button
         button_type: name
         show_name: true
         icon: mdi:power
@@ -926,6 +899,51 @@ sections:
         scrolling_effect: false
         modules:
           - default
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.marstek_marstek_battery_power
+        sub_button:
+          - entity: sensor.marstek_marstek_battery_remaining_capacity
+            show_name: false
+            show_icon: false
+            show_state: true
+            show_background: true
+            state_background: false
+          - entity: sensor.marstek_marstek_battery_state_of_charge
+            show_name: false
+            show_icon: false
+            show_state: true
+            state_background: false
+            show_background: true
+          - entity: sensor.marstek_marstek_inverter_state
+            show_last_changed: false
+            show_state: true
+            state_background: false
+            show_icon: false
+        name: Marstek Batterij
+        card_layout: large-2-rows
+        modules:
+          - default
+        tap_action:
+          action: navigate
+          navigation_path: "#battery"
+        double_tap_action:
+          action: navigate
+          navigation_path: "#battery"
+        hold_action:
+          action: navigate
+          navigation_path: "#battery"
+        button_action:
+          tap_action:
+            action: navigate
+            navigation_path: "#battery"
+          double_tap_action:
+            action: navigate
+            navigation_path: "#battery"
+          hold_action:
+            action: navigate
+            navigation_path: "#battery"
   - type: grid
     cards:
       - type: vertical-stack
