@@ -100,6 +100,20 @@ sections:
           hold_action:
             action: navigate
             navigation_path: "#groundfloor"
+        sub_button:
+          - entity: binary_sensor.pir_group_livingroom
+            show_state: false
+            icon: mdi:sofa
+            name: Woonkamer Beweging
+          - entity: binary_sensor.keuken_beweging_occupancy
+            icon: mdi:countertop
+            name: Keuken Beweging
+          - entity: binary_sensor.entree_beweging_occupancy
+            name: Entree Beweging
+            icon: mdi:hanger
+          - entity: binary_sensor.toilet_beweging_occupancy
+            name: Toilet Beweging
+            icon: mdi:paper-roll
       - type: custom:bubble-card
         card_type: button
         button_type: name
@@ -126,6 +140,13 @@ sections:
           hold_action:
             action: navigate
             navigation_path: "#firstfloor"
+        sub_button:
+          - entity: binary_sensor.pir_group_bathroom
+            name: Badkamer Beweging
+            icon: mdi:bathtub
+          - entity: binary_sensor.overloop_beweging_occupancy
+            name: Overloop Beweging
+            icon: mdi:stairs-down
       - type: custom:bubble-card
         card_type: button
         button_type: name
@@ -152,6 +173,10 @@ sections:
           hold_action:
             action: navigate
             navigation_path: "#secondfloor"
+        sub_button:
+          - entity: binary_sensor.overloop_zolder_beweging_occupancy
+            name: Overloop Zolder Beweging
+            icon: mdi:stairs-up
       - type: custom:bubble-card
         card_type: button
         button_type: name
@@ -178,6 +203,13 @@ sections:
           hold_action:
             action: navigate
             navigation_path: "#garage"
+        sub_button:
+          - entity: binary_sensor.pir_group_garage
+            name: Garage Beweging
+            icon: mdi:garage
+          - entity: binary_sensor.pir_group_playroom
+            name: Speelkamer Beweging
+            icon: mdi:controller
       - type: custom:bubble-card
         card_type: button
         button_type: name
@@ -204,6 +236,16 @@ sections:
           hold_action:
             action: navigate
             navigation_path: "#outside"
+        sub_button:
+          - entity: binary_sensor.g5_ultra_turret_overkapping_motion
+            name: Achtertuin Beweging
+            icon: mdi:awning-outline
+          - entity: binary_sensor.g4_doorbell_pro_motion
+            name: Deurbel beweging
+            icon: mdi:doorbell-video
+          - entity: binary_sensor.g5_ultra_turret_voortuin_motion
+            name: Voortuin Beweging
+            icon: mdi:car
   - type: grid
     cards:
       - type: custom:bubble-card
@@ -256,6 +298,68 @@ sections:
       - type: custom:bubble-card
         card_type: button
         button_type: name
+        modules:
+          - default
+        name: Speel Q-Music
+        icon: mdi:music
+        tap_action:
+          action: perform-action
+          perform_action: automation.trigger
+          target:
+            entity_id: automation.general_play_default_music
+          data:
+            skip_condition: true
+        double_tap_action:
+          action: perform-action
+          perform_action: automation.trigger
+          target:
+            entity_id: automation.general_play_default_music
+          data:
+            skip_condition: true
+        hold_action:
+          action: perform-action
+          perform_action: automation.trigger
+          target:
+            entity_id: automation.general_play_default_music
+          data:
+            skip_condition: true
+        button_action:
+          tap_action:
+            action: perform-action
+            perform_action: automation.trigger
+            target:
+              entity_id: automation.general_play_default_music
+            data:
+              skip_condition: true
+          double_tap_action:
+            action: perform-action
+            perform_action: automation.trigger
+            target:
+              entity_id: automation.general_play_default_music
+            data:
+              skip_condition: true
+          hold_action:
+            action: perform-action
+            perform_action: automation.trigger
+            target:
+              entity_id: automation.general_play_default_music
+            data:
+              skip_condition: true
+        visibility:
+          - condition: or
+            conditions:
+              - condition: state
+                entity: media_player.woonkamer_sonos
+                state: idle
+              - condition: state
+                entity: media_player.woonkamer_sonos
+                state: paused
+              - condition: state
+                entity: media_player.woonkamer_sonos
+                state: standby
+      - type: custom:bubble-card
+        card_type: button
+        button_type: name
         name: Boxen samenvoegen overkapping
         icon: mdi:set-all
         tap_action:
@@ -286,6 +390,11 @@ sections:
               - condition: numeric_state
                 entity: sensor.voortuin_zon_luminance
                 above: 15000
+          - condition: state
+            entity: media_player.overkapping_sonos
+            state: idle
+        modules:
+          - default
       - type: custom:bubble-card
         card_type: button
         button_type: name
@@ -379,9 +488,6 @@ sections:
         visibility:
           - condition: or
             conditions:
-              - condition: state
-                entity: switch.live_energieverbruik_totaal_negatief
-                state: "on"
               - condition: numeric_state
                 entity: sensor.zonneplan_current_electricity_tariff
                 below: 0
