@@ -567,7 +567,7 @@ sections:
       - type: custom:bubble-card
         card_type: button
         button_type: state
-        entity: sensor.marstek_marstek_battery_power
+        entity: sensor.lilygo_rs485_marstek_inverter_state
         sub_button:
           - entity: sensor.marstek_marstek_battery_remaining_capacity
             show_name: false
@@ -581,12 +581,16 @@ sections:
             show_state: true
             state_background: false
             show_background: true
-          - entity: sensor.marstek_marstek_inverter_state
+          - entity: sensor.marstek_marstek_battery_power
             show_last_changed: false
             show_state: true
             state_background: false
             show_icon: false
-        name: Marstek Batterij
+            visibility:
+              - condition: state
+                entity: sensor.lilygo_rs485_marstek_inverter_state
+                state_not: Standby
+        name: Batterij
         card_layout: large-2-rows
         modules:
           - default
@@ -609,6 +613,7 @@ sections:
           hold_action:
             action: navigate
             navigation_path: "#battery"
+        show_attribute: false
   - type: grid
     cards:
       - type: custom:bubble-card
@@ -1245,6 +1250,8 @@ sections:
                 show_state: true
                 state_background: false
                 show_background: false
+            modules:
+              - default
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
@@ -1258,8 +1265,7 @@ sections:
                 name: Verlichting Woonkamer
                 icon: mdi:sofa-outline
                 tap_action:
-                  action: navigate
-                  navigation_path: "#livingroom"
+                  action: toggle
                 sub_button:
                   - entity: sensor.woonkamer_verlichting_power
                     show_name: false
@@ -1277,14 +1283,11 @@ sections:
                   .bubble-button-background {
                     background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
                   }
-                double_tap_action:
-                  action: more-info
-                  target: {}
-                  service: light.turn.on
-                hold_action:
-                  action: more-info
                 slider_live_update: false
                 use_accent_color: false
+                modules:
+                  - default
+                button_action: {}
           - type: custom:bubble-card
             card_type: climate
             entity: climate.woonkamer_2
@@ -1338,6 +1341,8 @@ sections:
                     action: toggle
                   hold_action:
                     action: more-info
+                card_layout: large-2-rows
+                sub_button: []
               - type: custom:bubble-card
                 card_type: button
                 entity: switch.aquarium_stopcontact_pomp_skimmer
@@ -1367,12 +1372,26 @@ sections:
             icon: mdi:stairs
             modules:
               - default
+            tap_action:
+              action: toggle
+            button_action: {}
+            sub_button:
+              - entity: sensor.trapkast_verlichting_power
+                state_background: false
+                show_state: true
+                show_background: false
+                visibility:
+                  - condition: state
+                    entity: light.trapkast_lampen
+                    state: "on"
           - type: custom:bubble-card
             card_type: separator
             button_type: name
             name: Keuken
             icon: mdi:sofa
             sub_button: []
+            modules:
+              - default
           - type: custom:bubble-card
             card_type: button
             button_type: slider
@@ -1422,6 +1441,17 @@ sections:
               - default
             entity: light.eettafel_lampen
             name: Verlichting Eettafel
+            tap_action:
+              action: toggle
+            button_action: {}
+            sub_button:
+              - entity: sensor.eettafel_verlichting_power
+                show_background: false
+                show_state: true
+                visibility:
+                  - condition: state
+                    entity: light.eettafel_lampen
+                    state: "on"
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
@@ -1486,6 +1516,11 @@ sections:
                   - condition: state
                     entity: light.entree_lampen
                     state: "on"
+            modules:
+              - default
+            tap_action:
+              action: toggle
+            button_action: {}
           - type: custom:bubble-card
             card_type: button
             button_type: switch
@@ -1493,22 +1528,12 @@ sections:
             name: Verlichting Meterkast
             icon: mdi:fuse
             show_attribute: false
-            sub_button:
-              - entity: sensor.entree_lampen_power
-                show_state: true
-                state_background: false
-                show_background: false
-                icon: mdi:flash
-                visibility:
-                  - condition: state
-                    entity: light.entree_lampen
-                    state: "on"
+            sub_button: []
             tap_action:
               action: toggle
-            double_tap_action:
-              action: toggle
-            hold_action:
-              action: more-info
+            modules:
+              - default
+            button_action: {}
       - type: vertical-stack
         cards:
           - type: custom:bubble-card
@@ -1570,6 +1595,11 @@ sections:
                   - condition: state
                     entity: light.speelkamer_lampen
                     state: "on"
+            modules:
+              - default
+            tap_action:
+              action: toggle
+            button_action: {}
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
@@ -1583,6 +1613,9 @@ sections:
                   .bubble-button-background {
                     background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
                   }
+                button_type: switch
+                modules:
+                  - default
               - type: custom:bubble-card
                 card_type: button
                 entity: switch.speelkamer_stopcontact_verwarming
@@ -1596,6 +1629,11 @@ sections:
                       - condition: state
                         entity: switch.speelkamer_stopcontact_verwarming
                         state: "on"
+                button_type: switch
+                modules:
+                  - default
+                tap_action:
+                  action: toggle
           - type: custom:bubble-card
             card_type: separator
             name: Garage
@@ -1621,6 +1659,11 @@ sections:
                   - condition: state
                     entity: light.garage_lampen
                     state: "on"
+            modules:
+              - default
+            tap_action:
+              action: toggle
+            button_action: {}
       - type: vertical-stack
         cards:
           - type: custom:bubble-card
@@ -1685,6 +1728,11 @@ sections:
             name: Verlichting Slaapkamer
             icon: mdi:bed-double
             sub_button: []
+            modules:
+              - default
+            tap_action:
+              action: toggle
+            button_action: {}
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
@@ -1710,6 +1758,10 @@ sections:
             name: Verlichting Badkamer
             icon: mdi:shower-head
             slider_live_update: false
+            modules:
+              - default
+            tap_action:
+              action: toggle
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
@@ -1740,6 +1792,16 @@ sections:
             icon: mdi:desk-lamp
             modules:
               - default
+            tap_action:
+              action: toggle
+            sub_button:
+              - entity: sensor.kantoor_verlichting_power
+                show_background: false
+                show_state: true
+                visibility:
+                  - condition: state
+                    entity: light.kantoor_lampen
+                    state: "on"
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
@@ -1765,6 +1827,10 @@ sections:
             entity: light.slaapkamer_maxi_lampen
             name: Verlichting Slaapkamer Maxi
             icon: mdi:bed
+            modules:
+              - default
+            tap_action:
+              action: toggle
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
@@ -1774,6 +1840,7 @@ sections:
                 button_type: switch
                 modules:
                   - default
+                button_action: {}
               - type: custom:bubble-card
                 card_type: button
                 button_type: state
@@ -1829,6 +1896,10 @@ sections:
             entity: light.overloop_zolder_lampen
             name: Verlichting Overloop Zolder
             icon: mdi:stairs-box
+            modules:
+              - default
+            tap_action:
+              action: toggle
           - type: custom:bubble-card
             card_type: climate
             entity: climate.airco_zolder
@@ -1858,6 +1929,10 @@ sections:
             entity: light.slaapkamer_mini_lampen
             name: Verlichting Slaapkamer Mini
             icon: mdi:bed
+            modules:
+              - default
+            tap_action:
+              action: toggle
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
@@ -1931,6 +2006,16 @@ sections:
             entity: light.voortuin_lampen
             name: Verlichting Voortuin
             icon: mdi:flower
+            tap_action:
+              action: toggle
+            sub_button:
+              - entity: sensor.voortuin_verlichting_power
+                show_background: false
+                show_state: true
+                visibility:
+                  - condition: state
+                    entity: light.voortuin_lampen
+                    state: "on"
           - type: custom:bubble-card
             card_type: separator
             modules:
@@ -1945,6 +2030,16 @@ sections:
             entity: light.achtertuin_lampen
             name: Verlichting Achtertuin
             icon: mdi:seat
+            tap_action:
+              action: toggle
+            sub_button:
+              - entity: sensor.achtertuin_verlichting_power
+                show_background: false
+                show_state: true
+                visibility:
+                  - condition: state
+                    entity: light.achtertuin_lampen
+                    state: "on"
           - type: custom:bubble-card
             card_type: cover
             modules:
@@ -1983,6 +2078,8 @@ sections:
               - default
             entity: switch.achtertuin_schuur_lampen
             name: Verlichting Schuur
+            tap_action:
+              action: toggle
           - type: custom:bubble-card
             card_type: separator
             modules:
@@ -1997,6 +2094,16 @@ sections:
             entity: light.carport_lampen
             name: Verlichting Carport
             icon: mdi:car
+            tap_action:
+              action: toggle
+            sub_button:
+              - entity: sensor.carport_verlichting_power
+                show_background: false
+                show_state: true
+                visibility:
+                  - condition: state
+                    entity: light.carport_lampen
+                    state: "on"
           - type: custom:bubble-card
             card_type: button
             button_type: state
@@ -2044,7 +2151,7 @@ sections:
           - type: custom:bubble-card
             card_type: button
             button_type: state
-            entity: sensor.marstek_marstek_battery_power
+            entity: sensor.lilygo_rs485_marstek_inverter_state
             sub_button:
               - entity: sensor.marstek_marstek_battery_remaining_capacity
                 show_name: false
@@ -2058,20 +2165,44 @@ sections:
                 show_state: true
                 state_background: false
                 show_background: true
-              - entity: sensor.marstek_marstek_inverter_state
+              - entity: sensor.marstek_marstek_battery_power
                 show_last_changed: false
                 show_state: true
                 state_background: false
                 show_icon: false
-            name: Marstek Batterij
+                visibility:
+                  - condition: state
+                    entity: sensor.lilygo_rs485_marstek_inverter_state
+                    state_not: Standby
+            name: Batterij
             card_layout: large-2-rows
             modules:
               - default
+            tap_action:
+              action: navigate
+              navigation_path: "#battery"
+            double_tap_action:
+              action: navigate
+              navigation_path: "#battery"
+            hold_action:
+              action: navigate
+              navigation_path: "#battery"
+            button_action:
+              tap_action:
+                action: navigate
+                navigation_path: "#battery"
+              double_tap_action:
+                action: navigate
+                navigation_path: "#battery"
+              hold_action:
+                action: navigate
+                navigation_path: "#battery"
+            show_attribute: false
           - type: custom:bubble-card
             card_type: select
             entity: select.lilygo_rs485_marstek_rs485_control_mode
             show_state: true
-            name: Marstek handmatige controle
+            name: Handmatige controle
             show_attribute: false
             show_last_changed: false
             modules:
@@ -2117,6 +2248,7 @@ sections:
                     below: 0
             modules:
               - default
+            name: Geforceerd opladen
           - type: custom:bubble-card
             card_type: button
             button_type: state
@@ -2138,3 +2270,4 @@ sections:
                     below: 0
             modules:
               - default
+            name: Geforceerd ontladen
