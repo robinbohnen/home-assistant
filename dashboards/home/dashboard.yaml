@@ -9,6 +9,568 @@ sections:
     cards:
       - type: custom:bubble-card
         card_type: separator
+        name: Conditioneel
+        icon: mdi:vector-difference-ab
+        card_layout: large
+        modules:
+          - default
+        rows: "1"
+      - type: custom:bubble-card
+        card_type: cover
+        modules:
+          - default
+        entity: cover.achtertuin_zonnescherm
+        visibility:
+          - condition: numeric_state
+            entity: sensor.achtertuin_zon_luminance
+            above: 10000
+      - type: custom:bubble-card
+        card_type: climate
+        entity: climate.woonkamer_2
+        sub_button:
+          - name: HVAC modes menu
+            select_attribute: hvac_modes
+            state_background: false
+            show_arrow: false
+        state_color: false
+        visibility:
+          - condition: numeric_state
+            entity: sensor.woonkamer_temperatuur
+            above: 23
+          - condition: state
+            entity: binary_sensor.woonkamer_openslaande_deuren_contact
+            state: "off"
+        modules:
+          - default
+      - type: custom:bubble-card
+        card_type: climate
+        entity: climate.airco_zolder
+        sub_button:
+          - name: HVAC modes menu
+            select_attribute: hvac_modes
+            state_background: false
+            show_arrow: false
+        state_color: false
+        visibility:
+          - condition: numeric_state
+            entity: sensor.slaapkamer_temperatuur_temperature
+            above: 23
+        modules:
+          - default
+      - type: custom:bubble-card
+        card_type: button
+        button_type: name
+        icon: mdi:speaker-stop
+        name: Boxen loskoppelen overkapping
+        tap_action:
+          action: perform-action
+          perform_action: media_player.unjoin
+          target:
+            entity_id: media_player.overkapping_sonos
+        double_tap_action:
+          action: perform-action
+          perform_action: media_player.unjoin
+          target:
+            entity_id: media_player.overkapping_sonos
+        visibility:
+          - condition: state
+            entity: media_player.overkapping_sonos
+            state_not: paused
+        modules:
+          - default
+        button_action:
+          tap_action:
+            action: perform-action
+            perform_action: media_player.unjoin
+            target:
+              entity_id: media_player.overkapping_sonos
+            data: {}
+          double_tap_action:
+            action: perform-action
+            perform_action: media_player.unjoin
+            target:
+              entity_id: media_player.overkapping_sonos
+            data: {}
+          hold_action:
+            action: perform-action
+            perform_action: media_player.unjoin
+            target:
+              entity_id: media_player.overkapping_sonos
+            data: {}
+      - type: custom:bubble-card
+        card_type: button
+        button_type: name
+        name: Boxen samenvoegen overkapping
+        icon: mdi:set-all
+        tap_action:
+          action: perform-action
+          perform_action: media_player.join
+          target:
+            entity_id: media_player.woonkamer_sonos
+          data:
+            group_members:
+              - media_player.overkapping_sonos
+        double_tap_action:
+          action: perform-action
+          perform_action: media_player.join
+          target:
+            entity_id: media_player.woonkamer_sonos
+          data:
+            group_members:
+              - media_player.overkapping_sonos
+        visibility:
+          - condition: or
+            conditions:
+              - condition: state
+                entity: binary_sensor.woonkamer_openslaande_deuren_contact
+                state: "on"
+              - condition: numeric_state
+                entity: sensor.achtertuin_zon_luminance
+                above: 15000
+              - condition: numeric_state
+                entity: sensor.voortuin_zon_luminance
+                above: 15000
+          - condition: or
+            conditions:
+              - condition: state
+                entity: media_player.overkapping_sonos
+                state: idle
+              - condition: state
+                entity: media_player.overkapping_sonos
+                state: paused
+          - condition: state
+            entity: media_player.woonkamer_sonos
+            state: playing
+        modules:
+          - default
+        button_action:
+          tap_action:
+            action: perform-action
+            perform_action: media_player.join
+            target:
+              entity_id: media_player.woonkamer_sonos
+            data:
+              group_members:
+                - medi
+          double_tap_action:
+            action: perform-action
+            perform_action: media_player.join
+            target:
+              entity_id: media_player.woonkamer_sonos
+            data:
+              group_members:
+                - medi
+          hold_action:
+            action: perform-action
+            perform_action: media_player.join
+            target:
+              entity_id: media_player.woonkamer_sonos
+            data:
+              group_members:
+                - media_player.overkapping_sonos
+        hold_action:
+          action: perform-action
+          perform_action: media_player.join
+          target:
+            entity_id: media_player.woonkamer_sonos
+          data:
+            group_members:
+              - media_player.overkapping_sonos
+      - type: custom:bubble-card
+        card_type: climate
+        modules:
+          - default
+        entity: climate.intex_purespa
+        sub_button:
+          - name: HVAC modes menu
+            select_attribute: hvac_modes
+            state_background: false
+            show_arrow: false
+          - entity: switch.intex_purespa_filter
+          - entity: switch.intex_purespa_sanitizer
+        show_attribute: true
+        attribute: current_temperature
+        visibility:
+          - condition: state
+            entity: switch.intex_purespa_power
+            state: "on"
+      - type: custom:bubble-card
+        card_type: button
+        button_type: name
+        modules:
+          - default
+        name: Speel Q-Music
+        icon: mdi:music
+        tap_action:
+          action: perform-action
+          perform_action: automation.trigger
+          target:
+            entity_id: automation.general_play_default_music
+          data:
+            skip_condition: true
+        double_tap_action:
+          action: perform-action
+          perform_action: automation.trigger
+          target:
+            entity_id: automation.general_play_default_music
+          data:
+            skip_condition: true
+        hold_action:
+          action: perform-action
+          perform_action: automation.trigger
+          target:
+            entity_id: automation.general_play_default_music
+          data:
+            skip_condition: true
+        button_action:
+          tap_action:
+            action: perform-action
+            perform_action: automation.trigger
+            target:
+              entity_id: automation.general_play_default_music
+            data:
+              skip_condition: true
+          double_tap_action:
+            action: perform-action
+            perform_action: automation.trigger
+            target:
+              entity_id: automation.general_play_default_music
+            data:
+              skip_condition: true
+          hold_action:
+            action: perform-action
+            perform_action: automation.trigger
+            target:
+              entity_id: automation.general_play_default_music
+            data:
+              skip_condition: true
+        visibility:
+          - condition: or
+            conditions:
+              - condition: state
+                entity: media_player.woonkamer_sonos
+                state: idle
+              - condition: state
+                entity: media_player.woonkamer_sonos
+                state: paused
+              - condition: state
+                entity: media_player.woonkamer_sonos
+                state: standby
+          - condition: state
+            entity: alarm_control_panel.alarmo
+            state: disarmed
+      - type: custom:bubble-card
+        card_type: button
+        button_type: switch
+        modules:
+          - default
+        entity: input_boolean.backyard_spa_keep_warm
+        show_state: true
+        visibility:
+          - condition: state
+            entity: input_boolean.backyard_spa_keep_warm
+            state: "on"
+        name: Spa Warmhouden
+        tap_action:
+          action: toggle
+        double_tap_action:
+          action: toggle
+        hold_action:
+          action: more-info
+        button_action:
+          tap_action:
+            action: toggle
+          double_tap_action:
+            action: toggle
+          hold_action:
+            action: more-info
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            modules:
+              - default
+            entity: binary_sensor.slaapkamer_maxi_deur_contact
+            show_last_changed: true
+            name: Maxi Deur
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            modules:
+              - default
+            entity: binary_sensor.slaapkamer_mini_deur_contact
+            show_last_changed: true
+            name: Mini Deur
+            show_state: true
+        visibility:
+          - condition: state
+            entity: switch.bedtime_kids
+            state: "on"
+      - type: custom:bubble-card
+        card_type: separator
+        modules:
+          - default
+        name: Stroomverbruik negatief / Stroomprijs negatief
+        icon: mdi:currency-eur
+        visibility:
+          - condition: or
+            conditions:
+              - condition: state
+                entity: switch.live_energieverbruik_totaal_negatief
+                state: "on"
+              - condition: numeric_state
+                entity: sensor.zonneplan_current_electricity_tariff
+                below: 0
+        card_layout: large-2-rows
+        rows: "1"
+      - type: custom:bubble-card
+        card_type: button
+        button_type: slider
+        modules:
+          - default
+        name: Alle verlichting
+        icon: mdi:lightbulb
+        entity: light.alle_verlichting
+        visibility:
+          - condition: or
+            conditions:
+              - condition: numeric_state
+                entity: sensor.zonneplan_current_electricity_tariff
+                below: 0
+        use_accent_color: false
+        show_state: true
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        modules:
+          - default
+        entity: sensor.lilygo_rs485_marstek_inverter_state
+        name: Batterij
+        icon: mdi:battery-charging-100
+        tap_action:
+          action: navigate
+          navigation_path: "#battery"
+        double_tap_action:
+          action: navigate
+          navigation_path: "#battery"
+        hold_action:
+          action: navigate
+          navigation_path: "#battery"
+        button_action:
+          tap_action:
+            action: navigate
+            navigation_path: "#battery"
+          double_tap_action:
+            action: navigate
+            navigation_path: "#battery"
+          hold_action:
+            action: navigate
+            navigation_path: "#battery"
+        visibility:
+          - condition: or
+            conditions:
+              - condition: state
+                entity: switch.live_energieverbruik_totaal_negatief
+                state: "on"
+              - condition: numeric_state
+                entity: sensor.zonneplan_current_electricity_tariff
+                below: 0
+              - condition: state
+                entity: select.lilygo_rs485_marstek_rs485_control_mode
+                state: enable
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: automation.carport_charging_station_charge
+        name: Laadpaal Starten
+        icon: mdi:ev-station
+        show_last_changed: false
+        show_attribute: false
+        show_state: false
+        tap_action:
+          action: call-service
+          target:
+            entity_id: automation.carport_charging_station_charge
+          service: automation.trigger
+        modules:
+          - default
+        visibility:
+          - condition: or
+            conditions:
+              - condition: state
+                entity: switch.live_energieverbruik_totaal_negatief
+                state: "on"
+              - condition: numeric_state
+                entity: sensor.zonneplan_current_electricity_tariff
+                below: 0
+  - type: grid
+    cards:
+      - type: custom:bubble-card
+        card_type: separator
+        modules:
+          - default
+        name: Vandaag
+        icon: mdi:calendar-today
+        card_layout: large-2-rows
+        rows: "1"
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        modules:
+          - default
+        entity: sensor.afvalinfo_home_trash_type_today
+        visibility:
+          - condition: state
+            entity: sensor.afvalinfo_home_trash_type_today
+            state_not: geen
+        name: Afval vandaag
+      - type: custom:bubble-card
+        card_type: calendar
+        modules:
+          - default
+        entities:
+          - entity: calendar.agenda
+            color: "#2944BC"
+          - entity: calendar.agenda_business_2
+            color: "#EBDED6"
+          - entity: calendar.agenda_private
+            color: "#B79500"
+          - entity: calendar.agenda_business
+            color: "#FC3FE3"
+          - entity: calendar.mini
+            color: "#4DB907"
+          - entity: calendar.maxi
+            color: "#4D9C35"
+          - entity: calendar.robin_en_sam
+            color: "#8CA02E"
+        show_end: true
+        show_progress: true
+      - type: custom:bubble-card
+        card_type: separator
+        modules:
+          - default
+        name: Stroom
+        icon: mdi:power
+        card_layout: large-2-rows
+        rows: "1"
+      - type: custom:bubble-card
+        card_type: button
+        button_type: name
+        show_name: true
+        icon: mdi:power
+        sub_button:
+          - entity: sensor.electricity_meter_energieverbruik
+            show_name: true
+            show_state: true
+            name: Verbruik
+            state_background: false
+            icon: mdi:power-socket-eu
+          - entity: sensor.electricity_meter_energieproductie
+            state_background: false
+            show_name: true
+            show_state: true
+            name: Productie
+            icon: mdi:solar-panel
+          - entity: sensor.live_energieverbruik_totaal
+            show_icon: true
+            show_name: true
+            show_state: true
+            state_background: false
+            name: Totaal
+            icon: mdi:power
+        name: Nu
+        card_layout: large-2-rows
+        styles: |-
+          .bubble-sub-button-3 {
+            background-color: ${hass.states['switch.live_energieverbruik_totaal_negatief'].state === 'off' ? '#FFCCCB' : '#AFE1AF'} !important;
+          }
+        modules:
+          - default
+      - type: custom:bubble-card
+        card_type: button
+        button_type: name
+        name: Vandaag
+        icon: mdi:meter-electric
+        sub_button:
+          - entity: sensor.solar_power_generated_today
+            show_state: true
+            state_background: false
+            name: Totaal
+            show_name: true
+            icon: mdi:solar-power-variant
+          - entity: sensor.zonneplan_electricity_consumption_today
+            show_state: true
+            state_background: false
+            show_name: true
+            name: Totaal
+            icon: mdi:power-plug
+          - entity: sensor.forecast_solar_production_today
+            show_state: true
+            state_background: false
+            name: Verwacht
+            show_name: true
+            icon: mdi:solar-power
+          - entity: sensor.zonneplan_gas_consumption_today
+            show_state: true
+            show_name: true
+            state_background: false
+            name: Totaal
+            icon: mdi:gas-burner
+        card_layout: large-2-rows
+        show_name: true
+        scrolling_effect: false
+        modules:
+          - default
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.marstek_marstek_battery_power
+        sub_button:
+          - entity: sensor.marstek_marstek_battery_remaining_capacity
+            show_name: false
+            show_icon: false
+            show_state: true
+            show_background: true
+            state_background: false
+          - entity: sensor.marstek_marstek_battery_state_of_charge
+            show_name: false
+            show_icon: false
+            show_state: true
+            state_background: false
+            show_background: true
+          - entity: sensor.marstek_marstek_inverter_state
+            show_last_changed: false
+            show_state: true
+            state_background: false
+            show_icon: false
+        name: Marstek Batterij
+        card_layout: large-2-rows
+        modules:
+          - default
+        tap_action:
+          action: navigate
+          navigation_path: "#battery"
+        double_tap_action:
+          action: navigate
+          navigation_path: "#battery"
+        hold_action:
+          action: navigate
+          navigation_path: "#battery"
+        button_action:
+          tap_action:
+            action: navigate
+            navigation_path: "#battery"
+          double_tap_action:
+            action: navigate
+            navigation_path: "#battery"
+          hold_action:
+            action: navigate
+            navigation_path: "#battery"
+  - type: grid
+    cards:
+      - type: custom:bubble-card
+        card_type: separator
         name: Personen
         icon: mdi:human-male-female-child
         card_layout: large
@@ -25,6 +587,9 @@ sections:
             name: Kinderen
             tap_action:
               action: none
+        modules:
+          - default
+        rows: "1"
       - type: horizontal-stack
         cards:
           - type: custom:bubble-card
@@ -74,6 +639,9 @@ sections:
         name: Ruimtes
         icon: mdi:home-automation
         card_layout: large
+        modules:
+          - default
+        rows: "1"
       - type: custom:bubble-card
         card_type: button
         button_type: name
@@ -246,409 +814,9 @@ sections:
           - entity: binary_sensor.g5_ultra_turret_voortuin_motion
             name: Voortuin Beweging
             icon: mdi:car
-  - type: grid
-    cards:
-      - type: custom:bubble-card
-        card_type: separator
-        name: Conditioneel
-        icon: mdi:vector-difference-ab
-        card_layout: large
-      - type: custom:bubble-card
-        card_type: cover
-        modules:
-          - default
-        entity: cover.achtertuin_zonnescherm
-        visibility:
-          - condition: numeric_state
-            entity: sensor.achtertuin_zon_luminance
-            above: 10000
-      - type: custom:bubble-card
-        card_type: climate
-        entity: climate.woonkamer_2
-        sub_button:
-          - name: HVAC modes menu
-            select_attribute: hvac_modes
-            state_background: false
-            show_arrow: false
-        state_color: false
-        visibility:
-          - condition: numeric_state
-            entity: sensor.woonkamer_temperatuur
-            above: 23
-          - condition: state
-            entity: binary_sensor.woonkamer_openslaande_deuren_contact
-            state: "off"
-        modules:
-          - default
-      - type: custom:bubble-card
-        card_type: climate
-        entity: climate.airco_zolder
-        sub_button:
-          - name: HVAC modes menu
-            select_attribute: hvac_modes
-            state_background: false
-            show_arrow: false
-        state_color: false
-        visibility:
-          - condition: numeric_state
-            entity: sensor.slaapkamer_temperatuur_temperature
-            above: 23
-        modules:
-          - default
-      - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        icon: mdi:speaker-stop
-        name: Boxen loskoppelen overkapping
-        tap_action:
-          action: perform-action
-          perform_action: media_player.unjoin
-          target:
-            entity_id: media_player.overkapping_sonos
-        double_tap_action:
-          action: perform-action
-          perform_action: media_player.unjoin
-          target:
-            entity_id: media_player.overkapping_sonos
-        visibility:
-          - condition: state
-            entity: media_player.overkapping_sonos
-            state_not: paused
-        modules:
-          - default
-        button_action:
-          tap_action:
-            action: perform-action
-            perform_action: media_player.unjoin
-            target:
-              entity_id: media_player.overkapping_sonos
-            data: {}
-          double_tap_action:
-            action: perform-action
-            perform_action: media_player.unjoin
-            target:
-              entity_id: media_player.overkapping_sonos
-            data: {}
-          hold_action:
-            action: perform-action
-            perform_action: media_player.unjoin
-            target:
-              entity_id: media_player.overkapping_sonos
-            data: {}
-      - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        name: Boxen samenvoegen overkapping
-        icon: mdi:set-all
-        tap_action:
-          action: perform-action
-          perform_action: media_player.join
-          target:
-            entity_id: media_player.woonkamer_sonos
-          data:
-            group_members:
-              - media_player.overkapping_sonos
-        double_tap_action:
-          action: perform-action
-          perform_action: media_player.join
-          target:
-            entity_id: media_player.woonkamer_sonos
-          data:
-            group_members:
-              - media_player.overkapping_sonos
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: binary_sensor.woonkamer_openslaande_deuren_contact
-                state: "on"
-              - condition: numeric_state
-                entity: sensor.achtertuin_zon_luminance
-                above: 15000
-              - condition: numeric_state
-                entity: sensor.voortuin_zon_luminance
-                above: 15000
-          - condition: or
-            conditions:
-              - condition: state
-                entity: media_player.overkapping_sonos
-                state: idle
-              - condition: state
-                entity: media_player.overkapping_sonos
-                state: paused
-        modules:
-          - default
-        button_action:
-          tap_action:
-            action: perform-action
-            perform_action: media_player.join
-            target:
-              entity_id: media_player.woonkamer_sonos
-            data:
-              group_members:
-                - medi
-          double_tap_action:
-            action: perform-action
-            perform_action: media_player.join
-            target:
-              entity_id: media_player.woonkamer_sonos
-            data:
-              group_members:
-                - medi
-          hold_action:
-            action: perform-action
-            perform_action: media_player.join
-            target:
-              entity_id: media_player.woonkamer_sonos
-            data:
-              group_members:
-                - media_player.overkapping_sonos
-        hold_action:
-          action: perform-action
-          perform_action: media_player.join
-          target:
-            entity_id: media_player.woonkamer_sonos
-          data:
-            group_members:
-              - media_player.overkapping_sonos
-      - type: custom:bubble-card
-        card_type: climate
-        modules:
-          - default
-        entity: climate.intex_purespa
-        sub_button:
-          - name: HVAC modes menu
-            select_attribute: hvac_modes
-            state_background: false
-            show_arrow: false
-          - entity: switch.intex_purespa_filter
-          - entity: switch.intex_purespa_sanitizer
-        show_attribute: true
-        attribute: current_temperature
-        visibility:
-          - condition: state
-            entity: switch.intex_purespa_power
-            state: "on"
-      - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        modules:
-          - default
-        name: Speel Q-Music
-        icon: mdi:music
-        tap_action:
-          action: perform-action
-          perform_action: automation.trigger
-          target:
-            entity_id: automation.general_play_default_music
-          data:
-            skip_condition: true
-        double_tap_action:
-          action: perform-action
-          perform_action: automation.trigger
-          target:
-            entity_id: automation.general_play_default_music
-          data:
-            skip_condition: true
-        hold_action:
-          action: perform-action
-          perform_action: automation.trigger
-          target:
-            entity_id: automation.general_play_default_music
-          data:
-            skip_condition: true
-        button_action:
-          tap_action:
-            action: perform-action
-            perform_action: automation.trigger
-            target:
-              entity_id: automation.general_play_default_music
-            data:
-              skip_condition: true
-          double_tap_action:
-            action: perform-action
-            perform_action: automation.trigger
-            target:
-              entity_id: automation.general_play_default_music
-            data:
-              skip_condition: true
-          hold_action:
-            action: perform-action
-            perform_action: automation.trigger
-            target:
-              entity_id: automation.general_play_default_music
-            data:
-              skip_condition: true
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: media_player.woonkamer_sonos
-                state: idle
-              - condition: state
-                entity: media_player.woonkamer_sonos
-                state: paused
-              - condition: state
-                entity: media_player.woonkamer_sonos
-                state: standby
-      - type: horizontal-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            modules:
-              - default
-            entity: binary_sensor.slaapkamer_maxi_deur_contact
-            show_last_changed: true
-            name: Maxi Deur
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            modules:
-              - default
-            entity: binary_sensor.slaapkamer_mini_deur_contact
-            show_last_changed: true
-            name: Mini Deur
-            show_state: true
-        visibility:
-          - condition: state
-            entity: switch.bedtime_kids
-            state: "on"
-      - type: custom:bubble-card
-        card_type: separator
-        modules:
-          - default
-        name: Stroomverbruik negatief / Stroomprijs negatief
-        icon: mdi:currency-eur
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: switch.live_energieverbruik_totaal_negatief
-                state: "on"
-              - condition: numeric_state
-                entity: sensor.zonneplan_current_electricity_tariff
-                below: 0
-      - type: custom:bubble-card
-        card_type: button
-        button_type: slider
-        modules:
-          - default
-        name: Alle verlichting
-        icon: mdi:lightbulb
-        entity: light.alle_verlichting
-        visibility:
-          - condition: or
-            conditions:
-              - condition: numeric_state
-                entity: sensor.zonneplan_current_electricity_tariff
-                below: 0
-        use_accent_color: false
-        show_state: true
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        modules:
-          - default
-        entity: sensor.lilygo_rs485_marstek_inverter_state
-        name: Batterij
-        icon: mdi:battery-charging-100
-        tap_action:
-          action: navigate
-          navigation_path: "#battery"
-        double_tap_action:
-          action: navigate
-          navigation_path: "#battery"
-        hold_action:
-          action: navigate
-          navigation_path: "#battery"
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#battery"
-          double_tap_action:
-            action: navigate
-            navigation_path: "#battery"
-          hold_action:
-            action: navigate
-            navigation_path: "#battery"
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: switch.live_energieverbruik_totaal_negatief
-                state: "on"
-              - condition: numeric_state
-                entity: sensor.zonneplan_current_electricity_tariff
-                below: 0
-              - condition: state
-                entity: select.lilygo_rs485_marstek_rs485_control_mode
-                state: enable
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: automation.carport_charging_station_charge
-        name: Laadpaal Starten
-        icon: mdi:ev-station
-        show_last_changed: false
-        show_attribute: false
-        show_state: false
-        tap_action:
-          action: call-service
-          target:
-            entity_id: automation.carport_charging_station_charge
-          service: automation.trigger
-        modules:
-          - default
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: switch.live_energieverbruik_totaal_negatief
-                state: "on"
-              - condition: numeric_state
-                entity: sensor.zonneplan_current_electricity_tariff
-                below: 0
-  - type: grid
-    cards:
-      - type: custom:bubble-card
-        card_type: separator
-        modules:
-          - default
-        name: Vandaag
-        icon: mdi:calendar-today
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        modules:
-          - default
-        entity: sensor.afvalinfo_home_trash_type_today
-        visibility:
-          - condition: state
-            entity: sensor.afvalinfo_home_trash_type_today
-            state_not: geen
-        name: Afval vandaag
-      - type: custom:bubble-card
-        card_type: calendar
-        modules:
-          - default
-        entities:
-          - entity: calendar.agenda
-            color: "#2944BC"
-          - entity: calendar.agenda_business_2
-            color: "#EBDED6"
-          - entity: calendar.agenda_private
-            color: "#B79500"
-          - entity: calendar.agenda_business
-            color: "#FC3FE3"
-          - entity: calendar.mini
-            color: "#4DB907"
-          - entity: calendar.maxi
-            color: "#4D9C35"
-          - entity: calendar.robin_en_sam
-            color: "#8CA02E"
-        show_end: true
-        show_progress: true
+          - entity: binary_sensor.g5_turret_ultra_motion
+            name: Achtertuin Overkapping Beweging
+            icon: mdi:greenhouse
       - type: custom:bubble-card
         card_type: separator
         name: Brandweer
@@ -670,6 +838,7 @@ sections:
         card_layout: large
         modules:
           - default
+        rows: "1"
       - type: custom:bubble-card
         card_type: button
         button_type: state
@@ -825,125 +994,6 @@ sections:
                 color: ${hass.states['input_select.brandweer_mijn_huidige_ploeg'].state === 'C Ploeg' ? 'var(--accent-color)' : ''} !important;
               }
             icon: mdi:alpha-c-circle-outline
-      - type: custom:bubble-card
-        card_type: separator
-        modules:
-          - default
-        name: Stroom
-        icon: mdi:power
-      - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        show_name: true
-        icon: mdi:power
-        sub_button:
-          - entity: sensor.electricity_meter_energieverbruik
-            show_name: true
-            show_state: true
-            name: Verbruik
-            state_background: false
-            icon: mdi:power-socket-eu
-          - entity: sensor.electricity_meter_energieproductie
-            state_background: false
-            show_name: true
-            show_state: true
-            name: Productie
-            icon: mdi:solar-panel
-          - entity: sensor.live_energieverbruik_totaal
-            show_icon: true
-            show_name: true
-            show_state: true
-            state_background: false
-            name: Totaal
-            icon: mdi:power
-        name: Nu
-        card_layout: large-2-rows
-        styles: |-
-          .bubble-sub-button-3 {
-            background-color: ${hass.states['switch.live_energieverbruik_totaal_negatief'].state === 'off' ? '#FFCCCB' : '#AFE1AF'} !important;
-          }
-        modules:
-          - default
-      - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        name: Vandaag
-        icon: mdi:meter-electric
-        sub_button:
-          - entity: sensor.solar_power_generated_today
-            show_state: true
-            state_background: false
-            name: Totaal
-            show_name: true
-            icon: mdi:solar-power-variant
-          - entity: sensor.zonneplan_electricity_consumption_today
-            show_state: true
-            state_background: false
-            show_name: true
-            name: Totaal
-            icon: mdi:power-plug
-          - entity: sensor.forecast_solar_production_today
-            show_state: true
-            state_background: false
-            name: Verwacht
-            show_name: true
-            icon: mdi:solar-power
-          - entity: sensor.zonneplan_gas_consumption_today
-            show_state: true
-            show_name: true
-            state_background: false
-            name: Totaal
-            icon: mdi:gas-burner
-        card_layout: large-2-rows
-        show_name: true
-        scrolling_effect: false
-        modules:
-          - default
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: sensor.marstek_marstek_battery_power
-        sub_button:
-          - entity: sensor.marstek_marstek_battery_remaining_capacity
-            show_name: false
-            show_icon: false
-            show_state: true
-            show_background: true
-            state_background: false
-          - entity: sensor.marstek_marstek_battery_state_of_charge
-            show_name: false
-            show_icon: false
-            show_state: true
-            state_background: false
-            show_background: true
-          - entity: sensor.marstek_marstek_inverter_state
-            show_last_changed: false
-            show_state: true
-            state_background: false
-            show_icon: false
-        name: Marstek Batterij
-        card_layout: large-2-rows
-        modules:
-          - default
-        tap_action:
-          action: navigate
-          navigation_path: "#battery"
-        double_tap_action:
-          action: navigate
-          navigation_path: "#battery"
-        hold_action:
-          action: navigate
-          navigation_path: "#battery"
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#battery"
-          double_tap_action:
-            action: navigate
-            navigation_path: "#battery"
-          hold_action:
-            action: navigate
-            navigation_path: "#battery"
   - type: grid
     cards:
       - type: vertical-stack
@@ -1653,15 +1703,6 @@ sections:
             show_last_changed: false
             modules:
               - default
-            visibility:
-              - condition: or
-                conditions:
-                  - condition: state
-                    entity: switch.live_energieverbruik_totaal_negatief
-                    state: "on"
-                  - condition: numeric_state
-                    entity: sensor.zonneplan_current_electricity_tariff
-                    below: 0
           - type: custom:bubble-card
             card_type: select
             entity: select.lilygo_rs485_marstek_forcible_charge_discharge
