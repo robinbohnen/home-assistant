@@ -24,6 +24,36 @@ sections:
           - condition: numeric_state
             entity: sensor.achtertuin_zon_luminance
             above: 10000
+        card_layout: large
+        rows: 1
+      - type: custom:bubble-card
+        card_type: button
+        entity: alarm_control_panel.alarmo
+        show_state: true
+        show_last_changed: true
+        name: Alarm
+        sub_button:
+          - entity: lock.kroon18voordeur
+            show_state: true
+            show_last_changed: false
+            state_background: true
+            tap_action:
+              action: toggle
+        visibility:
+          - condition: or
+            conditions:
+              - condition: state
+                entity: alarm_control_panel.alarmo
+                state: armed_away
+              - condition: state
+                entity: alarm_control_panel.alarmo
+                state: armed_home
+              - condition: state
+                entity: lock.kroon18voordeur
+                state: locked
+              - condition: state
+                entity: group.all_adults
+                state_not: home
       - type: custom:bubble-card
         card_type: climate
         entity: climate.woonkamer_2
@@ -97,6 +127,7 @@ sections:
             target:
               entity_id: media_player.overkapping_sonos
             data: {}
+        show_icon: true
       - type: custom:bubble-card
         card_type: button
         button_type: name
@@ -306,7 +337,7 @@ sections:
         show_state: true
         show_last_changed: true
         show_last_updated: false
-        use_accent_color: false
+        use_accent_color: true
         visibility:
           - condition: state
             entity: light.slaapkamer_maxi_lampen
@@ -325,6 +356,7 @@ sections:
           - condition: state
             entity: light.slaapkamer_mini_lampen
             state: "on"
+        use_accent_color: true
       - type: custom:bubble-card
         card_type: button
         button_type: slider
@@ -337,6 +369,9 @@ sections:
           - condition: state
             entity: light.kantoor_lampen
             state: "on"
+        use_accent_color: true
+        show_last_changed: true
+        show_state: true
       - type: custom:bubble-card
         card_type: separator
         modules:
@@ -368,8 +403,9 @@ sections:
               - condition: numeric_state
                 entity: sensor.zonneplan_current_electricity_tariff
                 below: 0
-        use_accent_color: false
+        use_accent_color: true
         show_state: true
+        show_last_changed: true
       - type: custom:bubble-card
         card_type: button
         button_type: state
@@ -443,10 +479,12 @@ sections:
         show_attribute: false
         show_state: false
         tap_action:
-          action: call-service
+          action: perform-action
           target:
             entity_id: automation.carport_charging_station_charge
-          service: automation.trigger
+          perform_action: automation.trigger
+          data:
+            skip_condition: true
         modules:
           - default
         visibility:
@@ -458,6 +496,7 @@ sections:
               - condition: numeric_state
                 entity: sensor.zonneplan_current_electricity_tariff
                 below: 0
+        card_layout: large
   - type: grid
     cards:
       - type: custom:bubble-card
@@ -483,6 +522,9 @@ sections:
             entity: sensor.afvalinfo_home_trash_type_today
             state_not: geen
         name: Afval vandaag
+        show_last_changed: false
+        show_attribute: false
+        card_layout: large
       - type: custom:bubble-card
         card_type: calendar
         modules:
@@ -1281,8 +1323,8 @@ sections:
                 button_type: slider
                 entity: light.woonkamer_lampen
                 force_icon: false
-                show_state: false
-                show_last_changed: false
+                show_state: true
+                show_last_changed: true
                 show_attribute: false
                 name: Verlichting Woonkamer
                 icon: mdi:sofa-outline
@@ -1306,7 +1348,7 @@ sections:
                     background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
                   }
                 slider_live_update: false
-                use_accent_color: false
+                use_accent_color: true
                 modules:
                   - default
                 button_action: {}
@@ -1320,6 +1362,8 @@ sections:
                 show_arrow: false
             modules:
               - default
+            show_state: true
+            show_last_changed: false
           - type: custom:bubble-card
             card_type: button
             entity: media_player.woonkamer_77_oled
@@ -1338,6 +1382,8 @@ sections:
             button_type: switch
             modules:
               - default
+            show_state: true
+            show_last_changed: true
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
@@ -1365,6 +1411,7 @@ sections:
                     action: more-info
                 card_layout: large-2-rows
                 sub_button: []
+                show_state: true
               - type: custom:bubble-card
                 card_type: button
                 entity: switch.aquarium_stopcontact_pomp_skimmer
@@ -1386,6 +1433,7 @@ sections:
                     action: toggle
                   hold_action:
                     action: more-info
+                show_state: true
           - type: custom:bubble-card
             card_type: button
             button_type: slider
@@ -1406,6 +1454,9 @@ sections:
                   - condition: state
                     entity: light.trapkast_lampen
                     state: "on"
+            show_state: true
+            show_last_changed: true
+            use_accent_color: true
           - type: custom:bubble-card
             card_type: separator
             button_type: name
@@ -1437,7 +1488,7 @@ sections:
                   - condition: state
                     entity: light.keuken_lampen
                     state: "on"
-            scrolling_effect: false
+            scrolling_effect: true
             card_layout: normal
             styles: |-
               .bubble-sub-button-2 {
@@ -1453,9 +1504,11 @@ sections:
               action: more-info
             double_tap_action:
               action: more-info
-            use_accent_color: false
+            use_accent_color: true
             modules:
               - default
+            show_state: true
+            show_last_changed: true
           - type: custom:bubble-card
             card_type: button
             button_type: slider
@@ -1474,6 +1527,9 @@ sections:
                   - condition: state
                     entity: light.eettafel_lampen
                     state: "on"
+            use_accent_color: true
+            show_state: true
+            show_last_changed: true
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
@@ -1491,6 +1547,7 @@ sections:
                 button_type: switch
                 modules:
                   - default
+                show_state: true
               - type: custom:bubble-card
                 card_type: button
                 entity: cover.covers_kitchen_screens
@@ -1506,6 +1563,7 @@ sections:
                 button_type: switch
                 modules:
                   - default
+                show_state: true
               - type: custom:bubble-card
                 card_type: button
                 entity: switch.linea_micra_kroon_18
@@ -1517,6 +1575,7 @@ sections:
                   action: toggle
                 hold_action:
                   action: more-info
+                show_state: true
           - type: custom:bubble-card
             card_type: separator
             name: Entree
@@ -1543,6 +1602,9 @@ sections:
             tap_action:
               action: toggle
             button_action: {}
+            show_state: true
+            use_accent_color: true
+            show_last_changed: true
           - type: custom:bubble-card
             card_type: button
             button_type: switch
@@ -1556,136 +1618,8 @@ sections:
             modules:
               - default
             button_action: {}
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: "#garage"
-            name: Garage
-            icon: mdi:garage
-            button_type: name
-            modules:
-              - default
-            sub_button:
-              - name: Power Off
-                icon: mdi:power
-                state_background: false
-                tap_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.garage_lampen
-                      - light.speelkamer_lampen
-                  data: {}
-                double_tap_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.garage_lampen
-                      - light.speelkamer_lampen
-                  data: {}
-                hold_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.garage_lampen
-                      - light.speelkamer_lampen
-                  data: {}
-          - type: custom:bubble-card
-            card_type: separator
-            name: Speelkamer
-            icon: mdi:gamepad
-            card_layout: large
-            sub_button:
-              - entity: sensor.speelkamer_temperatuur_temperature
-                show_background: false
-                show_state: true
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.speelkamer_lampen
-            name: Verlichting Speelkamer
-            icon: mdi:controller
-            sub_button:
-              - entity: sensor.speelkamer_verlichting_power
-                show_state: true
-                show_background: false
-                visibility:
-                  - condition: state
-                    entity: light.speelkamer_lampen
-                    state: "on"
-            modules:
-              - default
-            tap_action:
-              action: toggle
-            button_action: {}
-          - type: horizontal-stack
-            cards:
-              - type: custom:bubble-card
-                card_type: button
-                entity: media_player.speelkamer_tv
-                name: Televisie
-                tap_action:
-                  action: toggle
-                icon: mdi:television
-                styles: |-
-                  .bubble-button-background {
-                    background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
-                  }
-                button_type: switch
-                modules:
-                  - default
-              - type: custom:bubble-card
-                card_type: button
-                entity: switch.speelkamer_stopcontact_verwarming
-                name: Verwarming
-                icon: mdi:heat-wave
-                sub_button:
-                  - entity: sensor.speelkamer_stopcontact_verwarming_power
-                    show_state: true
-                    show_background: false
-                    visibility:
-                      - condition: state
-                        entity: switch.speelkamer_stopcontact_verwarming
-                        state: "on"
-                button_type: switch
-                modules:
-                  - default
-                tap_action:
-                  action: toggle
-          - type: custom:bubble-card
-            card_type: separator
-            name: Garage
-            icon: mdi:garage-variant
-            card_layout: large
-            modules:
-              - default
-            sub_button:
-              - entity: sensor.garage_temperatuur_temperature
-                show_state: true
-                show_background: false
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.garage_lampen
-            name: Verlichting Garage
-            icon: mdi:garage
-            sub_button:
-              - entity: sensor.garage_verlichting_power
-                show_background: false
-                show_state: true
-                visibility:
-                  - condition: state
-                    entity: light.garage_lampen
-                    state: "on"
-            modules:
-              - default
-            tap_action:
-              action: toggle
-            button_action: {}
+            show_state: true
+            show_last_changed: true
       - type: vertical-stack
         cards:
           - type: custom:bubble-card
@@ -1755,12 +1689,18 @@ sections:
             tap_action:
               action: toggle
             button_action: {}
+            use_accent_color: true
+            show_state: true
+            show_last_changed: true
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
                 card_type: button
                 entity: cover.slaapkamer_rolluik
                 name: Rolluik
+                show_state: true
+                show_attribute: true
+                attribute: current_position
               - type: custom:bubble-card
                 card_type: empty-column
           - type: custom:bubble-card
@@ -1784,12 +1724,18 @@ sections:
               - default
             tap_action:
               action: toggle
+            use_accent_color: true
+            show_state: true
+            show_last_changed: true
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
                 card_type: button
                 entity: cover.badkamer_rolluik
                 name: Rolluik
+                show_state: true
+                show_attribute: true
+                attribute: current_position
               - type: custom:bubble-card
                 card_type: empty-column
           - type: custom:bubble-card
@@ -1824,16 +1770,23 @@ sections:
                   - condition: state
                     entity: light.kantoor_lampen
                     state: "on"
+            use_accent_color: true
+            show_state: true
+            show_last_changed: true
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
                 card_type: button
                 entity: cover.covers_office
                 name: Rolluiken
+                show_state: true
+                show_attribute: true
+                attribute: current_position
               - type: custom:bubble-card
                 card_type: button
                 entity: media_player.kantoor_sonos
                 name: Sonos
+                show_state: true
           - type: custom:bubble-card
             card_type: separator
             name: Slaapkamer Maxi
@@ -1853,6 +1806,9 @@ sections:
               - default
             tap_action:
               action: toggle
+            use_accent_color: true
+            show_state: true
+            show_last_changed: true
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
@@ -1863,6 +1819,9 @@ sections:
                 modules:
                   - default
                 button_action: {}
+                show_state: true
+                show_attribute: true
+                attribute: current_position
               - type: custom:bubble-card
                 card_type: button
                 button_type: state
@@ -1922,6 +1881,9 @@ sections:
               - default
             tap_action:
               action: toggle
+            use_accent_color: true
+            show_state: true
+            show_last_changed: true
           - type: custom:bubble-card
             card_type: climate
             entity: climate.airco_zolder
@@ -1931,6 +1893,7 @@ sections:
                 state_background: false
                 show_arrow: false
             name: Airco
+            show_state: true
           - type: custom:bubble-card
             card_type: separator
             name: Slaapkamer Mini
@@ -1955,6 +1918,9 @@ sections:
               - default
             tap_action:
               action: toggle
+            use_accent_color: true
+            show_state: true
+            show_last_changed: true
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
@@ -1964,6 +1930,9 @@ sections:
                 button_type: switch
                 modules:
                   - default
+                show_state: true
+                show_attribute: true
+                attribute: current_position
               - type: custom:bubble-card
                 card_type: button
                 button_type: state
@@ -1973,6 +1942,145 @@ sections:
                 show_last_changed: true
                 show_last_updated: false
                 name: Deur
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: "#garage"
+            name: Garage
+            icon: mdi:garage
+            button_type: name
+            modules:
+              - default
+            sub_button:
+              - name: Power Off
+                icon: mdi:power
+                state_background: false
+                tap_action:
+                  action: perform-action
+                  perform_action: light.toggle
+                  target:
+                    entity_id:
+                      - light.garage_lampen
+                      - light.speelkamer_lampen
+                  data: {}
+                double_tap_action:
+                  action: perform-action
+                  perform_action: light.toggle
+                  target:
+                    entity_id:
+                      - light.garage_lampen
+                      - light.speelkamer_lampen
+                  data: {}
+                hold_action:
+                  action: perform-action
+                  perform_action: light.toggle
+                  target:
+                    entity_id:
+                      - light.garage_lampen
+                      - light.speelkamer_lampen
+                  data: {}
+          - type: custom:bubble-card
+            card_type: separator
+            name: Speelkamer
+            icon: mdi:gamepad
+            card_layout: large
+            sub_button:
+              - entity: sensor.speelkamer_temperatuur_temperature
+                show_background: false
+                show_state: true
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.speelkamer_lampen
+            name: Verlichting Speelkamer
+            icon: mdi:controller
+            sub_button:
+              - entity: sensor.speelkamer_verlichting_power
+                show_state: true
+                show_background: false
+                visibility:
+                  - condition: state
+                    entity: light.speelkamer_lampen
+                    state: "on"
+            modules:
+              - default
+            tap_action:
+              action: toggle
+            button_action: {}
+            use_accent_color: true
+            show_state: true
+            show_last_changed: true
+          - type: horizontal-stack
+            cards:
+              - type: custom:bubble-card
+                card_type: button
+                entity: media_player.speelkamer_tv
+                name: Televisie
+                tap_action:
+                  action: toggle
+                icon: mdi:television
+                styles: |-
+                  .bubble-button-background {
+                    background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+                  }
+                button_type: switch
+                modules:
+                  - default
+                show_state: true
+              - type: custom:bubble-card
+                card_type: button
+                entity: switch.speelkamer_stopcontact_verwarming
+                name: Verwarming
+                icon: mdi:heat-wave
+                sub_button:
+                  - entity: sensor.speelkamer_stopcontact_verwarming_power
+                    show_state: true
+                    show_background: false
+                    visibility:
+                      - condition: state
+                        entity: switch.speelkamer_stopcontact_verwarming
+                        state: "on"
+                button_type: switch
+                modules:
+                  - default
+                tap_action:
+                  action: toggle
+                show_state: true
+          - type: custom:bubble-card
+            card_type: separator
+            name: Garage
+            icon: mdi:garage-variant
+            card_layout: large
+            modules:
+              - default
+            sub_button:
+              - entity: sensor.garage_temperatuur_temperature
+                show_state: true
+                show_background: false
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.garage_lampen
+            name: Verlichting Garage
+            icon: mdi:garage
+            sub_button:
+              - entity: sensor.garage_verlichting_power
+                show_background: false
+                show_state: true
+                visibility:
+                  - condition: state
+                    entity: light.garage_lampen
+                    state: "on"
+            modules:
+              - default
+            tap_action:
+              action: toggle
+            button_action: {}
+            use_accent_color: true
+            show_state: true
+            show_attribute: false
+            show_last_changed: true
       - type: vertical-stack
         cards:
           - type: custom:bubble-card
@@ -2038,6 +2146,9 @@ sections:
                   - condition: state
                     entity: light.voortuin_lampen
                     state: "on"
+            use_accent_color: true
+            show_state: true
+            show_last_changed: true
           - type: custom:bubble-card
             card_type: separator
             modules:
@@ -2062,12 +2173,18 @@ sections:
                   - condition: state
                     entity: light.achtertuin_lampen
                     state: "on"
+            use_accent_color: true
+            show_state: true
+            show_last_changed: true
           - type: custom:bubble-card
             card_type: cover
             modules:
               - default
             entity: cover.achtertuin_zonnescherm
             name: Zonnescherm
+            open_service: cover.open_cover
+            card_layout: large
+            rows: 1
           - type: custom:bubble-card
             card_type: separator
             modules:
@@ -2115,6 +2232,8 @@ sections:
             name: Verlichting Schuur
             tap_action:
               action: toggle
+            show_state: true
+            show_last_changed: true
           - type: custom:bubble-card
             card_type: separator
             modules:
@@ -2139,6 +2258,9 @@ sections:
                   - condition: state
                     entity: light.carport_lampen
                     state: "on"
+            use_accent_color: true
+            show_state: true
+            show_last_changed: true
           - type: custom:bubble-card
             card_type: button
             button_type: state
@@ -2146,15 +2268,18 @@ sections:
             name: Laadpaal Starten
             icon: mdi:ev-station
             show_last_changed: false
-            show_attribute: false
+            show_attribute: true
             show_state: false
             tap_action:
-              action: call-service
+              action: perform-action
               target:
                 entity_id: automation.carport_charging_station_charge
-              service: automation.trigger
+              perform_action: automation.trigger
+              data:
+                skip_condition: true
             modules:
               - default
+            attribute: last_triggered
       - type: vertical-stack
         cards:
           - type: custom:bubble-card
@@ -2307,3 +2432,7 @@ sections:
             modules:
               - default
             name: Geforceerd ontladen
+header:
+  layout: center
+  badges_position: bottom
+  badges_wrap: scroll
