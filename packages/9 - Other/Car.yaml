@@ -1,0 +1,25 @@
+car_package:
+  rest:
+    - platform: rest
+      name: car_next_location_geo
+      value_template: "{{ value_json.results[0].formatted }}"
+      json_attributes_path: "$.results[0]"
+      json_attributes:
+        - lon
+        - lat
+        - district
+        - city
+        - postcode
+        - street
+        - housenumber
+        - state
+        - country
+        - country_code
+      verify_ssl: true
+      scan_interval: 420 # every 7 min -- preferred: home_assistant.update_entity
+      resource_template: >
+        {{
+          "https://api.geoapify.com/v1/geocode/search?text="
+          + state_attr('sensor.car_next_location','state') | urlencode
+          + "&apiKey=f4e7ab1afe834fa6927b38cd92bb123f&format=json"
+        }}
