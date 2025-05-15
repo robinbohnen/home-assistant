@@ -16,10 +16,32 @@ car_package:
         - country
         - country_code
       verify_ssl: true
-      scan_interval: 420 # every 7 min -- preferred: home_assistant.update_entity
       resource_template: >
         {{
           "https://api.geoapify.com/v1/geocode/search?text="
           + states('sensor.car_next_location') | urlencode
           + "&apiKey=f4e7ab1afe834fa6927b38cd92bb123f&format=json"
         }}
+
+  automation:
+    - id: car_next_geolocation_fetch
+      alias: Car - Update geolocation from calendar
+      description: "Car - Update geo location when calendar updates"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - calendar.auto
+          attribute: location
+      conditions: []
+      actions:
+        - action: homeassistant.update_entity
+          metadata: {}
+          data:
+            entity_id:
+              - sensor.car_next_location_geo
+        - action: homeassistant.update_entity
+          metadata: {}
+          data:
+            entity_id:
+              - sensor.reistijd_volgende_bestemming
