@@ -783,6 +783,9 @@ sections:
                   - condition: numeric_state
                     entity: sensor.robin_reistijd_naar_huis
                     above: 5
+                  - condition: state
+                    entity: person.robin_bohnen
+                    state_not: home
                 icon: mdi:home
             card_layout: large-2-rows
             modules:
@@ -807,6 +810,9 @@ sections:
                   - condition: numeric_state
                     entity: sensor.samantha_reistijd_naar_huis
                     above: 5
+                  - condition: state
+                    entity: person.samantha_henkelman
+                    state_not: home
                 icon: mdi:home
             card_layout: large-2-rows
             modules:
@@ -2537,6 +2543,72 @@ sections:
               - default
             name: Geforceerd ontladen
 header:
-  layout: center
+  layout: responsive
   badges_position: bottom
   badges_wrap: scroll
+badges:
+  - type: custom:mushroom-template-badge
+    content: "{{ states['sensor.live_energieverbruik_totaal'].state }} kWh"
+    icon: mdi:power
+    color: grey
+    entity: sensor.live_energieverbruik_totaal
+    label: Live Stroom
+    tap_action:
+      action: more-info
+  - type: custom:mushroom-template-badge
+    content: >-
+      € {{ states['sensor.zonneplan_electricity_delivery_costs_today'].state |
+      round(2) }}
+    icon: mdi:currency-eur
+    color: grey
+    label: Kosten vandaag
+    tap_action:
+      action: more-info
+  - type: custom:mushroom-template-badge
+    icon: mdi:currency-eur
+    entity: sensor.zonneplan_current_tariff_group
+    color: grey
+    label: Huidig tarief
+    content: >-
+      {% if is_state('sensor.zonneplan_current_tariff_group','low') -%} Laag
+
+      {% elif is_state('sensor.zonneplan_current_tariff_group','normal') -%}
+      Gemiddeld
+
+      {% elif is_state('sensor.zonneplan_current_tariff_group','high') -%} Hoog
+
+      {% endif -%}
+
+      - € {{ states['sensor.zonneplan_current_electricity_tariff'].state |
+      round(3) }}
+    tap_action:
+      action: more-info
+  - type: custom:mushroom-template-badge
+    content: >-
+      {% if is_state('sensor.zonneplan_forecast_tariff_group_hour_1','low') -%}
+      Laag
+
+      {% elif is_state('sensor.zonneplan_forecast_tariff_group_hour_1','normal')
+      -%} Gemiddeld
+
+      {% elif is_state('sensor.zonneplan_forecast_tariff_group_hour_1','high')
+      -%} Hoog
+
+      {% endif -%}
+
+      - € {{ states['sensor.zonneplan_forecast_tariff_hour_1'].state | round(3)
+      }}
+    icon: mdi:currency-eur
+    color: grey
+    label: Volgend tarief
+    entity: sensor.zonneplan_forecast_tariff_group_hour_1
+    tap_action:
+      action: more-info
+  - type: custom:mushroom-template-badge
+    content: "{{ states['sensor.solar_power_generated_today'].state }} kWh"
+    icon: mdi:solar-power-variant
+    color: grey
+    label: Opgewekt vandaag
+    entity: sensor.solar_power_generated_today
+    tap_action:
+      action: more-info
