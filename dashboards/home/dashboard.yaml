@@ -687,6 +687,10 @@ sections:
         scrolling_effect: false
         modules:
           - default
+        button_action:
+          tap_action:
+            action: navigate
+            navigation_path: "#electricityprices"
       - type: custom:bubble-card
         card_type: button
         button_type: state
@@ -2542,6 +2546,100 @@ sections:
             modules:
               - default
             name: Geforceerd ontladen
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: "#electricityprices"
+            button_type: name
+            modules:
+              - default
+            name: Stroomprijzen
+            icon: mdi:currency-eur
+          - type: custom:apexcharts-card
+            update_interval: 15m
+            experimental:
+              color_threshold: true
+            graph_span: 24h
+            span:
+              start: day
+            now:
+              show: true
+              label: Now
+              color: black
+            header:
+              show: true
+              title: Electriciteitsprijzen vandaag
+            yaxis:
+              - id: kwh_prijs
+                min: ~0
+                max: ~0.4
+                decimals: 2
+                apex_config:
+                  title:
+                    text: Prijs €/kWh
+              - id: kw_gebruik
+                opposite: true
+                min: -7
+                max: ~17
+                decimals: 1
+                apex_config:
+                  title:
+                    text: Gebruik kW
+            apex_config:
+              tooltip:
+                x:
+                  show: false
+            series:
+              - entity: sensor.dynamische_prijzen_average_electricity_price
+                color_threshold:
+                  - value: -0.1
+                    color: "#264D59"
+                  - value: 0
+                    color: "#43978D"
+                  - value: 0.26
+                    color: "#F9E07F"
+                  - value: 0.4
+                    color: "#D46C4E"
+                name: Uurprijs vandaag
+                stroke_width: -5
+                float_precision: 3
+                type: column
+                show:
+                  legend_value: false
+                data_generator: |
+                  return entity.attributes.prices.map((entry) => {
+                  return [new Date(entry.time), entry.price];
+                  });
+                yaxis_id: kwh_prijs
+              - entity: sensor.dynamische_prijzen_average_electricity_price
+                name: Gemiddelde prijs vandaag
+                curve: stepline
+                stroke_width: 2
+                color: orange
+                type: line
+                float_precision: 3
+                group_by:
+                  duration: 1d
+                  func: avg
+                show:
+                  legend_value: false
+                data_generator: |
+                  return entity.attributes.prices.map((entry) => {
+                  return [new Date(entry.time), entry.price];
+                  });
+                yaxis_id: kwh_prijs
+              - entity: sensor.electricity_meter_energieverbruik
+                statistics:
+                  type: mean
+                  period: 5minute
+                group_by:
+                  duration: 15m
+                  func: avg
+                yaxis_id: kw_gebruik
+                stroke_width: 2
+                curve: smooth
+                extend_to: now
 header:
   layout: responsive
   badges_position: bottom
@@ -2594,7 +2692,8 @@ badges:
       - € {{ states['sensor.zonneplan_current_electricity_tariff'].state |
       round(3) }}
     tap_action:
-      action: more-info
+      action: navigate
+      navigation_path: "#electricityprices"
   - type: custom:mushroom-template-badge
     content: >-
       {% if is_state('sensor.zonneplan_forecast_tariff_group_hour_1','low') -%}
@@ -2615,4 +2714,5 @@ badges:
     label: Volgend tarief
     entity: sensor.zonneplan_forecast_tariff_group_hour_1
     tap_action:
-      action: more-info
+      action: navigate
+      navigation_path: "#electricityprices"
