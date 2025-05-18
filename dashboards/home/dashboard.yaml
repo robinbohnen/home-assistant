@@ -1412,6 +1412,10 @@ sections:
                 show_state: true
                 state_background: false
                 show_background: false
+                name: Temperature
+              - entity: binary_sensor.livingroom_doors
+                icon: mdi:door-sliding
+                name: Doors
             modules:
               - default
           - type: horizontal-stack
@@ -1482,6 +1486,11 @@ sections:
               - default
             show_state: true
             show_last_changed: true
+          - type: custom:bubble-card
+            card_type: media-player
+            modules:
+              - default
+            entity: media_player.woonkamer_sonos
           - type: horizontal-stack
             cards:
               - type: custom:bubble-card
@@ -1560,7 +1569,9 @@ sections:
             button_type: name
             name: Keuken
             icon: mdi:sofa
-            sub_button: []
+            sub_button:
+              - entity: binary_sensor.kitchen_windows
+                icon: mdi:window-closed
             modules:
               - default
           - type: custom:bubble-card
@@ -1678,6 +1689,10 @@ sections:
             card_type: separator
             name: Entree
             icon: mdi:hanger
+            modules:
+              - default
+            sub_button:
+              - entity: binary_sensor.entree_deur_contact
           - type: custom:bubble-card
             card_type: button
             entity: alarm_control_panel.alarmo
@@ -1789,6 +1804,14 @@ sections:
               - entity: sensor.slaapkamer_temperatuur_temperature
                 show_state: true
                 show_background: false
+                name: Temperature
+              - entity: binary_sensor.slaapkamer_deur_contact
+                show_name: false
+                icon: ""
+                name: Door
+              - entity: binary_sensor.bedroom_windows
+                icon: mdi:window-closed
+                name: Windows
             modules:
               - default
           - type: custom:bubble-card
@@ -1815,6 +1838,9 @@ sections:
                 show_state: true
                 show_attribute: true
                 attribute: current_position
+                button_type: switch
+                modules:
+                  - default
               - type: custom:bubble-card
                 card_type: empty-column
           - type: custom:bubble-card
@@ -1825,6 +1851,12 @@ sections:
               - entity: sensor.badkamer_temperatuur_temperature
                 show_background: false
                 show_state: true
+                name: Temperature
+              - entity: binary_sensor.badkamer_deur_contact
+                name: Door
+              - entity: binary_sensor.badkamer_raam_contact
+                icon: mdi:window-closed
+                name: Window
             modules:
               - default
           - type: custom:bubble-card
@@ -1850,8 +1882,17 @@ sections:
                 show_state: true
                 show_attribute: true
                 attribute: current_position
+                button_type: switch
+                modules:
+                  - default
               - type: custom:bubble-card
-                card_type: empty-column
+                card_type: button
+                button_type: switch
+                modules:
+                  - default
+                entity: media_player.badkamer_sonos
+                show_state: true
+                name: Sonos
           - type: custom:bubble-card
             card_type: separator
             name: Kantoor
@@ -1864,6 +1905,12 @@ sections:
                 show_state: true
                 state_background: false
                 show_background: false
+                name: Temperature
+              - entity: binary_sensor.kantoor_deur_contact
+                name: Door
+              - entity: binary_sensor.office_windows
+                icon: mdi:window-closed
+                name: Windows
             modules:
               - default
           - type: custom:bubble-card
@@ -1896,11 +1943,17 @@ sections:
                 show_state: true
                 show_attribute: true
                 attribute: current_position
+                button_type: switch
+                modules:
+                  - default
               - type: custom:bubble-card
                 card_type: button
                 entity: media_player.kantoor_sonos
                 name: Sonos
                 show_state: true
+                button_type: switch
+                modules:
+                  - default
           - type: custom:bubble-card
             card_type: separator
             name: Slaapkamer Maxi
@@ -1910,6 +1963,14 @@ sections:
               - entity: sensor.slaapkamer_maxi_temperatuur_temperature
                 show_state: true
                 show_background: false
+                name: Temperature
+              - entity: binary_sensor.slaapkamer_maxi_raam_links_contact
+                name: Door
+              - entity: binary_sensor.bedroom_maxi_windows
+                icon: mdi:window-closed
+                name: Windows
+            modules:
+              - default
           - type: custom:bubble-card
             card_type: button
             button_type: slider
@@ -1937,11 +1998,14 @@ sections:
                 show_attribute: true
                 attribute: current_position
               - type: custom:bubble-card
+                modules:
+                  - default
+                entity: media_player.slaapkamer_maxi_sonos
                 card_type: button
-                button_type: state
-                entity: binary_sensor.slaapkamer_maxi_deur_contact
-                show_last_changed: true
-                name: Deur
+                button_type: switch
+                name: Sonos
+                show_last_changed: false
+                show_state: true
       - type: vertical-stack
         cards:
           - type: custom:bubble-card
@@ -2022,6 +2086,7 @@ sections:
                 state_background: false
                 show_background: false
                 show_name: false
+              - entity: binary_sensor.slaapkamer_mini_deur_contact
           - type: custom:bubble-card
             card_type: button
             button_type: slider
@@ -2103,6 +2168,11 @@ sections:
               - entity: sensor.speelkamer_temperatuur_temperature
                 show_background: false
                 show_state: true
+                name: Temperature
+              - entity: binary_sensor.speelkamer_openslaande_deuren_contact
+                name: Door
+            modules:
+              - default
           - type: custom:bubble-card
             card_type: button
             button_type: slider
@@ -2172,6 +2242,9 @@ sections:
               - entity: sensor.garage_temperatuur_temperature
                 show_state: true
                 show_background: false
+                name: Temperature
+              - entity: binary_sensor.garage_achterdeur_contact
+                name: Door
           - type: custom:bubble-card
             card_type: button
             button_type: slider
@@ -2740,8 +2813,12 @@ badges:
       action: more-info
   - type: custom:mushroom-template-badge
     content: >-
-      € {{ states['sensor.zonneplan_electricity_delivery_costs_today'].state |
-      round(2) }}
+      € {{
+      '{:.2f}'.format(((states['sensor.zonneplan_electricity_delivery_costs_today'].state
+      | float -
+      states['sensor.zonneplan_electricity_production_costs_today'].state |
+      float)+ states['sensor.zonneplan_gas_delivery_costs_today'].state | float)
+      | round(2)) }}
     icon: mdi:currency-eur
     color: grey
     label: Kosten vandaag
