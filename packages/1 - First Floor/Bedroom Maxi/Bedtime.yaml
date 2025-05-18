@@ -14,13 +14,28 @@ bedtime_maxi_package:
     - platform: template
       switches:
         bedtime_kids:
-          name: "Bedtime Kids"
+          friendly_name: "Bedtime Kids"
           value_template: >
             "{% set bedtime_hour_maxi = strptime(states('input_datetime.bedtime_maxi_1h_off'), "%H:%M:%S").hour %}
             {% set bedtime_hour_mini = strptime(states('input_datetime.bedtime_mini_1h_off'), "%H:%M:%S").hour %}
             {{ (now().hour >= bedtime_hour_maxi or now().hour >= bedtime_hour_mini or now().hour < 9) }}"
-          turn_off: ""
-          turn_on: ""
+          turn_off:
+            action: media_player.unjoin
+            metadata: {}
+            data: {}
+            target:
+              entity_id:
+                - media_player.slaapkamer_maxi_sonos
+                - media_player.slaapkamer_mini_sonos
+          turn_on:
+            action: media_player.join
+            metadata: {}
+            data:
+              group_members:
+                - media_player.slaapkamer_maxi_sonos
+                - media_player.slaapkamer_mini_sonos
+            target:
+              entity_id: media_player.woonkamer_sonos
 
   automation:
     - id: bedtime_for_maxi_lights_off
