@@ -1,4 +1,12 @@
 car_package:
+  template:
+    - sensor:
+      - name: "Car - Next location"
+        state: "{{ state_attr('calendar.auto','location') }}"
+      - name: "Car - Departing in hours"
+        state: "{{ (((as_timestamp(now()) - as_timestamp(states.calendar.auto.attributes.start_time)) *-1 / 60/60) | string).split('.')[0] }}"
+        unit_of_measurement: "hour"
+
   sensor:
     - platform: rest
       name: car_next_location_geo
