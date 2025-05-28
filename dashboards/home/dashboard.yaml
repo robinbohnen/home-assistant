@@ -78,12 +78,17 @@ sections:
             show_arrow: false
         state_color: false
         visibility:
-          - condition: numeric_state
-            entity: sensor.woonkamer_temperatuur
-            above: 23
           - condition: state
             entity: binary_sensor.woonkamer_openslaande_deuren_contact
             state: "off"
+          - condition: or
+            conditions:
+              - condition: numeric_state
+                entity: sensor.woonkamer_kamertemperatuur
+                above: 22
+              - condition: numeric_state
+                entity: sensor.woonkamer_kamertemperatuur
+                below: 20
         modules:
           - default
         show_attribute: true
@@ -1286,6 +1291,7 @@ sections:
             attribute: timestamp
             tap_action:
               action: none
+            name: Datum & Tijd
           - entity: input_boolean.brandweer_uitgerukt_op_laatste_melding
             show_state: false
             show_name: true
@@ -1304,6 +1310,8 @@ sections:
               - condition: state
                 entity: binary_sensor.brandweer_uitgerukt_op_laatste_melding
                 state: "on"
+            name: Uitruktijd
+            show_attribute: false
         styles: |-
           .bubble-sub-button-2 {
             background-color: ${hass.states['binary_sensor.brandweer_uitgerukt_op_laatste_melding'].state === 'on' ? 'var(--bubble-default-color)' : 'var(--card-background-color)'} !important;
