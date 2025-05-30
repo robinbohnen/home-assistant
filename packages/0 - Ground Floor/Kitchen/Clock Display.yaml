@@ -189,6 +189,20 @@ kitchen_clock_display_package:
                   {"icon": 27283,"color":"FFFFFF","repeat": 2,"text": "{{
                   states('sensor.solar_power_generated_now') | round(2) }} W"}
               action: mqtt.publish
+          else:
+            - data:
+                qos: 0
+                retain: true
+                topic: clock_1/custom/power_generated
+              action: mqtt.publish
+        - data:
+            qos: 0
+            retain: true
+            topic: clock_1/custom/today costs
+            payload: >-
+              {"icon": 2147,"color":"FFFFFF","repeat": 2,"text": "€ {{ '{:.2f}'.format(((states['sensor.zonneplan_electricity_delivery_costs_today'].state | float - states['sensor.zonneplan_electricity_production_costs_today'].state | float)+ states['sensor.zonneplan_gas_delivery_costs_today'].state | float) | round(2)) }}"}
+          action: mqtt.publish
+          alias: Display total costs today
         - if:
             - condition: and
               conditions:
