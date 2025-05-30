@@ -203,6 +203,27 @@ kitchen_clock_display_package:
               {"icon": 2147,"color":"FFFFFF","repeat": 2,"text": "€ {{ '{:.2f}'.format(((states['sensor.zonneplan_electricity_delivery_costs_today'].state | float - states['sensor.zonneplan_electricity_production_costs_today'].state | float)+ states['sensor.zonneplan_gas_delivery_costs_today'].state | float) | round(2)) }}"}
           action: mqtt.publish
           alias: Display total costs today
+        - alias: Display spa temperature
+          - if:
+            - condition: state
+              entity_id: switch.intex_purespa_power
+              state: "on"
+          then:
+            - alias: Display spa temperature
+              data:
+                qos: 0
+                retain: true
+                topic: clock_1/custom/spa_temperature
+                payload: >-
+                  {"icon": 7097,"color":"FFFFFF","repeat": 2,"text": "{{
+                  state_attr('climate.intex_purespa','current_temperature') | round(2) }}"}
+              action: mqtt.publish
+          else:
+            - data:
+                qos: 0
+                retain: true
+                topic: clock_1/custom/spa_temperature
+              action: mqtt.publish
         - if:
             - condition: and
               conditions:
