@@ -84,3 +84,52 @@ backyard_sunscreen_package:
                               data: {}
                               target:
                                 entity_id: cover.achtertuin_zonnescherm
+
+    - id: backyard_sunscreen_close
+      alias: Backyard - Sunscreen open or close
+      description: "Notify adults when rain is expected and sunscreen is still open to close it"
+      mode: single
+      triggers:
+        - trigger: numeric_state
+          entity_id:
+            - sensor.neerslag_komende_30_minuten
+          above: 1
+      conditions:
+        - condition: state
+          entity_id: cover.achtertuin_zonnescherm
+          state: open
+      actions:
+        - variables:
+            action_sunscreen_close: "{{ 'CLOSE_' ~ context.id }}"
+        - action: notify.mobile_devices_adults
+          metadata: {}
+          data:
+            title: Zonnescherm open; het gaat regenen
+            message: >-
+              Het gaat regenen in de komende 30 minuten en het zonnescherm is open,
+              wil je deze sluiten?
+            data:
+              actions:
+                - action: "{{ action_sunscreen_close }}"
+                  title: Ja
+        - wait_for_trigger:
+            - event_type: mobile_app_notification_action
+              event_data:
+                action: "{{ action_sunscreen_close }}"
+              trigger: event
+          timeout:
+            hours: 0
+            minutes: 15
+            seconds: 0
+            milliseconds: 0
+          continue_on_timeout: false
+        - choose:
+            - conditions:
+                - condition: template
+                  value_template: "{{ wait.trigger.event.data.action == action_sunscreen_close }}"
+              sequence:
+                - action: cover.close_cover
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: cover.achtertuin_zonnescherm
