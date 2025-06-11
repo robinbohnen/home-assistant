@@ -101,6 +101,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | [Tado Gateway](https://amzn.to/3ApEIY5) | 1 | Ethernet | [Tado](https://www.home-assistant.io/integrations/tado/) | Wi-Fi bridge for Tado thermostat |
 | [Tado Thermostaat](https://amzn.to/40AsCG5) | 1 | Wi-Fi | [Tado](https://www.home-assistant.io/integrations/tado/) | Thermostat for Tado ecosystem |
 | [Tado Radiator Thermostat](https://amzn.to/3CmZAj6) | 1 | Wi-Fi | [Tado](https://www.home-assistant.io/integrations/tado/) | Radiator thermostat for Tado ecosystem |
+| [Mitsubishi Electric MSZ-EF50VGKB](https://aircoplazazwolle.nl/airconditioners/msz-ef50vgkb-serie-black-50kw18000btu-r32-coolheat-wifi-a) | 1 | Wi-Fi | [Melcloud](https://www.home-assistant.io/integrations/melcloud) | Airconditioning Unit for the livingroom; cooling / heating downstairs |
 | [Mitsubishi Heavy Indusries 80ZR-S](https://www.klimaatshop.nl/mitsubishi-srk80zr-singlesplit-airco-8-0kw.html) | 1 | Wi-Fi | [IntesisHome](https://www.home-assistant.io/integrations/intesishome/) | Airconditioning Unit on our Stairways to the Attic; cools upper floors |
 
 ## <a name="other">Other Hardware</a>
@@ -108,24 +109,23 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 
 | Device  | Quantity | Connection | Home Assistant | Notes |
 | ------------- | :---: | ------------- | ------------- | ------------- |
+| [Home Assistant Voice Preview](https://www.home-assistant.io/voice-pe/) | 1 | ESPHome | [ESPHome](https://www.home-assistant.io/integrations/esphome) | Advanced local voice assistant |
 | [HP Smart Tank 7300 series](https://amzn.to/3O3s9EK) | 1 | Ethernet | [Internet Printing Protocol (IPP)](https://www.home-assistant.io/integrations/ipp/) | HP Printer for printing all kinds of information |
 | [Ulanzi Awtrix Smart Pixel Clock](https://amzn.to/4fnTLAK) | 1 | Wi-Fi | [MQTT](https://www.home-assistant.io/integrations/mqtt/)| 8x32 RGB LED panel used to display time and various notifications / status.  Using the [Awtrix Light](https://github.com/Blueforcer/awtrix-light) project to integrate with MQTT and Home Assistant.  It also looks super cool. |
 | [La Marzocco Linea Micra](https://www.lamarzocco.com/fr/en/home-products/home-espresso-machines/linea-micra/) | 1 | Wi-Fi | [La Marzocco](https://www.home-assistant.io/integrations/lamarzocco/) | Coffee machine controllable by HA |
+| [Ikea INSPELNING Smart Plug](https://www.ikea.com/nl/nl/p/inspelning-stekker-smart-stroommonitor-00569836/) | 5 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Control outlet with metering to turn devices on/off |
 | [Ikea Tradfri Control Outlet](https://www.ikea.com/nl/en/p/tradfri-control-outlet-kit-smart-40364748/) | 6 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Control outlet without metering to turn devices on/off |
 | [Tuya Zigbee Smart Power Meter Socket](https://amzn.to/3O7eJYs) | 6 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Control outlet with metering to turn devices on/off and meter them |
 | [Aqara Door and Window magnet sensor](https://amzn.to/3UNSCdd) | 24 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Magnetic sensor for doors and windows |
 | [Aqara Motion Sensor P1](https://amzn.to/3AF04R9) | 15 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Motion sensor to control lighting and alarm |
 | [Aqara Temperature Sensor](https://amzn.to/3CnNmqB) | 8 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Temperature and humidity sensor for indoor use |
 | [Aqara Wireless Mini Switch](https://amzn.to/3AJqMYM) | 6 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Mini button to control things that can't be automated (for now) |
-| [Roborock S5](https://amzn.to/3OcPELC) | 1 | Wi-Fi | [Xiaomi Miio](https://www.home-assistant.io/integrations/xiaomi_miio/) | Robot Vacuum cleaner for the living room |
-| [iRobot I5](https://amzn.to/3YN0ZXT) | 1 | Wi-Fi | [iRobot Roomba and Braava](https://www.home-assistant.io/integrations/roomba) | Robot Vacuum cleaner for the 1st floor |
 
 ## <a name="vms">Virtual Machines</a>
 | [Menu](#menu) |
 
 | Device | Location | Home Assistant | Notes |
 | ------------- | ------------- | ------------- | ------------- |
-| AdGuard Home | Proxmox VE | [Adguard Home](https://www.home-assistant.io/integrations/adguard/) | To block all advertising and have some Child control |
 | Scrypted | Proxmox VE | [Proxmox VE](https://www.home-assistant.io/integrations/proxmoxve/) | Hosts all Proxmox vitual machines (even the Home Assistant one) |
 | Zigbee2MQTT | Proxmox VE | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Virtual Machine with Zigbee2MQTT seperated from Home Assistant |
 | Nginx Proxy Manager | Proxmox VE | N/A | Proxy for ssl-ing Home-Assistant and other Proxmox Virtual Machines |
@@ -135,20 +135,23 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 
 | Integration | Home Assistant | Notes |
 | ------------- | ------------- | ------------- |
-| Adguard Home | [Link](https://www.home-assistant.io/integrations/adguard) | Block all advertising |
+| Acaia | [Link](https://www.home-assistant.io/integrations/acaia) | Integration with a scale for making coffee |
 | Afvalinfo | [Link](https://github.com/heyajohnny/afvalinfo) | For dutchies to check when garbage is collected |
 | Alarmo | [Link](https://github.com/nielsfaber/alarmo) | Create your own alarm |
-| APC UPS Daemon | [Link](https://www.home-assistant.io/integrations/apcupsd) | Monitor local UPS device |
 | Apple TV | [Link](https://www.home-assistant.io/integrations/apple_tv) | Control your Apple TV Device |
+| Backup | [Link](https://www.home-assistant.io/integrations/backup) | For making backups of the home assistant setup |
 | Bluetooth | [Link](https://www.home-assistant.io/integrations/bluetooth) | Locate local Bluetooth devices  |
 | Buienradar | [Link](https://www.home-assistant.io/integrations/buienradar) | Monitor our dutch rainy weather |
 | CalDAV | [Link](https://www.home-assistant.io/integrations/caldav) | Integrate calendars to add appointments |
+| Chihiros | [Link](https://github.com/TheMicDiet/chihiros-led-control) | Integrate aquarium lights to ha |
 | Command Line | [Link](https://www.home-assistant.io/integrations/command_line) | To check and operate thing in commandline |
 | CPU-Snelheid | [Link](https://www.home-assistant.io/integrations/cpuspeed) | Add sensors for monitoring CPU speed |
 | DLNA Digital Media Renderer | [Link](https://www.home-assistant.io/integrations/dlna_dmr) | Control DLNA enabled devices |
 | DSMR Smart Meter | [Link](https://www.home-assistant.io/integrations/dsmr) | Monitoring power and gas usage |
+| Eheim digital | [Link](https://www.home-assistant.io/integrations/eheimdigital) | Aquarium heater integration |
 | Electricity Maps | [Link](https://www.home-assistant.io/integrations/co2signal) | Add CO2 sensor |
 | ENTSO-e Transparency Platform | [Link](https://github.com/JaccoR/hass-entso-e) | Check ultra flexibel energy prices |
+| ESPHome | [Link](https://www.home-assistant.io/integrations/esphome) | For controlling ESPhome devices |
 | Feestdag | [Link](https://www.home-assistant.io/integrations/holiday) | Add holiday sensors |
 | Forecast.Solar | [Link](https://www.home-assistant.io/integrations/forecast_solar) | Create a forecast of solar power |
 | GoodWe Inverter | [Link](https://www.home-assistant.io/integrations/goodwe) | Local communication with GoodWe inverter |
@@ -157,6 +160,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Google Translate Text-to-Speech | [Link](https://www.home-assistant.io/integrations/google_translate) | Speak messages to media players |
 | HACS | [Link](https://hacs.xyz/docs/use/) | Use non-official Home Assistant Plugins |
 | Home Assistant Supervisor | [Link](https://www.home-assistant.io/integrations/hassio) | Easy for Home Assistant operation |
+| Home Connect | [Link](https://www.home-assistant.io/integrations/home_connect) | Insights for Bosch washers and dryers |
 | iBeacon Tracker | [Link](https://www.home-assistant.io/integrations/ibeacon) | Track devices with Bluetooth |
 | Internet Printing Protocol (IPP) | [Link](https://www.home-assistant.io/integrations/ipp) | Monitor local printer |
 | IntesisHome | [Link](https://www.home-assistant.io/integrations/intesishome) | Control Mitsubishi Airco |
@@ -166,25 +170,35 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | La Marzocco | [Link](https://www.home-assistant.io/integrations/lamarzocco) | Control the delicious coffee machine |
 | LOQED Touch Smart Lock | [Link](https://www.home-assistant.io/integrations/loqed) | Control the smartlock |
 | Matter (BETA) | [Link](https://www.home-assistant.io/integrations/matter) | Not used yet |
+| Melcloud | [Link](https://www.home-assistant.io/integrations/melcloud) | Integration for Mitsubushi Electric Airco |
 | Meteorologisk institutt (Met.no) | [Link](https://www.home-assistant.io/integrations/met) | Check local weather |
+| Microsoft 365 - Calendar | [Link](https://github.com/RogerSelwyn/MS365-Calendar) | Microsoft 365 plugin for calendar integration |
+| Microsoft 365 - Mail | [Link](https://github.com/RogerSelwyn/MS365-Mail) | Microsoft 365 plugin for mail integration |
+| Microsoft 365 - Teams | [Link](https://github.com/RogerSelwyn/MS365-Teams) | Microsoft 365 plugin for teams integration |
+| Microsoft 365 - To Do | [Link](https://github.com/RogerSelwyn/MS365-ToDo) | Microsoft 365 plugin for ToDo integration |
+| Microsoft TTS | [Link](https://www.home-assistant.io/integrations/microsoft) | Microsoft Text-To-Speech integration for local HA Voice |
 | Miele | [Link](https://github.com/astrandb/miele) | Our oven and dishwasher are smart and can be monitored and controlled with this plugin |
 | Mobiele app | [Link](https://www.home-assistant.io/integrations/mobile_app) | Check all sensors of your mobile device |
 | Motionblinds | [Link](https://www.home-assistant.io/integrations/motion_blinds) | Smart blinds to stop sun |
 | MQTT | [Link](https://www.home-assistant.io/integrations/mqtt) | Integrate Zigbee2MQTT with Home Assistant |
+| Neerslag App (Buienalarm / Buienradar) | [Link](hhttps://github.com/aex351/home-assistant-neerslag-app) | Display rain forecast using Buienalarm and/or Buienradar sensor data |
 | Nest Protect | [Link](https://github.com/imicknl/ha-nest-protect) | Check the status of smoke and CO sensors |
-| Office 365 | [Link](https://github.com/RogerSelwyn/O365-HomeAssistant) | Integration to control mail, and calendars in M365 |
+| OneDrive | [Link](https://www.home-assistant.io/integrations/onedrive) | Add Microsoft Onedrive as storage for backups |
+| OpenAI Conversation | [Link](https://www.home-assistant.io/integrations/openai_conversation) | The OpenAI integration adds a conversation agent powered by OpenAI in Home Assistant |
 | Overkiz | [Link](https://www.home-assistant.io/integrations/overkiz) | Control your Somfy devices |
 | Ping (ICMP) | [Link](https://www.home-assistant.io/integrations/ping) | Check the status of local network devices |
 | Places | [Link](https://github.com/custom-components/places) | Check translated location of persons |
+| Powercalc | [Link](https://docs.powercalc.nl) | Powercalc is a custom component for Home Assistant to estimate the power consumption (as virtual meters) of lights, fans, smart speakers and other devices, which don't have a built-in power meter |
 | Proxmox VE | [Link](https://www.home-assistant.io/integrations/proxmoxve) | Monitor status of Proxmox VM's |
 | Pushover | [Link](https://www.home-assistant.io/integrations/pushover) | Send messages outside of HomeAssistant (to be able to mure sometimes) |
 | Radio Browser | [Link](https://www.home-assistant.io/integrations/radio_browser) | Play music on Sonos or other devices |
+| RESTful | [Link](https://www.home-assistant.io/integrations/rest) | The rest sensor platform is consuming a given endpoint which is exposed by a RESTful API of a device, an application, or a web service |
 | RESTful command | [Link](https://www.home-assistant.io/integrations/rest_command) | Send commands to non-local stuff |
-| Ring | [Link](https://www.home-assistant.io/integrations/ring) | Integrate doorbell and some (older) cameras |
 | Samsung Smart TV | [Link](https://www.home-assistant.io/integrations/samsungtv) | Check and interact with TVs |
 | Scrape | [Link](https://www.home-assistant.io/integrations/scrape) | Get some information from the WWW |
 | Sonos | [Link](https://www.home-assistant.io/integrations/sonos) | Control media players of Sonos |
 | Speedtest.net | [Link](https://www.home-assistant.io/integrations/speedtestdotnet) | Monitor local network |
+| Spotify | [Link](https://www.home-assistant.io/integrations/spotify) | The Spotify media player integration lets you control your Spotify account playback and browse the Spotify media library |
 | System Monitor | [Link](https://www.home-assistant.io/integrations/systemmonitor) | Check all sensors of the system |
 | Tado | [Link](https://www.home-assistant.io/integrations/tado) | Control the temperature inside |
 | Thread | [Link](https://www.home-assistant.io/integrations/thread) | Not used yet |
@@ -192,6 +206,6 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | UniFi Protect | [Link](https://www.home-assistant.io/integrations/unifiprotect) | Integrate cameras to Home Assistant |
 | Waze Reistijd | [Link](https://www.home-assistant.io/integrations/waze_travel_time) | Calculate time to travel home or work |
 | Werkdag | [Link](https://www.home-assistant.io/integrations/workday) | Check if I have to work today |
-| Xiaomi Miio | [Link](https://www.home-assistant.io/integrations/xiaomi_miio) | Interact with Roborock Vacuum robot |
+| Wyoming Protocol | [Link](https://www.home-assistant.io/integrations/wyoming) | The Wyoming integration connects external voice services to Home Assistant |
 | Zon | [Link](https://www.home-assistant.io/integrations/sun) | Check sun to automate things |
 | Zonneplan | [Link](https://github.com/fsaris/home-assistant-zonneplan-one) | Our power and gas provider |
