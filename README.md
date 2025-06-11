@@ -126,9 +126,11 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 
 | Device | Location | Home Assistant | Notes |
 | ------------- | ------------- | ------------- | ------------- |
+| Paperless | Proxmox VE | N/A | Paperless setup for storing documents |
 | Scrypted | Proxmox VE | [Proxmox VE](https://www.home-assistant.io/integrations/proxmoxve/) | Hosts all Proxmox vitual machines (even the Home Assistant one) |
 | Zigbee2MQTT | Proxmox VE | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Virtual Machine with Zigbee2MQTT seperated from Home Assistant |
 | Nginx Proxy Manager | Proxmox VE | N/A | Proxy for ssl-ing Home-Assistant and other Proxmox Virtual Machines |
+
 
 ## <a name="integrations">Other Integrations</a>
 | [Menu](#menu) |
