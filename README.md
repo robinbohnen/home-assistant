@@ -165,7 +165,6 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Internet Printing Protocol (IPP) | [Link](https://www.home-assistant.io/integrations/ipp) | Monitor local printer |
 | IntesisHome | [Link](https://www.home-assistant.io/integrations/intesishome) | Control Mitsubishi Airco |
 | Intex Spa | [Link](https://github.com/mathieu-mp/homeassistant-intex-spa) | Control spa bubble bath |
-| iRobot Roomba and Braava | [Link](https://www.home-assistant.io/integrations/roomba) | Control and monitor iRobot vacuum cleaners |
 | KNMI | [Link](https://github.com/golles/ha-knmi/blob/main/README.md) | Monitor Dutch Weather and alarms |
 | La Marzocco | [Link](https://www.home-assistant.io/integrations/lamarzocco) | Control the delicious coffee machine |
 | LOQED Touch Smart Lock | [Link](https://www.home-assistant.io/integrations/loqed) | Control the smartlock |
