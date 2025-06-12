@@ -1,6 +1,6 @@
 [![GitHub stars](https://img.shields.io/github/stars/robinbohnen/home-assistant.svg?style=plasticr)](https://github.com/robinbohnen/home-assistant/stargazers)
 [![GitHub last commit](https://img.shields.io/github/last-commit/robinbohnen/home-assistant.svg?style=plasticr)](https://github.com/robinbohnen/home-assistant/commits/master)
-[![HA Version](https://img.shields.io/badge/Running%20Home%20Assistant-2024.11.1%20-darkblue)](https://github.com/home-assistant/home-assistant/releases/latest)
+[![HA Version](https://img.shields.io/github/v/release/home-assistant/core?logo=github&label=Running%20Home-Assistant&color=darkblue)](https://github.com/home-assistant/home-assistant/releases/latest)
 [![HA Community](https://img.shields.io/badge/HA%20community-forum-orange)](https://community.home-assistant.io/u/robinbohnen/summary)
 
 
