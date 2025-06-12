@@ -120,6 +120,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | [Aqara Motion Sensor P1](https://amzn.to/3AF04R9) | 15 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Motion sensor to control lighting and alarm |
 | [Aqara Temperature Sensor](https://amzn.to/3CnNmqB) | 8 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Temperature and humidity sensor for indoor use |
 | [Aqara Wireless Mini Switch](https://amzn.to/3AJqMYM) | 6 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Mini button to control things that can't be automated (for now) |
+| [Marstek Venus E 5kWh](https://amzn.to/44bh5OF) | 1 | ESPHome | [ESPHome](https://www.home-assistant.io/integrations/esphome) | The Marstek Venus EnergyCube is a compact plug-in battery with modular capacity, perfect for sustainable energy storage and easy to install |
 
 ## <a name="vms">Virtual Machines</a>
 | [Menu](#menu) |
