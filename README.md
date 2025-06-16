@@ -188,6 +188,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | OneDrive | [Link](https://www.home-assistant.io/integrations/onedrive) | Add Microsoft Onedrive as storage for backups |
 | OpenAI Conversation | [Link](https://www.home-assistant.io/integrations/openai_conversation) | The OpenAI integration adds a conversation agent powered by OpenAI in Home Assistant |
 | Overkiz | [Link](https://www.home-assistant.io/integrations/overkiz) | Control your Somfy devices |
+| Parcel | [Link](https://github.com/jmdevita/parcel-ha/blob/main/README.md) | Status of Parcels to display on dashboards |
 | Ping (ICMP) | [Link](https://www.home-assistant.io/integrations/ping) | Check the status of local network devices |
 | Places | [Link](https://github.com/custom-components/places) | Check translated location of persons |
 | Powercalc | [Link](https://docs.powercalc.nl) | Powercalc is a custom component for Home Assistant to estimate the power consumption (as virtual meters) of lights, fans, smart speakers and other devices, which don't have a built-in power meter |
