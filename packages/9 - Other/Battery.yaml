@@ -2,7 +2,7 @@ battery_package:
   automation:
     - id: battery_disable_charging
       alias: Battery - Disable charging when no low pricing
-      description: "Change modes on battery when needed; to create low charing points"
+      description: Change modes on battery when needed; to create low charing points
       mode: single
       triggers:
         - trigger: state
@@ -16,6 +16,16 @@ battery_package:
         - trigger: time
           at: "12:00:00"
           id: afternoon
+        - trigger: state
+          entity_id:
+            - sensor.zonneplan_current_tariff_group
+          to: high
+          id: high_price
+        - trigger: state
+          entity_id:
+            - sensor.zonneplan_current_tariff_group
+          to: normal
+          id: medium_price
       conditions: []
       actions:
         - choose:
@@ -54,6 +64,21 @@ battery_package:
                 - condition: trigger
                   id:
                     - afternoon
+              sequence:
+                - action: select.select_option
+                  metadata: {}
+                  data:
+                    option: disable
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+            - conditions:
+                - condition: trigger
+                  id:
+                    - high_price
+                    - medium_price
+                - condition: state
+                  entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+                  state: enable
               sequence:
                 - action: select.select_option
                   metadata: {}
