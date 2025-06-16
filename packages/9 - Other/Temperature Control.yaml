@@ -1,0 +1,281 @@
+temp_control_package:
+  automation:
+    - id: temp_control_automation
+      alias: Temperature Control - All rooms
+      description: "Control the temperature inside with the outside temperature and smart notifications"
+      mode: single
+      triggers:
+        - trigger: numeric_state
+          entity_id:
+            - weather.knmi_thuis
+          attribute: temperature
+          above: sensor.woonkamer_temperatuur
+          id: hot_livingroom
+        - trigger: numeric_state
+          entity_id:
+            - weather.knmi_thuis
+          attribute: temperature
+          above: sensor.garage_temperatuur_temperature
+          id: hot_garage
+        - trigger: numeric_state
+          entity_id:
+            - weather.knmi_thuis
+          attribute: temperature
+          above: sensor.speelkamer_temperatuur_temperature
+          id: hot_playroom
+        - trigger: numeric_state
+          entity_id:
+            - weather.knmi_thuis
+          attribute: temperature
+          above: sensor.badkamer_temperatuur_temperature
+          id: hot_bathroom
+        - trigger: numeric_state
+          entity_id:
+            - weather.knmi_thuis
+          attribute: temperature
+          above: sensor.slaapkamer_maxi_temperatuur_temperature
+          id: hot_bedroom_maxi
+        - trigger: numeric_state
+          entity_id:
+            - weather.knmi_thuis
+          attribute: temperature
+          above: sensor.kantoor_temperatuur_temperature
+          id: hot_office
+        - trigger: numeric_state
+          entity_id:
+            - weather.knmi_thuis
+          attribute: temperature
+          above: sensor.slaapkamer_temperatuur_temperature
+          id: hot_bedroom
+        - trigger: numeric_state
+          entity_id:
+            - weather.knmi_thuis
+          attribute: temperature
+          above: sensor.slaapkamer_mini_temperatuur_temperature
+          id: hot_bedroom_mini
+        - trigger: numeric_state
+          entity_id:
+            - weather.knmi_thuis
+          attribute: temperature
+          id: cold_livingroom
+          below: sensor.woonkamer_temperatuur
+        - trigger: numeric_state
+          entity_id:
+            - weather.knmi_thuis
+          attribute: temperature
+          id: cold_bathroom
+          below: sensor.badkamer_temperatuur_temperature
+        - trigger: numeric_state
+          entity_id:
+            - weather.knmi_thuis
+          attribute: temperature
+          below: sensor.slaapkamer_temperatuur_temperature
+          id: cold_bedroom
+        - trigger: numeric_state
+          entity_id:
+            - weather.knmi_thuis
+          attribute: temperature
+          below: sensor.slaapkamer_maxi_temperatuur_temperature
+          id: cold_bedroom_maxi
+        - trigger: numeric_state
+          entity_id:
+            - weather.knmi_thuis
+          attribute: temperature
+          below: sensor.slaapkamer_mini_temperatuur_temperature
+          id: cold_bedroom_mini
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - hot_livingroom
+                - condition: state
+                  entity_id: binary_sensor.woonkamer_openslaande_deuren_contact
+                  state: "on"
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    title: Woonkamer deuren dicht
+                    message: >-
+                      Het is warmer buiten dan binnen, je kunt beter de woonkamer
+                      deuren dichthouden om het koel binnen te houden.
+            - conditions:
+                - condition: trigger
+                  id:
+                    - cold_livingroom
+                - condition: state
+                  entity_id: binary_sensor.woonkamer_openslaande_deuren_contact
+                  state: "off"
+                - condition: state
+                  entity_id: light.woonkamer_lampen
+                  state: "on"
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    title: Woonkamer deuren open
+                    message: >-
+                      Het is warmer binnen dan buiten, je kunt beter de woonkamer
+                      deuren open doen om het koel binnen te maken binnen.
+            - conditions:
+                - condition: trigger
+                  id:
+                    - hot_bathroom
+                - condition: state
+                  entity_id: binary_sensor.badkamer_raam_contact
+                  state: "on"
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    title: Badkamer raam dicht
+                    message: >-
+                      Het is warmer buiten dan binnen, je kunt beter het badkamer raam
+                      dichthouden om het koel binnen te houden.
+                - action: cover.close_cover
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: cover.badkamer_rolluik
+            - conditions:
+                - condition: trigger
+                  id:
+                    - cold_bathroom
+                - condition: state
+                  entity_id: binary_sensor.badkamer_raam_contact
+                  state: "off"
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    title: Badkamer raam open
+                    message: >-
+                      Het is warmer binnen dan buiten, je kunt beter het badkamer raam
+                      open doen om het koel binnen te maken.
+            - conditions:
+                - condition: trigger
+                  id:
+                    - hot_bedroom
+                - condition: or
+                  conditions:
+                    - condition: state
+                      entity_id: binary_sensor.slaapkamer_raam_rechts_contact
+                      state: "on"
+                    - condition: state
+                      entity_id: binary_sensor.slaapkamer_raam_links_contact
+                      state: "on"
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    title: Slaapkamer ramen dicht
+                    message: >-
+                      Het is warmer buiten dan binnen, je kunt beter de slaapkamer
+                      ramen dichthouden om het koel binnen te houden.
+                - action: cover.close_cover
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: cover.slaapkamer_rolluik
+            - conditions:
+                - condition: trigger
+                  id:
+                    - cold_bedroom
+                - condition: or
+                  conditions:
+                    - condition: state
+                      entity_id: binary_sensor.slaapkamer_raam_rechts_contact
+                      state: "off"
+                    - condition: state
+                      entity_id: binary_sensor.slaapkamer_raam_links_contact
+                      state: "off"
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    title: Slaapkamer ramen open
+                    message: >-
+                      Het is warmer binnen dan buiten, je kunt beter de slaapkamer
+                      ramen open doen om het koel binnen te maken.
+            - conditions:
+                - condition: trigger
+                  id:
+                    - hot_bedroom_maxi
+                - condition: or
+                  conditions:
+                    - condition: state
+                      entity_id: binary_sensor.slaapkamer_maxi_raam_links_contact
+                      state: "on"
+                    - condition: state
+                      entity_id: binary_sensor.slaapkamer_maxi_raam_rechts_contact
+                      state: "on"
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    title: Slaapkamer ramen Logan dicht
+                    message: >-
+                      Het is warmer buiten dan binnen, je kunt beter de slaapkamer
+                      ramen van Logan dichthouden om het koel binnen te houden.
+                - action: cover.close_cover
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: cover.covers_bedroom_maxi
+            - conditions:
+                - condition: trigger
+                  id:
+                    - cold_bedroom_maxi
+                - condition: or
+                  conditions:
+                    - condition: state
+                      entity_id: binary_sensor.slaapkamer_maxi_raam_links_contact
+                      state: "off"
+                    - condition: state
+                      entity_id: binary_sensor.slaapkamer_maxi_raam_rechts_contact
+                      state: "off"
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    title: Slaapkamer ramen Logan open
+                    message: >-
+                      Het is warmer binnen dan buiten, je kunt beter de slaapkamer
+                      ramen van Logan open doen om het koel binnen te maken.
+            - conditions:
+                - condition: trigger
+                  id:
+                    - hot_bedroom_mini
+                - condition: state
+                  entity_id: binary_sensor.slaapkamer_mini_raam_contact
+                  state: "on"
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    title: Slaapkamer ramen Emma dicht
+                    message: >-
+                      Het is warmer buiten dan binnen, je kunt beter de slaapkamer
+                      ramen van Emma dichthouden om het koel binnen te houden.
+                - action: cover.close_cover
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: cover.slaapkamer_mini
+            - conditions:
+                - condition: trigger
+                  id:
+                    - cold_bedroom_mini
+                - condition: state
+                  entity_id: binary_sensor.slaapkamer_mini_raam_contact
+                  state: "off"
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    title: Slaapkamer ramen Emma open
+                    message: >-
+                      Het is warmer binnen dan buiten, je kunt beter de slaapkamer
+                      ramen van Emma open doen om het koel binnen te maken.
