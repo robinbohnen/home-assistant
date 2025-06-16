@@ -1,0 +1,63 @@
+battery_package:
+  automation:
+    - id: battery_disable_charging
+      alias: Battery - Disable charging when no low pricing
+      description: "Change modes on battery when needed; to create low charing points"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - sensor.zonneplan_current_tariff_group
+          to: low
+          id: low_price
+        - trigger: time
+          at: "06:00:00"
+          id: morning
+        - trigger: time
+          at: "12:00:00"
+          id: afternoon
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - low_price
+                - condition: state
+                  entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+                  state: enable
+              sequence:
+                - action: select.select_option
+                  metadata: {}
+                  data:
+                    option: disable
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+            - conditions:
+                - condition: trigger
+                  id:
+                    - morning
+              sequence:
+                - action: select.select_option
+                  metadata: {}
+                  data:
+                    option: enable
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+                - action: select.select_option
+                  metadata: {}
+                  data:
+                    option: stop
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+            - conditions:
+                - condition: trigger
+                  id:
+                    - afternoon
+              sequence:
+                - action: select.select_option
+                  metadata: {}
+                  data:
+                    option: disable
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
