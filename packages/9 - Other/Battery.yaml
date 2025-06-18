@@ -33,29 +33,24 @@ battery_package:
                 - condition: trigger
                   id:
                     - low_price
-                - condition: state
-                  entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-                  state: disable
-                - condition: numeric_state
-                  entity_id: sensor.forecast_solar_production_today
-                  above: 20
               sequence:
                 - action: select.select_option
                   metadata: {}
                   data:
-                    option: enable
+                    option: disable
                   target:
                     entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-                - action: select.select_option
-                  metadata: {}
-                  data:
-                    option: stop
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+              alias: Low price; start charging
             - conditions:
                 - condition: trigger
                   id:
                     - morning
+                - condition: numeric_state
+                  entity_id: sensor.forecast_solar_production_today
+                  above: 20
+                - condition: state
+                  entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+                  state: disable
               sequence:
                 - action: select.select_option
                   metadata: {}
@@ -69,6 +64,7 @@ battery_package:
                     option: stop
                   target:
                     entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+              alias: Morning and forecast is positive; charge later on
             - conditions:
                 - condition: trigger
                   id:
@@ -80,10 +76,10 @@ battery_package:
                     option: disable
                   target:
                     entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+              alias: Afternoon; start own program
             - conditions:
                 - condition: trigger
                   id:
-                    - high_price
                     - medium_price
                 - condition: state
                   entity_id: select.lilygo_rs485_marstek_rs485_control_mode
@@ -95,3 +91,28 @@ battery_package:
                     option: disable
                   target:
                     entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+              alias: Medium price; start own program
+            - conditions:
+                - condition: trigger
+                  id:
+                    - high_price
+              sequence:
+                - action: select.select_option
+                  metadata: {}
+                  data:
+                    option: enable
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+                - action: select.select_option
+                  metadata: {}
+                  data:
+                    option: discharge
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+                - action: number.set_value
+                  metadata: {}
+                  data:
+                    value: "2500"
+                  target:
+                    entity_id: number.lilygo_rs485_marstek_forcible_discharge_power
+              alias: High price; discharge
