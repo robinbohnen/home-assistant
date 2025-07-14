@@ -1591,14 +1591,16 @@ sections:
             show_state: true
             show_name: false
             tap_action:
-              action: none
+              action: navigate
+              navigation_path: "#brandweer"
             double_tap_action:
               action: none
             hold_action:
               action: none
             button_action:
               tap_action:
-                action: more-info
+                action: navigate
+                navigation_path: "#brandweer"
               double_tap_action:
                 action: none
               hold_action:
@@ -1620,14 +1622,16 @@ sections:
             show_state: true
             show_icon: true
             tap_action:
-              action: none
+              action: navigate
+              navigation_path: "#brandweer"
             double_tap_action:
               action: none
             hold_action:
               action: none
             button_action:
               tap_action:
-                action: more-info
+                action: navigate
+                navigation_path: "#brandweer"
               double_tap_action:
                 action: none
               hold_action:
@@ -1652,10 +1656,12 @@ sections:
             hold_action:
               action: none
             tap_action:
-              action: none
+              action: navigate
+              navigation_path: "#brandweer"
             button_action:
               tap_action:
-                action: more-info
+                action: navigate
+                navigation_path: "#brandweer"
               double_tap_action:
                 action: none
               hold_action:
@@ -3464,6 +3470,119 @@ sections:
             entities:
               - sensor.neerslag_buienalarm_regen_data
               - sensor.neerslag_buienradar_regen_data
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: "#brandweer"
+            button_type: name
+            name: Brandweer
+            icon: mdi:fire-circle
+          - type: custom:bubble-card
+            card_type: separator
+            name: Ploeg
+            icon: mdi:account-group-outline
+          - type: custom:bubble-card
+            card_type: select
+            entity: input_select.brandweer_mijn_huidige_ploeg
+            name: Mijn ploeg
+            show_state: true
+          - type: custom:bubble-card
+            card_type: select
+            entity: input_select.brandweer_dienstdoende_ploeg
+            name: Dienstdoende ploeg
+            show_state: true
+          - type: custom:bubble-card
+            card_type: separator
+            name: Uitrukken
+            icon: mdi:fire-truck
+            sub_button:
+              - entity: counter.brandweer_totaal_aantal_uitrukken
+                show_icon: true
+                show_state: true
+                state_background: false
+                show_name: true
+                name: Totaal
+                show_background: true
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            name: Laatste melding
+            icon: mdi:fire-alert
+            show_name: true
+            entity: input_text.brandweer_laatste_melding
+            scrolling_effect: false
+            show_last_changed: false
+            show_attribute: true
+            sub_button:
+              - entity: input_datetime.brandweer_laatste_melding
+                show_attribute: false
+                show_name: false
+                show_state: true
+                show_icon: false
+                show_background: true
+                attribute: timestamp
+                tap_action:
+                  action: none
+                name: Datum & Tijd
+              - entity: input_boolean.brandweer_uitgerukt_op_laatste_melding
+                show_state: false
+                show_name: true
+                name: Uitgerukt
+                show_last_changed: false
+                show_attribute: false
+                show_icon: false
+                show_background: true
+                tap_action:
+                  action: none
+              - entity: input_number.brandweer_uitruktijd_secondes
+                show_state: true
+                show_icon: false
+                state_background: false
+                visibility:
+                  - condition: state
+                    entity: binary_sensor.brandweer_uitgerukt_op_laatste_melding
+                    state: "on"
+                name: Uitruktijd
+                show_attribute: false
+            styles: |-
+              .bubble-sub-button-2 {
+                background-color: ${hass.states['binary_sensor.brandweer_uitgerukt_op_laatste_melding'].state === 'on' ? 'var(--bubble-default-color)' : 'var(--card-background-color)'} !important;
+              }
+            tap_action:
+              action: more-info
+            double_tap_action:
+              action: none
+            hold_action:
+              action: none
+            button_action:
+              tap_action:
+                action: more-info
+              double_tap_action:
+                action: none
+              hold_action:
+                action: none
+            card_layout: large-2-rows
+            modules:
+              - default
+          - type: custom:bubble-card
+            card_type: separator
+            name: Statistieken
+            icon: mdi:chart-timeline-variant
+          - type: custom:apexcharts-card
+            apex_config:
+              legend:
+                show: false
+            header:
+              show: true
+              title: Uitrukken per ploeg
+              show_states: true
+              colorize_states: true
+            graph_span: 252h
+            series:
+              - entity: counter.brandweer_uden_a_ploeg_uitrukken
+              - entity: counter.brandweer_uden_b_ploeg_uitrukken
+              - entity: counter.brandweer_uden_c_ploeg_uitrukken
   - type: grid
     cards:
       - type: custom:mod-card
