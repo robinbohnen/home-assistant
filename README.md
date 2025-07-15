@@ -225,6 +225,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | [Menu](#menu) |
 
 | Integration | GitHub URL | Notes |
+| ------------- | ------------- | ------------- |
 | Advanced Camera Card | [Link](https://github.com/dermotduffy/advanced-camera-card) | For showing cameras in a single overview |
 | Afvalinfo | [Link](https://github.com/heyajohnny/afvalinfo) | Garbage collection information for the Netherlands |
 | Alarmo | [Link](https://github.com/nielsfaber/alarmo) | Create my own alarm system with all sensors used for other stuff |
