@@ -27,7 +27,7 @@ My personal [Home Assistant Container](https://home-assistant.io) configurations
 
 | Device  | Quantity | Connection | Home Assistant | Notes |
 | ------------- | :---: | ------------- | ------------- | ------------- |
-| [SONOFF Zigbee 3.0 USB Dongle Plus-E](https://amzn.to/40G1ENb) | 1 | USB | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Used to control all Zigbee smart bulbs and Blinds. |
+| [SLZB-MR3](https://smlight.tech/product/slzb-mr3/) | 1 | Ethernet | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Used to control all Zigbee smart bulbs and Blinds. |
 | [Somfy Tahoma](https://amzn.to/4fkzKee) | 1 | Ethernet | [Somfy](https://www.home-assistant.io/integrations/somfy/) | Used to control Somfy accessories like rollerblinds and sunscreens. |
 
 ## <a name="lights">Lights</a>
@@ -35,8 +35,8 @@ My personal [Home Assistant Container](https://home-assistant.io) configurations
 
 | Device  | Quantity | Connection | Home Assistant | Notes |
 | ------------- | :---: | ------------- | ------------- | ------------- |
-| [Ikea Tradfri bulb GU10](https://www.ikea.com/nl/en/p/tradfri-led-bulb-gu10-345-lumen-wireless-dimmable-colour-and-white-spectrum-70547474/) | 42 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led spots GU10 with colour |
-| [Ikea Tradfri bulb E27](https://www.ikea.com/nl/en/p/tradfri-led-bulb-e27-806-lumen-wireless-dimmable-colour-and-white-spectrum-globe-opal-white-30547471/) | 8 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led bulb E27 with colour |
+| [Ikea Tradfri bulb GU10](https://www.ikea.com/nl/en/p/tradfri-led-bulb-gu10-345-lumen-wireless-dimmable-colour-and-white-spectrum-70547474/) | 46 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led spots GU10 with colour |
+| [Ikea Tradfri bulb E27](https://www.ikea.com/nl/en/p/tradfri-led-bulb-e27-806-lumen-wireless-dimmable-colour-and-white-spectrum-globe-opal-white-30547471/) | 10 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led bulb E27 with colour |
 | [Ikea Tradfri Driver with ledstrip](https://www.ikea.com/nl/en/p/tradfri-driver-for-wireless-control-smart-grey-60342656/) | 1 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led driver for strip |
 | [Humble One Smart](https://amzn.to/40JOj6z) | 1 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Wireless light |
 | Ikea Leptiter downlight (discontinued) | 8 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led spots |
@@ -114,7 +114,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | [Ulanzi Awtrix Smart Pixel Clock](https://amzn.to/4fnTLAK) | 1 | Wi-Fi | [MQTT](https://www.home-assistant.io/integrations/mqtt/)| 8x32 RGB LED panel used to display time and various notifications / status.  Using the [Awtrix Light](https://github.com/Blueforcer/awtrix-light) project to integrate with MQTT and Home Assistant.  It also looks super cool. |
 | [La Marzocco Linea Micra](https://www.lamarzocco.com/fr/en/home-products/home-espresso-machines/linea-micra/) | 1 | Wi-Fi | [La Marzocco](https://www.home-assistant.io/integrations/lamarzocco/) | Coffee machine controllable by HA |
 | [Ikea INSPELNING Smart Plug](https://www.ikea.com/nl/nl/p/inspelning-stekker-smart-stroommonitor-00569836/) | 5 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Control outlet with metering to turn devices on/off |
-| [Ikea Tradfri Control Outlet](https://www.ikea.com/nl/en/p/tradfri-control-outlet-kit-smart-40364748/) | 6 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Control outlet without metering to turn devices on/off |
+| [Ikea Tradfri Control Outlet](https://www.ikea.com/nl/en/p/tradfri-control-outlet-kit-smart-40364748/) | 8 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Control outlet without metering to turn devices on/off |
 | [Tuya Zigbee Smart Power Meter Socket](https://amzn.to/3O7eJYs) | 6 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Control outlet with metering to turn devices on/off and meter them |
 | [Aqara Door and Window magnet sensor](https://amzn.to/3UNSCdd) | 24 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Magnetic sensor for doors and windows |
 | [Aqara Motion Sensor P1](https://amzn.to/3AF04R9) | 15 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Motion sensor to control lighting and alarm |
@@ -130,6 +130,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Paperless | Proxmox VE | N/A | Paperless setup for storing documents |
 | Scrypted | Proxmox VE | [Proxmox VE](https://www.home-assistant.io/integrations/proxmoxve/) | Hosts all Proxmox vitual machines (even the Home Assistant one) |
 | Zigbee2MQTT | Proxmox VE | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Virtual Machine with Zigbee2MQTT seperated from Home Assistant |
+| MQTT | Proxmox VE | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Virtual Machine with Mosquitto MQTT server seperated from Zigbee2MQTT |
 | Nginx Proxy Manager | Proxmox VE | N/A | Proxy for ssl-ing Home-Assistant and other Proxmox Virtual Machines |
 
 
@@ -143,6 +144,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Alarmo | [Link](https://github.com/nielsfaber/alarmo) | Create your own alarm |
 | Apple TV | [Link](https://www.home-assistant.io/integrations/apple_tv) | Control your Apple TV Device |
 | Backup | [Link](https://www.home-assistant.io/integrations/backup) | For making backups of the home assistant setup |
+| Bitcoin | [Link](https://www.home-assistant.io/integrations/bitcoin/) | Fetch information about the Bitcoin price to display on dashboard |
 | Bluetooth | [Link](https://www.home-assistant.io/integrations/bluetooth) | Locate local Bluetooth devices  |
 | Buienradar | [Link](https://www.home-assistant.io/integrations/buienradar) | Monitor our dutch rainy weather |
 | CalDAV | [Link](https://www.home-assistant.io/integrations/caldav) | Integrate calendars to add appointments |
@@ -186,19 +188,23 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Neerslag App (Buienalarm / Buienradar) | [Link](hhttps://github.com/aex351/home-assistant-neerslag-app) | Display rain forecast using Buienalarm and/or Buienradar sensor data |
 | Nest Protect | [Link](https://github.com/imicknl/ha-nest-protect) | Check the status of smoke and CO sensors |
 | OneDrive | [Link](https://www.home-assistant.io/integrations/onedrive) | Add Microsoft Onedrive as storage for backups |
+| Open Exchange Rates | [Link](https://www.home-assistant.io/integrations/openexchangerates/) | Add currency convertor for USD to EUR |
 | OpenAI Conversation | [Link](https://www.home-assistant.io/integrations/openai_conversation) | The OpenAI integration adds a conversation agent powered by OpenAI in Home Assistant |
 | Overkiz | [Link](https://www.home-assistant.io/integrations/overkiz) | Control your Somfy devices |
 | Parcel | [Link](https://github.com/jmdevita/parcel-ha/blob/main/README.md) | Status of Parcels to display on dashboards |
 | Ping (ICMP) | [Link](https://www.home-assistant.io/integrations/ping) | Check the status of local network devices |
 | Places | [Link](https://github.com/custom-components/places) | Check translated location of persons |
+| Playstation Network | [Link](https://www.home-assistant.io/integrations/playstation_network/) | Fetch information about playstation profile to HomeAssistant |
 | Powercalc | [Link](https://docs.powercalc.nl) | Powercalc is a custom component for Home Assistant to estimate the power consumption (as virtual meters) of lights, fans, smart speakers and other devices, which don't have a built-in power meter |
 | Proxmox VE | [Link](https://www.home-assistant.io/integrations/proxmoxve) | Monitor status of Proxmox VM's |
 | Pushover | [Link](https://www.home-assistant.io/integrations/pushover) | Send messages outside of HomeAssistant (to be able to mure sometimes) |
 | Radio Browser | [Link](https://www.home-assistant.io/integrations/radio_browser) | Play music on Sonos or other devices |
+| Renault | [Link](https://www.home-assistant.io/integrations/renault/) | Integrate the car (Renault Megane E-Tech Espirit Alpine) to Home Assistant |
 | RESTful | [Link](https://www.home-assistant.io/integrations/rest) | The rest sensor platform is consuming a given endpoint which is exposed by a RESTful API of a device, an application, or a web service |
 | RESTful command | [Link](https://www.home-assistant.io/integrations/rest_command) | Send commands to non-local stuff |
 | Samsung Smart TV | [Link](https://www.home-assistant.io/integrations/samsungtv) | Check and interact with TVs |
 | Scrape | [Link](https://www.home-assistant.io/integrations/scrape) | Get some information from the WWW |
+| SMLight SLZB | [Link](https://www.home-assistant.io/integrations/smlight/) | Integrate the SLZB-MR03 into Home Assistant and fetch information (firmware etc.) |
 | Sonos | [Link](https://www.home-assistant.io/integrations/sonos) | Control media players of Sonos |
 | Speedtest.net | [Link](https://www.home-assistant.io/integrations/speedtestdotnet) | Monitor local network |
 | Spotify | [Link](https://www.home-assistant.io/integrations/spotify) | The Spotify media player integration lets you control your Spotify account playback and browse the Spotify media library |
@@ -209,6 +215,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | UniFi Protect | [Link](https://www.home-assistant.io/integrations/unifiprotect) | Integrate cameras to Home Assistant |
 | Waze Reistijd | [Link](https://www.home-assistant.io/integrations/waze_travel_time) | Calculate time to travel home or work |
 | Werkdag | [Link](https://www.home-assistant.io/integrations/workday) | Check if I have to work today |
+| Withings | [Link](https://www.home-assistant.io/integrations/withings/) | Integrate Withings Body Scale to Home Assistant |
 | Wyoming Protocol | [Link](https://www.home-assistant.io/integrations/wyoming) | The Wyoming integration connects external voice services to Home Assistant |
 | Zon | [Link](https://www.home-assistant.io/integrations/sun) | Check sun to automate things |
 | Zonneplan | [Link](https://github.com/fsaris/home-assistant-zonneplan-one) | Our power and gas provider |
