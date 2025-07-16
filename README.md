@@ -235,6 +235,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Button Card | [Link](https://github.com/custom-cards/button-card) | Some buttons I need to use this card for |
 | Card-mod | [Link](https://github.com/thomasloven/lovelace-card-mod) | To modify existing cards with thing normally won't be possible |
 | Chihiros | [Link](https://github.com/TheMicDiet/chihiros-led-control) | Integration to integrate aquarium lights to HA |
+| Custom Brand Icons | [Link](https://github.com/elax46/custom-brand-icons) | Prettier icons with brand icons |
 | Digital Clock | [Link](https://github.com/wassy92x/lovelace-digital-clock) | Integration to display a digital clock in a Dashboard |
 | ENTSO-e | [Link](https://github.com/JaccoR/hass-entso-e) | Custom component for Home Assistant to fetch energy prices of all European countries from the ENTSO-e Transparency Platform |
 | GOODWE Sems API | [Link](https://github.com/TimSoethout/goodwe-sems-home-assistant) | Integration for Home Assistant that retrieves PV data from GoodWe SEMS API. |
