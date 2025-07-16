@@ -230,6 +230,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Afvalinfo | [Link](https://github.com/heyajohnny/afvalinfo) | Garbage collection information for the Netherlands |
 | Alarmo | [Link](https://github.com/nielsfaber/alarmo) | Create my own alarm system with all sensors used for other stuff |
 | ApexCharts Card | [Link](https://github.com/RomRider/apexcharts-card) | Display ApexCharts in Home Assistant |
+| Auto-Entities | [Link](https://github.com/thomasloven/lovelace-auto-entities) | Auto include entities |
 | Bubble Card | [Link](https://github.com/Clooos/Bubble-Card) | Theme I currently use for my dashboards |
 | Button Card | [Link](https://github.com/custom-cards/button-card) | Some buttons I need to use this card for |
 | Card-mod | [Link](https://github.com/thomasloven/lovelace-card-mod) | To modify existing cards with thing normally won't be possible |
