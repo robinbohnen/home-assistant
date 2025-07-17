@@ -68,6 +68,11 @@ sections:
         modules:
           - default
         card_layout: large
+        button_action:
+          tap_action:
+            action: more-info
+        hold_action:
+          action: more-info
       - type: custom:bubble-card
         card_type: climate
         entity: climate.airco_woonkamer
@@ -608,6 +613,9 @@ sections:
               - condition: state
                 entity: sensor.lilygo_rs485_marstek_inverter_state
                 state_not: Standby
+              - condition: numeric_state
+                entity: sensor.lilygo_rs485_marstek_battery_power
+                above: 0
         name: Batterij
         card_layout: large-2-rows
         modules:
@@ -1037,6 +1045,9 @@ sections:
               - condition: state
                 entity: sensor.lilygo_rs485_marstek_inverter_state
                 state_not: Standby
+              - condition: numeric_state
+                entity: sensor.lilygo_rs485_marstek_battery_power
+                above: 0
         name: Batterij
         card_layout: large-2-rows
         modules:
@@ -1075,7 +1086,6 @@ sections:
                 card_type: button
                 button_type: state
                 icon: phu:socket-eu
-                name: null
               domain: sensor
               name: "*Vermogen*"
           exclude:
@@ -1164,6 +1174,9 @@ sections:
                   - condition: state
                     entity: binary_sensor.work_maybe_travel_to_work_time
                     state: "on"
+                  - condition: numeric_state
+                    entity: sensor.robin_reistijd_naar_werk
+                    above: 0
             card_layout: large-2-rows
             modules:
               - default
@@ -1681,7 +1694,7 @@ sections:
             double_tap_action:
               action: none
             hold_action:
-              action: none
+              action: more-info
             button_action:
               tap_action:
                 action: navigate
@@ -1712,7 +1725,7 @@ sections:
             double_tap_action:
               action: none
             hold_action:
-              action: none
+              action: more-info
             button_action:
               tap_action:
                 action: navigate
@@ -1739,7 +1752,7 @@ sections:
             double_tap_action:
               action: none
             hold_action:
-              action: none
+              action: more-info
             tap_action:
               action: navigate
               navigation_path: "#brandweer"
@@ -1758,66 +1771,6 @@ sections:
             icon: mdi:alpha-c-circle-outline
             modules:
               - default
-      - type: custom:bubble-card
-        card_type: separator
-        name: Brandweer Bezetting
-        icon: mdi:fire-station
-      - type: horizontal-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: sensor.uden_totaal_bezetting
-            show_name: false
-            icon: mdi:alphabetical-variant
-            styles: |-
-              .bubble-button-card {
-                background: ${state <= 16 ? 'orange' : ''} !important;
-              }
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: sensor.a_ploeg_bezetting
-            show_state: true
-            name: A Ploeg
-            icon: mdi:alpha-a-box
-            show_name: false
-            styles: |-
-              .bubble-button-card {
-                background: ${state <= 5 ? 'orange' : ''} !important;
-              }
-              .bubble-icon {
-                color: ${hass.states['input_select.brandweer_dienstdoende_ploeg'].state === 'A Ploeg' ? 'var(--bubble-default-color)' : ''} !important;
-              }
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: sensor.b_ploeg_bezetting
-            show_state: true
-            name: B Ploeg
-            icon: mdi:alpha-b-box
-            show_name: false
-            styles: |-
-              .bubble-button-card {
-                background: ${state <= 5 ? 'orange' : ''} !important;
-              }
-              .bubble-icon {
-                color: ${hass.states['input_select.brandweer_dienstdoende_ploeg'].state === 'B Ploeg' ? 'var(--bubble-default-color)' : ''} !important;
-              }
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: sensor.c_ploeg_bezetting
-            name: C Ploeg
-            show_name: false
-            icon: mdi:alpha-c-box
-            styles: |-
-              .bubble-button-card {
-                background: ${state <= 5 ? 'orange' : ''} !important;
-              }
-              .bubble-icon {
-                color: ${hass.states['input_select.brandweer_dienstdoende_ploeg'].state === 'C Ploeg' ? 'var(--bubble-default-color)' : ''} !important;
-              }
       - type: custom:mushroom-empty-card
   - type: grid
     cards:
@@ -2609,7 +2562,12 @@ sections:
                 state_background: false
                 show_background: false
                 show_name: false
+                name: "Temperature "
               - entity: binary_sensor.slaapkamer_mini_deur_contact
+                name: Door
+              - entity: binary_sensor.bedroom_mini_windows
+                name: Windows
+                icon: mdi:window-closed
           - type: custom:bubble-card
             card_type: button
             button_type: slider
@@ -2872,6 +2830,7 @@ sections:
               - default
             name: Achtertuin
             icon: mdi:seat
+            sub_button: []
           - type: custom:bubble-card
             card_type: button
             button_type: slider
@@ -2910,6 +2869,9 @@ sections:
               - default
             name: Overkapping
             icon: mdi:greenhouse
+            sub_button:
+              - entity: binary_sensor.achtertuin_overkapping_schuur_deur_contact
+                name: Door
           - type: custom:bubble-card
             card_type: button
             button_type: switch
@@ -3061,6 +3023,9 @@ sections:
                   - condition: state
                     entity: sensor.lilygo_rs485_marstek_inverter_state
                     state_not: Standby
+                  - condition: numeric_state
+                    entity: sensor.lilygo_rs485_marstek_battery_power
+                    above: 0
             name: Batterij
             card_layout: large-2-rows
             modules:
