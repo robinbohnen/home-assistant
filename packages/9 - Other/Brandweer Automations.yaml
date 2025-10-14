@@ -1148,3 +1148,33 @@ brandweer_package:
                           - sensor.r_bohnen_vrbn_nl_status
                           - sensor.robin_bohnen_nl_status
                       action: ms365_teams.update_user_preferred_status
+
+    - id: brandweer_start_car_hvac
+      alias: Brandweer - Start car HVAC
+      description: Start HVAC in car if humidity is high or temperature is low
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - input_text.brandweer_laatste_melding
+      conditions:
+        - condition: state
+          entity_id: device_tracker.hrh85f_locatie
+          state: home
+        - condition: numeric_state
+          entity_id: sensor.hrh85f_batterij
+          above: 30
+        - condition: or
+          conditions:
+            - condition: numeric_state
+              entity_id: sensor.knmi_temperatuur
+              below: sensor.knmi_dauwpunt
+            - condition: numeric_state
+              entity_id: sensor.knmi_temperatuur
+              below: 15
+      actions:
+        - action: button.press
+          metadata: {}
+          data: {}
+          target:
+            entity_id: button.hrh85f_start_air_conditioner
