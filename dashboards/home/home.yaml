@@ -1,1098 +1,1111 @@
-kiosk_mode:
-  user_settings:
-    - users:
-        - Robin Bohnen
-        - Samantha Henkelman
-      kiosk: true
-      hide_header: true
-      hide_sidebar: true
-      hide_menu_button: true
-      hide_overflow: true
-type: sections
-max_columns: 3
-title: Woning
-path: woning
-icon: mdi:home
-dense_section_placement: true
+title: Home
+badges: []
 sections:
   - type: grid
     cards:
       - type: custom:bubble-card
         card_type: separator
-        name: Conditioneel
-        icon: mdi:vector-difference-ab
+        name: Personen
+        icon: mdi:human-male-female-child
         card_layout: large
-        modules:
-          - default
-        rows: "1"
-      - type: custom:bubble-card
-        card_type: cover
-        modules:
-          - default
-        entity: cover.achtertuin_zonnescherm
-        visibility:
-          - condition: numeric_state
-            entity: sensor.achtertuin_zon_luminance
-            above: 10000
-        card_layout: large
-        rows: 1
-      - type: custom:bubble-card
-        card_type: button
-        entity: alarm_control_panel.alarmo
-        show_state: true
-        show_last_changed: true
-        name: Alarm
         sub_button:
-          - entity: lock.kroon18voordeur
-            show_state: true
-            show_last_changed: false
-            state_background: true
+          - entity: group.all_adults
+            show_name: true
+            show_icon: false
+            name: Volwassenen
             tap_action:
-              action: toggle
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: alarm_control_panel.alarmo
-                state: armed_away
-              - condition: state
-                entity: alarm_control_panel.alarmo
-                state: armed_home
-              - condition: state
-                entity: lock.kroon18voordeur
-                state: locked
-              - condition: state
-                entity: group.all_adults
-                state_not: home
-        button_type: switch
-        modules:
-          - default
-        card_layout: large
-        button_action:
-          tap_action:
-            action: more-info
-        hold_action:
-          action: more-info
-      - type: custom:bubble-card
-        card_type: climate
-        entity: climate.airco_woonkamer
-        sub_button:
-          - name: HVAC modes menu
-            select_attribute: hvac_modes
-            state_background: false
-            show_arrow: false
-        state_color: false
-        visibility:
-          - condition: state
-            entity: binary_sensor.woonkamer_openslaande_deuren_contact
-            state: "off"
-          - condition: or
-            conditions:
-              - condition: numeric_state
-                entity: sensor.woonkamer_kamertemperatuur
-                above: 22
-              - condition: numeric_state
-                entity: sensor.woonkamer_kamertemperatuur
-                below: 20
-              - condition: state
-                entity: climate.airco_woonkamer
-                state_not: "off"
-        modules:
-          - default
-        show_attribute: true
-        attribute: current_temperature
-        card_layout: large
-        name: Airco Woonkamer
-        icon: phu:air-conditioner
-      - type: custom:bubble-card
-        card_type: climate
-        entity: climate.airco_zolder
-        sub_button:
-          - name: HVAC modes menu
-            select_attribute: hvac_modes
-            state_background: false
-            show_arrow: false
-        state_color: false
-        visibility:
-          - condition: or
-            conditions:
-              - condition: numeric_state
-                entity: sensor.slaapkamer_temperatuur_temperature
-                above: 23
-              - condition: state
-                entity: climate.airco_zolder
-                state_not: "off"
-        modules:
-          - default
-        show_attribute: true
-        attribute: current_temperature
-        card_layout: large
-        icon: phu:air-conditioner
-      - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        icon: mdi:speaker-stop
-        name: Boxen loskoppelen overkapping
-        tap_action:
-          action: perform-action
-          perform_action: media_player.unjoin
-          target:
-            entity_id: media_player.overkapping_sonos
-        double_tap_action:
-          action: perform-action
-          perform_action: media_player.unjoin
-          target:
-            entity_id: media_player.overkapping_sonos
-        visibility:
-          - condition: state
-            entity: media_player.overkapping_sonos
-            state_not: paused
-        modules:
-          - default
-        button_action:
-          tap_action:
-            action: perform-action
-            perform_action: media_player.unjoin
-            target:
-              entity_id: media_player.overkapping_sonos
-            data: {}
-          double_tap_action:
-            action: perform-action
-            perform_action: media_player.unjoin
-            target:
-              entity_id: media_player.overkapping_sonos
-            data: {}
-          hold_action:
-            action: perform-action
-            perform_action: media_player.unjoin
-            target:
-              entity_id: media_player.overkapping_sonos
-            data: {}
-        show_icon: true
-        card_layout: large
-      - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        name: Boxen samenvoegen overkapping
-        icon: phu:sonos-roam
-        tap_action:
-          action: perform-action
-          perform_action: media_player.join
-          target:
-            entity_id: media_player.woonkamer_sonos
-          data:
-            group_members:
-              - media_player.overkapping_sonos
-        double_tap_action:
-          action: perform-action
-          perform_action: media_player.join
-          target:
-            entity_id: media_player.woonkamer_sonos
-          data:
-            group_members:
-              - media_player.overkapping_sonos
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: binary_sensor.woonkamer_openslaande_deuren_contact
-                state: "on"
-              - condition: numeric_state
-                entity: sensor.achtertuin_zon_luminance
-                above: 20000
-              - condition: numeric_state
-                entity: sensor.voortuin_zon_luminance
-                above: 20000
-          - condition: or
-            conditions:
-              - condition: state
-                entity: media_player.overkapping_sonos
-                state: idle
-              - condition: state
-                entity: media_player.overkapping_sonos
-                state: paused
-          - condition: state
-            entity: media_player.woonkamer_sonos
-            state: playing
-        modules:
-          - default
-        button_action:
-          tap_action:
-            action: perform-action
-            perform_action: media_player.join
-            target:
-              entity_id: media_player.woonkamer_sonos
-            data:
-              group_members:
-                - media_player.overkapping_sonos
-          double_tap_action:
-            action: perform-action
-            perform_action: media_player.join
-            target:
-              entity_id: media_player.woonkamer_sonos
-            data:
-              group_members:
-                - media_player.overkapping_sonos
-          hold_action:
-            action: perform-action
-            perform_action: media_player.join
-            target:
-              entity_id: media_player.woonkamer_sonos
-            data:
-              group_members:
-                - media_player.overkapping_sonos
-        hold_action:
-          action: perform-action
-          perform_action: media_player.join
-          target:
-            entity_id: media_player.woonkamer_sonos
-          data:
-            group_members:
-              - media_player.overkapping_sonos
-        card_layout: large
-      - type: custom:bubble-card
-        card_type: climate
-        modules:
-          - default
-        entity: climate.intex_purespa
-        sub_button:
-          - name: HVAC modes menu
-            select_attribute: hvac_modes
-            state_background: false
-            show_arrow: false
-          - entity: switch.intex_purespa_filter
-            name: Filter
+              action: none
+          - entity: group.all_children
+            show_name: true
+            show_icon: false
+            name: Kinderen
             tap_action:
-              action: toggle
-          - entity: switch.intex_purespa_sanitizer
-            name: Sanitize
-            tap_action:
-              action: toggle
-          - entity: input_boolean.backyard_spa_keep_warm
-            icon: mdi:repeat-variant
-            state_background: true
-            show_state: false
-            name: Keep warm
-            tap_action:
-              action: toggle
-        show_attribute: true
-        attribute: current_temperature
-        visibility:
-          - condition: state
-            entity: switch.intex_purespa_power
-            state: "on"
-          - condition: state
-            entity: climate.intex_purespa
-            state_not: unavailable
-        card_layout: large
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        modules:
-          - default
-        entity: sensor.lopende_automatiseringen
-        show_last_changed: false
-        show_attribute: false
-        show_last_updated: false
-        icon: mdi:alert-circle
-        visibility:
-          - condition: user
-            users:
-              - 03dbe5fcdfa5478189faae96eff2c5d2
-          - condition: screen
-            media_query: "(min-width: 768px)"
-        card_layout: large
-      - type: custom:bubble-card
-        card_type: button
-        entity: media_player.kantoor_sonos
-        hide:
-          next_button: true
-          previous_button: true
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: binary_sensor.kantoor_deur_contact
-                state: "on"
-              - condition: state
-                entity: light.kantoor_lampen
-                state: "on"
-        name: Sonos Kantoor
-        scrolling_effect: true
-        show_attribute: true
-        attribute: media_title
-        button_type: switch
-        show_state: true
-        button_action:
-          tap_action:
-            action: more-info
-      - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        modules:
-          - default
-        name: Speel Q-Music
-        icon: phu:qmusic_radio
-        tap_action:
-          action: perform-action
-          perform_action: automation.trigger
-          target:
-            entity_id: automation.general_play_default_music
-          data:
-            skip_condition: true
-        double_tap_action:
-          action: perform-action
-          perform_action: automation.trigger
-          target:
-            entity_id: automation.general_play_default_music
-          data:
-            skip_condition: true
-        hold_action:
-          action: perform-action
-          perform_action: automation.trigger
-          target:
-            entity_id: automation.general_play_default_music
-          data:
-            skip_condition: true
-        button_action:
-          tap_action:
-            action: perform-action
-            perform_action: automation.trigger
-            target:
-              entity_id: automation.general_play_default_music
-            data:
-              skip_condition: true
-          double_tap_action:
-            action: perform-action
-            perform_action: automation.trigger
-            target:
-              entity_id: automation.general_play_default_music
-            data:
-              skip_condition: true
-          hold_action:
-            action: perform-action
-            perform_action: automation.trigger
-            target:
-              entity_id: automation.general_play_default_music
-            data:
-              skip_condition: true
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: media_player.woonkamer_sonos
-                state: idle
-              - condition: state
-                entity: media_player.woonkamer_sonos
-                state: paused
-              - condition: state
-                entity: media_player.woonkamer_sonos
-                state: standby
-          - condition: state
-            entity: alarm_control_panel.alarmo
-            state: disarmed
-        card_layout: large
+              action: none
       - type: horizontal-stack
         cards:
           - type: custom:bubble-card
             card_type: button
             button_type: state
-            modules:
-              - default
-            entity: binary_sensor.slaapkamer_maxi_deur_contact
-            show_last_changed: true
-            name: Maxi Deur
+            entity: person.robin_bohnen
+            name: Robin
+            sub_button:
+              - entity: sensor.iphone_van_robin_battery_level
+                show_state: true
+                show_background: false
             card_layout: large
           - type: custom:bubble-card
             card_type: button
             button_type: state
-            modules:
-              - default
-            entity: binary_sensor.slaapkamer_mini_deur_contact
-            show_last_changed: true
-            name: Mini Deur
-            show_state: true
+            entity: person.samantha_henkelman
+            name: Samantha
+            sub_button:
+              - entity: sensor.iphone_van_samantha_battery_level
+                show_state: true
+                show_background: false
             card_layout: large
-        visibility:
-          - condition: state
-            entity: switch.bedtime_kids
-            state: "on"
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: sensor.emmabo2017_now_playing
-        name: Playstation Emma
-        visibility:
-          - condition: state
-            entity: sensor.emmabo2017_now_playing
-            state_not: unknown
-        icon: phu:playstation-5
-        show_last_changed: false
-        show_last_updated: true
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: sensor.iloganvaine_now_playing
-        name: Playstation Logan
-        visibility:
-          - condition: state
-            entity: sensor.iloganvaine_now_playing
-            state_not: unknown
-        icon: phu:playstation-5
-        show_last_updated: true
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: sensor.loganv2014_now_playing
-        name: Playstation Logan
-        visibility:
-          - condition: state
-            entity: sensor.loganv2014_now_playing
-            state_not: unknown
-        icon: phu:playstation-5
-        show_last_updated: true
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: sensor.mrfirefalcon_now_playing
-        name: Playstation Robin
-        visibility:
-          - condition: state
-            entity: sensor.mrfirefalcon_now_playing
-            state_not: unknown
-        icon: phu:playstation-5
-        show_last_updated: true
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: sensor.sam_hb90_now_playing
-        name: Playstation Samantha
-        icon: phu:playstation-5
-        visibility:
-          - condition: state
-            entity: sensor.sam_hb90_now_playing
-            state_not: unknown
-      - type: custom:bubble-card
-        card_type: button
-        button_type: slider
-        modules:
-          - default
-        entity: light.slaapkamer_maxi_lampen
-        name: Verlichting Slaapkamer Maxi
-        icon: phu:ikea-ps-2014
-        show_state: true
-        show_last_changed: true
-        show_last_updated: false
-        use_accent_color: true
-        visibility:
-          - condition: state
-            entity: light.slaapkamer_maxi_lampen
-            state: "on"
-        card_layout: large
-        izequbes_custom_colors:
-          main_icon:
-            background_color: blue
-          card:
-            background_color: blue
-        hold_action:
-          action: more-info
-        tap_action:
-          action: toggle
-      - type: custom:bubble-card
-        card_type: button
-        button_type: slider
-        modules:
-          - default
-        entity: light.slaapkamer_mini_lampen
-        name: Verlichting Slaapkamer Mini
-        icon: phu:symfonisk-lampe
-        show_state: true
-        show_last_changed: true
-        visibility:
-          - condition: state
-            entity: light.slaapkamer_mini_lampen
-            state: "on"
-        use_accent_color: true
-        card_layout: large
-        hold_action:
-          action: more-info
-        tap_action:
-          action: toggle
-      - type: custom:bubble-card
-        card_type: button
-        button_type: slider
-        modules:
-          - default
-        entity: light.kantoor_lampen
-        name: Verlichting Kantoor
-        icon: phu:ikea-5-spot
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: light.kantoor_lampen
-                state: "on"
-              - condition: state
-                entity: binary_sensor.kantoor_deur_contact
-                state: "on"
-        use_accent_color: true
-        show_last_changed: true
-        show_state: true
-        card_layout: large
-        hold_action:
-          action: more-info
-        tap_action:
-          action: toggle
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        modules:
-          - default
-        entity: sensor.car_next_location_geo
-        show_attribute: false
-        name: Volgende bestemming
-        icon: mdi:car-electric
-        sub_button:
-          - entity: sensor.reistijd_volgende_bestemming
-            show_attribute: true
-            attribute: distance
-            icon: mdi:map-marker-distance
-            state_background: false
-            show_background: true
-            name: Afstand
-            show_name: true
-          - entity: sensor.reistijd_volgende_bestemming
-            show_attribute: true
-            attribute: duration
-            icon: mdi:clock-time-eight
-            name: Reistijd
-            state_background: false
-            show_name: true
-          - entity: sensor.car_departing_in_hours
-            show_state: true
-            icon: mdi:clock-in
-            show_attribute: true
-            show_name: true
-            name: Over
-            state_background: false
-        card_layout: large-2-rows
-        visibility:
-          - condition: numeric_state
-            entity: sensor.reistijd_volgende_bestemming
-            above: 1
-          - condition: numeric_state
-            entity: sensor.car_departing_in_hours
-            below: 96
-      - type: custom:bubble-card
-        card_type: button
-        button_type: slider
-        modules:
-          - default
-        entity: media_player.overkapping_sonos
-        name: Volume Overkapping Sonos
-        icon: mdi:volume-high
-        force_icon: true
-        show_state: false
-        show_attribute: true
-        attribute: volume_level
-        visibility:
-          - condition: state
-            entity: media_player.overkapping_sonos
-            state: playing
-        sub_button:
-          - entity: media_player.overkapping_sonos
-            name: 10%
-            show_state: false
-            show_icon: false
-            show_name: true
-            state_background: false
-            show_background: true
-            tap_action:
-              action: perform-action
-              perform_action: media_player.volume_set
-              target:
-                entity_id: media_player.overkapping_sonos
-              data:
-                volume_level: 0.1
-          - entity: media_player.overkapping_sonos
-            name: 20%
-            show_icon: false
-            show_name: true
-            state_background: false
-            tap_action:
-              action: perform-action
-              perform_action: media_player.volume_set
-              target:
-                entity_id: media_player.overkapping_sonos
-              data:
-                volume_level: 0.2
-          - entity: media_player.overkapping_sonos
-            name: 30%
-            show_icon: false
-            state_background: false
-            show_name: true
-            tap_action:
-              action: perform-action
-              perform_action: media_player.volume_set
-              target:
-                entity_id: media_player.overkapping_sonos
-              data:
-                volume_level: 0.3
-          - entity: media_player.overkapping_sonos
-            name: 40%
-            show_name: true
-            show_icon: false
-            state_background: false
-            tap_action:
-              action: perform-action
-              perform_action: media_player.volume_set
-              target:
-                entity_id: media_player.overkapping_sonos
-              data:
-                volume_level: 0.4
-          - entity: media_player.overkapping_sonos
-            name: 50%
-            show_icon: false
-            state_background: false
-            show_name: true
-            tap_action:
-              action: perform-action
-              perform_action: media_player.volume_set
-              target:
-                entity_id: media_player.overkapping_sonos
-              data:
-                volume_level: 0.5
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: person.emma_bohnen
+            name: Emma
+            sub_button:
+              - entity: sensor.iphone_van_emma_battery_level
+                show_state: true
+                show_background: false
+            card_layout: large
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: person.logan_veen
+            name: Logan
+            sub_button:
+              - entity: sensor.iphone_battery_level
+                show_state: true
+                show_background: false
+            card_layout: large
       - type: custom:bubble-card
         card_type: separator
-        modules:
-          - default
-        name: Stroomverbruik negatief / Stroomprijs negatief
-        icon: mdi:currency-eur
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: switch.live_energieverbruik_totaal_negatief
-                state: "on"
-              - condition: numeric_state
-                entity: sensor.zonneplan_current_electricity_tariff
-                below: 0
-              - condition: state
-                entity: sensor.lilygo_rs485_marstek_inverter_state
-                state: Charge
-          - condition: state
-            entity: sensor.lilygo_rs485_marstek_inverter_state
-            state_not: Discharge
-        card_layout: large-2-rows
-        rows: "1"
-      - type: custom:bubble-card
-        card_type: button
-        button_type: slider
-        modules:
-          - default
-        name: Alle verlichting
-        icon: mdi:lightbulb
-        entity: light.alle_verlichting
-        visibility:
-          - condition: or
-            conditions:
-              - condition: numeric_state
-                entity: sensor.zonneplan_current_electricity_tariff
-                below: 0
-          - condition: state
-            entity: sensor.lilygo_rs485_marstek_inverter_state
-            state_not: Discharge
-        use_accent_color: true
-        show_state: true
-        show_last_changed: true
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: sensor.lilygo_rs485_marstek_inverter_state
+        name: Beneden
+        icon: mdi:home-floor-0
         sub_button:
-          - entity: sensor.lilygo_rs485_marstek_battery_remaining_capacity
-            show_name: false
-            show_icon: false
+          - entity: sensor.woonkamer_temperatuur
             show_state: true
-            show_background: true
-            state_background: false
-          - entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
-            show_name: false
-            show_icon: false
-            show_state: true
-            state_background: false
-            show_background: true
-          - entity: sensor.lilygo_rs485_marstek_battery_power
-            show_last_changed: false
-            show_state: true
-            state_background: false
-            show_icon: false
-            visibility:
-              - condition: state
-                entity: sensor.lilygo_rs485_marstek_inverter_state
-                state_not: Standby
-        name: Batterij
-        card_layout: large-2-rows
-        modules:
-          - default
-        tap_action:
-          action: navigate
-          navigation_path: "#battery"
-        double_tap_action:
-          action: navigate
-          navigation_path: "#battery"
-        hold_action:
-          action: navigate
-          navigation_path: "#battery"
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#battery"
-          double_tap_action:
-            action: navigate
-            navigation_path: "#battery"
-          hold_action:
-            action: navigate
-            navigation_path: "#battery"
-        show_attribute: false
-        icon: phu:solar-battery-15
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: switch.live_energieverbruik_totaal_negatief
-                state: "on"
-              - condition: numeric_state
-                entity: sensor.zonneplan_current_electricity_tariff
-                below: 0
-              - condition: state
-                entity: select.lilygo_rs485_marstek_rs485_control_mode
-                state: enable
-              - condition: state
-                entity: sensor.lilygo_rs485_marstek_inverter_state
-                state: Charge
-              - condition: state
-                entity: sensor.lilygo_rs485_marstek_inverter_state
-                state: Discharge
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: automation.carport_charging_station_charge
-        name: Laadpaal Starten
-        icon: phu:generic-car-charger
-        show_last_changed: false
-        show_attribute: false
-        show_state: false
-        tap_action:
-          action: perform-action
-          target:
-            entity_id: automation.carport_charging_station_charge
-          perform_action: automation.trigger
-          data:
-            skip_condition: true
-        modules:
-          - default
-        visibility:
-          - condition: or
-            conditions:
-              - condition: state
-                entity: switch.live_energieverbruik_totaal_negatief
-                state: "on"
-              - condition: numeric_state
-                entity: sensor.zonneplan_current_electricity_tariff
-                below: 0
-              - condition: state
-                entity: sensor.lilygo_rs485_marstek_inverter_state
-                state: Charge
-          - condition: state
-            entity: sensor.lilygo_rs485_marstek_inverter_state
-            state_not: Discharge
+            show_name: true
+            show_attribute: false
+            show_background: false
+            name: Woonkamer
         card_layout: large
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.woonkamer_lampen
+            force_icon: false
+            show_state: false
+            show_last_changed: false
+            show_attribute: false
+            name: Woonkamer
+            icon: mdi:sofa-outline
+            tap_action:
+              action: toggle
+            sub_button:
+              - entity: sensor.woonkamer_verlichting_power
+                show_name: false
+                show_state: true
+                state_background: false
+                show_icon: true
+                show_background: false
+                name: Stroomverbruik
+                visibility:
+                  - condition: state
+                    entity: light.woonkamer_lampen
+                    state: "on"
+              - entity: switch.woonkamer_luchtreinigers
+                name: Luchtreinigers
+                icon: mdi:air-filter
+                tap_action:
+                  action: toggle
+              - entity: vacuum.roborock_s5
+                show_state: false
+                tap_action:
+                  action: toggle
+                name: Stofzuiger
+                visibility:
+                  - condition: state
+                    entity: vacuum.roborock_s5
+                    state_not: unavailable
+              - entity: switch.aquarium_stopcontact_pomp_skimmer
+                name: Aquarium pomp
+                icon: mdi:fishbowl-outline
+                show_last_changed: false
+                show_state: false
+                tap_action:
+                  action: toggle
+                show_icon: true
+            card_layout: large
+            styles: |-
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            double_tap_action:
+              action: more-info
+              target: {}
+              service: light.turn.on
+            hold_action:
+              action: more-info
+            slider_live_update: false
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.keuken_lampen
+            name: Keuken
+            icon: mdi:fridge-outline
+            force_icon: false
+            tap_action:
+              action: toggle
+            sub_button:
+              - entity: sensor.keuken_verlichting_power
+                show_state: true
+                state_background: false
+                show_background: false
+                show_icon: true
+                show_name: false
+                show_attribute: false
+                attribute: friendly_name
+                name: Stroomverbruik
+                visibility:
+                  - condition: state
+                    entity: light.keuken_lampen
+                    state: "on"
+              - entity: cover.covers_kitchen_screens
+                tap_action:
+                  action: call-service
+                  target:
+                    entity_id: cover.covers_kitchen_screens
+                  service: cover.toggle
+                name: Screens
+                show_name: false
+                show_icon: true
+                show_last_changed: false
+                show_state: false
+                show_background: true
+              - entity: cover.covers_kitchen_rollerblinds
+                tap_action:
+                  action: call-service
+                  target:
+                    entity_id: cover.covers_kitchen_rollerblinds
+                  service: cover.toggle
+                show_icon: true
+                show_name: false
+                name: Gordijnen
+                show_attribute: false
+                show_last_changed: false
+                show_state: false
+                icon: mdi:curtains
+              - entity: switch.linea_micra_kroon_18
+                icon: mdi:coffee
+                show_state: false
+                show_name: false
+                name: Koffie
+                tap_action:
+                  action: toggle
+                visibility:
+                  - condition: state
+                    entity: switch.linea_micra_kroon_18
+                    state_not: unavailable
+            scrolling_effect: false
+            card_layout: normal
+            styles: |-
+              .bubble-sub-button-2 {
+                background-color: ${hass.states['cover.covers_kitchen_screens'].state === 'open' ? 'var(--card-background-color)' : 'var(--accent-color)'} !important;
+              }
+              .bubble-sub-button-3 {
+                background-color: ${hass.states['cover.covers_kitchen_rollerblinds'].state === 'open' ? 'var(--card-background-color)' : 'var(--accent-color)'} !important;
+              }
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.entree_lampen
+            name: Entree
+            icon: mdi:hanger
+            tap_action:
+              action: toggle
+            sub_button:
+              - entity: switch.meterkast_lampen
+                icon: mdi:fuse
+                show_background: true
+                name: Meterkast
+                tap_action:
+                  action: toggle
+            styles: |-
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.trapkast_lampen
+            name: Trapkast
+            icon: mdi:food
+            tap_action:
+              action: toggle
+            styles: |-
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.speelkamer_lampen
+            name: Speelkamer
+            icon: mdi:controller
+            show_last_changed: false
+            show_attribute: false
+            show_state: false
+            show_icon: true
+            show_name: true
+            scrolling_effect: true
+            tap_action:
+              action: toggle
+            sub_button:
+              - entity: sensor.speelkamer_verlichting_power
+                name: Stroomverbruik
+                state_background: false
+                show_background: false
+                show_state: true
+                visibility:
+                  - condition: state
+                    entity: light.speelkamer_lampen
+                    state: "on"
+            styles: |-
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.garage_lampen
+            name: Garage
+            icon: mdi:garage-variant
+            tap_action:
+              action: toggle
+            styles: |-
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+            sub_button:
+              - entity: sensor.garage_verlichting_power
+                name: Stroomverbruik
+                state_background: false
+                show_background: false
+                show_state: true
+                visibility:
+                  - condition: state
+                    entity: light.garage_lampen
+                    state: "on"
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.eettafel_lampen
+            name: Eettafel
+            icon: mdi:table-chair
+            card_layout: normal
+            tap_action:
+              action: toggle
+            styles: |-
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+            sub_button:
+              - entity: sensor.eettafel_verlichting_power
+                name: Stroomverbruik
+                state_background: false
+                show_background: false
+                show_state: true
+                visibility:
+                  - condition: state
+                    entity: light.eettafel_lampen
+                    state: "on"
+          - type: custom:mushroom-empty-card
+      - type: custom:bubble-card
+        card_type: separator
+        name: 1e etage
+        sub_button:
+          - entity: sensor.slaapkamer_temperatuur_temperature
+            show_state: true
+            show_name: true
+            show_icon: true
+            show_background: false
+            name: Slaapkamer
+        icon: mdi:home-floor-1
+        card_layout: large
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.slaapkamer_lampen
+            tap_action:
+              action: toggle
+            name: Slaapkamer
+            icon: mdi:bed-double
+            sub_button:
+              - entity: cover.slaapkamer_rolluik_low_speed
+                tap_action:
+                  action: call-service
+                  target:
+                    entity_id: cover.slaapkamer_rolluik_low_speed
+                  service: cover.toggle
+                icon: ""
+                name: Rolluik
+                show_state: false
+            styles: |-
+              .bubble-sub-button-1 {
+                background-color: ${hass.states['cover.slaapkamer_rolluik_low_speed'].attributes.current_position <= 15 ? 'var(--accent-color)' : 'var(--card-background-color)'} !important;
+              }
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.badkamer_lampen
+            name: Badkamer
+            icon: mdi:bathtub
+            tap_action:
+              action: toggle
+            sub_button:
+              - entity: cover.badkamer_rolluik_low_speed
+                tap_action:
+                  action: call-service
+                  target:
+                    entity_id: cover.badkamer_rolluik_low_speed
+                  service: cover.toggle
+                icon: ""
+                name: Rolluik
+                show_state: false
+            styles: |-
+              .bubble-sub-button-1 {
+                background-color: ${hass.states['cover.badkamer_rolluik_low_speed'].attributes.current_position <= 15 ? 'var(--accent-color)' : 'var(--card-background-color)'} !important;
+              }
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.slaapkamer_maxi_lampen
+            name: Slaapkamer Maxi
+            icon: mdi:bed-single
+            tap_action:
+              action: toggle
+            sub_button:
+              - entity: cover.covers_bedroom_maxi
+                tap_action:
+                  action: perform-action
+                  target:
+                    entity_id: cover.covers_bedroom_maxi
+                  perform_action: cover.toggle
+                  data: {}
+                name: Rolluik
+                show_state: false
+            styles: |-
+              .bubble-sub-button-1 {
+                background-color: ${hass.states['cover.covers_bedroom_maxi'].attributes.current_position <= 15 ? 'var(--accent-color)' : 'var(--card-background-color)'} !important;
+              }
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.kantoor_lampen
+            name: Kantoor
+            tap_action:
+              action: toggle
+            sub_button:
+              - entity: cover.covers_office
+                tap_action:
+                  action: perform-action
+                  target:
+                    entity_id: cover.covers_office
+                  perform_action: cover.toggle
+                name: Rolluik
+                show_state: false
+            icon: mdi:desk
+            styles: |-
+              .bubble-sub-button-1 {
+                background-color: ${hass.states['cover.covers_office'].attributes.current_position <= 15 ? 'var(--accent-color)' : 'var(--card-background-color)'} !important;
+              }
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.overloop_lampen
+            force_icon: false
+            show_state: false
+            show_last_changed: false
+            show_attribute: false
+            name: Overloop
+            icon: mdi:stairs
+            tap_action:
+              action: toggle
+            styles: |-
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+          - type: custom:bubble-card
+            card_type: empty-column
+      - type: custom:bubble-card
+        card_type: separator
+        name: 2e etage
+        icon: mdi:home-floor-2
+        sub_button:
+          - entity: sensor.slaapkamer_mini_temperatuur_temperature
+            show_name: true
+            show_state: true
+            show_background: false
+            name: Slaapkamer Mini
+        card_layout: large
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.slaapkamer_mini_lampen
+            name: Slaapkamer Mini
+            icon: mdi:bed-single
+            tap_action:
+              action: toggle
+            sub_button:
+              - entity: cover.slaapkamer_mini
+                name: Rolluik
+                show_state: false
+                show_name: false
+                tap_action:
+                  action: call-service
+                  target:
+                    entity_id: cover.slaapkamer_mini
+                  service: cover.toggle
+                icon: ""
+                show_background: true
+            styles: |-
+              .bubble-sub-button-1 {
+                background-color: ${hass.states['cover.slaapkamer_mini'].attributes.current_position <= 15 ? 'var(--accent-color)' : 'var(--card-background-color)'} !important;
+              }
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.overloop_zolder_lampen
+            name: Overloop Zolder
+            icon: mdi:home-roof
+            tap_action:
+              action: toggle
+            styles: |-
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+      - type: custom:bubble-card
+        card_type: separator
+        name: Buiten
+        icon: mdi:shovel
+        sub_button:
+          - entity: weather.knmi_thuis
+            show_name: true
+            show_state: true
+            show_attribute: true
+            attribute: temperature
+            show_background: false
+            name: KNMI
+        card_layout: large
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.voortuin_lampen
+            name: Voortuin
+            icon: mdi:door
+            tap_action:
+              action: toggle
+            styles: |-
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            force_icon: false
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+            sub_button:
+              - entity: sensor.voortuin_verlichting_power
+                show_background: false
+                show_state: true
+                name: Stroomverbruik
+                visibility:
+                  - condition: state
+                    entity: light.voortuin_lampen
+                    state: "on"
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.achtertuin_lampen
+            name: Achtertuin
+            icon: mdi:spa
+            tap_action:
+              action: toggle
+            sub_button:
+              - entity: sensor.achtertuin_verlichting_power
+                state_background: false
+                show_background: false
+                show_state: true
+                visibility:
+                  - condition: state
+                    entity: light.achtertuin_lampen
+                    state: "on"
+              - entity: cover.achtertuin_zonnescherm
+                name: Zonnescherm
+                tap_action:
+                  action: call-service
+                  target:
+                    entity_id: cover.achtertuin_zonnescherm
+                  service: cover.toggle
+              - entity: switch.schuur_plafond_lamp
+                name: Shed
+                icon: mdi:greenhouse
+                show_state: false
+                tap_action:
+                  action: toggle
+            styles: |-
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: slider
+            entity: light.carport_lampen
+            name: Carport
+            icon: mdi:car
+            tap_action:
+              action: toggle
+            styles: |-
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            hold_action:
+              action: more-info
+            double_tap_action:
+              action: more-info
+            sub_button: []
+          - type: custom:bubble-card
+            card_type: button
+            entity: media_player.overkapping_sonos
+            hide:
+              play_pause_button: true
+            select_attribute: source_list
+            button_type: state
+            show_state: false
+            sub_button:
+              - name: Join
+                icon: mdi:set-all
+                state_background: false
+                tap_action:
+                  action: perform-action
+                  perform_action: media_player.join
+                  target:
+                    entity_id: media_player.woonkamer_sonos
+                  data:
+                    group_members:
+                      - media_player.overkapping_sonos
+                double_tap_action:
+                  action: perform-action
+                  perform_action: ""
+              - icon: mdi:speaker-stop
+                state_background: false
+                tap_action:
+                  action: perform-action
+                  perform_action: media_player.unjoin
+                  target:
+                    entity_id: media_player.overkapping_sonos
+                  data: {}
   - type: grid
     cards:
       - type: custom:bubble-card
         card_type: separator
-        modules:
-          - default
-        name: Vandaag
-        icon: mdi:calendar-today
+        name: Media
+        icon: mdi:multimedia
         card_layout: large
-        rows: "1"
+      - type: custom:bubble-card
+        card_type: media-player
+        entity: media_player.woonkamer_sonos
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            entity: media_player.woonkamer_77_oled
+            name: Woonkamer TV
+            tap_action:
+              action: toggle
+            icon: mdi:television
+            sub_button:
+              - entity: automation.livingroom_media_playing
+                name: Media playing
+                icon: mdi:home-automation
+                tap_action:
+                  action: toggle
+                  target: {}
+            styles: |-
+              .bubble-sub-button-1 {
+                background-color: ${hass.states['automation.livingroom_media_playing'].state === 'on' ? 'var(--accent-color)' : 'var(--card-background-color)'} !important;
+              }
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+          - type: custom:bubble-card
+            card_type: button
+            entity: media_player.speelkamer_tv
+            name: Speelkamer TV
+            tap_action:
+              action: toggle
+            icon: mdi:television
+            styles: |-
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: automation.general_play_default_music
+            name: Speel muziek
+            show_last_changed: true
+            show_attribute: false
+            attribute: last_triggered
+            tap_action:
+              action: call-service
+              target:
+                entity_id: automation.general_play_default_music
+              service: automation.trigger
+            button_action:
+              tap_action:
+                action: call-service
+                target:
+                  entity_id: automation.general_play_default_music
+                service: automation.trigger
+          - type: custom:bubble-card
+            card_type: empty-column
+      - type: custom:bubble-card
+        card_type: separator
+        name: Overige
+        icon: mdi:card-outline
+        card_layout: large-2-rows
+      - type: custom:bubble-card
+        card_type: climate
+        entity: climate.woonkamer
         sub_button:
-          - entity: weather.knmi_thuis
+          - name: HVAC modes menu
+            select_attribute: hvac_modes
+            state_background: false
+            show_arrow: false
+        show_attribute: true
+        attribute: current_temperature
+        state_color: true
+        card_layout: large
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            entity: alarm_control_panel.alarmo
+            show_state: true
+            show_last_changed: true
+            show_attribute: true
+            attribute: arm_mode
+            name: Alarm
+            button_type: state
+            styles: |-
+              .bubble-button-background {
+                background-color: ${state === 'on' ?  'var(--accent-color)' : ''} !important;
+              }
+            sub_button:
+              - entity: lock.kroon18voordeur
+                show_state: true
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: binary_sensor.slaapkamer_maxi_deur_contact
+            name: Slaapkamer Maxi Deur
+            show_last_changed: true
+            show_attribute: false
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: binary_sensor.slaapkamer_mini_deur_contact
+            name: Slaapkamer Mini Deur
+            show_last_changed: true
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            entity: climate.airco_zolder
+            name: Airco Zolder
+            show_last_changed: false
+            show_attribute: false
+            attribute: swing_mode
+            show_state: true
+            force_icon: false
+            tap_action:
+              action: toggle
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: automation.carport_charging_station_charge
+            name: Laadpaal Starten
+            icon: mdi:ev-station
+            show_last_changed: false
+            show_attribute: false
+            show_state: false
+            tap_action:
+              action: call-service
+              target:
+                entity_id: automation.carport_charging_station_charge
+              service: automation.trigger
+      - type: custom:bubble-card
+        card_type: separator
+        name: Brandweer
+        icon: mdi:fire-circle
+        sub_button:
+          - entity: input_select.brandweer_dienstdoende_ploeg
+            show_name: true
             show_state: true
             show_background: false
-            name: Weer nu
-          - entity: sensor.neerslag_buienradar_regen_data
-            show_state: false
-            state_background: false
-            show_background: false
-            icon: mdi:weather-rainy
-            tap_action:
-              action: navigate
-              navigation_path: "#neerslag"
-            double_tap_action:
-              action: navigate
-              navigation_path: "#neerslag"
-            hold_action:
-              action: navigate
-              navigation_path: "#neerslag"
-            hide_when_parent_unavailable: false
-            visibility:
-              - condition: state
-                entity: sensor.neerslag_buienalarm_regen_data
-                state_not: unavailable
-            name: Neerslag
-            show_name: true
-          - entity: sensor.afvalinfo_home_trash_type_today
-            icon: phu:garbage-residual
-            state_background: false
-            show_background: false
-            name: Afval
-            show_name: true
-            tap_action:
-              action: navigate
-              navigation_path: "#afval"
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        modules:
-          - default
-        entity: sensor.afvalinfo_home_trash_type_today
-        visibility:
-          - condition: state
-            entity: sensor.afvalinfo_home_trash_type_today
-            state_not: geen
-        name: Afval vandaag
-        show_last_changed: false
-        show_attribute: false
+            show_attribute: false
+            attribute: friendly_name
+            show_arrow: false
+            show_icon: true
+            name: "Huidige ploeg:"
+        styles: |-
+          .bubble-sub-button {
+            background-color: ${hass.states['input_select.brandweer_dienstdoende_ploeg'].state === 'B Ploeg' ? 'var(--accent-color)' : ''} !important;
+          }
         card_layout: large
-        tap_action:
-          action: navigate
-          navigation_path: "#afval"
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#afval"
       - type: custom:bubble-card
         card_type: button
         button_type: state
-        modules:
-          - default
-        entity: sensor.afvalinfo_home_trash_type_tomorrow
-        visibility:
-          - condition: state
-            entity: sensor.afvalinfo_home_trash_type_tomorrow
-            state_not: geen
-        name: Afval morgen
+        name: Laatste melding
+        icon: mdi:fire-alert
+        show_name: true
+        entity: input_text.brandweer_laatste_melding
+        scrolling_effect: false
         show_last_changed: false
-        show_attribute: false
-        card_layout: large
-        tap_action:
-          action: navigate
-          navigation_path: "#afval"
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#afval"
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: sensor.parcel_active_shipment
-        name: Pakketten
-        icon: phu:postnl
         show_attribute: true
-        attribute: full_description
-        show_state: false
         sub_button:
-          - entity: sensor.parcel_active_shipment
-            show_attribute: true
-            attribute: parcels_arriving_today
-            state_background: false
-            name: Vandaag
+          - entity: input_datetime.brandweer_laatste_melding
+            show_attribute: false
+            show_name: false
+            show_state: true
+            show_icon: false
+            show_background: true
+            attribute: timestamp
+            tap_action:
+              action: none
+          - entity: input_boolean.brandweer_uitgerukt_op_laatste_melding
+            show_state: false
             show_name: true
-        visibility:
-          - condition: state
-            entity: sensor.parcel_active_shipment
-            state_not: No parcels for now..
-      - type: custom:bubble-card
-        card_type: calendar
-        modules:
-          - default
-        entities:
-          - entity: calendar.agenda
-            color: "#2944BC"
-          - entity: calendar.r_bohnen_vrbn_nl_agenda
-            color: "#EBDED6"
-          - entity: calendar.robin_bohnen_nl_agenda
-            color: "#B79500"
-          - entity: calendar.mini
-            color: pink
-          - entity: calendar.maxi
-            color: "#4D9C35"
-          - entity: calendar.robin_en_sam
-            color: "#8CA02E"
-        show_end: true
-        show_progress: true
-        event_action:
+            name: Uitgerukt
+            show_last_changed: false
+            show_attribute: false
+            show_icon: false
+            show_background: true
+            tap_action:
+              action: none
+        styles: |-
+          .bubble-sub-button-2 {
+            background-color: ${hass.states['binary_sensor.brandweer_uitgerukt_op_laatste_melding'].state === 'on' ? 'var(--accent-color)' : 'var(--card-background-color)'} !important;
+          }
+        tap_action:
+          action: more-info
+        double_tap_action:
+          action: none
+        hold_action:
+          action: none
+        button_action:
           tap_action:
             action: more-info
           double_tap_action:
             action: none
           hold_action:
             action: none
-      - type: custom:bubble-card
-        card_type: separator
-        name: Auto
-        icon: phu:renault
-        sub_button:
-          - entity: sensor.hrh85f_batterij
-            show_state: true
-            state_background: false
-            show_background: false
-          - entity: sensor.hrh85f_battery_autonomy
-            show_state: true
-            state_background: false
-            show_background: false
-            icon: mdi:map-marker-distance
-            show_last_changed: false
-            show_last_updated: false
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: button.hrh85f_start_opladen
-        name: Start opladen
-        icon: phu:ev-charging
-        show_state: false
-        show_attribute: true
-        modules:
-          - get_state_attribute
-        get_state_attribute:
-          - entity: sensor.hrh85f_charge_state
-          - entity: sensor.hrh85f_charging_remaining_time
-          - entity: sensor.hrh85f_plug_state
-        tap_action:
-          action: perform-action
-          perform_action: button.press
-          target:
-            entity_id: button.hrh85f_start_opladen
-        button_action:
-          tap_action:
-            action: perform-action
-            perform_action: button.press
-            target:
-              entity_id: button.hrh85f_start_opladen
-        visibility:
-          - condition: state
-            entity: sensor.hrh85f_plug_state
-            state_not: unplugged
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: sensor.renault_megane_e_tech
-        name: Locatie
-        icon: mdi:map-marker
-        show_attribute: true
-        attribute: street
-        show_state: false
-        modules:
-          - get_state_attribute
-        get_state_attribute:
-          - entity: device_tracker.hrh85f_locatie
-          - entity: sensor.renault_megane_e_tech
-            attribute: street
-          - entity: sensor.renault_megane_e_tech
-            attribute: city
-        visibility:
-          - condition: state
-            entity: device_tracker.hrh85f_locatie
-            state_not: home
+        card_layout: large-2-rows
       - type: horizontal-stack
         cards:
           - type: custom:bubble-card
             card_type: button
             button_type: state
-            entity: sensor.hrh85f_kilometerstand
-            name: Kilometerstand
-            icon: phu:odometer
-            sub_button:
-              - entity: input_number.lease_contract_kms
-                show_state: true
-                show_icon: true
-                state_background: false
-                show_background: true
-                icon: mdi:file-sign
-              - entity: sensor.car_price_additional_km_s
-                state_background: false
-                show_state: true
-                icon: mdi:currency-eur
-            card_layout: large-2-rows
+            entity: counter.brandweer_totaal_aantal_uitrukken
+            show_icon: true
+            show_name: true
+            name: Totaal
+            icon: mdi:fire-extinguisher
+            scrolling_effect: false
+            tap_action:
+              action: none
+            double_tap_action:
+              action: none
+            hold_action:
+              action: none
+            button_action:
+              tap_action:
+                action: more-info
+              double_tap_action:
+                action: none
+              hold_action:
+                action: none
           - type: custom:bubble-card
             card_type: button
             button_type: state
-            entity: binary_sensor.hrh85f_hvac
-            name: Klimaat
-            icon: mdi:thermometer-lines
+            entity: counter.brandweer_uden_a_ploeg_uitrukken
+            name: A
+            scrolling_effect: false
+            show_state: true
+            show_name: false
             tap_action:
-              action: perform-action
-              perform_action: button.press
-              target:
-                entity_id: button.hrh85f_start_air_conditioner
+              action: none
+            double_tap_action:
+              action: none
+            hold_action:
+              action: none
             button_action:
               tap_action:
-                action: perform-action
-                perform_action: button.press
-                target:
-                  entity_id: button.hrh85f_start_air_conditioner
+                action: more-info
+              double_tap_action:
+                action: none
+              hold_action:
+                action: none
+            styles: |-
+              .bubble-icon {
+                color: ${hass.states['input_select.brandweer_mijn_huidige_ploeg'].state === 'A Ploeg' ? 'var(--accent-color)' : ''} !important;
+              }
+            icon: mdi:alpha-a-circle-outline
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: counter.brandweer_uden_b_ploeg_uitrukken
+            name: "B "
+            scrolling_effect: false
+            show_name: false
+            show_state: true
+            show_icon: true
+            tap_action:
+              action: none
+            double_tap_action:
+              action: none
+            hold_action:
+              action: none
+            button_action:
+              tap_action:
+                action: more-info
+              double_tap_action:
+                action: none
+              hold_action:
+                action: none
+            styles: |-
+              .bubble-icon {
+                color: ${hass.states['input_select.brandweer_mijn_huidige_ploeg'].state === 'B Ploeg' ? 'var(--accent-color)' : ''} !important;
+              }
+            icon: mdi:alpha-b-circle-outline
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: counter.brandweer_uden_c_ploeg_uitrukken
+            name: C
+            scrolling_effect: false
+            force_icon: false
+            show_name: false
+            double_tap_action:
+              action: none
+            hold_action:
+              action: none
+            tap_action:
+              action: none
+            button_action:
+              tap_action:
+                action: more-info
+              double_tap_action:
+                action: none
+              hold_action:
+                action: none
+            styles: |-
+              .bubble-icon {
+                color: ${hass.states['input_select.brandweer_mijn_huidige_ploeg'].state === 'C Ploeg' ? 'var(--accent-color)' : ''} !important;
+              }
+            icon: mdi:alpha-c-circle-outline
       - type: custom:bubble-card
         card_type: separator
-        modules:
-          - default
         name: Stroom
-        icon: phu:zonneplan
-        card_layout: large
-        rows: "1"
+        icon: mdi:transmission-tower
         sub_button:
           - entity: sensor.zonneplan_status_tip
+            show_name: false
             show_state: true
+            show_icon: true
             show_background: false
-            show_icon: true
-      - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        show_name: true
-        icon: mdi:power
-        sub_button:
+            icon: mdi:lightbulb-multiple
+        card_layout: large
+      - type: custom:apexcharts-card
+        update_interval: 15m
+        experimental:
+          color_threshold: true
+        graph_span: 24h
+        span:
+          start: day
+        now:
+          show: true
+          label: Now
+          color: black
+        header:
+          show: true
+          title: Electriciteitsprijzen vandaag
+        yaxis:
+          - id: kwh_prijs
+            min: ~0
+            max: ~0.4
+            decimals: 2
+            apex_config:
+              title:
+                text: Prijs €/kWh
+          - id: kw_gebruik
+            opposite: true
+            min: -7
+            max: ~17
+            decimals: 1
+            apex_config:
+              title:
+                text: Gebruik kW
+        apex_config:
+          tooltip:
+            x:
+              show: false
+        series:
+          - entity: sensor.dynamische_prijzen_average_electricity_price
+            color_threshold:
+              - value: -0.1
+                color: "#264D59"
+              - value: 0
+                color: "#43978D"
+              - value: 0.26
+                color: "#F9E07F"
+              - value: 0.4
+                color: "#D46C4E"
+            name: Uurprijs vandaag
+            stroke_width: -5
+            float_precision: 3
+            type: column
+            show:
+              legend_value: false
+            data_generator: |
+              return entity.attributes.prices.map((entry) => {
+              return [new Date(entry.time), entry.price];
+              });
+            yaxis_id: kwh_prijs
+          - entity: sensor.dynamische_prijzen_average_electricity_price
+            name: Gemiddelde prijs vandaag
+            curve: stepline
+            stroke_width: 2
+            color: orange
+            type: line
+            float_precision: 3
+            group_by:
+              duration: 1d
+              func: avg
+            show:
+              legend_value: false
+            data_generator: |
+              return entity.attributes.prices.map((entry) => {
+              return [new Date(entry.time), entry.price];
+              });
+            yaxis_id: kwh_prijs
           - entity: sensor.electricity_meter_energieverbruik
-            show_name: true
-            show_state: true
-            name: Verbruik
-            state_background: false
-            icon: mdi:power-socket-eu
-          - entity: sensor.electricity_meter_energieproductie
-            state_background: false
-            show_name: true
-            show_state: true
-            name: Productie
-            icon: mdi:solar-panel
-          - entity: sensor.live_energieverbruik_totaal
-            show_icon: true
-            show_name: true
-            show_state: true
-            state_background: false
-            name: Totaal
-            icon: mdi:power
-            tap_action:
-              action: navigate
-              navigation_path: "#liveenergy"
-        name: Nu
-        card_layout: large-2-rows
-        styles: |-
-          .bubble-sub-button-3 {
-            background-color: ${hass.states['switch.live_energieverbruik_totaal_negatief'].state === 'off' ? '#FFCCCB' : '#AFE1AF'} !important;
-          }
-        modules:
-          - default
+            statistics:
+              type: mean
+              period: 5minute
+            group_by:
+              duration: 15m
+              func: avg
+            yaxis_id: kw_gebruik
+            stroke_width: 2
+            curve: smooth
+            extend_to: now
+  - type: grid
+    cards:
+      - type: custom:bubble-card
+        card_type: separator
+        name: Woning
+        icon: mdi:home-account
+        card_layout: large
       - type: custom:bubble-card
         card_type: button
         button_type: name
@@ -1126,2984 +1139,128 @@ sections:
         card_layout: large-2-rows
         show_name: true
         scrolling_effect: false
-        modules:
-          - default
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#electricityprices"
-        tap_action:
-          action: navigate
-          navigation_path: "#electricityprices"
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: sensor.lilygo_rs485_marstek_inverter_state
-        sub_button:
-          - entity: sensor.lilygo_rs485_marstek_battery_remaining_capacity
-            show_name: false
-            show_icon: false
-            show_state: true
-            show_background: true
-            state_background: false
-          - entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
-            show_name: false
-            show_icon: false
-            show_state: true
-            state_background: false
-            show_background: true
-          - entity: sensor.lilygo_rs485_marstek_battery_power
-            show_last_changed: false
-            show_state: true
-            state_background: false
-            show_icon: false
-            visibility:
-              - condition: state
-                entity: sensor.lilygo_rs485_marstek_inverter_state
-                state_not: Standby
-        name: Batterij
-        card_layout: large-2-rows
-        modules:
-          - default
-        tap_action:
-          action: navigate
-          navigation_path: "#battery"
-        double_tap_action:
-          action: navigate
-          navigation_path: "#battery"
-        hold_action:
-          action: navigate
-          navigation_path: "#battery"
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#battery"
-          double_tap_action:
-            action: navigate
-            navigation_path: "#battery"
-          hold_action:
-            action: navigate
-            navigation_path: "#battery"
-        show_attribute: false
-        icon: phu:solar-battery-15
-      - type: custom:bubble-card
-        card_type: separator
-        name: Stroom veelgebruikers
-        icon: mdi:power-plug-outline
-      - type: custom:auto-entities
-        show_empty: false
-        filter:
-          include:
-            - options:
-                type: custom:bubble-card
-                card_type: button
-                button_type: state
-                icon: phu:socket-eu
-              domain: sensor
-              name: "*Vermogen*"
-          exclude:
-            - options: {}
-              state: "off"
-            - options: {}
-              state: unavailable
-            - options: {}
-              hidden_by: user
-            - options: {}
-              name: Inverter*
-            - options: {}
-              state: "0"
-        sort:
-          method: state
-          reverse: true
-          numeric: true
-          count: 5
-        card:
-          type: grid
-          columns: 1
-          square: false
-        card_param: cards
-      - type: custom:mushroom-empty-card
-  - type: grid
-    cards:
-      - type: custom:bubble-card
-        card_type: separator
-        name: Personen
-        icon: mdi:human-male-female-child
-        card_layout: large
-        sub_button:
-          - entity: group.all_adults
-            show_name: true
-            show_icon: false
-            name: Volwassenen
-            tap_action:
-              action: none
-          - entity: group.all_children
-            show_name: true
-            show_icon: false
-            name: Kinderen
-            tap_action:
-              action: none
-        modules:
-          - default
-        rows: "1"
-      - type: horizontal-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: person.robin_bohnen
-            name: Robin
-            sub_button:
-              - entity: sensor.iphone_van_robin_battery_level
-                show_state: true
-                show_background: false
-                name: Battery
-                icon: phu:apple-iphone
-              - entity: sensor.robin_reistijd_naar_huis
-                show_icon: true
-                show_state: true
-                state_background: false
-                show_background: true
-                show_name: false
-                name: Huis
-                visibility:
-                  - condition: numeric_state
-                    entity: sensor.robin_reistijd_naar_huis
-                    above: 5
-                  - condition: state
-                    entity: person.robin_bohnen
-                    state_not: home
-                icon: mdi:home
-              - entity: sensor.robin_reistijd_naar_werk
-                show_state: true
-                show_name: false
-                icon: mdi:office-building-marker
-                name: Kantoor
-                state_background: false
-                visibility:
-                  - condition: state
-                    entity: binary_sensor.werkdag_sensor
-                    state: "on"
-                  - condition: state
-                    entity: binary_sensor.work_maybe_travel_to_work_time
-                    state: "on"
-                  - condition: numeric_state
-                    entity: sensor.robin_reistijd_naar_werk
-                    above: 0
-            card_layout: large-2-rows
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: person.samantha_henkelman
-            name: Samantha
-            sub_button:
-              - entity: sensor.iphone_van_samantha_battery_level
-                show_state: true
-                show_background: false
-                name: Battery
-                icon: phu:apple-iphone
-              - entity: sensor.samantha_reistijd_naar_huis
-                show_state: true
-                show_icon: true
-                state_background: false
-                show_background: true
-                show_name: false
-                name: Huis
-                visibility:
-                  - condition: numeric_state
-                    entity: sensor.samantha_reistijd_naar_huis
-                    above: 5
-                  - condition: state
-                    entity: person.samantha_henkelman
-                    state_not: home
-                icon: mdi:home
-            card_layout: large-2-rows
-            modules:
-              - default
-      - type: horizontal-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: person.emma_bohnen
-            name: Emma
-            sub_button:
-              - entity: sensor.iphone_van_emma_battery_level
-                show_state: true
-                show_background: false
-                name: Battery
-                icon: phu:apple-iphone
-            card_layout: large-2-rows
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: person.logan_veen
-            name: Logan
-            sub_button:
-              - entity: sensor.iphone_battery_level
-                show_state: true
-                show_background: false
-                name: Battery
-                icon: phu:apple-iphone
-            card_layout: large-2-rows
-            modules:
-              - default
-      - type: custom:bubble-card
-        card_type: separator
-        name: Ruimtes
-        icon: mdi:home-automation
-        card_layout: large
-        modules:
-          - default
-        rows: "1"
       - type: custom:bubble-card
         card_type: button
         button_type: name
-        name: Begane Grond
-        icon: mdi:home-floor-0
-        tap_action:
-          action: navigate
-          navigation_path: "#groundfloor"
-        double_tap_action:
-          action: navigate
-          navigation_path: "#groundfloor"
-        hold_action:
-          action: navigate
-          navigation_path: "#groundfloor"
-        modules:
-          - default
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#groundfloor"
-          double_tap_action:
-            action: navigate
-            navigation_path: "#groundfloor"
-          hold_action:
-            action: navigate
-            navigation_path: "#groundfloor"
-        sub_button:
-          - entity: binary_sensor.pir_group_livingroom
-            show_state: false
-            icon: mdi:sofa
-            name: Woonkamer Beweging
-          - entity: binary_sensor.keuken_beweging_occupancy
-            icon: mdi:silverware-fork-knife
-            name: Keuken Beweging
-          - entity: binary_sensor.entree_beweging_occupancy
-            name: Entree Beweging
-            icon: mdi:hanger
-          - entity: binary_sensor.toilet_beweging_occupancy
-            name: Toilet Beweging
-            icon: mdi:paper-roll
-          - name: Lights
-            icon: mdi:lightbulb
-            show_icon: true
-            state_background: false
-            tap_action:
-              action: perform-action
-              perform_action: light.turn_off
-              target:
-                entity_id:
-                  - light.woonkamer_lampen
-                  - light.keuken_lampen
-                  - light.eettafel_lampen
-                  - light.entree_lampen
-                  - light.trapkast_lampen
-              data: {}
-            visibility:
-              - condition: or
-                conditions:
-                  - condition: state
-                    entity: light.woonkamer_lampen
-                    state: "on"
-                  - condition: state
-                    entity: light.eettafel_lampen
-                    state: "on"
-                  - condition: state
-                    entity: light.entree_lampen
-                    state: "on"
-                  - condition: state
-                    entity: light.keuken_lampen
-                    state: "on"
-                  - condition: state
-                    entity: light.trapkast_lampen
-                    state: "on"
-            show_background: true
-        styles: |-
-          .bubble-sub-button-5 {
-            background-color: var(--bubble-default-color) !important;
-          }
-      - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        name: Eerste verdieping
-        icon: mdi:home-floor-1
-        tap_action:
-          action: navigate
-          navigation_path: "#firstfloor"
-        double_tap_action:
-          action: navigate
-          navigation_path: "#firstfloor"
-        hold_action:
-          action: navigate
-          navigation_path: "#firstfloor"
-        modules:
-          - default
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#firstfloor"
-          double_tap_action:
-            action: navigate
-            navigation_path: "#firstfloor"
-          hold_action:
-            action: navigate
-            navigation_path: "#firstfloor"
-        sub_button:
-          - entity: binary_sensor.pir_group_bathroom
-            name: Badkamer Beweging
-            icon: mdi:bathtub
-          - entity: binary_sensor.overloop_beweging_occupancy
-            name: Overloop Beweging
-            icon: mdi:stairs-down
-          - name: Lights
-            icon: mdi:lightbulb
-            state_background: false
-            tap_action:
-              action: perform-action
-              perform_action: light.turn_off
-              target:
-                entity_id:
-                  - light.badkamer_lampen
-                  - light.slaapkamer_lampen
-                  - light.slaapkamer_maxi_lampen
-                  - light.kantoor_lampen
-                  - light.overloop_lampen
-              data: {}
-            visibility:
-              - condition: or
-                conditions:
-                  - condition: state
-                    entity: light.badkamer_lampen
-                    state: "on"
-                  - condition: state
-                    entity: light.slaapkamer_lampen
-                    state: "on"
-                  - condition: state
-                    entity: light.overloop_lampen
-                    state: "on"
-                  - condition: state
-                    entity: light.slaapkamer_maxi_lampen
-                    state: "on"
-                  - condition: state
-                    entity: light.kantoor_lampen
-                    state: "on"
-        styles: |-
-          .bubble-sub-button-3 {
-            background-color: var(--bubble-default-color) !important;
-          }
-      - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        name: Tweede verdieping
-        icon: mdi:home-floor-2
-        tap_action:
-          action: navigate
-          navigation_path: "#secondfloor"
-        double_tap_action:
-          action: navigate
-          navigation_path: "#secondfloor"
-        hold_action:
-          action: navigate
-          navigation_path: "#secondfloor"
-        modules:
-          - default
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#secondfloor"
-          double_tap_action:
-            action: navigate
-            navigation_path: "#secondfloor"
-          hold_action:
-            action: navigate
-            navigation_path: "#secondfloor"
-        sub_button:
-          - entity: binary_sensor.overloop_zolder_beweging_occupancy
-            name: Overloop Zolder Beweging
-            icon: mdi:stairs-up
-          - name: Lights
-            icon: mdi:lightbulb
-            state_background: false
-            tap_action:
-              action: perform-action
-              perform_action: light.turn_off
-              target:
-                entity_id:
-                  - light.overloop_zolder_lampen
-                  - light.slaapkamer_mini_lampen
-              data: {}
-            visibility:
-              - condition: or
-                conditions:
-                  - condition: state
-                    entity: light.overloop_zolder_lampen
-                    state: "on"
-                  - condition: state
-                    entity: light.slaapkamer_mini_lampen
-                    state: "on"
-        styles: |-
-          .bubble-sub-button-2 {
-            background-color: var(--bubble-default-color) !important;
-          }
-      - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        name: Garage / Speelkamer
-        icon: mdi:garage
-        tap_action:
-          action: navigate
-          navigation_path: "#garage"
-        double_tap_action:
-          action: navigate
-          navigation_path: "#garage"
-        hold_action:
-          action: navigate
-          navigation_path: "#garage"
-        modules:
-          - default
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#garage"
-          double_tap_action:
-            action: navigate
-            navigation_path: "#garage"
-          hold_action:
-            action: navigate
-            navigation_path: "#garage"
-        sub_button:
-          - entity: binary_sensor.pir_group_garage
-            name: Garage Beweging
-            icon: mdi:garage
-          - entity: binary_sensor.pir_group_playroom
-            name: Speelkamer Beweging
-            icon: mdi:controller
-          - name: Lights
-            icon: mdi:lightbulb
-            tap_action:
-              action: perform-action
-              perform_action: light.turn_off
-              target:
-                entity_id:
-                  - light.garage_lampen
-                  - light.speelkamer_lampen
-              data: {}
-            visibility:
-              - condition: or
-                conditions:
-                  - condition: state
-                    entity: light.speelkamer_lampen
-                    state: "on"
-                  - condition: state
-                    entity: light.garage_lampen
-                    state: "on"
-        styles: |-
-          .bubble-sub-button-3 {
-            background-color: var(--bubble-default-color) !important;
-          }
-      - type: custom:bubble-card
-        card_type: button
-        button_type: name
-        modules:
-          - default
-        name: Buiten
-        icon: mdi:flower
-        tap_action:
-          action: navigate
-          navigation_path: "#outside"
-        double_tap_action:
-          action: navigate
-          navigation_path: "#outside"
-        hold_action:
-          action: navigate
-          navigation_path: "#outside"
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#outside"
-          double_tap_action:
-            action: navigate
-            navigation_path: "#outside"
-          hold_action:
-            action: navigate
-            navigation_path: "#outside"
-        sub_button:
-          - entity: binary_sensor.g5_ultra_turret_overkapping_motion
-            name: Achtertuin Beweging
-            icon: mdi:awning-outline
-          - entity: binary_sensor.g4_doorbell_pro_motion
-            name: Deurbel beweging
-            icon: mdi:doorbell-video
-          - entity: binary_sensor.g5_ultra_turret_voortuin_motion
-            name: Voortuin Beweging
-            icon: mdi:car
-          - entity: binary_sensor.g5_turret_ultra_motion
-            name: Achtertuin Overkapping Beweging
-            icon: mdi:greenhouse
-          - name: Lampen
-            icon: mdi:lightbulb
-            state_background: false
-            tap_action:
-              action: perform-action
-              perform_action: light.turn_off
-              target:
-                entity_id:
-                  - light.voortuin_lampen
-                  - light.achtertuin_lampen
-                  - light.carport_lampen
-              data: {}
-            visibility:
-              - condition: or
-                conditions:
-                  - condition: state
-                    entity: light.achtertuin_lampen
-                    state: "on"
-                  - condition: state
-                    entity: light.voortuin_lampen
-                    state: "on"
-                  - condition: state
-                    entity: light.carport_lampen
-                    state: "on"
-        styles: |-
-          .bubble-sub-button-5 {
-            background-color: var(--bubble-default-color) !important;
-          }
-      - type: custom:bubble-card
-        card_type: separator
-        name: Brandweer
-        icon: mdi:fire-circle
-        sub_button:
-          - entity: input_select.brandweer_dienstdoende_ploeg
-            show_name: true
-            show_state: true
-            show_background: false
-            show_attribute: false
-            attribute: friendly_name
-            show_arrow: false
-            show_icon: true
-            name: "Huidige ploeg:"
-        styles: |-
-          .bubble-sub-button {
-            background-color: ${hass.states['input_select.brandweer_dienstdoende_ploeg'].state === 'B Ploeg' ? 'var(--bubble-default-color)' : ''} !important;
-          }
-        card_layout: large
-        modules:
-          - default
-        rows: "1"
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        name: Laatste melding
-        icon: mdi:fire-alert
         show_name: true
-        entity: input_text.brandweer_laatste_melding
-        scrolling_effect: false
-        show_last_changed: false
-        show_attribute: true
+        icon: mdi:power
         sub_button:
-          - entity: input_datetime.brandweer_laatste_melding
-            show_attribute: false
-            show_name: false
-            show_state: true
-            show_icon: false
-            show_background: true
-            attribute: timestamp
-            tap_action:
-              action: none
-            name: Datum & Tijd
-          - entity: input_boolean.brandweer_uitgerukt_op_laatste_melding
-            show_state: false
+          - entity: sensor.electricity_meter_energieverbruik
             show_name: true
-            name: Uitgerukt
-            show_last_changed: false
-            show_attribute: false
-            show_icon: false
-            show_background: true
-            tap_action:
-              action: none
-          - entity: input_number.brandweer_uitruktijd_secondes
             show_state: true
-            show_icon: false
+            name: Verbruik
             state_background: false
-            visibility:
-              - condition: state
-                entity: binary_sensor.brandweer_uitgerukt_op_laatste_melding
-                state: "on"
-            name: Uitruktijd
-            show_attribute: false
-        styles: |-
-          .bubble-sub-button-2 {
-            background-color: ${hass.states['binary_sensor.brandweer_uitgerukt_op_laatste_melding'].state === 'on' ? 'var(--bubble-default-color)' : 'var(--card-background-color)'} !important;
-          }
-        tap_action:
-          action: more-info
-        double_tap_action:
-          action: none
-        hold_action:
-          action: none
-        button_action:
-          tap_action:
-            action: more-info
-          double_tap_action:
-            action: none
-          hold_action:
-            action: none
+            icon: mdi:power-socket-eu
+          - entity: sensor.electricity_meter_energieproductie
+            state_background: false
+            show_name: true
+            show_state: true
+            name: Productie
+            icon: mdi:solar-panel
+          - entity: sensor.live_energieverbruik_totaal
+            show_icon: true
+            show_name: true
+            show_state: true
+            state_background: false
+            name: Totaal
+            icon: mdi:power
+        name: Nu
         card_layout: large-2-rows
-        modules:
-          - default
+        styles: |-
+          .bubble-sub-button-3 {
+            background-color: ${hass.states['switch.live_energieverbruik_totaal_negatief'].state === 'off' ? '#FFCCCB' : '#AFE1AF'} !important;
+          }
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.marstek_marstek_battery_power
+        sub_button:
+          - entity: sensor.marstek_marstek_battery_remaining_capacity
+            show_name: false
+            show_icon: false
+            show_state: true
+            show_background: true
+            state_background: false
+          - entity: sensor.marstek_marstek_battery_state_of_charge
+            show_name: false
+            show_icon: false
+            show_state: true
+            state_background: false
+            show_background: true
+          - entity: sensor.marstek_marstek_inverter_state
+            show_last_changed: false
+            show_state: true
+            state_background: false
+            show_icon: false
+        name: Marstek Batterij
+        card_layout: large-2-rows
       - type: horizontal-stack
         cards:
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: counter.brandweer_totaal_aantal_uitrukken
-            show_icon: true
-            show_name: true
-            name: Totaal
-            icon: mdi:fire-extinguisher
-            scrolling_effect: false
-            tap_action:
-              action: none
-            double_tap_action:
-              action: none
-            hold_action:
-              action: none
-            button_action:
-              tap_action:
-                action: more-info
-              double_tap_action:
-                action: none
-              hold_action:
-                action: none
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: counter.brandweer_uden_a_ploeg_uitrukken
-            name: A
-            scrolling_effect: false
-            show_state: true
-            show_name: false
-            tap_action:
-              action: navigate
-              navigation_path: "#brandweer"
-            double_tap_action:
-              action: none
-            hold_action:
-              action: more-info
-            button_action:
-              tap_action:
-                action: navigate
-                navigation_path: "#brandweer"
-              double_tap_action:
-                action: none
-              hold_action:
-                action: none
-            styles: |-
-              .bubble-icon {
-                color: ${hass.states['input_select.brandweer_mijn_huidige_ploeg'].state === 'A Ploeg' ? 'var(--bubble-default-color)' : ''} !important;
-              }
-            icon: mdi:alpha-a-circle-outline
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: counter.brandweer_uden_b_ploeg_uitrukken
-            name: "B "
-            scrolling_effect: false
-            show_name: false
-            show_state: true
-            show_icon: true
-            tap_action:
-              action: navigate
-              navigation_path: "#brandweer"
-            double_tap_action:
-              action: none
-            hold_action:
-              action: more-info
-            button_action:
-              tap_action:
-                action: navigate
-                navigation_path: "#brandweer"
-              double_tap_action:
-                action: none
-              hold_action:
-                action: none
-            styles: |-
-              .bubble-icon {
-                color: ${hass.states['input_select.brandweer_mijn_huidige_ploeg'].state === 'B Ploeg' ? 'var(--bubble-default-color)' : ''} !important;
-              }
-            icon: mdi:alpha-b-circle-outline
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: counter.brandweer_uden_c_ploeg_uitrukken
-            name: C
-            scrolling_effect: false
-            force_icon: false
-            show_name: false
-            double_tap_action:
-              action: none
-            hold_action:
-              action: more-info
-            tap_action:
-              action: navigate
-              navigation_path: "#brandweer"
-            button_action:
-              tap_action:
-                action: navigate
-                navigation_path: "#brandweer"
-              double_tap_action:
-                action: none
-              hold_action:
-                action: none
-            styles: |-
-              .bubble-icon {
-                color: ${hass.states['input_select.brandweer_mijn_huidige_ploeg'].state === 'C Ploeg' ? 'var(--bubble-default-color)' : ''} !important;
-              }
-            icon: mdi:alpha-c-circle-outline
-            modules:
-              - default
-      - type: custom:mushroom-empty-card
-  - type: grid
-    cards:
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: "#groundfloor"
-            button_type: name
-            name: Begane Grond
-            icon: mdi:home-floor-0
-            show_header: true
-            styles: ""
-            modules:
-              - default
-            sub_button:
-              - icon: mdi:power
-                name: Power Off
-                show_background: true
-                state_background: false
-                tap_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.woonkamer_lampen
-                      - light.keuken_lampen
-                      - light.entree_lampen
-                      - light.eettafel_lampen
-                  data: {}
-                double_tap_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.woonkamer_lampen
-                      - light.keuken_lampen
-                      - light.entree_lampen
-                      - light.eettafel_lampen
-                  data: {}
-                hold_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.woonkamer_lampen
-                      - light.keuken_lampen
-                      - light.entree_lampen
-                      - light.eettafel_lampen
-                  data: {}
-            card_layout: large
-          - type: custom:bubble-card
-            card_type: separator
-            button_type: name
-            name: Woonkamer
-            icon: mdi:sofa
-            sub_button:
-              - entity: sensor.woonkamer_temperatuur
-                show_icon: true
-                show_state: true
-                state_background: false
-                show_background: false
-                name: Temperature
-              - entity: binary_sensor.livingroom_doors
-                icon: mdi:door-sliding
-                name: Doors
-            modules:
-              - default
-            rows: "1"
-          - type: horizontal-stack
-            cards:
-              - type: custom:bubble-card
-                card_type: button
-                button_type: slider
-                entity: light.woonkamer_lampen
-                force_icon: false
-                show_state: true
-                show_last_changed: true
-                show_attribute: false
-                name: Verlichting Woonkamer
-                icon: mdi:sofa-outline
-                tap_action:
-                  action: toggle
-                sub_button:
-                  - entity: sensor.woonkamer_verlichting_power
-                    show_name: false
-                    show_state: true
-                    state_background: false
-                    show_icon: true
-                    show_background: false
-                    name: Stroomverbruik
-                    visibility:
-                      - condition: state
-                        entity: light.woonkamer_lampen
-                        state: "on"
-                card_layout: large
-                slider_live_update: false
-                use_accent_color: true
-                modules:
-                  - default
-                button_action: {}
-                hold_action:
-                  action: more-info
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.trapkast_lampen
-            name: Verlichting Trapkast
-            icon: mdi:stairs
-            modules:
-              - default
-            tap_action:
-              action: toggle
-            button_action: {}
-            sub_button:
-              - entity: sensor.trapkast_verlichting_power
-                state_background: false
-                show_state: true
-                show_background: false
-                visibility:
-                  - condition: state
-                    entity: light.trapkast_lampen
-                    state: "on"
-            show_state: true
-            show_last_changed: true
-            use_accent_color: true
-            card_layout: large
-            hold_action:
-              action: more-info
-          - type: custom:bubble-card
-            card_type: climate
-            entity: climate.airco_woonkamer
-            sub_button:
-              - name: HVAC modes menu
-                select_attribute: hvac_modes
-                state_background: false
-                show_arrow: false
-            modules:
-              - default
-            show_state: true
-            show_last_changed: false
-            card_layout: large
-            icon: phu:air-conditioner
-          - type: horizontal-stack
-            cards:
-              - type: custom:bubble-card
-                card_type: button
-                entity: media_player.woonkamer_77_oled
-                name: Woonkamer TV
-                tap_action:
-                  action: toggle
-                icon: phu:samsung
-                sub_button:
-                  - entity: automation.livingroom_media_playing
-                    name: Media playing
-                    icon: mdi:home-automation
-                    tap_action:
-                      action: toggle
-                      target: {}
-                styles: ""
-                button_type: switch
-                modules:
-                  - default
-                show_state: true
-                show_last_changed: true
-                card_layout: large
-              - type: custom:bubble-card
-                card_type: media-player
-                modules:
-                  - default
-                entity: media_player.woonkamer_sonos
-                card_layout: large
-          - type: horizontal-stack
-            cards:
-              - type: custom:bubble-card
-                card_type: button
-                entity: switch.woonkamer_luchtreinigers
-                name: Luchtreinigers
-                show_name: true
-                icon: phu:ikea-fornuftig
-                force_icon: false
-                button_type: switch
-                modules:
-                  - default
-                tap_action:
-                  action: toggle
-                double_tap_action:
-                  action: toggle
-                hold_action:
-                  action: more-info
-                button_action:
-                  tap_action:
-                    action: toggle
-                  double_tap_action:
-                    action: toggle
-                  hold_action:
-                    action: more-info
-                card_layout: large
-                sub_button: []
-                show_state: true
-              - type: custom:bubble-card
-                card_type: button
-                entity: switch.aquarium_stopcontact_pomp_skimmer
-                icon: mdi:fishbowl-outline
-                name: Aquarium pomp
-                button_type: switch
-                modules:
-                  - default
-                tap_action:
-                  action: toggle
-                double_tap_action:
-                  action: toggle
-                hold_action:
-                  action: more-info
-                button_action:
-                  tap_action:
-                    action: toggle
-                  double_tap_action:
-                    action: toggle
-                  hold_action:
-                    action: more-info
-                show_state: true
-                card_layout: large
-          - type: custom:bubble-card
-            card_type: separator
-            button_type: name
-            name: Keuken
-            icon: mdi:sofa
-            sub_button:
-              - entity: binary_sensor.kitchen_windows
-                icon: mdi:window-closed
-            modules:
-              - default
-            rows: "1"
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.keuken_lampen
-            name: Verlichting Keuken
-            icon: mdi:fridge-outline
-            force_icon: false
-            tap_action:
-              action: toggle
-            sub_button:
-              - entity: sensor.keuken_verlichting_power
-                show_state: true
-                state_background: false
-                show_background: false
-                show_icon: true
-                show_name: false
-                show_attribute: false
-                attribute: friendly_name
-                name: Stroomverbruik
-                visibility:
-                  - condition: state
-                    entity: light.keuken_lampen
-                    state: "on"
-            scrolling_effect: true
-            card_layout: large
-            styles: |-
-              .bubble-sub-button-2 {
-                background-color: ${hass.states['cover.covers_kitchen_screens'].state === 'open' ? 'var(--card-background-color)' : 'var(--accent-color)'} !important;
-              }
-              .bubble-sub-button-3 {
-                background-color: ${hass.states['cover.covers_kitchen_rollerblinds'].state === 'open' ? 'var(--card-background-color)' : 'var(--accent-color)'} !important;
-              }
-            hold_action:
-              action: more-info
-            double_tap_action:
-              action: more-info
-            use_accent_color: true
-            modules:
-              - default
-            show_state: true
-            show_last_changed: true
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            modules:
-              - default
-            entity: light.eettafel_lampen
-            name: Verlichting Eettafel
-            tap_action:
-              action: toggle
-            button_action: {}
-            sub_button:
-              - entity: sensor.eettafel_verlichting_power
-                show_background: false
-                show_state: true
-                visibility:
-                  - condition: state
-                    entity: light.eettafel_lampen
-                    state: "on"
-            use_accent_color: true
-            show_state: true
-            show_last_changed: true
-            card_layout: large
-            hold_action:
-              action: more-info
-            icon: phu:table-lighting-alt
-          - type: horizontal-stack
-            cards:
-              - type: custom:bubble-card
-                card_type: button
-                entity: cover.covers_kitchen_rollerblinds
-                name: Gordijnen
-                icon: mdi:curtains
-                styles: ""
-                tap_action:
-                  action: toggle
-                double_tap_action:
-                  action: toggle
-                hold_action:
-                  action: more-info
-                button_type: switch
-                modules:
-                  - default
-                show_state: true
-                card_layout: large
-              - type: custom:bubble-card
-                card_type: button
-                entity: cover.covers_kitchen_screens
-                name: Screens
-                icon: ""
-                styles: ""
-                tap_action:
-                  action: toggle
-                double_tap_action:
-                  action: toggle
-                hold_action:
-                  action: more-info
-                button_type: switch
-                modules:
-                  - default
-                show_state: true
-                card_layout: large
-              - type: custom:bubble-card
-                card_type: button
-                entity: switch.linea_micra_kroon_18
-                icon: mdi:coffee
-                name: Koffie
-                tap_action:
-                  action: toggle
-                double_tap_action:
-                  action: toggle
-                hold_action:
-                  action: more-info
-                show_state: true
-                button_type: switch
-                modules:
-                  - default
-                card_layout: large
-          - type: custom:bubble-card
-            card_type: separator
-            name: Entree
-            icon: mdi:hanger
-            modules:
-              - default
-            sub_button:
-              - entity: binary_sensor.entree_deur_contact
-            rows: "1"
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.entree_lampen
-            name: Verlichting Entree
-            icon: mdi:hanger
-            show_attribute: false
-            sub_button:
-              - entity: sensor.entree_lampen_power
-                show_state: true
-                state_background: false
-                show_background: false
-                icon: mdi:flash
-                visibility:
-                  - condition: state
-                    entity: light.entree_lampen
-                    state: "on"
-            modules:
-              - default
-            tap_action:
-              action: toggle
-            button_action: {}
-            show_state: true
-            use_accent_color: true
-            show_last_changed: true
-            card_layout: large
-            hold_action:
-              action: more-info
-          - type: custom:bubble-card
-            card_type: button
-            button_type: switch
-            entity: switch.meterkast_lampen
-            name: Verlichting Meterkast
-            icon: mdi:fuse
-            show_attribute: false
-            sub_button: []
-            tap_action:
-              action: toggle
-            modules:
-              - default
-            button_action: {}
-            show_state: true
-            show_last_changed: true
-            card_layout: large
-            hold_action:
-              action: more-info
-          - type: custom:bubble-card
-            card_type: button
-            entity: alarm_control_panel.alarmo
-            show_state: true
-            show_last_changed: true
-            name: Alarm
-            sub_button:
-              - entity: lock.kroon18voordeur
-                show_state: true
-                show_last_changed: false
-                state_background: true
-                tap_action:
-                  action: toggle
-            button_type: switch
-            modules:
-              - default
-            card_layout: large
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            name: Eerste verdieping
-            icon: mdi:home-floor-1
-            hash: "#firstfloor"
-            button_type: name
-            modules:
-              - default
-            sub_button:
-              - name: Power Off
-                icon: mdi:power
-                tap_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.slaapkamer_lampen
-                      - light.slaapkamer_maxi_lampen
-                      - light.overloop_lampen
-                      - light.badkamer_lampen
-                      - light.kantoor_lampen
-                  data: {}
-                double_tap_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.slaapkamer_lampen
-                      - light.badkamer_lampen
-                      - light.slaapkamer_maxi_lampen
-                      - light.overloop_lampen
-                      - light.kantoor_lampen
-                  data: {}
-                hold_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.slaapkamer_lampen
-                      - light.badkamer_lampen
-                      - light.kantoor_lampen
-                      - light.slaapkamer_maxi_lampen
-                      - light.overloop_lampen
-                  data: {}
-          - type: custom:bubble-card
-            card_type: separator
-            name: Slaapkamer
-            icon: mdi:bed-double
-            card_layout: large
-            sub_button:
-              - entity: sensor.slaapkamer_temperatuur_temperature
-                show_state: true
-                show_background: false
-                name: Temperature
-              - entity: binary_sensor.slaapkamer_deur_contact
-                show_name: false
-                icon: ""
-                name: Door
-              - entity: binary_sensor.bedroom_windows
-                icon: mdi:window-closed
-                name: Windows
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.slaapkamer_lampen
-            name: Verlichting Slaapkamer
-            icon: mdi:bed-double
-            sub_button: []
-            modules:
-              - default
-            tap_action:
-              action: toggle
-            button_action: {}
-            use_accent_color: true
-            show_state: true
-            show_last_changed: true
-            hold_action:
-              action: more-info
-          - type: horizontal-stack
-            cards:
-              - type: custom:bubble-card
-                card_type: button
-                entity: cover.slaapkamer_rolluik
-                name: Rolluik
-                show_state: true
-                show_attribute: true
-                attribute: current_position
-                button_type: switch
-                modules:
-                  - default
-              - type: custom:bubble-card
-                card_type: empty-column
-          - type: custom:bubble-card
-            card_type: separator
-            name: Badkamer
-            card_layout: large
-            sub_button:
-              - entity: sensor.badkamer_temperatuur_temperature
-                show_background: false
-                show_state: true
-                name: Temperature
-              - entity: binary_sensor.badkamer_deur_contact
-                name: Door
-              - entity: binary_sensor.badkamer_raam_contact
-                icon: mdi:window-closed
-                name: Window
-            modules:
-              - default
-            icon: mdi:shower-head
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.badkamer_lampen
-            name: Verlichting Badkamer
-            icon: mdi:shower-head
-            slider_live_update: false
-            modules:
-              - default
-            tap_action:
-              action: toggle
-            use_accent_color: true
-            show_state: true
-            show_last_changed: true
-            hold_action:
-              action: more-info
-          - type: horizontal-stack
-            cards:
-              - type: custom:bubble-card
-                card_type: button
-                entity: cover.badkamer_rolluik
-                name: Rolluik
-                show_state: true
-                show_attribute: true
-                attribute: current_position
-                button_type: switch
-                modules:
-                  - default
-              - type: custom:bubble-card
-                card_type: button
-                button_type: switch
-                modules:
-                  - default
-                entity: media_player.badkamer_sonos
-                show_state: true
-                name: Sonos
-          - type: custom:bubble-card
-            card_type: separator
-            name: Kantoor
-            icon: mdi:desk
-            card_layout: large
-            sub_button:
-              - entity: sensor.kantoor_temperatuur_temperature
-                show_icon: true
-                show_name: false
-                show_state: true
-                state_background: false
-                show_background: false
-                name: Temperature
-              - entity: binary_sensor.kantoor_deur_contact
-                name: Door
-              - entity: binary_sensor.office_windows
-                icon: mdi:window-closed
-                name: Windows
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.kantoor_lampen
-            name: Verlichting Kantoor
-            icon: phu:ikea-5-spot
-            modules:
-              - default
-            tap_action:
-              action: toggle
-            sub_button:
-              - entity: sensor.kantoor_verlichting_power
-                show_background: false
-                show_state: true
-                visibility:
-                  - condition: state
-                    entity: light.kantoor_lampen
-                    state: "on"
-            use_accent_color: true
-            show_state: true
-            show_last_changed: true
-            hold_action:
-              action: more-info
-          - type: horizontal-stack
-            cards:
-              - type: custom:bubble-card
-                card_type: button
-                entity: cover.covers_office
-                name: Rolluiken
-                show_state: true
-                show_attribute: true
-                attribute: current_position
-                button_type: switch
-                modules:
-                  - default
-              - type: custom:bubble-card
-                card_type: button
-                entity: media_player.kantoor_sonos
-                name: Sonos
-                show_state: true
-                button_type: switch
-                modules:
-                  - default
-          - type: custom:bubble-card
-            card_type: separator
-            name: Slaapkamer Maxi
-            icon: mdi:bed
-            card_layout: large
-            sub_button:
-              - entity: sensor.slaapkamer_maxi_temperatuur_temperature
-                show_state: true
-                show_background: false
-                name: Temperature
-              - entity: binary_sensor.slaapkamer_maxi_deur_contact
-                name: Door
-              - entity: binary_sensor.bedroom_maxi_windows
-                icon: mdi:window-closed
-                name: Windows
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.slaapkamer_maxi_lampen
-            name: Verlichting Slaapkamer Maxi
-            icon: phu:ikea-ps-2014
-            modules:
-              - default
-            tap_action:
-              action: toggle
-            use_accent_color: true
-            show_state: true
-            show_last_changed: true
-            hold_action:
-              action: more-info
-          - type: horizontal-stack
-            cards:
-              - type: custom:bubble-card
-                card_type: button
-                entity: cover.covers_bedroom_maxi
-                name: Rolluiken
-                button_type: switch
-                modules:
-                  - default
-                button_action: {}
-                show_state: true
-                show_attribute: true
-                attribute: current_position
-              - type: custom:bubble-card
-                modules:
-                  - default
-                entity: media_player.slaapkamer_maxi_sonos
-                card_type: button
-                button_type: switch
-                name: Sonos
-                show_last_changed: false
-                show_state: true
-          - type: custom:bubble-card
-            card_type: separator
-            name: Overloop
-            icon: mdi:stairs-down
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.overloop_lampen
-            use_accent_color: true
-            name: Verlichting Overloop
-            show_state: true
-            show_last_changed: true
-            hold_action:
-              action: more-info
-            tap_action:
-              action: toggle
-            show_icon: true
-            icon: mdi:stairs-down
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: "#secondfloor"
-            name: Tweede Verdieping
-            icon: mdi:home-floor-2
-            button_type: name
-            modules:
-              - default
-            sub_button:
-              - name: Power Off
-                icon: mdi:power
-                state_background: false
-                tap_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.overloop_zolder_lampen
-                      - light.slaapkamer_mini_lampen
-                  data: {}
-                double_tap_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.overloop_zolder_lampen
-                      - light.slaapkamer_mini_lampen
-                  data: {}
-                hold_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.overloop_zolder_lampen
-                      - light.slaapkamer_mini_lampen
-                  data: {}
-          - type: custom:bubble-card
-            card_type: separator
-            name: Overloop Zolder
-            card_layout: large
-            icon: mdi:stairs-up
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.overloop_zolder_lampen
-            name: Verlichting Overloop Zolder
-            icon: mdi:stairs-box
-            modules:
-              - default
-            tap_action:
-              action: toggle
-            use_accent_color: true
-            show_state: true
-            show_last_changed: true
-            hold_action:
-              action: more-info
-          - type: custom:bubble-card
-            card_type: climate
-            entity: climate.airco_zolder
-            sub_button:
-              - name: HVAC modes menu
-                select_attribute: hvac_modes
-                state_background: false
-                show_arrow: false
-            name: Airco
-            show_state: true
-            icon: phu:air-conditioner
-          - type: custom:bubble-card
-            card_type: separator
-            name: Slaapkamer Mini
-            icon: mdi:bed
-            card_layout: large
-            modules:
-              - default
-            sub_button:
-              - entity: sensor.slaapkamer_mini_temperatuur_temperature
-                show_icon: true
-                show_state: true
-                state_background: false
-                show_background: false
-                show_name: false
-                name: "Temperature "
-              - entity: binary_sensor.slaapkamer_mini_deur_contact
-                name: Door
-              - entity: binary_sensor.bedroom_mini_windows
-                name: Windows
-                icon: mdi:window-closed
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.slaapkamer_mini_lampen
-            name: Verlichting Slaapkamer Mini
-            icon: phu:symfonisk-lampe
-            modules:
-              - default
-            tap_action:
-              action: toggle
-            use_accent_color: true
-            show_state: true
-            show_last_changed: true
-            hold_action:
-              action: more-info
-          - type: horizontal-stack
-            cards:
-              - type: custom:bubble-card
-                card_type: button
-                entity: cover.slaapkamer_mini
-                name: Rolluik
-                button_type: switch
-                modules:
-                  - default
-                show_state: true
-                show_attribute: true
-                attribute: current_position
-              - type: custom:bubble-card
-                card_type: button
-                entity: media_player.slaapkamer_mini_sonos
-                button_type: switch
-                name: Sonos
-                icon: phu:symfonisk-lampe
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: "#garage"
-            name: Garage
-            icon: mdi:garage
-            button_type: name
-            modules:
-              - default
-            sub_button:
-              - name: Power Off
-                icon: mdi:power
-                state_background: false
-                tap_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.garage_lampen
-                      - light.speelkamer_lampen
-                  data: {}
-                double_tap_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.garage_lampen
-                      - light.speelkamer_lampen
-                  data: {}
-                hold_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.garage_lampen
-                      - light.speelkamer_lampen
-                  data: {}
-          - type: custom:bubble-card
-            card_type: separator
-            name: Speelkamer
-            icon: mdi:gamepad
-            card_layout: large
-            sub_button:
-              - entity: sensor.speelkamer_temperatuu_temperature
-                show_background: false
-                show_state: true
-                name: Temperature
-                show_icon: true
-                show_name: false
-                show_attribute: false
-                attribute: state_class
-                show_last_updated: false
-                state_background: false
-              - entity: binary_sensor.speelkamer_openslaande_deuren_contact
-                name: Door
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.speelkamer_lampen
-            name: Verlichting Speelkamer
-            icon: mdi:controller
-            sub_button:
-              - entity: sensor.speelkamer_verlichting_power
-                show_state: true
-                show_background: false
-                visibility:
-                  - condition: state
-                    entity: light.speelkamer_lampen
-                    state: "on"
-            modules:
-              - default
-            tap_action:
-              action: toggle
-            button_action: {}
-            use_accent_color: true
-            show_state: true
-            show_last_changed: true
-            hold_action:
-              action: more-info
-          - type: horizontal-stack
-            cards:
-              - type: custom:bubble-card
-                card_type: button
-                entity: media_player.speelkamer_tv
-                name: Televisie
-                tap_action:
-                  action: toggle
-                icon: phu:samsung
-                button_type: switch
-                modules:
-                  - default
-                show_state: true
-              - type: custom:bubble-card
-                card_type: button
-                entity: switch.speelkamer_stopcontact_verwarming
-                name: Verwarming
-                icon: mdi:heat-wave
-                sub_button:
-                  - entity: sensor.speelkamer_stopcontact_verwarming_power
-                    show_state: true
-                    show_background: false
-                    visibility:
-                      - condition: state
-                        entity: switch.speelkamer_stopcontact_verwarming
-                        state: "on"
-                button_type: switch
-                modules:
-                  - default
-                tap_action:
-                  action: toggle
-                show_state: true
-          - type: custom:bubble-card
-            card_type: separator
-            name: Garage
-            icon: mdi:garage-variant
-            card_layout: large
-            modules:
-              - default
-            sub_button:
-              - entity: sensor.garage_temperatuur_temperature
-                show_state: true
-                show_background: false
-                name: Temperature
-              - entity: binary_sensor.garage_achterdeur_contact
-                name: Door
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            entity: light.garage_lampen
-            name: Verlichting Garage
-            icon: mdi:garage
-            sub_button:
-              - entity: sensor.garage_verlichting_power
-                show_background: false
-                show_state: true
-                visibility:
-                  - condition: state
-                    entity: light.garage_lampen
-                    state: "on"
-            modules:
-              - default
-            tap_action:
-              action: toggle
-            button_action: {}
-            use_accent_color: true
-            show_state: true
-            show_attribute: false
-            show_last_changed: true
-            hold_action:
-              action: more-info
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: "#outside"
-            button_type: name
-            modules:
-              - default
-            name: Buiten
-            icon: mdi:flower
-            sub_button:
-              - name: Power Off
-                icon: mdi:power
-                state_background: false
-                tap_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.voortuin_lampen
-                      - light.achtertuin_lampen
-                      - light.carport_lampen
-                  data: {}
-                double_tap_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.voortuin_lampen
-                      - light.achtertuin_lampen
-                      - light.carport_lampen
-                  data: {}
-                hold_action:
-                  action: perform-action
-                  perform_action: light.toggle
-                  target:
-                    entity_id:
-                      - light.voortuin_lampen
-                      - light.achtertuin_lampen
-                      - light.carport_lampen
-                  data: {}
-          - type: custom:bubble-card
-            card_type: separator
-            modules:
-              - default
-            name: Voortuin
-            icon: mdi:bee-flower
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            modules:
-              - default
-            entity: light.voortuin_lampen
-            name: Verlichting Voortuin
-            icon: mdi:flower
-            tap_action:
-              action: toggle
-            sub_button:
-              - entity: sensor.voortuin_verlichting_power
-                show_background: false
-                show_state: true
-                visibility:
-                  - condition: state
-                    entity: light.voortuin_lampen
-                    state: "on"
-            use_accent_color: true
-            show_state: true
-            show_last_changed: true
-            hold_action:
-              action: more-info
-          - type: custom:bubble-card
-            card_type: separator
-            modules:
-              - default
-            name: Achtertuin
-            icon: mdi:seat
-            sub_button: []
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            modules:
-              - default
-            entity: light.achtertuin_lampen
-            name: Verlichting Achtertuin
-            icon: mdi:seat
-            tap_action:
-              action: toggle
-            sub_button:
-              - entity: sensor.achtertuin_verlichting_power
-                show_background: false
-                show_state: true
-                visibility:
-                  - condition: state
-                    entity: light.achtertuin_lampen
-                    state: "on"
-            use_accent_color: true
-            show_state: true
-            show_last_changed: true
-            hold_action:
-              action: more-info
-          - type: custom:bubble-card
-            card_type: cover
-            modules:
-              - default
-            entity: cover.achtertuin_zonnescherm
-            name: Zonnescherm
-            open_service: cover.open_cover
-            card_layout: large
-            rows: 1
-          - type: custom:bubble-card
-            card_type: separator
-            modules:
-              - default
-            name: Overkapping
-            icon: mdi:greenhouse
-            sub_button:
-              - entity: binary_sensor.achtertuin_overkapping_schuur_deur_contact
-                name: Door
-          - type: custom:bubble-card
-            card_type: button
-            button_type: switch
-            modules:
-              - default
-            entity: switch.achtertuin_schuur_lampen
-            name: Verlichting Schuur
-            tap_action:
-              action: toggle
-            show_state: true
-            show_last_changed: true
-          - type: custom:bubble-card
-            card_type: climate
-            modules:
-              - default
-            entity: climate.intex_purespa
-            sub_button:
-              - name: HVAC modes menu
-                select_attribute: hvac_modes
-                state_background: false
-                show_arrow: false
-              - entity: switch.intex_purespa_filter
-                name: Filter
-                tap_action:
-                  action: toggle
-              - entity: switch.intex_purespa_sanitizer
-                name: Sanitize
-                tap_action:
-                  action: toggle
-              - entity: input_boolean.backyard_spa_keep_warm
-                icon: mdi:repeat-variant
-                state_background: true
-                show_state: false
-                name: Keep warm
-                tap_action:
-                  action: toggle
-            show_attribute: true
-            attribute: current_temperature
-            visibility:
-              - condition: state
-                entity: climate.intex_purespa
-                state_not: unavailable
-            card_layout: large
-          - type: custom:bubble-card
-            card_type: media-player
-            modules:
-              - default
-            entity: media_player.overkapping_sonos
-          - type: custom:bubble-card
-            card_type: separator
-            modules:
-              - default
-            name: Carport
-            icon: mdi:car
-          - type: custom:bubble-card
-            card_type: button
-            button_type: slider
-            modules:
-              - default
-            entity: light.carport_lampen
-            name: Verlichting Carport
-            icon: mdi:car
-            tap_action:
-              action: toggle
-            sub_button:
-              - entity: sensor.carport_verlichting_power
-                show_background: false
-                show_state: true
-                visibility:
-                  - condition: state
-                    entity: light.carport_lampen
-                    state: "on"
-            use_accent_color: true
-            show_state: true
-            show_last_changed: true
-            hold_action:
-              action: more-info
-            show_icon: true
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: automation.carport_charging_station_charge
-            name: Laadpaal Starten
-            icon: mdi:ev-station
-            show_last_changed: false
-            show_attribute: true
-            show_state: false
-            tap_action:
-              action: perform-action
-              target:
-                entity_id: automation.carport_charging_station_charge
-              perform_action: automation.trigger
-              data:
-                skip_condition: true
-            modules:
-              - default
-            attribute: last_triggered
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: "#doorbell"
-            button_type: name
-            modules:
-              - default
-            name: Deurbel
-            trigger:
-              - condition: state
-                entity: binary_sensor.g4_doorbell_voortuin_doorbell
-                state: "on"
-            icon: mdi:doorbell-video
-          - type: custom:advanced-camera-card
-            cameras:
-              - camera_entity: camera.g4_doorbell_pro_high_resolution_channel
-              - camera_entity: camera.g4_doorbell_pro_package_camera
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: "#battery"
-            button_type: name
-            modules:
-              - default
-            name: Batterij
-            icon: mdi:battery-charging-100
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: sensor.lilygo_rs485_marstek_inverter_state
-            sub_button:
-              - entity: sensor.lilygo_rs485_marstek_battery_remaining_capacity
-                show_name: false
-                show_icon: false
-                show_state: true
-                show_background: true
-                state_background: false
-              - entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
-                show_name: false
-                show_icon: false
-                show_state: true
-                state_background: false
-                show_background: true
-              - entity: sensor.lilygo_rs485_marstek_battery_power
-                show_last_changed: false
-                show_state: true
-                state_background: false
-                show_icon: false
-                visibility:
-                  - condition: state
-                    entity: sensor.lilygo_rs485_marstek_inverter_state
-                    state_not: Standby
-                  - condition: numeric_state
-                    entity: sensor.lilygo_rs485_marstek_battery_power
-                    above: 0
-            name: Batterij
-            card_layout: large-2-rows
-            modules:
-              - default
-            tap_action:
-              action: navigate
-              navigation_path: "#battery"
-            double_tap_action:
-              action: navigate
-              navigation_path: "#battery"
-            hold_action:
-              action: navigate
-              navigation_path: "#battery"
-            button_action:
-              tap_action:
-                action: navigate
-                navigation_path: "#battery"
-              double_tap_action:
-                action: navigate
-                navigation_path: "#battery"
-              hold_action:
-                action: navigate
-                navigation_path: "#battery"
-            show_attribute: false
-            icon: phu:solar-battery-15
-          - type: custom:bubble-card
-            card_type: select
-            entity: select.lilygo_rs485_marstek_rs485_control_mode
-            show_state: true
-            name: Handmatige controle
-            show_attribute: false
-            show_last_changed: false
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: select
-            entity: select.lilygo_rs485_marstek_forcible_charge_discharge
-            name: Op-/ontladen
-            show_state: true
-            icon: mdi:power-plug-battery
-            visibility:
-              - condition: or
-                conditions:
-                  - condition: state
-                    entity: select.lilygo_rs485_marstek_rs485_control_mode
-                    state: enable
-                  - condition: state
-                    entity: switch.live_energieverbruik_totaal_negatief
-                    state: "on"
-                  - condition: numeric_state
-                    entity: sensor.zonneplan_current_electricity_tariff
-                    below: 0
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: number.lilygo_rs485_marstek_forcible_charge_power
-            visibility:
-              - condition: or
-                conditions:
-                  - condition: state
-                    entity: switch.live_energieverbruik_totaal_negatief
-                    state: "on"
-                  - condition: numeric_state
-                    entity: sensor.zonneplan_current_electricity_tariff
-                    below: 0
-                  - condition: state
-                    entity: select.lilygo_rs485_marstek_forcible_charge_discharge
-                    state: charge
-                  - condition: state
-                    entity: select.lilygo_rs485_marstek_rs485_control_mode
-                    state: enable
-            modules:
-              - default
-            name: Geforceerd opladen
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: number.lilygo_rs485_marstek_forcible_discharge_power
-            visibility:
-              - condition: or
-                conditions:
-                  - condition: state
-                    entity: switch.live_energieverbruik_totaal_negatief
-                    state: "on"
-                  - condition: numeric_state
-                    entity: sensor.zonneplan_current_electricity_tariff
-                    below: 0
-                  - condition: state
-                    entity: select.lilygo_rs485_marstek_forcible_charge_discharge
-                    state: discharge
-                  - condition: state
-                    entity: select.lilygo_rs485_marstek_rs485_control_mode
-                    state: enable
-            modules:
-              - default
-            name: Geforceerd ontladen
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: "#electricityprices"
-            button_type: name
-            modules:
-              - default
-            name: Stroomprijzen
-            icon: mdi:currency-eur
-          - type: custom:apexcharts-card
-            update_interval: 15m
-            experimental:
-              color_threshold: true
-            graph_span: 24h
-            span:
-              start: day
-            now:
-              show: true
-              label: Now
-              color: black
-            header:
-              show: true
-              title: Electriciteitsprijzen vandaag
-            yaxis:
-              - id: kwh_prijs
-                min: ~0
-                max: ~0.4
-                decimals: 2
-                apex_config:
-                  title:
-                    text: Prijs €/kWh
-            apex_config:
-              tooltip:
-                x:
-                  show: false
-            series:
-              - entity: sensor.dynamische_prijzen_average_electricity_price
-                color_threshold:
-                  - value: -0.1
-                    color: "#264D59"
-                  - value: 0
-                    color: "#43978D"
-                  - value: 0.26
-                    color: "#F9E07F"
-                  - value: 0.4
-                    color: "#D46C4E"
-                name: Uurprijs vandaag
-                stroke_width: 0
-                float_precision: 3
-                type: column
-                show:
-                  legend_value: false
-                data_generator: |
-                  return entity.attributes.prices_today.map((entry) => {
-                  return [new Date(entry.time), entry.price];
-                  });
-                yaxis_id: kwh_prijs
-              - entity: sensor.dynamische_prijzen_average_electricity_price
-                name: Gemiddelde prijs vandaag
-                curve: stepline
-                stroke_width: 2
-                color: orange
-                type: line
-                float_precision: 3
-                group_by:
-                  duration: 1d
-                  func: avg
-                show:
-                  legend_value: false
-                data_generator: |
-                  return entity.attributes.prices.map((entry) => {
-                  return [new Date(entry.time), entry.price];
-                  });
-                yaxis_id: kwh_prijs
-          - type: custom:apexcharts-card
-            update_interval: 15m
-            experimental:
-              color_threshold: true
-            graph_span: 24h
-            span:
-              start: day
-              offset: +1d
-            now:
-              show: true
-              label: Now
-              color: black
-            header:
-              show: true
-              title: Electriciteitsprijzen morgen
-            yaxis:
-              - id: kwh_prijs
-                min: ~0
-                max: ~0.4
-                decimals: 2
-                apex_config:
-                  title:
-                    text: Prijs €/kWh
-            apex_config:
-              tooltip:
-                x:
-                  show: false
-            series:
-              - entity: sensor.dynamische_prijzen_average_electricity_price
-                color_threshold:
-                  - value: -0.1
-                    color: "#264D59"
-                  - value: 0
-                    color: "#43978D"
-                  - value: 0.26
-                    color: "#F9E07F"
-                  - value: 0.4
-                    color: "#D46C4E"
-                name: Uurprijs morgen
-                stroke_width: 0
-                float_precision: 3
-                type: column
-                show:
-                  legend_value: false
-                data_generator: |
-                  return entity.attributes.prices_tomorrow.map((entry) => {
-                  return [new Date(entry.time), entry.price];
-                  });
-                yaxis_id: kwh_prijs
-              - entity: sensor.dynamische_prijzen_average_electricity_price
-                name: Gemiddelde prijs morgen
-                curve: stepline
-                stroke_width: 2
-                color: orange
-                type: line
-                float_precision: 3
-                group_by:
-                  duration: 1d
-                  func: avg
-                show:
-                  legend_value: false
-                data_generator: |
-                  return entity.attributes.prices.map((entry) => {
-                  return [new Date(entry.time), entry.price];
-                  });
-                yaxis_id: kwh_prijs
-          - type: custom:apexcharts-card
-            update_interval: 15m
-            experimental:
-              color_threshold: true
-            graph_span: 24h
-            span:
-              start: day
-            now:
-              show: true
-              label: Now
-              color: black
-            header:
-              show: true
-              title: Electriciteitsgebruik vandaag
-            yaxis:
-              - id: kw_gebruik
-                min: -7
-                max: ~17
-                decimals: 1
-                apex_config:
-                  title:
-                    text: Gebruik kW
-            apex_config:
-              tooltip:
-                x:
-                  show: false
-            series:
-              - entity: sensor.electricity_meter_energieverbruik
-                statistics:
-                  type: mean
-                  period: 5minute
-                group_by:
-                  duration: 15m
-                  func: avg
-                yaxis_id: kw_gebruik
-                stroke_width: 2
-                curve: smooth
-                extend_to: now
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: "#liveenergy"
-            button_type: name
-            modules:
-              - default
-            name: Live Stroomgebruik
-            icon: mdi:chart-bell-curve-cumulative
-          - type: custom:apexcharts-card
-            graph_span: 10m
-            header:
-              show: false
-              title: Live Stroomgebruik
-            series:
-              - entity: sensor.live_energieverbruik_totaal
-                name: Stroomverbruik live
-                type: column
-                stroke_width: 1
-                color: var(--bubble-default-color)
-                group_by:
-                  duration: 5s
-                  func: avg
-                opacity: 1
-                float_precision: 2
-                color_threshold:
-                  - value: -1
-                    color: green
-                  - value: 0
-                    color: "#grey"
-                  - value: 1
-                    color: orange
-                  - value: 2
-                    color: red
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: "#media"
-            button_type: name
-            name: Media
-            icon: mdi:account-music
-            styles: ""
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: separator
-            name: Woonkamer
-            icon: mdi:sofa-outline
-            rows: "0.5"
-          - type: custom:bubble-card
-            card_type: media-player
-            entity: media_player.woonkamer_sonos
-          - type: custom:bubble-card
-            card_type: separator
-            name: Tuin
-            icon: mdi:flower-tulip-outline
-            rows: "0.5"
-          - type: custom:bubble-card
-            card_type: media-player
-            entity: media_player.overkapping_sonos
-          - type: custom:bubble-card
-            card_type: separator
-            name: Muziek keuzes
-            icon: mdi:playlist-check
-            rows: "0.5"
-          - type: custom:bubble-card
-            card_type: button
-            button_type: name
-            name: Beste van NL
-            icon: mdi:playlist-music
-            tap_action:
-              action: perform-action
-              perform_action: media_player.play_media
-              target:
-                entity_id: media_player.woonkamer_sonos
-              data:
-                media_content_id: >-
-                  action: media_player.play_media target:   entity_id:
-                  media_player.woonkamer_sonos data:   media_content_type:
-                  spotify   media_content_id:
-                  https://open.spotify.com/playlist/37i9dQZF1DXdKMCnEhDnDL?si=30c6594387814c76
-                media_content_type: spotify
-            button_action:
-              tap_action:
-                action: perform-action
-                perform_action: media_player.play_media
-                target:
-                  entity_id: media_player.woonkamer_sonos
-                data:
-                  media_content_id: >-
-                    action: media_player.play_media target:   entity_id:
-                    media_player.woonkamer_sonos data:   media_content_type:
-                    spotify   media_content_id:
-                    https://open.spotify.com/playlist/37i9dQZF1DXdKMCnEhDnDL?si=30c6594387814c76
-                  media_content_type: spotify
-          - type: custom:bubble-card
-            card_type: button
-            button_type: name
-            name: Q-Music
-            icon: phu:qmusic_radio
-            tap_action:
-              action: perform-action
-              target:
-                entity_id: media_player.woonkamer_sonos
-              perform_action: media_player.play_media
-              data:
-                media_content_type: favorite_item_id
-                media_content_id: FV:2/20
-            button_action:
-              tap_action:
-                action: perform-action
-                perform_action: media_player.play_media
-                target:
-                  entity_id:
-                    - media_player.woonkamer_sonos
-                data:
-                  media_content_id: FV:2/20
-                  media_content_type: favorite_item_id
-            modules: []
-            izequbes_custom_colors:
-              card:
-                opacity: 100
-          - type: custom:bubble-card
-            card_type: button
-            button_type: name
-            name: Zomer Hits
-            icon: mdi:weather-sunny
-            tap_action:
-              action: perform-action
-              perform_action: media_player.play_media
-              target:
-                entity_id: media_player.woonkamer_sonos
-              data:
-                media_content_id: >-
-                  https://open.spotify.com/playlist/37i9dQZF1DXcx1szy2g67M?si=1e3ba26df4df44e0
-                media_content_type: spotify
-            button_action:
-              tap_action:
-                action: perform-action
-                perform_action: media_player.play_media
-                target:
-                  entity_id: media_player.woonkamer_sonos
-                data:
-                  media_content_id: >-
-                    https://open.spotify.com/playlist/37i9dQZF1DXcx1szy2g67M?si=1e3ba26df4df44e0
-                  media_content_type: spotify
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: separator
-            name: Boxen
-            icon: mdi:music-box
-            rows: "0.5"
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            name: Kantoor
-            icon: phu:sonos-bookshelf-horizontal
-            sub_button:
-              - name: Samenvoegen
-                icon: mdi:merge
-                tap_action:
-                  action: perform-action
-                  perform_action: media_player.join
-                  target:
-                    entity_id: media_player.woonkamer_sonos
-                  data:
-                    group_members:
-                      - media_player.kantoor_sonos
-              - name: Loskoppelen
-                icon: mdi:set-split
-                tap_action:
-                  action: perform-action
-                  perform_action: media_player.unjoin
-                  target:
-                    entity_id: media_player.kantoor_sonos
-                  data: {}
-            styles: ""
-            modules:
-              - default
-            get_state_attribute: []
-            entity: media_player.kantoor_sonos
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            name: Overkapping
-            icon: phu:sonos-roam
-            sub_button:
-              - name: Samenvoegen
-                icon: mdi:merge
-                tap_action:
-                  action: perform-action
-                  perform_action: media_player.join
-                  target:
-                    entity_id: media_player.woonkamer_sonos
-                  data:
-                    group_members:
-                      - media_player.overkapping_sonos
-              - name: Loskoppelen
-                icon: mdi:set-split
-                tap_action:
-                  action: perform-action
-                  perform_action: media_player.unjoin
-                  target:
-                    entity_id: media_player.overkapping_sonos
-            styles: ""
-            modules:
-              - default
-            entity: media_player.overkapping_sonos
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            name: Slaapkamer Maxi
-            icon: phu:sonos-bookshelf-horizontal
-            sub_button:
-              - name: Samenvoegen
-                icon: mdi:merge
-                tap_action:
-                  action: perform-action
-                  perform_action: media_player.join
-                  target:
-                    entity_id: media_player.woonkamer_sonos
-                  data:
-                    group_members:
-                      - media_player.slaapkamer_maxi_sonos
-              - name: Loskoppelen
-                icon: mdi:set-split
-                tap_action:
-                  action: perform-action
-                  perform_action: media_player.unjoin
-                  target:
-                    entity_id:
-                      - media_player.slaapkamer_maxi_sonos
-                  data: {}
-            styles: ""
-            modules:
-              - default
-            entity: media_player.slaapkamer_maxi_sonos
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            name: Slaapkamer Mini
-            icon: phu:symfonisk-lampe
-            sub_button:
-              - name: Samenvoegen
-                icon: mdi:merge
-                tap_action:
-                  action: perform-action
-                  perform_action: media_player.join
-                  target:
-                    entity_id: media_player.woonkamer_sonos
-                  data:
-                    group_members:
-                      - media_player.slaapkamer_mini_sonos
-              - name: Loskoppelen
-                icon: mdi:set-split
-                tap_action:
-                  action: perform-action
-                  perform_action: media_player.unjoin
-                  target:
-                    entity_id:
-                      - media_player.slaapkamer_mini_sonos
-                  data: {}
-            styles: ""
-            modules:
-              - default
-            entity: media_player.slaapkamer_mini_sonos
-            show_attribute: false
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: "#neerslag"
-            button_type: name
-            name: Neerslag
-            icon: mdi:weather-rainy
-          - type: custom:neerslag-card
-            title: Neerslag
-            entities:
-              - sensor.neerslag_buienalarm_regen_data
-              - sensor.neerslag_buienradar_regen_data
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: "#brandweer"
-            button_type: name
-            name: Brandweer
-            icon: mdi:fire-circle
-          - type: custom:bubble-card
-            card_type: separator
-            name: Ploeg
-            icon: mdi:account-group-outline
-          - type: custom:bubble-card
-            card_type: select
-            entity: input_select.brandweer_mijn_huidige_ploeg
-            name: Mijn ploeg
-            show_state: true
-          - type: custom:bubble-card
-            card_type: select
-            entity: input_select.brandweer_dienstdoende_ploeg
-            name: Dienstdoende ploeg
-            show_state: true
-          - type: custom:bubble-card
-            card_type: separator
-            name: Uitrukken
-            icon: mdi:fire-truck
-            sub_button:
-              - entity: counter.brandweer_totaal_aantal_uitrukken
-                show_icon: true
-                show_state: true
-                state_background: false
-                show_name: true
-                name: Totaal
-                show_background: true
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            name: Laatste melding
-            icon: mdi:fire-alert
-            show_name: true
-            entity: input_text.brandweer_laatste_melding
-            scrolling_effect: false
-            show_last_changed: false
-            show_attribute: true
-            sub_button:
-              - entity: input_datetime.brandweer_laatste_melding
-                show_attribute: false
-                show_name: false
-                show_state: true
-                show_icon: false
-                show_background: true
-                attribute: timestamp
-                tap_action:
-                  action: none
-                name: Datum & Tijd
-              - entity: input_boolean.brandweer_uitgerukt_op_laatste_melding
-                show_state: false
-                show_name: true
-                name: Uitgerukt
-                show_last_changed: false
-                show_attribute: false
-                show_icon: false
-                show_background: true
-                tap_action:
-                  action: none
-              - entity: input_number.brandweer_uitruktijd_secondes
-                show_state: true
-                show_icon: false
-                state_background: false
-                visibility:
-                  - condition: state
-                    entity: binary_sensor.brandweer_uitgerukt_op_laatste_melding
-                    state: "on"
-                name: Uitruktijd
-                show_attribute: false
-            styles: |-
-              .bubble-sub-button-2 {
-                background-color: ${hass.states['binary_sensor.brandweer_uitgerukt_op_laatste_melding'].state === 'on' ? 'var(--bubble-default-color)' : 'var(--card-background-color)'} !important;
-              }
-            tap_action:
-              action: more-info
-            double_tap_action:
-              action: none
-            hold_action:
-              action: none
-            button_action:
-              tap_action:
-                action: more-info
-              double_tap_action:
-                action: none
-              hold_action:
-                action: none
-            card_layout: large-2-rows
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: separator
-            name: Statistieken
-            icon: mdi:chart-timeline-variant
-          - type: custom:apexcharts-card
-            apex_config:
-              legend:
-                show: false
-            header:
-              show: true
-              title: Uitrukken per ploeg
-              show_states: true
-              colorize_states: true
-            graph_span: 252h
-            series:
-              - entity: counter.brandweer_uden_a_ploeg_uitrukken
-              - entity: counter.brandweer_uden_b_ploeg_uitrukken
-              - entity: counter.brandweer_uden_c_ploeg_uitrukken
-      - type: vertical-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: pop-up
-            hash: "#afval"
-            button_type: name
-            name: Afval
-            icon: phu:garbage-residual
-          - type: custom:bubble-card
-            card_type: separator
-            name: Vandaag / morgen
           - type: custom:bubble-card
             card_type: button
             button_type: state
             entity: sensor.afvalinfo_home_trash_type_today
-          - type: custom:bubble-card
-            card_type: button
-            event_action:
-              tap_action:
-                action: more-info
-              double_tap_action:
-                action: none
-              hold_action:
-                action: none
-            button_type: state
-            entity: sensor.afvalinfo_home_trash_type_tomorrow
-          - type: custom:bubble-card
-            card_type: separator
-            name: Eerstvolgende ophaaldata
-            icon: mdi:delete-empty
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: sensor.afvalinfo_home_gft
-            icon: phu:garbage-organic
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: sensor.afvalinfo_home_papier
-            icon: phu:garbage-cardboard
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: sensor.afvalinfo_home_pbd
-            icon: phu:garbage-plastic
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: sensor.afvalinfo_home_restafval
-            icon: phu:garbage-residual
-  - type: grid
-    cards:
-      - type: custom:mod-card
-        card_mod:
-          style: |
-            @media(min-width: 180px) {
-              ha-card {
-                background: black;
-                border-radius: 100px;
-                position: fixed;
-                bottom: 15px;
-                left: 10px;
-                z-index: 1;
-                width: calc(100% - 20px);
-                padding: 10px;
-              }
-            }
-            @media(min-width: 800px) {
-              ha-card {
-                width: calc(60% - 30px);
-                left: calc(20% + 43px);
-              }
-            }
-        card:
-          type: grid
-          square: false
-          columns: 6
-          cards:
-            - type: custom:button-card
-              icon: mdi:home-floor-0
-              tap_action:
-                action: navigate
-                navigation_path: "#groundfloor"
-              styles:
-                icon:
-                  - width: 24px;
-                  - color: white;
-                img_cell:
-                  - width: 50px;
-                  - height: 50px;
-                card:
-                  - background: none;
-                  - padding: 0;
-            - type: custom:button-card
-              icon: mdi:home-floor-1
-              tap_action:
-                action: navigate
-                navigation_path: "#firstfloor"
-              styles:
-                icon:
-                  - width: 24px;
-                  - color: white;
-                img_cell:
-                  - width: 50px;
-                  - height: 50px;
-                card:
-                  - background: none;
-                  - padding: 0;
-            - type: custom:button-card
-              icon: mdi:home-floor-2
-              tap_action:
-                action: navigate
-                navigation_path: "#secondfloor"
-              styles:
-                icon:
-                  - width: 24px;
-                  - color: white;
-                img_cell:
-                  - width: 50px;
-                  - height: 50px;
-                card:
-                  - background: none;
-                  - padding: 0;
-            - type: custom:button-card
-              icon: mdi:garage
-              tap_action:
-                action: navigate
-                navigation_path: "#garage"
-              styles:
-                icon:
-                  - width: 24px;
-                  - color: white;
-                img_cell:
-                  - width: 50px;
-                  - height: 50px;
-                card:
-                  - background: none;
-                  - padding: 0;
-            - type: custom:button-card
-              icon: mdi:flower-tulip-outline
-              tap_action:
-                action: navigate
-                navigation_path: "#outside"
-              styles:
-                icon:
-                  - width: 24px;
-                  - color: white;
-                img_cell:
-                  - width: 50px;
-                  - height: 50px;
-                card:
-                  - background: none;
-                  - padding: 0;
-            - type: custom:button-card
-              icon: mdi:music
-              tap_action:
-                action: navigate
-                navigation_path: "#media"
-              styles:
-                icon:
-                  - width: 24px;
-                  - color: white;
-                img_cell:
-                  - width: 50px;
-                  - height: 50px;
-                card:
-                  - background: none;
-                  - padding: 0;
-header:
-  layout: center
-  badges_position: bottom
-  badges_wrap: scroll
-badges:
-  - type: custom:mushroom-template-badge
-    content: "{{ states['sensor.live_energieverbruik_totaal'].state }} kWh"
-    icon: mdi:power
-    color: var(--bubble-default-color)
-    entity: sensor.live_energieverbruik_totaal
-    label: Live Stroom
-    tap_action:
-      action: navigate
-      navigation_path: "#liveenergy"
-  - type: entity
-    show_name: true
-    show_state: true
-    show_icon: true
-    entity: sensor.total_costs_today_calculated
-    icon: mdi:currency-eur
-    name: Totaal
-  - type: entity
-    show_name: true
-    show_state: true
-    show_icon: true
-    entity: sensor.zonneplan_electricity_production_costs_today
-    icon: mdi:currency-eur-off
-    color: green
-    name: Productie
-  - type: custom:mushroom-template-badge
-    content: >-
-      {{ states['sensor.solar_power_generated_today'].state| round(1) }} kWh /
-      {{ states['sensor.forecast_solar_production_today'].state | round(1) }}
-      kWh
-    icon: mdi:solar-power-variant
-    color: var(--bubble-default-color)
-    label: Opgewekt vandaag
-    entity: sensor.solar_power_generated_today
-    tap_action:
-      action: more-info
-  - type: custom:mushroom-template-badge
-    content: "{{ states['sensor.solar_power_generated_now'].state }} kWh"
-    icon: mdi:solar-power-variant-outline
-    color: var(--bubble-default-color)
-    label: Huidige opwek
-    tap_action:
-      action: more-info
-    entity: sensor.solar_power_generated_now
-    visibility:
-      - condition: state
-        entity: sensor.solar_power_generated_now
-        state_not: unavailable
-      - condition: numeric_state
-        entity: sensor.solar_power_generated_now
-        above: 1
-  - type: custom:mushroom-template-badge
-    icon: mdi:currency-eur
-    entity: sensor.zonneplan_current_tariff_group
-    color: var(--bubble-default-color)
-    label: Huidig tarief
-    content: >-
-      {% if is_state('sensor.zonneplan_current_tariff_group','low') -%} Laag
-
-      {% elif is_state('sensor.zonneplan_current_tariff_group','normal') -%}
-      Gemiddeld
-
-      {% elif is_state('sensor.zonneplan_current_tariff_group','high') -%} Hoog
-
-      {% endif -%}
-
-      - € {{ states['sensor.zonneplan_current_electricity_tariff'].state |
-      round(3) }}
-    tap_action:
-      action: navigate
-      navigation_path: "#electricityprices"
-  - type: custom:mushroom-template-badge
-    content: >-
-      {% if is_state('sensor.zonneplan_forecast_tariff_group_hour_1','low') -%}
-      Laag
-
-      {% elif is_state('sensor.zonneplan_forecast_tariff_group_hour_1','normal')
-      -%} Gemiddeld
-
-      {% elif is_state('sensor.zonneplan_forecast_tariff_group_hour_1','high')
-      -%} Hoog
-
-      {% endif -%}
-
-      - € {{ states['sensor.zonneplan_forecast_tariff_hour_1'].state | round(3)
-      }}
-    icon: mdi:currency-eur
-    color: var(--bubble-default-color)
-    label: Volgend tarief
-    entity: sensor.zonneplan_forecast_tariff_group_hour_1
-    tap_action:
-      action: navigate
-      navigation_path: "#electricityprices"
-  - type: custom:mushroom-template-badge
-    content: >-
-      € {{ (states['input_number.bitcoin_portfolio'].state | float *
-      states['sensor.exchange_rate_1_btc'].state | float *
-      states['sensor.open_exchange_rates_usd_eur'].state | float) | round(2) }}
-    icon: mdi:bitcoin
-    entity: sensor.exchange_rate_1_btc
-    color: blue
-    label: Bitcoins
-    tap_action:
-      action: more-info
-  - type: custom:mushroom-template-badge
-    content: >-
-      € {{ (states['input_number.xrp_portfolio'].state | float *
-      states['sensor.cryptoinfo_bunq_xrp_2'].state | float) | round(2) }}
-    icon: mdi:circle-double
-    entity: sensor.cryptoinfo_bunq_xrp_2
-    color: blue
-    label: XRP
-    tap_action:
-      action: more-info
-cards: []
-background:
-  opacity: 30
-  alignment: center
-  size: cover
-  repeat: no-repeat
-  attachment: fixed
-  image: /api/image/serve/aaa828911de9870e2fb9d677be3108d5/original
-top_margin: false
+            name: Afval vandaag
+            sub_button:
+              - entity: sensor.afvalinfo_home_gft
+                show_last_changed: false
+                show_state: true
+                icon: mdi:flower-tulip
+                state_background: false
+              - entity: sensor.afvalinfo_home_papier
+                show_state: true
+                state_background: false
+                icon: mdi:file-outline
+              - entity: sensor.afvalinfo_home_pbd
+                show_state: true
+                state_background: false
+                icon: mdi:bottle-soda-classic-outline
+              - entity: sensor.afvalinfo_home_restafval
+                icon: mdi:delete
+                state_background: false
+                show_state: true
+            card_layout: large-2-rows
+      - type: custom:bubble-card
+        card_type: separator
+        name: Achtertuin Spa
+        icon: mdi:spa
+        card_layout: large
+        sub_button:
+          - entity: switch.intex_purespa_power
+            name: Intex Purespa
+            icon: mdi:power
+            show_name: false
+            show_state: true
+            tap_action:
+              action: toggle
+      - type: custom:bubble-card
+        card_type: climate
+        entity: climate.intex_purespa
+        sub_button:
+          - name: HVAC modes menu
+            select_attribute: hvac_modes
+            state_background: false
+            show_arrow: false
+          - entity: switch.intex_purespa_filter
+            tap_action:
+              action: toggle
+          - entity: switch.intex_purespa_sanitizer
+            tap_action:
+              action: toggle
+        show_attribute: true
+        attribute: current_temperature
+      - type: custom:bubble-card
+        card_type: separator
+        name: Agenda
+        icon: mdi:calendar-today
+        card_layout: large
+      - initial_view: listWeek
+        type: calendar
+        entities:
+          - calendar.agenda
+          - calendar.r_bohnen_vrbn_nl_agenda
+          - calendar.mini
+          - calendar.maxi
+          - calendar.feestdagen_in_nederland
+          - calendar.robin_en_sam
+          - calendar.brandweer
