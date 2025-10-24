@@ -58,22 +58,21 @@ coffee_package:
         - trigger: time
           at: "19:00:00"
           id: time_1900
-      conditions:
-        - condition: time
-          after: "07:00:00"
-          before: "19:30:00"
-        - condition: state
-          entity_id: group.all_adults
-          state: home
+      conditions: []
       actions:
         - choose:
             - conditions:
-                - condition: trigger
-                  id:
-                    - time_0700
-                    - unexepected_off
-                    - person_enters_zone
-                    - partner_enters_zone
+                - condition: and
+                  conditions:
+                    - condition: trigger
+                      id:
+                        - time_0700
+                        - unexepected_off
+                        - person_enters_zone
+                        - partner_enters_zone
+                    - condition: time
+                      after: "07:00:00"
+                      before: "19:30:00"
               sequence:
                 - action: switch.turn_on
                   metadata: {}
@@ -89,16 +88,22 @@ coffee_package:
                     - time_1900
               sequence:
                 - if:
-                    - condition: state
-                      entity_id: switch.linea_micra_kroon_18
-                      state: "on"
+                    - condition: and
+                      conditions:
+                        - condition: not
+                          conditions:
+                            - condition: state
+                              entity_id: group.all_adults
+                              state: home
+                        - condition: state
+                          entity_id: switch.linea_micra_kroon_18
+                          state: "on"
                   then:
                     - action: switch.turn_off
                       metadata: {}
                       data: {}
                       target:
                         entity_id: switch.linea_micra_kroon_18
-
 
     - id: backflush_coffee
       alias: Kitchen - Coffee Backflushed
