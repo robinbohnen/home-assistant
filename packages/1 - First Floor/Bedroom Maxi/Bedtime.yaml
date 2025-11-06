@@ -14,33 +14,13 @@ bedtime_maxi_package:
       has_time: true
       icon: mdi:clock-time-nine
 
-  switch:
-    - platform: template
-      switches:
-        bedtime_kids:
-          unique_id: bedtime_kids
-          friendly_name: "Bedtime Kids"
-          value_template: >
+  template:
+    - binary_sensor:
+        - name: bedtime_kids
+          state: >
             "{% set bedtime_hour_maxi = strptime(states('input_datetime.bedtime_maxi_1h_off'), "%H:%M:%S").hour %}
             {% set bedtime_hour_mini = strptime(states('input_datetime.bedtime_mini_1h_off'), "%H:%M:%S").hour %}
             {{ (now().hour >= bedtime_hour_maxi or now().hour >= bedtime_hour_mini or now().hour < 9) }}"
-          turn_off:
-            action: media_player.unjoin
-            metadata: {}
-            data: {}
-            target:
-              entity_id:
-                - media_player.slaapkamer_maxi_sonos
-                - media_player.slaapkamer_mini_sonos
-          turn_on:
-            action: media_player.join
-            metadata: {}
-            data:
-              group_members:
-                - media_player.slaapkamer_maxi_sonos
-                - media_player.slaapkamer_mini_sonos
-            target:
-              entity_id: media_player.woonkamer_sonos
 
   automation:
     - id: bedtime_for_maxi_lights_off
