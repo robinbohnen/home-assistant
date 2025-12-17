@@ -2,7 +2,7 @@ zigbee_package:
   automation:
     - id: zigbee_fix_slzb
       alias: Zigbee - Fix unavailability
-      description: "Fix unavailability by restarting controller automatically"
+      description: Fix unavailability by restarting controller automatically
       mode: single
       triggers:
         - trigger: state
@@ -12,6 +12,15 @@ zigbee_package:
           for:
             hours: 0
             minutes: 5
+            seconds: 0
+        - trigger: state
+          entity_id:
+            - light.woonkamer_lampen
+          to:
+            - unavailable
+          for:
+            hours: 0
+            minutes: 10
             seconds: 0
       conditions: []
       actions:
@@ -30,3 +39,40 @@ zigbee_package:
           data: {}
           target:
             entity_id: button.slzb_mr3_core_restart
+        - if:
+            - condition: state
+              entity_id: light.woonkamer_lampen
+              state:
+                - unavailable
+              for:
+                hours: 0
+                minutes: 10
+                seconds: 0
+          then:
+            - action: button.press
+              metadata: {}
+              target:
+                entity_id:
+                  - button.qemu_z2mqtt_105_reboot
+                  - button.qemu_mqtt_100_reboot
+              data: {}
+            - delay:
+                hours: 0
+                minutes: 0
+                seconds: 30
+                milliseconds: 0
+            - action: button.press
+              metadata: {}
+              data: {}
+              target:
+                entity_id: button.slzb_mr3_core_restart
+            - delay:
+                hours: 0
+                minutes: 0
+                seconds: 5
+                milliseconds: 0
+            - action: button.press
+              metadata: {}
+              data: {}
+              target:
+                entity_id: button.slzb_mr3_zigbee_opnieuw_opstarten
