@@ -1168,3 +1168,63 @@ brandweer_package:
           data: {}
           target:
             entity_id: button.hrh85f_start_air_conditioner
+
+    - id: brandweer_light_p1_p2
+      alias: Brandweer - Turn on P1 or P2 lights
+      description: "Change light color on P1 or P2"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - input_text.brandweer_laatste_melding
+      conditions:
+        - condition: state
+          entity_id: light.woonkamer_hue_tafellamp
+          state:
+            - "on"
+      actions:
+        - action: scene.create
+          metadata: {}
+          data:
+            scene_id: hue_taffellamp_nu
+            snapshot_entities:
+              - light.woonkamer_hue_tafellamp
+        - if:
+            - condition: template
+              value_template: |2
+                 {% set STRING = states('input_text.brandweer_laatste_melding') %}
+                 {% if STRING[:3] == "P 1" %}
+                 true
+                 {% else %}
+                 false
+                 {% endif %}
+          then:
+            - action: light.turn_on
+              metadata: {}
+              target:
+                entity_id: light.woonkamer_hue_tafellamp
+              data:
+                rgb_color:
+                  - 255
+                  - 38
+                  - 0
+          else:
+            - action: light.turn_on
+              metadata: {}
+              target:
+                entity_id: light.woonkamer_hue_tafellamp
+              data:
+                rgb_color:
+                  - 79
+                  - 122
+                  - 40
+        - delay:
+            hours: 0
+            minutes: 0
+            seconds: 30
+            milliseconds: 0
+        - action: scene.turn_on
+          metadata: {}
+          target:
+            entity_id: scene.hue_taffellamp_nu
+          data: {}
