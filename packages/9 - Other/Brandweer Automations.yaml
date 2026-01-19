@@ -1228,3 +1228,33 @@ brandweer_package:
           target:
             entity_id: scene.hue_taffellamp_nu
           data: {}
+
+    - alias: Brandweer - Webhook - Major incidents
+      description: Webhook for major incidents and p2000 notifications
+      mode: single
+      triggers:
+        - trigger: webhook
+          allowed_methods:
+            - POST
+            - PUT
+          local_only: false
+          webhook_id: brandweer-webhook-region-_L{0eqfp/5g%}q:t[$7!jV4Aj25Zry
+      conditions: null
+      actions:
+        - if:
+            - condition: template
+              value_template: >-
+                {% if trigger.json.p2000_message[:2]|upper != "B1" and
+                trigger.json.p2000_message[:4]|upper != "TEST" and
+                trigger.json.p2000_message[:4]|upper != "TE5T" and
+                trigger.json.p2000_message[:2]|upper != "B2" and
+                trigger.json.p2000_message[:2]|upper != "A2"  %} true {% else %} false
+                {% endif %}
+          then:
+            - action: notify.pushover
+              metadata: {}
+              data:
+                title: "{{ trigger.json.capcode_description }}"
+                message: "{{ trigger.json.p2000_message }}"
+                data:
+                  priority: 0
