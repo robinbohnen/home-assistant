@@ -1,5 +1,4 @@
 brandweer_package:
-
   rest:
     - resource: https://brandweeruden.112radar.nl/status.php
       scan_interval: 300
@@ -72,42 +71,42 @@ brandweer_package:
 
   input_text:
     brandweer_laatste_melding:
-      name: 'Brandweer - Laatste melding'
+      name: "Brandweer - Laatste melding"
       icon: mdi:fire-circle
     brandweer_laatste_melding_fonetisch:
-      name: 'Brandweer - Laatste Melding Fonetisch'
+      name: "Brandweer - Laatste Melding Fonetisch"
       icon: mdi:account-voice
     brandweer_laatste_p2000_melding:
-      name: 'Brandweer - Laatste p2000 melding'
+      name: "Brandweer - Laatste p2000 melding"
       icon: mdi:police-badge
     brandweer_laatste_p2000_melding_fonetisch:
-      name: 'Brandweer - Laatste p2000 melding fonetisch'
+      name: "Brandweer - Laatste p2000 melding fonetisch"
       icon: mdi:account-voice
     brandweer_laatste_p2000_brandweer_melding:
-      name: 'Brandweer - Laatste p2000 Brandweer melding'
+      name: "Brandweer - Laatste p2000 Brandweer melding"
       icon: mdi:police-badge
     brandweer_laatste_p2000_brandweer_melding_fonetisch:
-      name: 'Brandweer - Laatste p2000 Brandweer melding fonetisch'
+      name: "Brandweer - Laatste p2000 Brandweer melding fonetisch"
       icon: mdi:account-voice
     brandweer_meldingen_om_uden:
-      name: 'Brandweer - Meldingen Om Uden'
+      name: "Brandweer - Meldingen Om Uden"
       icon: mdi:fire-station
 
   input_datetime:
     brandweer_laatste_melding:
-      name: 'Brandweer - Laatste datum/tijd Melding'
+      name: "Brandweer - Laatste datum/tijd Melding"
       has_date: true
       has_time: true
       icon: mdi:fire-circle
     brandweer_laatste_uitgerukt:
-      name: 'Brandweer - Laatst Uitgerukt op datum/tijd'
+      name: "Brandweer - Laatst Uitgerukt op datum/tijd"
       has_date: true
       has_time: true
       icon: mdi:fire-circle
 
   input_boolean:
     brandweer_uitgerukt:
-      name: 'Brandweer - Nu uitgerukt'
+      name: "Brandweer - Nu uitgerukt"
       icon: mdi:fire-circle
 
   template:
@@ -549,9 +548,8 @@ brandweer_package:
       actions:
         - alias: Stuur bericht naar Home Assistant gebruikers
           if:
-            - condition: state
-              entity_id: input_select.brandweer_dienstdoende_ploeg
-              state: input_select.brandweer_mijn_huidige_ploeg
+            - condition: template
+              value_template: "{{ states('input_select.brandweer_dienstdoende_ploeg') == states('input_select.brandweer_mijn_huidige_ploeg') }}"
               alias: Kijk of ik momenteel dienst heb
           then:
             - metadata: {}
@@ -606,9 +604,8 @@ brandweer_package:
                   state: "on"
               then:
                 - if:
-                    - condition: state
-                      entity_id: input_select.brandweer_dienstdoende_ploeg
-                      state: input_select.brandweer_mijn_huidige_ploeg
+                    - condition: template
+                      value_template: "{{ states('input_select.brandweer_dienstdoende_ploeg') == states('input_select.brandweer_mijn_huidige_ploeg') }}"
                       alias: Kijk of ik momenteel dienst heb
                   then:
                     - metadata: {}
@@ -737,9 +734,8 @@ brandweer_package:
               then:
                 - sequence:
                     - if:
-                        - condition: state
-                          entity_id: input_select.brandweer_dienstdoende_ploeg
-                          state: input_select.brandweer_mijn_huidige_ploeg
+                        - condition: template
+                          value_template: "{{ states('input_select.brandweer_dienstdoende_ploeg') == states('input_select.brandweer_mijn_huidige_ploeg') }}"
                           alias: Kijk of ik momenteel dienst heb
                       then:
                         - action: light.turn_on
@@ -788,9 +784,8 @@ brandweer_package:
               then:
                 - sequence:
                     - if:
-                        - condition: state
-                          entity_id: input_select.brandweer_dienstdoende_ploeg
-                          state: input_select.brandweer_mijn_huidige_ploeg
+                        - condition: template
+                          value_template: "{{ states('input_select.brandweer_dienstdoende_ploeg') == states('input_select.brandweer_mijn_huidige_ploeg') }}"
                           alias: Kijk of ik momenteel dienst heb
                       then:
                         - action: alarm_control_panel.alarm_disarm
@@ -809,12 +804,9 @@ brandweer_package:
                       alias: Als ik wel dienst heb
                     - alias: Als ik geen dienst heb
                       if:
-                        - condition: not
-                          conditions:
-                            - condition: state
-                              entity_id: input_select.brandweer_dienstdoende_ploeg
-                              state: input_select.brandweer_mijn_huidige_ploeg
-                              alias: Kijk of ik momenteel dienst heb
+                        - condition: template
+                          value_template: "{{ states('input_select.brandweer_dienstdoende_ploeg') != states('input_select.brandweer_mijn_huidige_ploeg') }}"
+                          alias: Kijk of ik momenteel geen dienst heb
                       then:
                         - wait_for_trigger:
                             - trigger: state

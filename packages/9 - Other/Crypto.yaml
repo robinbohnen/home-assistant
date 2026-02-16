@@ -1,13 +1,17 @@
 crypto_package:
-
   template:
     - sensor:
-      - name: "Crypto - Current value"
-        state: "{{ (states['input_number.bitcoin_portfolio'].state | float * states['sensor.exchange_rate_1_btc'].state | float) | round(2) + (states['input_number.xrp_portfolio'].state | float * states['sensor.cryptoinfo_bunq_xrp_2'].state | float) | round(2) }}"
-        unique_id: current_crypto_value
-        unit_of_measurement: "EUR"
-        device_class: "monetary"
-        state_class: "Total"
+        - name: "Crypto - Current value"
+          state: >-
+            {{ (states('input_number.bitcoin_portfolio') | float(0) * states('sensor.exchange_rate_1_btc') | float(0)) | round(2)
+               + (states('input_number.xrp_portfolio') | float(0) * states('sensor.cryptoinfo_bunq_xrp_2') | float(0)) | round(2) }}
+          availability: >-
+            {{ states('sensor.exchange_rate_1_btc') not in ['unavailable', 'unknown']
+               and states('sensor.cryptoinfo_bunq_xrp_2') not in ['unavailable', 'unknown'] }}
+          unique_id: current_crypto_value
+          unit_of_measurement: "EUR"
+          device_class: "monetary"
+          state_class: "Total"
 
   input_number:
     bitcoin_portfolio:
@@ -27,25 +31,25 @@ crypto_package:
       icon: mdi:circle-multiple
 
   sensor:
-  - platform: bitcoin
-    currency: EUR
-    display_options:
-      - exchangerate
-      - timestamp
-      - market_price_usd
+    - platform: bitcoin
+      currency: EUR
+      display_options:
+        - exchangerate
+        - timestamp
+        - market_price_usd
 
-  - platform: cryptoinfo_advanced
-    id: "bunq_bitcoin"
-    cryptocurrency_name: "bitcoin"
-    currency_name: "eur"
-    unit_of_measurement: "€"
-    multiplier: 1
-    update_frequency: 1
+    - platform: cryptoinfo_advanced
+      id: "bunq_bitcoin"
+      cryptocurrency_name: "bitcoin"
+      currency_name: "eur"
+      unit_of_measurement: "€"
+      multiplier: 1
+      update_frequency: 1
 
-  - platform: cryptoinfo_advanced
-    id: "bunq_xrp"
-    cryptocurrency_name: "ripple"
-    currency_name: "eur"
-    unit_of_measurement: "€"
-    multiplier: 1
-    update_frequency: 1
+    - platform: cryptoinfo_advanced
+      id: "bunq_xrp"
+      cryptocurrency_name: "ripple"
+      currency_name: "eur"
+      unit_of_measurement: "€"
+      multiplier: 1
+      update_frequency: 1
