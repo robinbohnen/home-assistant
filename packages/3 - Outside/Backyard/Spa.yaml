@@ -1,5 +1,4 @@
 backyard_spa_package:
-
   input_number:
     backyard_spa_target_temperature:
       name: "Backyard Spa - Target Temperature"
@@ -54,9 +53,9 @@ backyard_spa_package:
       mode: single
       triggers:
         - trigger: template
-          value_template: |-
-            {{ state_attr('climate.intex_purespa','current_temperature') | int >=
-            states.input_number.backyard_spa_target_temperature.state | int }}
+          value_template: >-
+            {{ state_attr('climate.intex_purespa', 'current_temperature') | int(0) >=
+            states('input_number.backyard_spa_target_temperature') | int(0) }}
           id: temperature_reached
         - trigger: time
           at: "23:59:00"
@@ -127,11 +126,8 @@ backyard_spa_package:
                       conditions:
                         - condition: template
                           value_template: >-
-                            {{
-                            state_attr('climate.intex_purespa','current_temperature')
-                            | int <
-                            states['input_number.backyard_spa_target_temperature'].state
-                            | int }}
+                            {{ state_attr('climate.intex_purespa', 'current_temperature') | int(0) <
+                            states('input_number.backyard_spa_target_temperature') | int(0) }}
                         - condition: state
                           entity_id: input_boolean.backyard_spa_keep_warm
                           state: "on"
