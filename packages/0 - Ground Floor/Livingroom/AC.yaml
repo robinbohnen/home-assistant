@@ -99,6 +99,36 @@ airco_livingroom_package:
                     title: Warm in Woonkamer, deuren open
                     data: {}
 
+    - id: ac_off_nobody_home
+      alias: AC - Turn off when nobody home
+      description: Turn off all ACs when all adults leave and AC is heating
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - group.all_adults
+          from: home
+      conditions:
+        - condition: or
+          conditions:
+            - condition: state
+              entity_id: climate.airco_woonkamer
+              state: heat
+            - condition: state
+              entity_id: climate.airco_zolder
+              state: heat
+      actions:
+        - action: climate.turn_off
+          data: {}
+          target:
+            entity_id:
+              - climate.airco_woonkamer
+              - climate.airco_zolder
+        - action: notify.mobile_devices_adults
+          data:
+            title: Airco's uitgeschakeld
+            message: Niemand meer thuis, airco's zijn automatisch uitgezet.
+
     - id: ac_off_evening
       alias: Livingroom - AC Automatically off
       description: "Turn off AC when is on for more than 2 hours and almost time to go to bed"
