@@ -70,3 +70,548 @@ sections:
           - entity: input_datetime.brandweer_laatste_melding
             show_attribute: false
             show_name: false
+            show_state: true
+            show_icon: false
+            show_background: true
+            attribute: timestamp
+            tap_action:
+              action: none
+            name: Datum & Tijd
+          - entity: input_boolean.brandweer_uitgerukt_op_laatste_melding
+            show_state: false
+            show_name: true
+            name: Uitgerukt
+            show_last_changed: false
+            show_attribute: false
+            show_icon: false
+            show_background: true
+            tap_action:
+              action: none
+          - entity: input_number.brandweer_uitruktijd_secondes
+            show_state: true
+            show_icon: false
+            state_background: false
+            visibility:
+              - condition: state
+                entity: binary_sensor.brandweer_uitgerukt_op_laatste_melding
+                state: "on"
+            name: Uitruktijd
+            show_attribute: false
+        styles: |-
+          .bubble-sub-button-2 {
+            background-color: ${hass.states['binary_sensor.brandweer_uitgerukt_op_laatste_melding'].state === 'on' ? 'var(--bubble-default-color)' : 'var(--card-background-color)'} !important;
+          }
+        tap_action:
+          action: more-info
+        double_tap_action:
+          action: none
+        hold_action:
+          action: none
+        button_action:
+          tap_action:
+            action: more-info
+          double_tap_action:
+            action: none
+          hold_action:
+            action: none
+        card_layout: large-2-rows
+        modules:
+          - default
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: counter.brandweer_totaal_aantal_uitrukken
+            show_icon: true
+            show_name: true
+            name: Totaal
+            icon: mdi:fire-extinguisher
+            scrolling_effect: false
+            tap_action:
+              action: none
+            double_tap_action:
+              action: none
+            hold_action:
+              action: none
+            button_action:
+              tap_action:
+                action: more-info
+              double_tap_action:
+                action: none
+              hold_action:
+                action: none
+            modules:
+              - default
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: counter.brandweer_uden_a_ploeg_uitrukken
+            name: A
+            scrolling_effect: false
+            show_state: true
+            show_name: false
+            tap_action:
+              action: navigate
+              navigation_path: "#brandweer"
+            double_tap_action:
+              action: none
+            hold_action:
+              action: more-info
+            button_action:
+              tap_action:
+                action: navigate
+                navigation_path: "#brandweer"
+              double_tap_action:
+                action: none
+              hold_action:
+                action: none
+            styles: |-
+              .bubble-icon {
+                color: ${hass.states['input_select.brandweer_mijn_huidige_ploeg'].state === 'A Ploeg' ? 'var(--bubble-default-color)' : ''} !important;
+              }
+            icon: mdi:alpha-a-circle-outline
+            modules:
+              - default
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: counter.brandweer_uden_b_ploeg_uitrukken
+            name: B
+            scrolling_effect: false
+            show_name: false
+            show_state: true
+            show_icon: true
+            tap_action:
+              action: navigate
+              navigation_path: "#brandweer"
+            double_tap_action:
+              action: none
+            hold_action:
+              action: more-info
+            button_action:
+              tap_action:
+                action: navigate
+                navigation_path: "#brandweer"
+              double_tap_action:
+                action: none
+              hold_action:
+                action: none
+            styles: |-
+              .bubble-icon {
+                color: ${hass.states['input_select.brandweer_mijn_huidige_ploeg'].state === 'B Ploeg' ? 'var(--bubble-default-color)' : ''} !important;
+              }
+            icon: mdi:alpha-b-circle-outline
+            modules:
+              - default
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: counter.brandweer_uden_c_ploeg_uitrukken
+            name: C
+            scrolling_effect: false
+            force_icon: false
+            show_name: false
+            double_tap_action:
+              action: none
+            hold_action:
+              action: more-info
+            tap_action:
+              action: navigate
+              navigation_path: "#brandweer"
+            button_action:
+              tap_action:
+                action: navigate
+                navigation_path: "#brandweer"
+              double_tap_action:
+                action: none
+              hold_action:
+                action: none
+            styles: |-
+              .bubble-icon {
+                color: ${hass.states['input_select.brandweer_mijn_huidige_ploeg'].state === 'C Ploeg' ? 'var(--bubble-default-color)' : ''} !important;
+              }
+            icon: mdi:alpha-c-circle-outline
+            modules:
+              - default
+      - type: custom:bubble-card
+        card_type: separator
+        name: Thuis
+        icon: mdi:home-account
+        sub_button:
+          - entity: sensor.crypto_current_value
+            show_state: true
+            state_background: false
+            show_background: true
+        card_layout: normal
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: person.robin_bohnen
+            name: Robin
+            sub_button:
+              - entity: sensor.iphone_van_robin_battery_level
+                show_state: true
+                show_background: false
+                name: Battery
+                icon: phu:apple-iphone
+              - entity: sensor.robin_reistijd_naar_huis
+                show_icon: true
+                show_state: true
+                state_background: false
+                show_background: true
+                show_name: false
+                name: Huis
+                visibility:
+                  - condition: numeric_state
+                    entity: sensor.robin_reistijd_naar_huis
+                    above: 5
+                  - condition: state
+                    entity: person.robin_bohnen
+                    state_not: home
+                icon: mdi:home
+              - entity: sensor.robin_reistijd_naar_werk
+                show_state: true
+                show_name: false
+                icon: mdi:office-building-marker
+                name: Kantoor
+                state_background: false
+                visibility:
+                  - condition: state
+                    entity: binary_sensor.werkdag_sensor
+                    state: "on"
+                  - condition: state
+                    entity: binary_sensor.work_maybe_travel_to_work_time
+                    state: "on"
+                  - condition: numeric_state
+                    entity: sensor.robin_reistijd_naar_werk
+                    above: 0
+              - entity: sensor.robin_reistijd_naar_brandweer_uden
+                show_name: false
+                show_state: true
+                icon: mdi:fire-station
+                state_background: false
+                show_background: true
+                visibility:
+                  - condition: numeric_state
+                    entity: sensor.robin_reistijd_naar_brandweer_uden
+                    below: 10
+                  - condition: numeric_state
+                    entity: sensor.robin_reistijd_naar_brandweer_uden
+                    above: 3
+                name: Brandweer
+            card_layout: large-2-rows
+            modules:
+              - default
+            styles: |-
+              .bubble-sub-button-4 {
+                background-color: ${hass.states['sensor.robin_reistijd_naar_brandweer_uden'].state > 6 ? '#FFADB0' : ''} !important;
+              }
+
+              @media (prefers-color-scheme: dark) {
+                  .bubble-sub-button-4 {
+                      color: ${hass.states['sensor.robin_reistijd_naar_brandweer_uden'].state > 6 ? 'black' : 'white'} !important;
+                  }
+              }
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: person.samantha_henkelman
+            name: Samantha
+            sub_button:
+              - entity: sensor.iphone_van_samantha_battery_level
+                show_state: true
+                show_background: false
+                name: Battery
+                icon: phu:apple-iphone
+              - entity: sensor.samantha_reistijd_naar_huis
+                show_state: true
+                show_icon: true
+                state_background: false
+                show_background: true
+                show_name: false
+                name: Huis
+                visibility:
+                  - condition: numeric_state
+                    entity: sensor.samantha_reistijd_naar_huis
+                    above: 5
+                  - condition: state
+                    entity: person.samantha_henkelman
+                    state_not: home
+                icon: mdi:home
+            card_layout: large-2-rows
+            modules:
+              - default
+      - type: horizontal-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: person.emma_bohnen
+            name: Emma
+            sub_button:
+              - entity: sensor.iphone_van_emma_battery_level
+                show_state: true
+                show_background: false
+                name: Battery
+                icon: phu:apple-iphone
+              - entity: sensor.emma_reistijd_naar_huis
+                show_state: true
+                state_background: false
+                show_background: true
+                icon: mdi:home
+                visibility:
+                  - condition: numeric_state
+                    entity: sensor.emma_reistijd_naar_huis
+                    above: 5
+                name: Reistijd
+            card_layout: large-2-rows
+            modules:
+              - default
+          - type: custom:bubble-card
+            card_type: button
+            button_type: state
+            entity: person.logan_veen
+            name: Logan
+            sub_button:
+              - entity: sensor.iphone_battery_level
+                show_state: true
+                show_background: false
+                name: Battery
+                icon: phu:apple-iphone
+              - entity: sensor.logan_reistijd_naar_huis
+                name: Reistijd
+                icon: mdi:home
+                show_icon: true
+                show_state: true
+                state_background: false
+                visibility:
+                  - condition: numeric_state
+                    entity: sensor.logan_reistijd_naar_huis
+                    above: 5
+            card_layout: large-2-rows
+            modules:
+              - default
+      - type: custom:bubble-card
+        card_type: calendar
+        modules:
+          - default
+        entities:
+          - entity: calendar.agenda
+            color: "#2944BC"
+          - entity: calendar.r_bohnen_vrbn_nl_agenda
+            color: "#EBDED6"
+          - entity: calendar.robin_bohnen_nl_agenda
+            color: "#B79500"
+          - entity: calendar.mini
+            color: pink
+          - entity: calendar.maxi
+            color: "#4D9C35"
+          - entity: calendar.robin_en_sam
+            color: "#8CA02E"
+        show_end: true
+        show_progress: true
+        event_action:
+          tap_action:
+            action: more-info
+          double_tap_action:
+            action: none
+          hold_action:
+            action: none
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.lilygo_rs485_marstek_inverter_state
+        sub_button:
+          - entity: sensor.lilygo_rs485_marstek_battery_remaining_capacity
+            show_name: false
+            show_icon: false
+            show_state: true
+            show_background: true
+            state_background: false
+          - entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
+            show_name: false
+            show_icon: false
+            show_state: true
+            state_background: false
+            show_background: true
+          - entity: sensor.lilygo_rs485_marstek_battery_power
+            show_last_changed: false
+            show_state: true
+            state_background: false
+            show_icon: false
+            visibility:
+              - condition: state
+                entity: sensor.lilygo_rs485_marstek_inverter_state
+                state_not: Standby
+        name: Batterij
+        card_layout: large-2-rows
+        modules:
+          - default
+        tap_action:
+          action: navigate
+          navigation_path: "#battery"
+        double_tap_action:
+          action: navigate
+          navigation_path: "#battery"
+        hold_action:
+          action: navigate
+          navigation_path: "#battery"
+        button_action:
+          tap_action:
+            action: navigate
+            navigation_path: "#battery"
+          double_tap_action:
+            action: navigate
+            navigation_path: "#battery"
+          hold_action:
+            action: navigate
+            navigation_path: "#battery"
+        show_attribute: false
+        icon: phu:solar-battery-15
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        modules:
+          - default
+        entity: sensor.afvalinfo_home_trash_type_today
+        visibility:
+          - condition: state
+            entity: sensor.afvalinfo_home_trash_type_today
+            state_not: geen
+        name: Afval vandaag
+        show_last_changed: false
+        show_attribute: false
+        card_layout: large
+        tap_action:
+          action: navigate
+          navigation_path: "#afval"
+        button_action:
+          tap_action:
+            action: navigate
+            navigation_path: "#afval"
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        modules:
+          - default
+        entity: sensor.afvalinfo_home_trash_type_tomorrow
+        visibility:
+          - condition: state
+            entity: sensor.afvalinfo_home_trash_type_tomorrow
+            state_not: geen
+        name: Afval morgen
+        show_last_changed: false
+        show_attribute: false
+        card_layout: large
+        tap_action:
+          action: navigate
+          navigation_path: "#afval"
+        button_action:
+          tap_action:
+            action: navigate
+            navigation_path: "#afval"
+  - type: grid
+    cards:
+      - type: custom:bubble-card
+        card_type: separator
+        name: Stroomverbruik
+        icon: mdi:power
+        sub_button:
+          - entity: sensor.total_costs_today_calculated
+            show_state: true
+            state_background: false
+        card_layout: normal
+      - type: custom:bubble-card
+        card_type: button
+        button_type: state
+        entity: sensor.zonneplan_current_tariff_group
+        name: Huidig energie tarief
+        icon: phu:clock-euro
+        show_last_changed: false
+        show_attribute: false
+        show_last_updated: false
+        sub_button:
+          - entity: sensor.zonneplan_current_electricity_tariff
+            show_state: true
+            show_icon: true
+            state_background: false
+            show_name: false
+            icon: mdi:currency-eur
+          - entity: sensor.live_energieverbruik_totaal
+            state_background: false
+            show_icon: true
+            show_state: true
+            icon: mdi:transmission-tower
+        styles: |-
+          ha-card {
+              ${hass.states['sensor.zonneplan_current_tariff_group'].state === 'low' ? '--bubble-icon-background-color: #AFE1AF !important' : ''}
+              ${hass.states['sensor.zonneplan_current_tariff_group'].state === 'high' ? '--bubble-icon-background-color: #FFCCCB !important' : ''}
+          }
+          @media (prefers-color-scheme: dark) {
+               .bubble-icon, .bubble-sub-button-1, .bubble-sub-button-2 {
+                    ${hass.states['sensor.zonneplan_current_tariff_group'].state === 'low' ? 'color: black !important' : ''}
+                    ${hass.states['sensor.zonneplan_current_tariff_group'].state === 'high' ? 'color: black !important' : ''}
+              }
+          }
+      - type: custom:apexcharts-card
+        graph_span: 10m
+        header:
+          show: true
+          title: Live Stroomgebruik
+        series:
+          - entity: sensor.live_energieverbruik_totaal
+            name: Stroomverbruik live
+            type: column
+            stroke_width: 1
+            color: var(--bubble-default-color)
+            group_by:
+              duration: 5s
+              func: avg
+            opacity: 1
+            float_precision: 2
+            color_threshold:
+              - value: -1
+                color: green
+              - value: 0
+                color: "#grey"
+              - value: 1
+                color: orange
+              - value: 2
+                color: red
+      - type: custom:auto-entities
+        show_empty: false
+        filter:
+          include:
+            - options:
+                type: custom:bubble-card
+                card_type: button
+                button_type: state
+                icon: phu:socket-eu
+              domain: sensor
+              name: "*Vermogen*"
+          exclude:
+            - options: {}
+              state: "off"
+            - options: {}
+              state: unavailable
+            - options: {}
+              hidden_by: user
+            - options: {}
+              name: Inverter*
+            - options: {}
+              state: "0"
+        sort:
+          method: state
+          reverse: true
+          numeric: true
+          count: 2
+        card:
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
+badges: []
+cards: []
