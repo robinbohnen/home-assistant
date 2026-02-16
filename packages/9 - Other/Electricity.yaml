@@ -1,59 +1,76 @@
 electricity_package:
   template:
     - switch:
-      - name: Live Energieverbruik Totaal Negatief
-        unique_id: live_energieverbruik_totaal_negatief
-        turn_off: []
-        turn_on: []
-        default_entity_id: switch.live_energieverbruik_totaal_negatief
-        state: '"{{ states(''sensor.live_energieverbruik_totaal'',0) | float <= 0 }}"'
+        - name: Live Energieverbruik Totaal Negatief
+          unique_id: live_energieverbruik_totaal_negatief
+          turn_off: []
+          turn_on: []
+          default_entity_id: switch.live_energieverbruik_totaal_negatief
+          state: "{{ states('sensor.live_energieverbruik_totaal', 0) | float(0) <= 0 }}"
     - sensor:
-      - name: "Energieverbruik Fase L1 in Watt"
-        unique_id: energieverbruik_fase_l1_in_watt
-        state: "{{ states('sensor.electricity_meter_energieverbruik_fase_l1') | float * 1000}}"
-        unit_of_measurement: "W"
+        - name: "Energieverbruik Fase L1 in Watt"
+          unique_id: energieverbruik_fase_l1_in_watt
+          state: "{{ states('sensor.electricity_meter_energieverbruik_fase_l1') | float(0) * 1000 }}"
+          availability: "{{ states('sensor.electricity_meter_energieverbruik_fase_l1') not in ['unavailable', 'unknown'] }}"
+          unit_of_measurement: "W"
     - sensor:
-      - name: "Energieverbruik Fase L2 in Watt"
-        unique_id: energieverbruik_fase_l2_in_watt
-        state: "{{ states('sensor.electricity_meter_energieverbruik_fase_l2') | float * 1000}}"
-        unit_of_measurement: "W"
+        - name: "Energieverbruik Fase L2 in Watt"
+          unique_id: energieverbruik_fase_l2_in_watt
+          state: "{{ states('sensor.electricity_meter_energieverbruik_fase_l2') | float(0) * 1000 }}"
+          availability: "{{ states('sensor.electricity_meter_energieverbruik_fase_l2') not in ['unavailable', 'unknown'] }}"
+          unit_of_measurement: "W"
     - sensor:
-      - name: "Energieverbruik Fase L3 in Watt"
-        unique_id: energieverbruik_fase_l3_in_watt
-        state: "{{ states('sensor.electricity_meter_energieverbruik_fase_l3') | float * 1000}}"
-        unit_of_measurement: "W"
+        - name: "Energieverbruik Fase L3 in Watt"
+          unique_id: energieverbruik_fase_l3_in_watt
+          state: "{{ states('sensor.electricity_meter_energieverbruik_fase_l3') | float(0) * 1000 }}"
+          availability: "{{ states('sensor.electricity_meter_energieverbruik_fase_l3') not in ['unavailable', 'unknown'] }}"
+          unit_of_measurement: "W"
     - sensor:
-      - name: "Energieproductie Fase L1 in Watt"
-        unique_id: energieproductie_fase_l1_in_watt
-        state: "{{ states('sensor.electricity_meter_energieproductie_fase_l1') | float * 1000}}"
-        unit_of_measurement: "W"
+        - name: "Energieproductie Fase L1 in Watt"
+          unique_id: energieproductie_fase_l1_in_watt
+          state: "{{ states('sensor.electricity_meter_energieproductie_fase_l1') | float(0) * 1000 }}"
+          availability: "{{ states('sensor.electricity_meter_energieproductie_fase_l1') not in ['unavailable', 'unknown'] }}"
+          unit_of_measurement: "W"
     - sensor:
-      - name: "Energieproductie Fase L2 in Watt"
-        unique_id: energieproductie_fase_l2_in_watt
-        state: "{{ states('sensor.electricity_meter_energieproductie_fase_l2') | float * 1000}}"
-        unit_of_measurement: "W"
+        - name: "Energieproductie Fase L2 in Watt"
+          unique_id: energieproductie_fase_l2_in_watt
+          state: "{{ states('sensor.electricity_meter_energieproductie_fase_l2') | float(0) * 1000 }}"
+          availability: "{{ states('sensor.electricity_meter_energieproductie_fase_l2') not in ['unavailable', 'unknown'] }}"
+          unit_of_measurement: "W"
     - sensor:
-      - name: "Energieproductie Fase L3 in Watt"
-        unique_id: energieproductie_fase_l3_in_watt
-        state: "{{ states('sensor.electricity_meter_energieproductie_fase_l3') | float * 1000}}"
-        unit_of_measurement: "W"
+        - name: "Energieproductie Fase L3 in Watt"
+          unique_id: energieproductie_fase_l3_in_watt
+          state: "{{ states('sensor.electricity_meter_energieproductie_fase_l3') | float(0) * 1000 }}"
+          availability: "{{ states('sensor.electricity_meter_energieproductie_fase_l3') not in ['unavailable', 'unknown'] }}"
+          unit_of_measurement: "W"
     - sensor:
-      - name: "Live Energieverbruik Totaal"
-        unique_id: live_energieverbruik_totaal
-        state: "{{ (states('sensor.electricity_meter_energieverbruik') | float - states('sensor.electricity_meter_energieproductie') | float) | round(4)  }}"
-        unit_of_measurement: "kWh"
-        state_class: "Total"
+        - name: "Live Energieverbruik Totaal"
+          unique_id: live_energieverbruik_totaal
+          state: "{{ (states('sensor.electricity_meter_energieverbruik') | float(0) - states('sensor.electricity_meter_energieproductie') | float(0)) | round(4) }}"
+          availability: >-
+            {{ states('sensor.electricity_meter_energieverbruik') not in ['unavailable', 'unknown']
+               and states('sensor.electricity_meter_energieproductie') not in ['unavailable', 'unknown'] }}
+          unit_of_measurement: "kWh"
+          state_class: "Total"
     - sensor:
-      - name: "Daily Discharging Energy Negative"
-        unique_id: daily_discharging_energy_negative
-        state: "{{ ((states['sensor.lilygo_rs485_marstek_daily_discharging_energy'].state | float ) * -1) }}"
-        unit_of_measurement: "kWh"
-        device_class: "Energy"
-        state_class: "Total"
+        - name: "Daily Discharging Energy Negative"
+          unique_id: daily_discharging_energy_negative
+          state: "{{ (states('sensor.lilygo_rs485_marstek_daily_discharging_energy') | float(0)) * -1 }}"
+          availability: "{{ states('sensor.lilygo_rs485_marstek_daily_discharging_energy') not in ['unavailable', 'unknown'] }}"
+          unit_of_measurement: "kWh"
+          device_class: "Energy"
+          state_class: "Total"
     - sensor:
-      - name: "Total costs today calculated"
-        unique_id: daily_total_costs_today_calculated
-        state: "{{ (((states['sensor.zonneplan_electricity_delivery_costs_today'].state | float - states['sensor.zonneplan_electricity_production_costs_today'].state | float)+ states['sensor.zonneplan_gas_delivery_costs_today'].state | float)) }}"
-        unit_of_measurement: "EUR"
-        device_class: "monetary"
-        state_class: "Total"
+        - name: "Total costs today calculated"
+          unique_id: daily_total_costs_today_calculated
+          state: >-
+            {{ (states('sensor.zonneplan_electricity_delivery_costs_today') | float(0)
+                - states('sensor.zonneplan_electricity_production_costs_today') | float(0)
+                + states('sensor.zonneplan_gas_delivery_costs_today') | float(0)) }}
+          availability: >-
+            {{ states('sensor.zonneplan_electricity_delivery_costs_today') not in ['unavailable', 'unknown']
+               and states('sensor.zonneplan_electricity_production_costs_today') not in ['unavailable', 'unknown']
+               and states('sensor.zonneplan_gas_delivery_costs_today') not in ['unavailable', 'unknown'] }}
+          unit_of_measurement: "EUR"
+          device_class: "monetary"
+          state_class: "Total"

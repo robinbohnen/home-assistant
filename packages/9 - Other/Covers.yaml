@@ -1,57 +1,41 @@
 covers_package:
+  group:
+    covers_first_floor:
+      name: Rolluiken eerste verdieping
+      icon: mdi:window-shutter
+      entities:
+        - cover.kantoor_links_low_speed
+        - cover.kantoor_rechts_low_speed
+        - cover.badkamer_rolluik_low_speed
+        - cover.slaapkamer_rolluik_low_speed
+        - cover.slaapkamer_maxi_links_low_speed
+        - cover.slaapkamer_maxi_rechts_low_speed
+        - cover.slaapkamer_mini
+
+    covers_kitchen_rollerblinds:
+      name: Rolgordijnen keuken
+      icon: mdi:blinds
+      entities:
+        - cover.rollerblind_0001
+        - cover.rollerblind_0002
+
+    covers_children_bedrooms:
+      name: Rolluiken kinderkamers
+      icon: mdi:window-shutter
+      entities:
+        - cover.slaapkamer_maxi_links_low_speed
+        - cover.slaapkamer_maxi_rechts_low_speed
+        - cover.slaapkamer_mini
+
   automation:
-    - id: covers_open_close
-      alias: General - Covers Open or Close All
-      description: Open or Close all covers based on time, temperature and sun
+    #################################################################
+    ## Bedroom button press - open covers
+    #################################################################
+    - id: covers_bedroom_button
+      alias: Covers - Bedroom button press
+      description: Open covers when bedroom button is pressed
       mode: single
       triggers:
-        - trigger: time
-          at: "09:30:00"
-          id: morning
-        - trigger: time
-          at: "23:00:00"
-          id: midnight
-        - trigger: numeric_state
-          entity_id:
-            - sensor.knmi_temperatuur
-          above: 20
-          id: temperature_above_20
-        - trigger: numeric_state
-          entity_id:
-            - sensor.voortuin_zon_luminance
-          above: 20000
-          for:
-            hours: 0
-            minutes: 15
-            seconds: 0
-          id: luminance_frontyard_above_20000
-        - trigger: numeric_state
-          entity_id:
-            - sensor.achtertuin_zon_luminance
-          above: 20000
-          for:
-            hours: 0
-            minutes: 15
-            seconds: 0
-          id: luminance_backyard_above_20000
-        - trigger: numeric_state
-          entity_id:
-            - sensor.voortuin_zon_luminance
-          below: 20000
-          for:
-            hours: 0
-            minutes: 15
-            seconds: 0
-          id: luminance_frontyard_below_20000
-        - trigger: numeric_state
-          entity_id:
-            - sensor.achtertuin_zon_luminance
-          below: 20000
-          for:
-            hours: 0
-            minutes: 15
-            seconds: 0
-          id: luminance_backyard_below_20000
         - domain: mqtt
           device_id: 529832208f6d63cd56f2879a153f216b
           type: action
@@ -64,6 +48,49 @@ covers_package:
           subtype: single
           trigger: device
           id: bedroom_buttons_pressed
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: time
+                  after: "06:00:00"
+                  before: "17:00:00"
+              sequence:
+                - if:
+                    - condition: numeric_state
+                      entity_id: sensor.voortuin_zon_luminance
+                      above: 20000
+                  then:
+                    - action: cover.open_cover
+                      data: {}
+                      target:
+                        entity_id:
+                          - cover.badkamer_rolluik_low_speed
+                          - cover.slaapkamer_rolluik_low_speed
+                    - action: cover.close_cover
+                      data: {}
+                      target:
+                        entity_id:
+                          - cover.keuken_screen_links
+                          - cover.keuken_screen_rechts
+                  else:
+                    - action: cover.open_cover
+                      data: {}
+                      target:
+                        entity_id: group.covers_first_floor
+                    - action: cover.open_cover
+                      data: {}
+                      target:
+                        entity_id: group.covers_kitchen_rollerblinds
+
+    #################################################################
+    ## Lock/alarm events - open/close kitchen rollerblinds
+    #################################################################
+    - id: covers_lock_alarm_events
+      alias: Covers - Lock and alarm events
+      description: Open or close covers based on lock and alarm state changes
+      mode: single
+      triggers:
         - trigger: state
           entity_id:
             - lock.kroon18voordeur
@@ -95,51 +122,6 @@ covers_package:
             - conditions:
                 - condition: trigger
                   id:
-                    - bedroom_buttons_pressed
-              sequence:
-                - choose:
-                    - conditions:
-                        - condition: time
-                          after: "06:00:00"
-                          before: "17:00:00"
-                      sequence:
-                        - if:
-                            - condition: numeric_state
-                              entity_id: sensor.voortuin_zon_luminance
-                              above: 20000
-                          then:
-                            - action: cover.open_cover
-                              metadata: {}
-                              data: {}
-                              target:
-                                entity_id:
-                                  - cover.badkamer_rolluik_low_speed
-                                  - cover.slaapkamer_rolluik_low_speed
-                            - action: cover.close_cover
-                              metadata: {}
-                              data: {}
-                              target:
-                                entity_id:
-                                  - cover.keuken_screen_links
-                                  - cover.keuken_screen_rechts
-                          else:
-                            - action: cover.open_cover
-                              metadata: {}
-                              data: {}
-                              target:
-                                entity_id:
-                                  - cover.kantoor_links_low_speed
-                                  - cover.kantoor_rechts_low_speed
-                                  - cover.badkamer_rolluik_low_speed
-                                  - cover.slaapkamer_rolluik_low_speed
-                                  - cover.slaapkamer_maxi_links_low_speed
-                                  - cover.slaapkamer_maxi_rechts_low_speed
-                                  - cover.slaapkamer_mini
-                                  - cover.rollerblind_0001
-                                  - cover.rollerblind_0002
-            - conditions:
-                - condition: trigger
-                  id:
                     - lock_unlocked
                     - alarm_off
               sequence:
@@ -155,12 +137,9 @@ covers_package:
                       before_offset: "-00:30:00"
                   then:
                     - action: cover.open_cover
-                      metadata: {}
                       data: {}
                       target:
-                        entity_id:
-                          - cover.rollerblind_0001
-                          - cover.rollerblind_0002
+                        entity_id: group.covers_kitchen_rollerblinds
             - conditions:
                 - condition: trigger
                   id:
@@ -187,7 +166,6 @@ covers_package:
                           state: "off"
                       then:
                         - action: cover.close_cover
-                          metadata: {}
                           data: {}
                           target:
                             entity_id: cover.rollerblind_0001
@@ -197,17 +175,41 @@ covers_package:
                           state: "off"
                       then:
                         - action: cover.close_cover
-                          metadata: {}
                           data: {}
                           target:
                             entity_id: cover.rollerblind_0002
+
+    #################################################################
+    ## Sun protection - kitchen screens based on frontyard luminance
+    #################################################################
+    - id: covers_sun_protection
+      alias: Covers - Sun protection screens
+      description: Close or open kitchen sunscreens based on frontyard sun luminance
+      mode: single
+      triggers:
+        - trigger: numeric_state
+          entity_id:
+            - sensor.voortuin_zon_luminance
+          above: 20000
+          for:
+            minutes: 15
+          id: luminance_frontyard_above_20000
+        - trigger: numeric_state
+          entity_id:
+            - sensor.voortuin_zon_luminance
+          below: 20000
+          for:
+            minutes: 15
+          id: luminance_frontyard_below_20000
+      conditions: []
+      actions:
+        - choose:
             - conditions:
                 - condition: trigger
                   id:
                     - luminance_frontyard_above_20000
               sequence:
                 - action: cover.close_cover
-                  metadata: {}
                   data: {}
                   target:
                     entity_id: cover.covers_kitchen_screens
@@ -217,256 +219,208 @@ covers_package:
                   id:
                     - luminance_frontyard_below_20000
               sequence:
-                - choose:
-                    - conditions:
-                        - condition: not
-                          conditions:
-                            - condition: state
-                              entity_id: group.all_adults
-                              state: home
-                        - condition: time
-                          after: "18:45:00"
-                          before: "07:00:00"
-                      sequence:
-                        - action: cover.open_cover
-                          metadata: {}
-                          data: {}
-                          target:
-                            entity_id: cover.covers_kitchen_screens
-                      alias: Nobody is home and during sleeping hours
-                    - conditions:
-                        - condition: not
-                          conditions:
-                            - condition: state
-                              entity_id: group.all_adults
-                              state: home
-                        - condition: time
-                          after: "07:00:00"
-                          before: "18:45:00"
-                      sequence:
-                        - action: cover.open_cover
-                          metadata: {}
-                          data: {}
-                          target:
-                            entity_id: cover.covers_kitchen_screens
-                      alias: Nobody is home and during daytime
-                    - conditions:
-                        - condition: state
-                          entity_id: group.all_adults
-                          state: home
-                        - condition: time
-                          after: "18:45:00"
-                          before: "07:00:00"
-                      sequence:
-                        - action: cover.open_cover
-                          metadata: {}
-                          data: {}
-                          target:
-                            entity_id: cover.covers_kitchen_screens
-                      alias: Someone is home and during sleeping hours
-                    - conditions:
-                        - condition: state
-                          entity_id: group.all_adults
-                          state: home
-                        - condition: time
-                          after: "07:00:00"
-                          before: "18:45:00"
-                      sequence:
-                        - action: cover.open_cover
-                          metadata: {}
-                          data: {}
-                          target:
-                            entity_id:
-                              - cover.covers_kitchen_screens
-                              - cover.rollerblind_0001
-                              - cover.rollerblind_0002
-                      alias: Someone is home and during daytime
-              alias: Sunscreens up
-            - conditions:
-                - alias: Morning
-                  condition: or
-                  conditions:
-                    - condition: trigger
-                      id:
-                        - morning
+                - action: cover.open_cover
+                  data: {}
+                  target:
+                    entity_id: cover.covers_kitchen_screens
+                - if:
+                    - condition: state
+                      entity_id: group.all_adults
+                      state: home
                     - condition: time
-                      before: "17:00:00"
-                      after: "08:00:00"
-              sequence:
-                - alias: Check weather conditions
-                  choose:
-                    - conditions:
-                        - condition: numeric_state
-                          entity_id: weather.knmi_thuis
-                          attribute: temperature
-                          above: 20
-                          alias: Hot
-                      sequence:
-                        - action: cover.close_cover
-                          metadata: {}
-                          data: {}
-                          target:
-                            entity_id:
-                              - cover.kantoor_links_low_speed
-                              - cover.kantoor_rechts_low_speed
-                              - cover.badkamer_rolluik_low_speed
-                              - cover.slaapkamer_rolluik_low_speed
-                              - cover.slaapkamer_maxi_links_low_speed
-                              - cover.slaapkamer_maxi_rechts_low_speed
-                              - cover.slaapkamer_mini
-                    - conditions:
-                        - condition: numeric_state
-                          entity_id: sensor.voortuin_zon_luminance
-                          above: 20000
-                          alias: Sunny frontyard
-                      sequence:
-                        - action: cover.close_cover
-                          metadata: {}
-                          data: {}
-                          target:
-                            entity_id:
-                              - cover.keuken_screen_links
-                              - cover.keuken_screen_rechts
-                        - if:
-                            - condition: state
-                              entity_id: binary_sensor.keuken_raam_klein_contact
-                              state: "off"
-                          then:
-                            - action: cover.close_cover
-                              metadata: {}
-                              data: {}
-                              target:
-                                entity_id: cover.rollerblind_0002
-                          alias: Rolgordijn rechts dicht
-                        - if:
-                            - condition: state
-                              entity_id: binary_sensor.keuken_raam_groot_contact
-                              state: "off"
-                          then:
-                            - action: cover.close_cover
-                              metadata: {}
-                              data: {}
-                              target:
-                                entity_id: cover.rollerblind_0001
-                          alias: Rolgordijn links dicht
-                        - if:
-                            - condition: state
-                              entity_id: light.woonkamer_lampen
-                              state: "on"
-                          then:
-                            - action: cover.set_cover_position
-                              metadata: {}
-                              data:
-                                position: 15
-                              target:
-                                entity_id:
-                                  - cover.slaapkamer_maxi_rechts_low_speed
-                                  - cover.slaapkamer_maxi_links_low_speed
-                                  - cover.kantoor_links_low_speed
-                                  - cover.kantoor_rechts_low_speed
-                                  - cover.slaapkamer_mini
-                            - action: cover.open_cover
-                              metadata: {}
-                              data: {}
-                              target:
-                                entity_id:
-                                  - cover.badkamer_rolluik_low_speed
-                                  - cover.slaapkamer_rolluik_low_speed
-                          alias: If we are awake, open covers otherwise leave them closed
-                    - conditions:
-                        - condition: numeric_state
-                          entity_id: sensor.achtertuin_zon_luminance
-                          above: 20000
-                          alias: Sunny Backyard
-                      sequence:
-                        - action: cover.set_cover_position
-                          metadata: {}
-                          data:
-                            position: 15
-                          target:
-                            entity_id:
-                              - cover.badkamer_rolluik_low_speed
-                              - cover.slaapkamer_rolluik_low_speed
-                              - cover.slaapkamer_mini
-                              - cover.kantoor_rechts_low_speed
-                        - action: cover.open_cover
-                          metadata: {}
-                          data: {}
-                          target:
-                            entity_id:
-                              - cover.slaapkamer_maxi_rechts_low_speed
-                              - cover.slaapkamer_maxi_links_low_speed
-                              - cover.kantoor_links_low_speed
-                  default:
+                      after: "07:00:00"
+                      before: "18:45:00"
+                  then:
                     - action: cover.open_cover
-                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: group.covers_kitchen_rollerblinds
+              alias: Sunscreens up
+
+    #################################################################
+    ## Morning routine - open covers based on weather conditions
+    #################################################################
+    - id: covers_morning_routine
+      alias: Covers - Morning routine
+      description: Open or close covers in the morning based on temperature and sun
+      mode: single
+      triggers:
+        - trigger: time
+          at: "09:30:00"
+          id: morning
+        - trigger: numeric_state
+          entity_id:
+            - sensor.knmi_temperatuur
+          above: 20
+          id: temperature_above_20
+        - trigger: numeric_state
+          entity_id:
+            - sensor.achtertuin_zon_luminance
+          above: 20000
+          for:
+            minutes: 15
+          id: luminance_backyard_above_20000
+        - trigger: numeric_state
+          entity_id:
+            - sensor.achtertuin_zon_luminance
+          below: 20000
+          for:
+            minutes: 15
+          id: luminance_backyard_below_20000
+      conditions:
+        - alias: Only during daytime
+          condition: time
+          after: "08:00:00"
+          before: "17:00:00"
+      actions:
+        - alias: Check weather conditions
+          choose:
+            - conditions:
+                - condition: numeric_state
+                  entity_id: weather.knmi_thuis
+                  attribute: temperature
+                  above: 20
+                  alias: Hot
+              sequence:
+                - action: cover.close_cover
+                  data: {}
+                  target:
+                    entity_id: group.covers_first_floor
+            - conditions:
+                - condition: numeric_state
+                  entity_id: sensor.voortuin_zon_luminance
+                  above: 20000
+                  alias: Sunny frontyard
+              sequence:
+                - action: cover.close_cover
+                  data: {}
+                  target:
+                    entity_id:
+                      - cover.keuken_screen_links
+                      - cover.keuken_screen_rechts
+                - if:
+                    - condition: state
+                      entity_id: binary_sensor.keuken_raam_klein_contact
+                      state: "off"
+                  then:
+                    - action: cover.close_cover
+                      data: {}
+                      target:
+                        entity_id: cover.rollerblind_0002
+                  alias: Rolgordijn rechts dicht
+                - if:
+                    - condition: state
+                      entity_id: binary_sensor.keuken_raam_groot_contact
+                      state: "off"
+                  then:
+                    - action: cover.close_cover
+                      data: {}
+                      target:
+                        entity_id: cover.rollerblind_0001
+                  alias: Rolgordijn links dicht
+                - if:
+                    - condition: state
+                      entity_id: light.woonkamer_lampen
+                      state: "on"
+                  then:
+                    - action: cover.set_cover_position
+                      data:
+                        position: 15
+                      target:
+                        entity_id:
+                          - cover.slaapkamer_maxi_rechts_low_speed
+                          - cover.slaapkamer_maxi_links_low_speed
+                          - cover.kantoor_links_low_speed
+                          - cover.kantoor_rechts_low_speed
+                          - cover.slaapkamer_mini
+                    - action: cover.open_cover
                       data: {}
                       target:
                         entity_id:
-                          - cover.kantoor_links_low_speed
-                          - cover.kantoor_rechts_low_speed
                           - cover.badkamer_rolluik_low_speed
                           - cover.slaapkamer_rolluik_low_speed
-                          - cover.slaapkamer_maxi_links_low_speed
-                          - cover.slaapkamer_maxi_rechts_low_speed
-                          - cover.slaapkamer_mini
-                          - cover.keuken_screen_links
-                          - cover.keuken_screen_rechts
-                    - if:
-                        - condition: state
-                          entity_id: group.all_adults
-                          state: home
-                      then:
-                        - action: cover.open_cover
-                          metadata: {}
-                          data: {}
-                          target:
-                            entity_id:
-                              - cover.rollerblind_0001
-                              - cover.rollerblind_0002
+                  alias: If we are awake, open covers otherwise leave them closed
             - conditions:
-                - condition: or
-                  conditions:
-                    - condition: trigger
-                      id:
-                        - midnight
-                    - condition: time
-                      after: "17:00:00"
-                      before: "08:00:00"
-                  alias: Midnight
+                - condition: numeric_state
+                  entity_id: sensor.achtertuin_zon_luminance
+                  above: 20000
+                  alias: Sunny Backyard
               sequence:
-                - action: cover.close_cover
-                  metadata: {}
+                - action: cover.set_cover_position
+                  data:
+                    position: 15
+                  target:
+                    entity_id:
+                      - cover.badkamer_rolluik_low_speed
+                      - cover.slaapkamer_rolluik_low_speed
+                      - cover.slaapkamer_mini
+                      - cover.kantoor_rechts_low_speed
+                - action: cover.open_cover
                   data: {}
                   target:
                     entity_id:
                       - cover.slaapkamer_maxi_rechts_low_speed
                       - cover.slaapkamer_maxi_links_low_speed
-                      - cover.slaapkamer_mini
-                - if:
-                    - condition: numeric_state
-                      entity_id: weather.forecast_thuis
-                      attribute: temperature
-                      below: 20
-                  then:
-                    - action: cover.set_cover_position
-                      metadata: {}
-                      data:
-                        position: 15
-                      target:
-                        entity_id:
-                          - cover.kantoor_links_low_speed
-                          - cover.kantoor_rechts_low_speed
-                          - cover.badkamer_rolluik_low_speed
-                          - cover.slaapkamer_rolluik_low_speed
-                  else:
-                    - action: cover.close_cover
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id:
-                          - cover.kantoor_links_low_speed
-                          - cover.kantoor_rechts_low_speed
-                          - cover.badkamer_rolluik_low_speed
-                          - cover.slaapkamer_rolluik_low_speed
-              alias: Midnight
+                      - cover.kantoor_links_low_speed
+          default:
+            - action: cover.open_cover
+              data: {}
+              target:
+                entity_id:
+                  - cover.keuken_screen_links
+                  - cover.keuken_screen_rechts
+            - action: cover.open_cover
+              data: {}
+              target:
+                entity_id: group.covers_first_floor
+            - if:
+                - condition: state
+                  entity_id: group.all_adults
+                  state: home
+              then:
+                - action: cover.open_cover
+                  data: {}
+                  target:
+                    entity_id: group.covers_kitchen_rollerblinds
+
+    #################################################################
+    ## Bedtime - close covers at night
+    #################################################################
+    - id: covers_bedtime
+      alias: Covers - Bedtime routine
+      description: Close covers at night
+      mode: single
+      triggers:
+        - trigger: time
+          at: "23:00:00"
+          id: midnight
+      conditions: []
+      actions:
+        - action: cover.close_cover
+          data: {}
+          target:
+            entity_id: group.covers_children_bedrooms
+        - if:
+            - condition: numeric_state
+              entity_id: weather.forecast_thuis
+              attribute: temperature
+              below: 20
+          then:
+            - action: cover.set_cover_position
+              data:
+                position: 15
+              target:
+                entity_id:
+                  - cover.kantoor_links_low_speed
+                  - cover.kantoor_rechts_low_speed
+                  - cover.badkamer_rolluik_low_speed
+                  - cover.slaapkamer_rolluik_low_speed
+          else:
+            - action: cover.close_cover
+              data: {}
+              target:
+                entity_id:
+                  - cover.kantoor_links_low_speed
+                  - cover.kantoor_rechts_low_speed
+                  - cover.badkamer_rolluik_low_speed
+                  - cover.slaapkamer_rolluik_low_speed
