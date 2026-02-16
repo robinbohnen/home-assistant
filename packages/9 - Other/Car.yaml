@@ -10,16 +10,22 @@ car_package:
 
   template:
     - sensor:
-      - name: "Car - Next location"
-        state: "{{ state_attr('calendar.auto','location') }}"
-        unique_id: car_next_location
-      - name: "Car - Price additional KM's"
-        state: "{{ ((states('sensor.hrh85f_kilometerstand') | int - states('input_number.lease_contract_kms') | int) * 0.12) }}"
-        unique_id: car_price_add_kms
-      - name: "Car - Departing in hours"
-        state: "{% set timestamp = as_timestamp(now()) %}{{ (((timestamp - as_timestamp(states.calendar.auto.attributes.start_time,timestamp)) *-1 / 60/60) | string).split('.')[0] }}"
-        unit_of_measurement: "hour"
-        unique_id: car_departing_in_hours
+        - name: "Car - Next location"
+          state: "{{ state_attr('calendar.auto','location') }}"
+          unique_id: car_next_location
+        - name: "Car - Price additional KM's"
+          state: "{{ ((states('sensor.hrh85f_kilometerstand') | int - states('input_number.lease_contract_kms') | int) * 0.12) }}"
+          unique_id: car_price_add_kms
+        - name: "Car - Departing in hours"
+          state: "{% set timestamp = as_timestamp(now()) %}{{ (((timestamp - as_timestamp(states.calendar.auto.attributes.start_time,timestamp)) *-1 / 60/60) | string).split('.')[0] }}"
+          unit_of_measurement: "hour"
+          unique_id: car_departing_in_hours
+
+  input_text:
+    geoapify_api_key:
+      name: Geoapify API Key
+      initial: !secret geoapify_api_key
+      mode: password
 
   sensor:
     - platform: rest
@@ -42,7 +48,8 @@ car_package:
         {{
           "https://api.geoapify.com/v1/geocode/search?text="
           + states('sensor.car_next_location') | urlencode
-          + "&apiKey=f4e7ab1afe834fa6927b38cd92bb123f&format=json"
+          + "&apiKey=" + states('input_text.geoapify_api_key')
+          + "&format=json"
         }}
 
   automation:

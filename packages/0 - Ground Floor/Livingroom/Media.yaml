@@ -1,5 +1,4 @@
 livingroom_media_package:
-
   input_number:
     tv_playing_percentage:
       name: "TV Playing Lights Percentage"
@@ -14,7 +13,6 @@ livingroom_media_package:
       icon: mdi:remote-tv
 
   automation:
-
     - id: livingroom_media_playing
       alias: Livingroom - Media Playing
       description: "When Apple TV starts playing, dim all lights"
@@ -40,39 +38,24 @@ livingroom_media_package:
               before: "05:00:00"
       actions:
         - action: media_player.unjoin
-          metadata: {}
           data: {}
           target:
-            entity_id:
-              - media_player.badkamer_sonos
-              - media_player.overkapping_sonos
-              - media_player.entree_sonos
-              - media_player.garage_sonos
-              - media_player.kantoor_sonos
-              - media_player.keuken_sonos
-              - media_player.keuken_sonos_2
-              - media_player.slaapkamer_mini_sonos
-              - media_player.slaapkamer_maxi_sonos
-              - media_player.speelkamer_sonos
-              - media_player.toilet_sonos
+            entity_id: group.all_sonos_secondary
         - if:
             - condition: state
               entity_id: input_boolean.changed_tv_volume
               state: "off"
           then:
             - action: media_player.volume_set
-              metadata: {}
               data:
                 volume_level: 0.17
               target:
                 entity_id: media_player.woonkamer_sonos
             - action: input_boolean.turn_on
-              metadata: {}
               data: {}
               target:
                 entity_id: input_boolean.changed_tv_volume
         - action: light.turn_on
-          metadata: {}
           data:
             transition: "{{ states('input_number.lights_transition_seconds')|int }}"
             brightness_pct: "{{ states('input_number.tv_playing_percentage')|int }}"
@@ -82,7 +65,6 @@ livingroom_media_package:
               - light.keuken_lampen
               - light.eettafel_lampen
         - action: light.turn_off
-          metadata: {}
           data: {}
           target:
             entity_id:
@@ -92,7 +74,6 @@ livingroom_media_package:
               - light.trapkast_lampen
               - light.woonkamer_humble
         - action: light.turn_on
-          metadata: {}
           data:
             brightness_pct: 1
           target:
@@ -114,7 +95,6 @@ livingroom_media_package:
       conditions: []
       actions:
         - action: light.turn_on
-          metadata: {}
           data:
             transition: "{{ states('input_number.lights_transition_seconds')|int }}"
             brightness_pct: "{{ states('input_number.lights_livingroom_percentage')|int }}"
@@ -124,7 +104,6 @@ livingroom_media_package:
               - light.eettafel_lampen
               - light.keuken_lampen
         - action: light.turn_on
-          metadata: {}
           data:
             brightness_pct: 50
           target:
@@ -132,7 +111,7 @@ livingroom_media_package:
 
     - id: livingroom_tv_on
       alias: Livingroom - Media TV On
-      description: 'Unjoin everything if TV is turned on'
+      description: "Unjoin everything if TV is turned on"
       mode: single
       triggers:
         - trigger: state
@@ -146,18 +125,6 @@ livingroom_media_package:
       conditions: []
       actions:
         - action: media_player.unjoin
-          metadata: {}
           data: {}
           target:
-            entity_id:
-              - media_player.entree_sonos
-              - media_player.badkamer_sonos
-              - media_player.overkapping_sonos
-              - media_player.garage_sonos
-              - media_player.kantoor_sonos
-              - media_player.keuken_sonos
-              - media_player.keuken_sonos_2
-              - media_player.slaapkamer_mini_sonos
-              - media_player.slaapkamer_maxi_sonos
-              - media_player.speelkamer_sonos
-              - media_player.toilet_sonos
+            entity_id: group.all_sonos_secondary

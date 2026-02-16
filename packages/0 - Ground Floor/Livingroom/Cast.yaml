@@ -2,118 +2,57 @@ livingroom_cast_package:
   automation:
     - id: livingroom_always_cast_nest_hub
       alias: Livingroom - Always cast on Nest Hub
-      description: Cast again when casting stops
+      description: Keep casting dashboard on Nest Hub - recast when idle, off or paused
       mode: single
       triggers:
         - trigger: state
           entity_id:
             - media_player.woonkamer
           to: idle
+          id: idle
         - trigger: state
           entity_id:
             - light.woonkamer_lampen
           to: "on"
+          id: lights_on
         - trigger: state
           entity_id:
             - media_player.woonkamer
-          to:
-            - "off"
+          to: "off"
+          id: "off"
+        - trigger: state
+          entity_id:
+            - media_player.woonkamer
+          to: paused
+          for:
+            minutes: 1
+          id: paused
       conditions: []
       actions:
         - if:
             - condition: state
               entity_id: media_player.woonkamer
-              state:
-                - "off"
+              state: "off"
           then:
             - action: media_player.turn_on
-              metadata: {}
               data: {}
               target:
                 entity_id: media_player.woonkamer
             - delay:
-                hours: 0
-                minutes: 0
                 seconds: 5
-                milliseconds: 0
+        - if:
+            - condition: state
+              entity_id: media_player.woonkamer
+              state: paused
+          then:
+            - action: media_player.turn_off
+              data: {}
+              target:
+                entity_id: media_player.woonkamer
+            - delay:
+                seconds: 5
         - action: cast.show_lovelace_view
-          metadata: {}
           data:
             entity_id: media_player.woonkamer
             dashboard_path: dashboard-dev
             view_path: mini-dashboard
-
-    - id: 'livingroom_cast_off'
-      alias: Livingroom - Always cast on Nest Hub
-      description: Cast again when casting stops
-      mode: single
-      triggers:
-        - trigger: state
-          entity_id:
-            - media_player.woonkamer
-          to: idle
-        - trigger: state
-          entity_id:
-            - light.woonkamer_lampen
-          to: "on"
-        - trigger: state
-          entity_id:
-            - media_player.woonkamer
-          to:
-            - "off"
-          for:
-            hours: 0
-            minutes: 1
-            seconds: 0
-        - trigger: state
-          entity_id:
-            - media_player.woonkamer
-          to:
-            - paused
-          for:
-            hours: 0
-            minutes: 1
-            seconds: 0
-      conditions: []
-      actions:
-        - if:
-            - condition: state
-              entity_id: media_player.woonkamer
-              state:
-                - "off"
-          then:
-            - action: media_player.turn_on
-              metadata: {}
-              data: {}
-              target:
-                entity_id: media_player.woonkamer
-            - delay:
-                hours: 0
-                minutes: 0
-                seconds: 5
-                milliseconds: 0
-            - action: cast.show_lovelace_view
-              metadata: {}
-              data:
-                entity_id: media_player.woonkamer
-                dashboard_path: dashboard-dev
-                view_path: mini-dashboard
-        - if:
-            - condition: state
-              entity_id: media_player.woonkamer
-              state:
-                - paused
-          then: []
-          else:
-            - action: media_player.turn_off
-              metadata: {}
-              data: {}
-              target:
-                entity_id: media_player.woonkamer
-                device_id: 1cd944954e507ee9dc85a35ecdd4cb19
-            - action: cast.show_lovelace_view
-              metadata: {}
-              data:
-                entity_id: media_player.woonkamer
-                dashboard_path: dashboard-dev
-                view_path: mini-dashboard
