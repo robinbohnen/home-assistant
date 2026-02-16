@@ -17,7 +17,14 @@ car_package:
           state: "{{ ((states('sensor.hrh85f_kilometerstand') | int - states('input_number.lease_contract_kms') | int) * 0.12) }}"
           unique_id: car_price_add_kms
         - name: "Car - Departing in hours"
-          state: "{% set timestamp = as_timestamp(now()) %}{{ (((timestamp - as_timestamp(states.calendar.auto.attributes.start_time,timestamp)) *-1 / 60/60) | string).split('.')[0] }}"
+          state: >-
+            {% set start = state_attr('calendar.auto', 'start_time') %}
+            {% if start %}
+              {{ ((as_timestamp(start) - as_timestamp(now())) / 3600) | int }}
+            {% else %}
+              0
+            {% endif %}
+          availability: "{{ state_attr('calendar.auto', 'start_time') is not none }}"
           unit_of_measurement: "hour"
           unique_id: car_departing_in_hours
 
