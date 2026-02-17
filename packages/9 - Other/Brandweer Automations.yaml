@@ -74,6 +74,13 @@ brandweer_package:
         - B Ploeg
         - C Ploeg
       icon: mdi:firebase
+    brandweer_bezetting_status:
+      name: "Brandweer - Bezetting Status"
+      options:
+        - ok
+        - krap
+        - onderbezet
+      icon: mdi:account-group
 
   input_text:
     brandweer_laatste_melding:
@@ -1272,3 +1279,46 @@ brandweer_package:
                 message: "{{ trigger.json.p2000_message }}"
                 data:
                   priority: 0
+
+    - id: brandweer_bezetting_webhook
+      alias: Brandweer - (Onder)bezetting bericht
+      description: Webhook voor bezettingswijzigingen brandweer
+      mode: single
+      triggers:
+        - trigger: webhook
+          allowed_methods:
+            - POST
+            - PUT
+          local_only: false
+          webhook_id: brandweer-onder-bezetting-bericht-dykzRyg6UOQoTloNGJjCYxlW
+      conditions: []
+      actions:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.brandweer_bezetting_status
+          data:
+            option: "{{ trigger.json.type }}"
+        - variables:
+            status: "{{ trigger.json.type }}"
+            vorige: "{{ trigger.json.vorige_status }}"
+            ploeg: "{{ trigger.json.ploeg }}"
+            tijdstip: "{{ trigger.json.tijdstip }}"
+            functies: "{{ trigger.json.functies | default([]) }}"
+            ook_krap: "{{ trigger.json.ook_krap | default([]) }}"
+            was_sinds: "{{ trigger.json.was_sinds | default('') }}"
+            wijzigingen: "{{ trigger.json.wijzigingen | default({}) }}"
+        - action: notify.mobile_devices_robin
+          data:
+            title: >-
+              {% if status == 'onderbezet' %}Onderbezet - {{ ploeg }} Ploeg
+              {% elif status == 'krap' %}Krap bezet - {{ ploeg }} Ploeg
+              {% else %}Bezetting OK - {{ ploeg }} Ploeg{% endif %}
+            message: >-
+              {% if status == 'onderbezet' %}Bezetting {{ ploeg }} Ploeg is onderbezet (was {{ vorige }}).
+              {% for f in functies %}{{ f.functie }}: {{ f.beschikbaar }}/{{ f.nodig }} beschikbaar. {% endfor %}
+              {% if ook_krap | length > 0 %}Ook krap: {% for f in ook_krap %}{{ f.functie }}: {{ f.beschikbaar }}/{{ f.gewenst }}. {% endfor %}{% endif %}
+              {% elif status == 'krap' %}Bezetting {{ ploeg }} Ploeg is krap (was {{ vorige }}).
+              {% for f in functies %}{{ f.functie }}: {{ f.beschikbaar }}/{{ f.gewenst }} beschikbaar. {% endfor %}
+              {% else %}Bezetting {{ ploeg }} Ploeg is weer op orde (was {{ vorige }}{% if was_sinds %} sinds {{ was_sinds }}{% endif %}).
+              {% endif %}
+              {% if wijzigingen | length > 0 %}Wijzigingen: {% for functie, w in wijzigingen.items() %}{{ functie }}: {% if w.erbij is defined %}+{{ w.erbij | join(', +') }} {% endif %}{% if w.eraf is defined %}-{{ w.eraf | join(', -') }}{% endif %}. {% endfor %}{% endif %}
