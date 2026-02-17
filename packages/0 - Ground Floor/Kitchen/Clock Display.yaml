@@ -164,7 +164,7 @@ kitchen_clock_display_package:
             topic: clock_1/custom/temperature_living
             payload: >-
               {"icon": 7112,"color":"FFFFFF","repeat": 2,"text": "{{
-              states('sensor.woonkamer_temperatuur') | round(1) }}"}
+              states('sensor.woonkamer_temperatuur') | float(0) | round(1) }}"}
           action: mqtt.publish
           alias: Display temperature
         - data:
@@ -173,7 +173,7 @@ kitchen_clock_display_package:
             topic: clock_1/custom/power_usage
             payload: >-
               {"icon": 54077,"color":"FFFFFF","repeat": 2,"text": "{{
-              states('sensor.live_energieverbruik_totaal') | round(2) }}"}
+              states('sensor.live_energieverbruik_totaal') | float(0) | round(2) }}"}
           action: mqtt.publish
           alias: Display power usage
         - alias: Display solar power generated now
@@ -189,7 +189,7 @@ kitchen_clock_display_package:
                 topic: clock_1/custom/power_generated
                 payload: >-
                   {"icon": 27283,"color":"FFFFFF","repeat": 2,"text": "{{
-                  states('sensor.solar_power_generated_now') | round(2) }} W"}
+                  states('sensor.solar_power_generated_now') | float(0) | round(2) }} W"}
               action: mqtt.publish
           else:
             - data:
@@ -203,11 +203,11 @@ kitchen_clock_display_package:
             topic: clock_1/custom/today costs
             payload: >-
               {"icon": 2147,"color":"FFFFFF","repeat": 2,"text": "€ {{
-              '{:.2f}'.format(((states['sensor.zonneplan_electricity_delivery_costs_today'].state
-              | float -
-              states['sensor.zonneplan_electricity_production_costs_today'].state |
-              float)+ states['sensor.zonneplan_gas_delivery_costs_today'].state |
-              float) | round(2)) }}"}
+              '{:.2f}'.format(((states('sensor.zonneplan_electricity_delivery_costs_today')
+              | float(0) -
+              states('sensor.zonneplan_electricity_production_costs_today')
+              | float(0)) + states('sensor.zonneplan_gas_delivery_costs_today')
+              | float(0)) | round(2)) }}"}
           action: mqtt.publish
           alias: Display total costs today
         - alias: Display spa temperature
@@ -223,7 +223,7 @@ kitchen_clock_display_package:
                 topic: clock_1/custom/spa_temperature
                 payload: >-
                   {"icon": 7097,"color":"FFFFFF","repeat": 2,"text": "{{
-                  state_attr('climate.intex_purespa','current_temperature') | round(2)
+                  state_attr('climate.intex_purespa','current_temperature') | float(0) | round(1)
                   }}"}
               action: mqtt.publish
           else:
