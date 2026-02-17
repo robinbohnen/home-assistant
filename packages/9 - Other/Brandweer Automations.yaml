@@ -1299,6 +1299,7 @@ brandweer_package:
           data:
             option: "{{ trigger.json.type }}"
         - variables:
+            payload: "{{ trigger.json }}"
             status: "{{ trigger.json.type }}"
             vorige: "{{ trigger.json.vorige_status }}"
             ploeg: "{{ trigger.json.ploeg }}"
@@ -1314,6 +1315,9 @@ brandweer_package:
               {% elif status == 'krap' %}Krap bezet - {{ ploeg }} Ploeg
               {% else %}Bezetting OK - {{ ploeg }} Ploeg{% endif %}
             message: >-
+              {% set functies = payload.functies | default([]) %}
+              {% set ook_krap = payload.ook_krap | default([]) %}
+              {% set wijzigingen = payload.wijzigingen | default({}) %}
               {% if status == 'onderbezet' %}Bezetting {{ ploeg }} Ploeg is onderbezet (was {{ vorige }}).
               {% for f in functies %}{{ f.functie }}: {{ f.beschikbaar }}/{{ f.nodig }} beschikbaar. {% endfor %}
               {% if ook_krap | length > 0 %}Ook krap: {% for f in ook_krap %}{{ f.functie }}: {{ f.beschikbaar }}/{{ f.gewenst }}. {% endfor %}{% endif %}
