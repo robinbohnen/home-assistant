@@ -50,19 +50,8 @@ zigbee_package:
             - delay:
                 minutes: 10
 
-        # Step 3 — reboot the zigbee2mqtt VM (but not MQTT yet)
-        - if:
-            - condition: state
-              entity_id: light.woonkamer_lampen
-              state: unavailable
-          then:
-            - action: button.press
-              target:
-                entity_id: button.qemu_z2mqtt_105_reboot
-            - delay:
-                minutes: 10
-
-        # Step 4 — last resort: also reboot the MQTT broker VM
+        # Step 3 — reboot the zigbee2mqtt VM (but not MQTT yet).
+        # Entity name is misleading: VM 100 is now zigbee2mqtt in Proxmox, HA cached the old name.
         - if:
             - condition: state
               entity_id: light.woonkamer_lampen
@@ -71,6 +60,18 @@ zigbee_package:
             - action: button.press
               target:
                 entity_id: button.qemu_mqtt_100_reboot
+            - delay:
+                minutes: 10
+
+        # Step 4 — last resort: also reboot the MQTT broker LXC
+        - if:
+            - condition: state
+              entity_id: light.woonkamer_lampen
+              state: unavailable
+          then:
+            - action: button.press
+              target:
+                entity_id: button.lxc_mqtt_kroon18_slimhuys_nl_108_reboot
 
     - id: zigbee_fix_cooldown_clear
       alias: Zigbee - Clear fix cooldown
