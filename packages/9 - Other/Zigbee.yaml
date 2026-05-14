@@ -1,8 +1,13 @@
 zigbee_package:
+  input_boolean:
+    zigbee_fix_cooldown:
+      name: "Zigbee fix - in cooldown"
+      icon: mdi:timer-pause-outline
+
   automation:
     - id: zigbee_fix_slzb
       alias: Zigbee - Fix unavailability
-      description: Fix unavailability by restarting controller automatically
+      description: Escalating recovery (soft → hard) for the living-room Zigbee group
       mode: single
       triggers:
         - trigger: state
@@ -10,58 +15,76 @@ zigbee_package:
             - light.woonkamer_lampen
           to: unavailable
           for:
-            minutes: 5
-      conditions: []
+            minutes: 30
+      conditions:
+        - condition: state
+          entity_id: input_boolean.zigbee_fix_cooldown
+          state: "off"
       actions:
-        - action: button.press
-          metadata: {}
-          data: {}
+        - action: input_boolean.turn_on
           target:
-            entity_id: button.slzb_mr3_zigbee_opnieuw_opstarten
+            entity_id: input_boolean.zigbee_fix_cooldown
+
+        # Step 1 — soft: ask zigbee2mqtt to restart its own process
+        - action: mqtt.publish
+          data:
+            topic: zigbee2mqtt/bridge/request/restart
+            payload: ""
         - delay:
-            hours: 0
-            minutes: 0
-            seconds: 5
-            milliseconds: 0
-        - action: button.press
-          metadata: {}
-          data: {}
-          target:
-            entity_id: button.slzb_mr3_core_restart
+            minutes: 5
+
+        # Step 2 — restart Zigbee stack on coordinator, then full SLZB reboot
         - if:
             - condition: state
               entity_id: light.woonkamer_lampen
-              state:
-                - unavailable
-              for:
-                hours: 0
-                minutes: 10
-                seconds: 0
+              state: unavailable
           then:
             - action: button.press
-              metadata: {}
               target:
-                entity_id:
-                  - button.qemu_z2mqtt_105_reboot
-                  - button.qemu_mqtt_100_reboot
-              data: {}
+                entity_id: button.slzb_mr3_zigbee_opnieuw_opstarten
             - delay:
-                hours: 0
-                minutes: 0
                 seconds: 30
-                milliseconds: 0
             - action: button.press
-              metadata: {}
-              data: {}
               target:
                 entity_id: button.slzb_mr3_core_restart
             - delay:
-                hours: 0
-                minutes: 0
-                seconds: 5
-                milliseconds: 0
+                minutes: 10
+
+        # Step 3 — reboot the zigbee2mqtt VM (but not MQTT yet)
+        - if:
+            - condition: state
+              entity_id: light.woonkamer_lampen
+              state: unavailable
+          then:
             - action: button.press
-              metadata: {}
-              data: {}
               target:
-                entity_id: button.slzb_mr3_zigbee_opnieuw_opstarten
+                entity_id: button.qemu_z2mqtt_105_reboot
+            - delay:
+                minutes: 10
+
+        # Step 4 — last resort: also reboot the MQTT broker VM
+        - if:
+            - condition: state
+              entity_id: light.woonkamer_lampen
+              state: unavailable
+          then:
+            - action: button.press
+              target:
+                entity_id: button.qemu_mqtt_100_reboot
+
+    - id: zigbee_fix_cooldown_clear
+      alias: Zigbee - Clear fix cooldown
+      description: Release the fix cooldown after 1 hour or on Home Assistant start
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: input_boolean.zigbee_fix_cooldown
+          to: "on"
+          for:
+            minutes: 60
+        - trigger: homeassistant
+          event: start
+      actions:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.zigbee_fix_cooldown
