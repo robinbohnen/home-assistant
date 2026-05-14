@@ -7,15 +7,17 @@ zigbee_package:
   automation:
     - id: zigbee_fix_slzb
       alias: Zigbee - Fix unavailability
-      description: Escalating recovery (soft → hard) for the living-room Zigbee group
+      description: Recover from a stuck zigbee2mqtt-to-coordinator link, escalating from soft to hard
       mode: single
       triggers:
         - trigger: state
           entity_id:
-            - light.woonkamer_lampen
-          to: unavailable
+            - binary_sensor.zigbee2mqtt_bridge_connection_state_3
+          to:
+            - "off"
+            - "unavailable"
           for:
-            minutes: 30
+            minutes: 10
       conditions:
         - condition: state
           entity_id: input_boolean.zigbee_fix_cooldown
@@ -25,19 +27,37 @@ zigbee_package:
           target:
             entity_id: input_boolean.zigbee_fix_cooldown
 
-        # Step 1 — soft: ask zigbee2mqtt to restart its own process
+        # Step 1 — soft: ask z2m to restart its own process via MQTT.
+        # Only works if z2m still consumes MQTT; harmless no-op otherwise.
         - action: mqtt.publish
           data:
             topic: zigbee2mqtt/bridge/request/restart
             payload: ""
         - delay:
-            minutes: 5
+            minutes: 3
 
-        # Step 2 — restart Zigbee stack on coordinator, then full SLZB reboot
+        # Step 2 — hard: reboot the zigbee2mqtt VM.
+        # Entity name lies: VM 100 is now zigbee2mqtt in Proxmox, HA cached the old name.
         - if:
             - condition: state
-              entity_id: light.woonkamer_lampen
-              state: unavailable
+              entity_id: binary_sensor.zigbee2mqtt_bridge_connection_state_3
+              state:
+                - "off"
+                - "unavailable"
+          then:
+            - action: button.press
+              target:
+                entity_id: button.qemu_mqtt_100_reboot
+            - delay:
+                minutes: 5
+
+        # Step 3 — reset the SLZB coordinator (Zigbee stack first, then full core)
+        - if:
+            - condition: state
+              entity_id: binary_sensor.zigbee2mqtt_bridge_connection_state_3
+              state:
+                - "off"
+                - "unavailable"
           then:
             - action: button.press
               target:
@@ -48,26 +68,15 @@ zigbee_package:
               target:
                 entity_id: button.slzb_mr3_core_restart
             - delay:
-                minutes: 10
-
-        # Step 3 — reboot the zigbee2mqtt VM (but not MQTT yet).
-        # Entity name is misleading: VM 100 is now zigbee2mqtt in Proxmox, HA cached the old name.
-        - if:
-            - condition: state
-              entity_id: light.woonkamer_lampen
-              state: unavailable
-          then:
-            - action: button.press
-              target:
-                entity_id: button.qemu_mqtt_100_reboot
-            - delay:
-                minutes: 10
+                minutes: 5
 
         # Step 4 — last resort: also reboot the MQTT broker LXC
         - if:
             - condition: state
-              entity_id: light.woonkamer_lampen
-              state: unavailable
+              entity_id: binary_sensor.zigbee2mqtt_bridge_connection_state_3
+              state:
+                - "off"
+                - "unavailable"
           then:
             - action: button.press
               target:
