@@ -18,6 +18,21 @@ zigbee_package:
             - "unavailable"
           for:
             minutes: 10
+
+        # Silent failure: bridge still reports 'on' (Z2M ↔ MQTT alive), but the
+        # Z2M ↔ SLZB link is hung — most zigbee lights go 'unavailable' while
+        # the connection_state trigger above never fires. 75% threshold leaves
+        # headroom for the post-restart window where lights re-check-in one by
+        # one (observed ~68% unavail 1 min after Z2M came back).
+        - trigger: template
+          value_template: >-
+            {% set lights = states.light | list %}
+            {% set total = lights | count %}
+            {% set unavail = lights | selectattr('state','eq','unavailable') | list | count %}
+            {{ is_state('binary_sensor.zigbee2mqtt_bridge_connection_state_3', 'on')
+               and total > 50 and unavail * 4 > total * 3 }}
+          for:
+            minutes: 15
       conditions:
         - condition: state
           entity_id: input_boolean.zigbee_fix_cooldown
