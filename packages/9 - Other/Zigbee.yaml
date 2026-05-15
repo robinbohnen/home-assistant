@@ -34,7 +34,7 @@ zigbee_package:
             topic: zigbee2mqtt/bridge/request/restart
             payload: ""
         - delay:
-            minutes: 3
+            minutes: 2
 
         # Step 2 — hard: reboot the zigbee2mqtt VM.
         # Entity name lies: VM 100 is now zigbee2mqtt in Proxmox, HA cached the old name.
@@ -49,7 +49,7 @@ zigbee_package:
               target:
                 entity_id: button.qemu_mqtt_100_reboot
             - delay:
-                minutes: 5
+                minutes: 2
 
         # Step 3 — reset the SLZB coordinator (Zigbee stack first, then full core)
         - if:
@@ -68,7 +68,7 @@ zigbee_package:
               target:
                 entity_id: button.slzb_mr3_core_restart
             - delay:
-                minutes: 5
+                minutes: 2
 
         # Step 4 — last resort: also reboot the MQTT broker LXC
         - if:
@@ -81,6 +81,36 @@ zigbee_package:
             - action: button.press
               target:
                 entity_id: button.lxc_mqtt_kroon18_slimhuys_nl_108_reboot
+
+        # Step 5 — realllast resort: stop everything and start clean
+        - if:
+            - condition: state
+              entity_id: binary_sensor.zigbee2mqtt_bridge_connection_state_3
+              state:
+                - "off"
+                - "unavailable"
+          then:
+            - action: button.press
+              target:
+                entity_id: button.lxc_mqtt_kroon18_slimhuys_nl_108_stop
+            - action: button.press
+              target:
+                entity_id: button.qemu_mqtt_100_stop
+            - delay:
+                minutes: 2
+            - action: button.press
+              target:
+                entity_id: button.slzb_mr3_core_restart
+            - delay:
+                minutes: 1
+            - action: button.press
+              target:
+                entity_id: button.lxc_mqtt_kroon18_slimhuys_nl_108_start
+            - delay:
+                minutes: 1
+            - action: button.press
+              target:
+                entity_id: button.qemu_mqtt_100_start
 
     - id: zigbee_fix_cooldown_clear
       alias: Zigbee - Clear fix cooldown
