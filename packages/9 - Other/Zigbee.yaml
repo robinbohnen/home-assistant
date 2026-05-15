@@ -85,7 +85,29 @@ zigbee_package:
             - delay:
                 minutes: 2
 
-        # Step 4 — last resort: also reboot the MQTT broker LXC
+        # Step 4 — PoE-cycle the SLZB-MR3 (real hardware power reset of the
+        # zigbee radio chip). Use when the soft SLZB restart in step 3 didn't
+        # revive ZNP. After the SLZB comes back, also kick Z2M because its TCP
+        # socket to the coordinator died with the power cut.
+        - if:
+            - condition: state
+              entity_id: binary_sensor.zigbee2mqtt_bridge_connection_state_3
+              state:
+                - "off"
+                - "unavailable"
+          then:
+            - action: button.press
+              target:
+                entity_id: button.kroon_18_dream_machine_se_downlink_naar_woonkamer_power_cycle
+            - delay:
+                seconds: 90
+            - action: button.press
+              target:
+                entity_id: button.qemu_mqtt_100_reboot
+            - delay:
+                minutes: 2
+
+        # Step 5 — last resort: also reboot the MQTT broker LXC
         - if:
             - condition: state
               entity_id: binary_sensor.zigbee2mqtt_bridge_connection_state_3
@@ -97,7 +119,7 @@ zigbee_package:
               target:
                 entity_id: button.lxc_mqtt_kroon18_slimhuys_nl_108_reboot
 
-        # Step 5 — realllast resort: stop everything and start clean
+        # Step 6 — realllast resort: stop everything and start clean
         - if:
             - condition: state
               entity_id: binary_sensor.zigbee2mqtt_bridge_connection_state_3
