@@ -123,6 +123,61 @@ livingsroom_lights_package:
               target:
                 entity_id: light.woonkamer_lampen
 
+    - id: livingroom_lights_ambient_fill
+      alias: Livingroom - Ambient fill lights (low luminance)
+      description: >
+        Zet humble + ledstrip aan op laag niveau als woonkamer_lampen aan zijn
+        en buiten-lux onder 1000 zakt. Zet ze uit als woonkamer_lampen uit gaan.
+      mode: restart
+      triggers:
+        - trigger: numeric_state
+          entity_id: sensor.achtertuin_zon_luminance
+          below: 1000
+          id: lux_laag
+        - trigger: state
+          entity_id: light.woonkamer_lampen
+          to: "on"
+          id: lampen_aan
+        - trigger: state
+          entity_id: light.woonkamer_lampen
+          to: "off"
+          id: lampen_uit
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - lux_laag
+                    - lampen_aan
+                - condition: state
+                  entity_id: light.woonkamer_lampen
+                  state: "on"
+                - condition: numeric_state
+                  entity_id: sensor.achtertuin_zon_luminance
+                  below: 1000
+              sequence:
+                - action: light.turn_on
+                  target:
+                    entity_id: light.woonkamer_humble
+                  data:
+                    brightness_pct: 20
+                    color_temp_kelvin: 3984
+                - action: light.turn_on
+                  target:
+                    entity_id: light.woonkamer_ledstrip_tv_kast
+                  data:
+                    brightness_pct: 5
+                    color_temp_kelvin: 3984
+            - conditions:
+                - condition: trigger
+                  id: lampen_uit
+              sequence:
+                - action: light.turn_off
+                  target:
+                    entity_id:
+                      - light.woonkamer_humble
+                      - light.woonkamer_ledstrip_tv_kast
+
     - id: livingroom_lights_backtonormal
       alias: Livingroom - Lights back to normal
       description: Lights - Back to normal
