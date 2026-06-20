@@ -1,0 +1,132 @@
+presence_package:
+  #################################################################
+  ## Bayesian presence detection
+  ##
+  ## Combineert meerdere signalen (telefoon GPS + UniFi WiFi) om
+  ## betrouwbaardere aanwezigheidsdetectie te krijgen. Een enkel
+  ## signaal dat wegvalt zorgt niet meer voor een fout-negatief.
+  ##
+  ## SETUP:
+  ## 1. Zoek je UniFi device tracker entity IDs op via:
+  ##    Developer Tools → States → zoek op "device_tracker."
+  ##    De UniFi integratie maakt entities aan per verbonden apparaat.
+  ## 2. Vervang de UNIFI_PLACEHOLDER waarden hieronder.
+  ## 3. Voeg de UniFi device trackers ook toe via:
+  ##    Instellingen → Personen → [persoon] → Device Trackers
+  ##    zodat ook person.* ermee rekening houdt.
+  #################################################################
+
+  binary_sensor:
+    #################################################################
+    ## Robin - Bayesian aanwezigheid
+    #################################################################
+    - platform: bayesian
+      name: "Robin thuis"
+      unique_id: bayesian_robin_home
+      device_class: presence
+      # Prior: geschatte fractie van de tijd dat Robin thuis is
+      prior: 0.35
+      # Drempelwaarde: boven 85% zekerheid → thuis
+      probability_threshold: 0.85
+      observations:
+        # Telefoon GPS (hoge betrouwbaarheid, maar kan laggen bij vertrek)
+        - platform: state
+          entity_id: person.robin_bohnen
+          to_state: "home"
+          prob_given_true: 0.95   # Als Robin thuis is, zegt GPS bijna altijd 'home'
+          prob_given_false: 0.03  # GPS zegt zelden 'home' als Robin weg is
+
+        # UniFi WiFi aanwezigheid (sneller bij aankomst/vertrek, maar kan kort verbreken)
+        # Vervang dit met jouw echte UniFi device tracker entity ID
+        # Voorbeeld: device_tracker.robin_iphone  of  device_tracker.192_168_1_100
+        # WiFi is een positief boostsignaal, maar een uitval bewijst niks.
+        # prob_given_true laag houden zodat WiFi-drop de GPS niet overstemt.
+        - platform: state
+          entity_id: device_tracker.iphone_9
+          to_state: "home"
+          prob_given_true: 0.50   # WiFi connected = extra zekerheid, maar niet verplicht als je thuis bent
+          prob_given_false: 0.05  # WiFi connected terwijl je weg bent = zelden
+
+    #################################################################
+    ## Samantha - Bayesian aanwezigheid
+    #################################################################
+    - platform: bayesian
+      name: "Samantha thuis"
+      unique_id: bayesian_samantha_home
+      device_class: presence
+      prior: 0.40
+      probability_threshold: 0.85
+      observations:
+        - platform: state
+          entity_id: person.samantha_henkelman
+          to_state: "home"
+          prob_given_true: 0.95
+          prob_given_false: 0.03
+
+        - platform: state
+          entity_id: device_tracker.apple_iphone_samantha
+          to_state: "home"
+          prob_given_true: 0.50
+          prob_given_false: 0.05
+
+  #################################################################
+  ## Template sensor: zijn er überhaupt volwassenen thuis?
+  ## Werkt naast de bestaande group.all_adults (die GPS gebruikt).
+  ## Gebruik binary_sensor.volwassenen_thuis in nieuwe automations.
+  #################################################################
+  template:
+    - binary_sensor:
+        - name: "Volwassenen thuis"
+          unique_id: adults_home_bayesian
+          device_class: presence
+          state: >-
+            {{ is_state('binary_sensor.robin_thuis', 'on')
+               or is_state('binary_sensor.samantha_thuis', 'on') }}
+          availability: >-
+            {{ states('binary_sensor.robin_thuis') not in ['unknown', 'unavailable']
+               and states('binary_sensor.samantha_thuis') not in ['unknown', 'unavailable'] }}
+
+        - name: "Alle volwassenen thuis"
+          unique_id: all_adults_home_bayesian
+          device_class: presence
+          state: >-
+            {{ is_state('binary_sensor.robin_thuis', 'on')
+               and is_state('binary_sensor.samantha_thuis', 'on') }}
+
+  #################################################################
+  ## Notificatie bij onbetrouwbare detectie
+  ## Waarschuwt als GPS en WiFi het oneens zijn (mogelijke storing)
+  #################################################################
+  automation:
+    - id: presence_conflict_robin
+      alias: Presence - GPS en WiFi conflict Robin
+      description: Waarschuw als GPS en WiFi-aanwezigheid voor Robin conflicteren
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: person.robin_bohnen
+          to: "home"
+          for:
+            minutes: 10
+        - trigger: state
+          entity_id: person.robin_bohnen
+          to: "not_home"
+          for:
+            minutes: 10
+      conditions:
+        # Trigger alleen als GPS en Bayesian sensor het niet eens zijn
+        - condition: template
+          value_template: >-
+            {% set gps_home = is_state('person.robin_bohnen', 'home') %}
+            {% set bayesian_home = is_state('binary_sensor.robin_thuis', 'on') %}
+            {{ gps_home != bayesian_home }}
+      actions:
+        - action: notify.mobile_devices_robin
+          data:
+            title: "Aanwezigheid conflict"
+            message: >-
+              GPS zegt Robin is {% if is_state('person.robin_bohnen', 'home') %}thuis{% else %}weg{% endif %},
+              maar WiFi zegt het tegenovergestelde. Controleer je aanwezigheid in HA.
+            data:
+              push:
+                sound: default
