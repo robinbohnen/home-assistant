@@ -54,3 +54,172 @@ alarm_package:
                   - light.eettafel_lampen
                   - light.keuken_lampen
                   - light.achtertuin_lampen
+
+    # ---------------------------------------------------------------------
+    # AFSCHRIKKING - draait zodra Alarmo daadwerkelijk 'triggered' is
+    # (dus na de eventuele entry-delay, niet bij 'pending').
+    # Combineert: 1) Sonos stemwaarschuwing (TTS) huisbreed + buiten,
+    #             2) alle binnen- en buitenlichten aan + knipperen,
+    #             3) rolluiken boven open (indringer zichtbaar maken),
+    #             4) critical push met camerabeeld naar de volwassenen.
+    # NB: UniFi Protect biedt geen HA-actie om audio via de camera-speaker
+    #     af te spelen; buiten-audio loopt daarom via de overkapping-,
+    #     garage- en entree-Sonos (zitten in group.all_sonos).
+    # ---------------------------------------------------------------------
+    - id: alarm_deterrence
+      alias: Alarm - Afschrikking
+      description: >-
+        Schrikt bij een echt afgegaan alarm af met huisbrede Sonos
+        stemwaarschuwing, knipperende binnen/buitenverlichting, open
+        rolluiken en een critical notificatie met camerabeeld.
+      mode: restart
+      triggers:
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          to: triggered
+      conditions: []
+      actions:
+        # Huidige licht- en rolluikstanden vastleggen om later te herstellen
+        - action: scene.create
+          data:
+            scene_id: voor_alarm_afschrikking
+            snapshot_entities:
+              - light.woonkamer_lampen
+              - light.eettafel_lampen
+              - light.keuken_lampen
+              - light.speelkamer_lampen
+              - light.entree_lampen
+              - light.overloop_lampen
+              - light.voortuin_lampen
+              - light.achtertuin_lampen
+              - light.carport_lampen
+              - light.garage_lampen
+              - cover.all_covers_upstairs
+
+        # Directe critical push met camerabeeld (voortuin)
+        - action: notify.mobile_devices_adults
+          data:
+            title: "🚨 ALARM AFGEGAAN"
+            message: >-
+              Er is een inbraakalarm geactiveerd om
+              {{ now().strftime('%H:%M') }}. Bekijk de camera's.
+            data:
+              image: >-
+                /api/camera_proxy/camera.g5_ultra_turret_voortuin_high_resolution_channel
+              push:
+                interruption-level: critical
+                sound:
+                  name: default
+                  critical: 1
+                  volume: 1.0
+
+        # Alle binnen- en buitenlichten voluit aan (basis voor de flits)
+        - action: light.turn_on
+          data:
+            brightness_pct: 100
+          target:
+            entity_id:
+              - light.woonkamer_lampen
+              - light.eettafel_lampen
+              - light.keuken_lampen
+              - light.speelkamer_lampen
+              - light.entree_lampen
+              - light.overloop_lampen
+              - light.voortuin_lampen
+              - light.achtertuin_lampen
+              - light.carport_lampen
+              - light.garage_lampen
+
+        # Rolluiken boven openen zodat de indringer zichtbaar is
+        - action: cover.open_cover
+          target:
+            entity_id: cover.all_covers_upstairs
+
+        # Sonos-waarschuwing en licht-flits gelijktijdig herhalen zolang
+        # het alarm 'triggered' blijft (max. ~60 rondes als veiligheid).
+        - parallel:
+            - repeat:
+                while:
+                  - condition: template
+                    value_template: >-
+                      {{ is_state('alarm_control_panel.alarmo', 'triggered') }}
+                  - condition: template
+                    value_template: "{{ repeat.index < 60 }}"
+                sequence:
+                  - action: media_player.play_media
+                    target:
+                      entity_id: group.all_sonos
+                    data:
+                      announce: true
+                      extra:
+                        volume: 100
+                      media_content_type: music
+                      media_content_id: >-
+                        media-source://tts/tts.google_translate_nl_nl?message=Waarschuwing.
+                        Er is een alarm geactiveerd. U bevindt zich op verboden
+                        terrein en wordt gefilmd. Verlaat onmiddellijk het pand.
+                        De bewoners en de meldkamer zijn gewaarschuwd.
+                  - delay:
+                      seconds: 11
+            - repeat:
+                while:
+                  - condition: template
+                    value_template: >-
+                      {{ is_state('alarm_control_panel.alarmo', 'triggered') }}
+                  - condition: template
+                    value_template: "{{ repeat.index < 120 }}"
+                sequence:
+                  - action: light.turn_on
+                    data:
+                      flash: long
+                    target:
+                      entity_id:
+                        - light.woonkamer_lampen
+                        - light.eettafel_lampen
+                        - light.keuken_lampen
+                        - light.speelkamer_lampen
+                        - light.entree_lampen
+                        - light.overloop_lampen
+                        - light.voortuin_lampen
+                        - light.achtertuin_lampen
+                        - light.carport_lampen
+                        - light.garage_lampen
+                  - delay:
+                      seconds: 3
+
+        # Alarm is niet meer 'triggered' -> herstel de oorspronkelijke stand
+        - action: scene.turn_on
+          target:
+            entity_id: scene.voor_alarm_afschrikking
+
+    - id: alarm_deterrence_stop
+      alias: Alarm - Afschrikking Stoppen
+      description: >-
+        Stopt de afschrik-automation direct en herstelt de vorige stand
+        zodra het alarm wordt uitgeschakeld of teruggezet naar armed.
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - alarm_control_panel.alarmo
+          from: triggered
+      conditions: []
+      actions:
+        - action: automation.turn_off
+          data:
+            stop_actions: true
+          target:
+            entity_id: automation.alarm_afschrikking
+        - action: automation.turn_on
+          target:
+            entity_id: automation.alarm_afschrikking
+        - if:
+            - condition: state
+              entity_id: scene.voor_alarm_afschrikking
+              state: "unknown"
+          then: []
+          else:
+            - action: scene.turn_on
+              target:
+                entity_id: scene.voor_alarm_afschrikking
