@@ -97,6 +97,16 @@ alarm_package:
               - light.garage_lampen
               - cover.all_covers_upstairs
 
+        # Snapshot van de voortuin-camera naar een statisch bestand zetten.
+        # /api/camera_proxy geeft in de companion-app regelmatig een 404
+        # (reverse-proxy/externe URL); een vooraf weggeschreven bestand dat
+        # via /local wordt geserveerd is betrouwbaarder als notificatiebeeld.
+        - action: camera.snapshot
+          target:
+            entity_id: camera.g5_ultra_turret_voortuin_high_resolution_channel
+          data:
+            filename: /config/www/alarm_voortuin.jpg
+
         # Directe critical push met camerabeeld (voortuin)
         - action: notify.mobile_devices_adults
           data:
@@ -105,8 +115,7 @@ alarm_package:
               Er is een inbraakalarm geactiveerd om
               {{ now().strftime('%H:%M') }}. Bekijk de camera's.
             data:
-              image: >-
-                /api/camera_proxy/camera.g5_ultra_turret_voortuin_high_resolution_channel
+              image: /local/alarm_voortuin.jpg
               push:
                 interruption-level: critical
                 sound:
