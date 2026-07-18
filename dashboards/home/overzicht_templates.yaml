@@ -4,18 +4,16 @@
 # --- Person row: avatar initial, name, status, battery -----------------------
 ov_person:
   show_icon: false
-  show_name: true
-  show_state: true
+  show_name: false
+  show_state: false
   variables:
     battery: sensor.none
   tap_action:
     action: more-info
-  state_display: |
-    [[[ return entity.state === 'home' ? 'thuis' : 'afwezig'; ]]]
   styles:
     grid:
-      - grid-template-areas: '"av n s bat"'
-      - grid-template-columns: 34px auto 1fr auto
+      - grid-template-areas: '"av info bat"'
+      - grid-template-columns: 34px 1fr auto
       - align-items: center
       - column-gap: 11px
     card:
@@ -23,20 +21,12 @@ ov_person:
       - border: none
       - box-shadow: none
       - padding: 8px 2px
-    name:
-      - grid-area: n
-      - justify-self: start
-      - font-size: 15px
-      - font-weight: "600"
-      - color: white
-    state:
-      - grid-area: s
-      - justify-self: start
-      - font-size: 13px
-      - color: rgba(255,255,255,0.4)
     custom_fields:
       av:
         - grid-area: av
+      info:
+        - grid-area: info
+        - justify-self: start
       bat:
         - grid-area: bat
         - justify-self: end
@@ -48,6 +38,13 @@ ov_person:
         var bg = home ? 'rgba(52,168,120,0.16)' : 'rgba(255,255,255,0.06)';
         var col = home ? '#4ade80' : 'rgba(255,255,255,0.55)';
         return `<div style="width:34px;height:34px;border-radius:50%;background:${bg};color:${col};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;">${n.charAt(0)}</div>`;
+      ]]]
+    info: |
+      [[[
+        var fn = entity && entity.attributes.friendly_name ? entity.attributes.friendly_name.split(' ')[0] : '?';
+        var home = entity && entity.state === 'home';
+        var st = home ? 'thuis' : 'afwezig';
+        return `<span style="display:flex;align-items:baseline;gap:9px"><span style="font-size:15px;font-weight:600;color:white">${fn}</span><span style="font-size:13px;color:rgba(255,255,255,0.4)">${st}</span></span>`;
       ]]]
     bat: |
       [[[
