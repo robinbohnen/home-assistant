@@ -1,0 +1,804 @@
+kiosk_mode:
+  user_settings:
+    - users:
+        - Robin Bohnen
+        - Samantha Henkelman
+      kiosk: true
+      hide_header: true
+      hide_sidebar: true
+      hide_menu_button: true
+      hide_overflow: true
+title: Overzicht
+path: overzicht
+icon: mdi:view-dashboard-outline
+panel: true
+cards:
+  - type: vertical-stack
+    card_mod:
+      style: |
+        #root { gap: 18px !important; }
+    cards:
+      # =================== HEADER ===================
+      - type: horizontal-stack
+        card_mod:
+          style: |
+            #root {
+              display: grid !important;
+              grid-template-columns: 1fr auto !important;
+              align-items: center !important;
+              gap: 16px !important;
+              padding: 4px 6px !important;
+            }
+        cards:
+          - type: custom:button-card
+            tap_action:
+              action: none
+            styles:
+              card:
+                - background: none
+                - border: none
+                - box-shadow: none
+                - padding: 0
+              grid:
+                - grid-template-areas: '"h" "d"'
+                - justify-items: start
+            custom_fields:
+              h: |
+                [[[ return `<span style="font-size:22px;font-weight:700;color:white">Hallo ${user}</span>`; ]]]
+              d: |
+                [[[
+                  var d = new Date();
+                  var days = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
+                  var months = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+                  var t = ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+                  return `<span style="font-size:13px;color:rgba(255,255,255,0.4)">${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} · ${t}</span>`;
+                ]]]
+          - type: horizontal-stack
+            card_mod:
+              style: |
+                #root { gap: 10px !important; }
+            cards:
+              - type: custom:button-card
+                template: ov_pill
+                tap_action:
+                  action: none
+                custom_fields:
+                  c: |
+                    [[[
+                      var g = states['sensor.zonneplan_current_tariff_group'];
+                      var p = states['sensor.zonneplan_current_electricity_tariff'];
+                      var lbl = {low:'laag', normal:'gemiddeld', high:'hoog'};
+                      var col = {low:'#4ade80', normal:'#f59e0b', high:'#ef4444'};
+                      var gs = g ? g.state : 'normal';
+                      var price = p ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '';
+                      return `<span style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:${col[gs]||'#888'}"></span><span style="color:rgba(255,255,255,0.85)">tarief ${lbl[gs]||gs} · ${price}</span></span>`;
+                    ]]]
+              - type: custom:button-card
+                template: ov_pill
+                tap_action:
+                  action: more-info
+                entity: sensor.cryptoinfo_bunq_xrp_2
+                custom_fields:
+                  c: |
+                    [[[
+                      var n = states['input_number.xrp_portfolio'];
+                      var pr = states['sensor.cryptoinfo_bunq_xrp_2'];
+                      if(!n || !pr) return 'XRP';
+                      var v = Number(n.state) * Number(pr.state);
+                      return `<span style="color:rgba(255,255,255,0.85)">XRP € ${v.toFixed(2).replace('.',',')}</span>`;
+                    ]]]
+              - type: custom:button-card
+                template: ov_pill
+                tap_action:
+                  action: more-info
+                entity: sensor.crypto_current_value
+                custom_fields:
+                  c: |
+                    [[[
+                      var v = states['sensor.crypto_current_value'];
+                      return `<span style="color:rgba(255,255,255,0.85)">crypto € ${v ? Number(v.state).toFixed(2).replace('.',',') : '—'}</span>`;
+                    ]]]
+              - type: custom:button-card
+                template: ov_pill
+                tap_action:
+                  action: more-info
+                entity: weather.knmi_thuis
+                custom_fields:
+                  c: |
+                    [[[
+                      var w = states['weather.knmi_thuis'];
+                      if(!w) return 'weer';
+                      var t = w.attributes.temperature;
+                      var map = {sunny:'zonnig', 'clear-night':'helder', cloudy:'bewolkt', partlycloudy:'half bewolkt', rainy:'regen', pouring:'zware regen', snowy:'sneeuw', 'snowy-rainy':'natte sneeuw', fog:'mist', windy:'winderig', 'windy-variant':'winderig', hail:'hagel', lightning:'onweer', 'lightning-rainy':'onweer'};
+                      var s = map[w.state] || w.state;
+                      return `<span style="display:flex;align-items:center;gap:7px;color:rgba(255,255,255,0.7)"><ha-icon icon="mdi:weather-partly-cloudy" style="--mdc-icon-size:16px;color:rgba(255,255,255,0.55)"></ha-icon>${s} · ${t != null ? Math.round(t) : '—'}°</span>`;
+                    ]]]
+
+      # =================== BODY (3 columns) ===================
+      - type: horizontal-stack
+        card_mod:
+          style: |
+            #root {
+              display: grid !important;
+              grid-template-columns: 1fr 1.95fr 1fr !important;
+              gap: 16px !important;
+              align-items: start !important;
+            }
+        cards:
+          # ----------- LEFT COLUMN -----------
+          - type: vertical-stack
+            card_mod:
+              style: |
+                #root { gap: 16px !important; }
+            cards:
+              # PERSONEN
+              - type: custom:mod-card
+                card_mod:
+                  style: &panel |
+                    ha-card {
+                      background: rgba(22,24,31,0.72) !important;
+                      border: 1px solid rgba(255,255,255,0.06) !important;
+                      border-radius: 20px !important;
+                      box-shadow: none !important;
+                      padding: 16px 18px !important;
+                    }
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: ov_title
+                      variables:
+                        title: PERSONEN
+                      custom_fields:
+                        b: |
+                          [[[
+                            var ppl = ['person.robin_bohnen','person.samantha_henkelman','person.emma_bohnen','person.logan_veen'];
+                            var n = ppl.filter(e => states[e] && states[e].state === 'home').length;
+                            return `<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:#4ade80;background:rgba(52,168,120,0.15)">${n} thuis</span>`;
+                          ]]]
+                    - type: custom:button-card
+                      template: ov_person
+                      entity: person.robin_bohnen
+                      variables:
+                        battery: sensor.iphone_van_robin_battery_level
+                    - type: custom:button-card
+                      template: ov_person
+                      entity: person.samantha_henkelman
+                      variables:
+                        battery: sensor.iphone_van_samantha_battery_level
+                    - type: custom:button-card
+                      template: ov_person
+                      entity: person.emma_bohnen
+                      variables:
+                        battery: sensor.iphone_van_emma_battery_level
+                    - type: custom:button-card
+                      template: ov_person
+                      entity: person.logan_veen
+                      variables:
+                        battery: sensor.iphone_battery_level
+              # RUIMTES
+              - type: custom:mod-card
+                card_mod:
+                  style: *panel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: ov_title
+                      variables:
+                        title: RUIMTES
+                    - type: custom:button-card
+                      template: ov_room
+                      name: Begane grond
+                      tap_action:
+                        action: navigate
+                        navigation_path: /lovelace/woning#groundfloor
+                      variables:
+                        lights:
+                          - light.woonkamer_lampen
+                          - light.keuken_lampen
+                          - light.eettafel_lampen
+                          - light.entree_lampen
+                          - light.trapkast_lampen
+                    - type: custom:button-card
+                      template: ov_room
+                      name: Eerste verdieping
+                      tap_action:
+                        action: navigate
+                        navigation_path: /lovelace/woning#firstfloor
+                      variables:
+                        lights:
+                          - light.badkamer_lampen
+                          - light.slaapkamer_lampen
+                          - light.slaapkamer_maxi_lampen
+                          - light.kantoor_lampen
+                          - light.overloop_lampen
+                    - type: custom:button-card
+                      template: ov_room
+                      name: Tweede verdieping
+                      tap_action:
+                        action: navigate
+                        navigation_path: /lovelace/woning#secondfloor
+                      variables:
+                        lights:
+                          - light.overloop_zolder_lampen
+                          - light.slaapkamer_mini_lampen
+                    - type: custom:button-card
+                      template: ov_room
+                      name: Garage / speelkamer
+                      tap_action:
+                        action: navigate
+                        navigation_path: /lovelace/woning#garage
+                      variables:
+                        lights:
+                          - light.garage_lampen
+                          - light.speelkamer_lampen
+                    - type: custom:button-card
+                      template: ov_room
+                      name: Buiten
+                      entity: cover.achtertuin_zonnescherm
+                      tap_action:
+                        action: navigate
+                        navigation_path: /lovelace/woning#outside
+                      custom_fields:
+                        sum: |
+                          [[[
+                            var c = states['cover.achtertuin_zonnescherm'];
+                            var m = {open:'omhoog', closed:'omlaag', opening:'gaat omhoog', closing:'gaat omlaag'};
+                            return `<span style="color:rgba(255,255,255,0.62)">zonnescherm ${c ? (m[c.state] || c.state) : '?'}</span>`;
+                          ]]]
+                        dot: |
+                          [[[
+                            var c = states['cover.achtertuin_zonnescherm'];
+                            var act = c && c.state !== 'closed';
+                            return `<div style="width:9px;height:9px;border-radius:50%;background:${act ? '#3b82f6' : 'rgba(255,255,255,0.14)'}"></div>`;
+                          ]]]
+              # AUTO
+              - type: custom:mod-card
+                card_mod:
+                  style: *panel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: ov_title
+                      variables:
+                        title: AUTO
+                      custom_fields:
+                        b: |
+                          [[[
+                            var b = states['sensor.hrh85f_batterij'];
+                            var r = states['sensor.hrh85f_battery_autonomy'];
+                            var bs = b ? Math.round(Number(b.state)) : '?';
+                            var rs = r ? Math.round(Number(r.state)) : '?';
+                            var col = (typeof bs === 'number' && bs <= 20) ? '#f59e0b' : '#4ade80';
+                            var bg = (typeof bs === 'number' && bs <= 20) ? 'rgba(245,158,11,0.15)' : 'rgba(52,168,120,0.15)';
+                            return `<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${col};background:${bg}">${bs}% · ${rs} km</span>`;
+                          ]]]
+                    - type: custom:button-card
+                      entity: sensor.hrh85f_kilometerstand
+                      tap_action:
+                        action: more-info
+                      styles:
+                        card:
+                          - background: none
+                          - border: none
+                          - box-shadow: none
+                          - padding: 6px 2px 2px 2px
+                        grid:
+                          - grid-template-areas: '"a b"'
+                          - grid-template-columns: 1fr 1fr
+                          - column-gap: 12px
+                        custom_fields:
+                          a:
+                            - justify-self: start
+                          b:
+                            - justify-self: start
+                      custom_fields:
+                        a: |
+                          [[[
+                            var e = states['sensor.hrh85f_kilometerstand'];
+                            var v = e ? Number(e.state).toLocaleString('nl-NL') : '—';
+                            return `<div style="display:flex;flex-direction:column"><span style="font-size:20px;font-weight:700;color:white">${v}</span><span style="font-size:12px;color:rgba(255,255,255,0.42)">km totaal</span></div>`;
+                          ]]]
+                        b: |
+                          [[[
+                            var e = states['sensor.car_price_add_kms'];
+                            var v = e ? '€ ' + Number(e.state).toFixed(2).replace('.',',') : '—';
+                            return `<div style="display:flex;flex-direction:column"><span style="font-size:20px;font-weight:700;color:white">${v}</span><span style="font-size:12px;color:rgba(255,255,255,0.42)">meerprijs km</span></div>`;
+                          ]]]
+
+          # ----------- CENTER COLUMN -----------
+          - type: vertical-stack
+            card_mod:
+              style: |
+                #root { gap: 16px !important; }
+            cards:
+              # ENERGIE NU
+              - type: custom:mod-card
+                card_mod:
+                  style: *panel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: ov_title
+                      variables:
+                        title: ENERGIE · NU
+                      custom_fields:
+                        b: |
+                          [[[
+                            var g = states['sensor.zonneplan_current_tariff_group'];
+                            var solar = states['sensor.solar_power_generated_now'];
+                            var cheap = g && g.state === 'low';
+                            var green = solar && Number(solar.state) > 0.1;
+                            var txt = (green && cheap) ? 'stroom is groen en goedkoop' : (cheap ? 'stroom is goedkoop' : (green ? 'stroom is groen' : 'normaal tarief'));
+                            var col = (green || cheap) ? '#4ade80' : 'rgba(255,255,255,0.6)';
+                            return `<span style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:${col}"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span>${txt}</span>`;
+                          ]]]
+                    # stats row
+                    - type: custom:button-card
+                      tap_action:
+                        action: navigate
+                        navigation_path: /lovelace/woning#liveenergy
+                      styles:
+                        card:
+                          - background: none
+                          - border: none
+                          - box-shadow: none
+                          - padding: 6px 2px 10px 2px
+                        grid:
+                          - grid-template-areas: '"net prod cons batt"'
+                          - grid-template-columns: 1.5fr 1fr 1fr 1.1fr
+                          - align-items: end
+                          - column-gap: 8px
+                        custom_fields:
+                          net:
+                            - justify-self: start
+                          prod:
+                            - justify-self: start
+                          cons:
+                            - justify-self: start
+                          batt:
+                            - justify-self: start
+                      custom_fields:
+                        net: |
+                          [[[
+                            var e = states['sensor.live_energieverbruik_totaal'];
+                            var v = e ? Number(e.state).toFixed(2).replace('.',',') : '—';
+                            var u = e ? (e.attributes.unit_of_measurement || 'kW') : 'kW';
+                            return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:38px;font-weight:700;color:white;line-height:1">${v}</span> <span style="font-size:15px;color:rgba(255,255,255,0.5)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.42)">netto verbruik</div></div>`;
+                          ]]]
+                        prod: |
+                          [[[
+                            var e = states['sensor.solar_power_generated_now'];
+                            var v = e ? Number(e.state).toFixed(2).replace('.',',') : '—';
+                            var u = e ? (e.attributes.unit_of_measurement || 'kW') : 'kW';
+                            return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:#4ade80;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.5)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.42)">productie</div></div>`;
+                          ]]]
+                        cons: |
+                          [[[
+                            var e = states['sensor.electricity_meter_energieverbruik'];
+                            var v = e ? Number(e.state).toFixed(2).replace('.',',') : '—';
+                            var u = e ? (e.attributes.unit_of_measurement || 'kW') : 'kW';
+                            return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:white;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.5)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.42)">verbruik</div></div>`;
+                          ]]]
+                        batt: |
+                          [[[
+                            var p = states['sensor.lilygo_rs485_marstek_battery_power'];
+                            var soc = states['sensor.lilygo_rs485_marstek_battery_state_of_charge'];
+                            var pv = p ? Math.round(Number(p.state)) : null;
+                            var socv = soc ? Math.round(Number(soc.state)) : '—';
+                            var mode = pv === null ? '' : (pv < 0 ? 'ontlaadt' : (pv > 0 ? 'laadt' : 'idle'));
+                            var disp = pv === null ? '—' : pv + ' W';
+                            return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:white;line-height:1">${disp}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.42)">batterij · ${socv}%${mode ? ' · ' + mode : ''}</div></div>`;
+                          ]]]
+                    # live chart
+                    - type: custom:apexcharts-card
+                      graph_span: 10m
+                      update_interval: 10s
+                      card_mod:
+                        style: |
+                          ha-card { background: none !important; box-shadow: none !important; border: none !important; }
+                      header:
+                        show: false
+                      apex_config:
+                        chart:
+                          height: 165
+                          toolbar:
+                            show: false
+                        grid:
+                          show: false
+                          padding:
+                            left: 0
+                            right: 0
+                            top: -10
+                            bottom: -8
+                        yaxis:
+                          show: false
+                        tooltip:
+                          enabled: true
+                        plotOptions:
+                          bar:
+                            columnWidth: 72%
+                      series:
+                        - entity: sensor.live_energieverbruik_totaal
+                          name: Netto
+                          type: column
+                          stroke_width: 1
+                          opacity: 1
+                          float_precision: 2
+                          group_by:
+                            duration: 15s
+                            func: avg
+                          color_threshold:
+                            - value: -20
+                              color: "#4ade80"
+                            - value: 0
+                              color: "#3b82f6"
+                    # chips row
+                    - type: horizontal-stack
+                      card_mod:
+                        style: |
+                          #root { gap: 10px !important; flex-wrap: wrap !important; }
+                      cards:
+                        - type: custom:button-card
+                          template: ov_pill
+                          entity: sensor.solar_power_generated_today
+                          tap_action:
+                            action: more-info
+                          custom_fields:
+                            c: |
+                              [[[
+                                var g = states['sensor.solar_power_generated_today'];
+                                return `<span style="color:rgba(255,255,255,0.8)">vandaag opgewekt · ${g ? Number(g.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
+                              ]]]
+                        - type: custom:button-card
+                          template: ov_pill
+                          entity: sensor.forecast_solar_production_today
+                          tap_action:
+                            action: more-info
+                          custom_fields:
+                            c: |
+                              [[[
+                                var f = states['sensor.forecast_solar_production_today'];
+                                return `<span style="color:rgba(255,255,255,0.8)">verwacht · ${f ? Number(f.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
+                              ]]]
+                        - type: custom:button-card
+                          template: ov_pill
+                          entity: sensor.zonneplan_gas_consumption_today
+                          tap_action:
+                            action: more-info
+                          custom_fields:
+                            c: |
+                              [[[
+                                var g = states['sensor.zonneplan_gas_consumption_today'];
+                                return `<span style="color:rgba(255,255,255,0.8)">gas · ${g ? Number(g.state).toFixed(2).replace('.',',') : '—'} m³</span>`;
+                              ]]]
+                        - type: custom:button-card
+                          template: ov_pill
+                          entity: sensor.total_costs_today_calculated
+                          tap_action:
+                            action: more-info
+                          styles:
+                            card:
+                              - background: rgba(52,168,120,0.12)
+                              - border: 1px solid rgba(52,168,120,0.2)
+                          custom_fields:
+                            c: |
+                              [[[
+                                var k = states['sensor.total_costs_today_calculated'];
+                                var v = k ? Number(k.state) : 0;
+                                var col = v < 0 ? '#4ade80' : 'rgba(255,255,255,0.85)';
+                                return `<span style="color:${col};font-weight:600">kosten vandaag · € ${v.toFixed(2).replace('.',',')}</span>`;
+                              ]]]
+              # VEELGEBRUIKERS
+              - type: custom:mod-card
+                card_mod:
+                  style: *panel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: ov_title
+                      variables:
+                        title: VEELGEBRUIKERS
+                    - type: custom:button-card
+                      template: ov_bar
+                      entity: sensor.energieproductie_fase_l2_in_watt
+                      name: Zonneplan vermogen L2
+                      variables:
+                        max: 3680
+                    - type: custom:button-card
+                      template: ov_bar
+                      entity: sensor.energieproductie_fase_l1_in_watt
+                      name: Zonneplan vermogen L1
+                      variables:
+                        max: 3680
+                    - type: custom:button-card
+                      template: ov_bar
+                      entity: sensor.speelkamer_stopcontact_verwarming_power
+                      name: Speelkamer verwarming
+                      variables:
+                        max: 1500
+                    - type: custom:button-card
+                      template: ov_bar
+                      entity: sensor.woonkamer_verlichting_power
+                      name: Woonkamer verlichting
+                      variables:
+                        max: 400
+                    - type: custom:button-card
+                      template: ov_bar
+                      entity: sensor.keuken_verlichting_power
+                      name: Keuken verlichting
+                      variables:
+                        max: 400
+
+          # ----------- RIGHT COLUMN -----------
+          - type: vertical-stack
+            card_mod:
+              style: |
+                #root { gap: 16px !important; }
+            cards:
+              # VANDAAG
+              - type: custom:mod-card
+                card_mod:
+                  style: *panel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: ov_title
+                      variables:
+                        title: VANDAAG
+                    - type: custom:button-card
+                      template: ov_listrow
+                      entity: sensor.afvalinfo_home_trash_type_today
+                      tap_action:
+                        action: navigate
+                        navigation_path: /lovelace/woning#afval
+                      variables:
+                        title: Afval vandaag
+                        mdi: mdi:trash-can-outline
+                      custom_fields:
+                        s: |
+                          [[[
+                            var e = states['sensor.afvalinfo_home_trash_type_today'];
+                            return e && e.state && e.state !== 'Geen' ? e.state : 'geen ophaal vandaag';
+                          ]]]
+                    - type: custom:button-card
+                      template: ov_listrow
+                      entity: sensor.afvalinfo_home_trash_type_tomorrow
+                      tap_action:
+                        action: navigate
+                        navigation_path: /lovelace/woning#afval
+                      variables:
+                        title: Afval morgen
+                        mdi: mdi:recycle
+                      custom_fields:
+                        s: |
+                          [[[
+                            var e = states['sensor.afvalinfo_home_trash_type_tomorrow'];
+                            return e && e.state && e.state !== 'Geen' ? e.state : 'geen ophaal morgen';
+                          ]]]
+                    - type: custom:button-card
+                      template: ov_listrow
+                      entity: calendar.agenda
+                      tap_action:
+                        action: navigate
+                        navigation_path: /lovelace/kalender
+                      variables:
+                        mdi: mdi:calendar
+                      custom_fields:
+                        t: |
+                          [[[
+                            var c = states['calendar.agenda'];
+                            return c && c.attributes.message ? c.attributes.message : 'Agenda';
+                          ]]]
+                        s: |
+                          [[[
+                            var c = states['calendar.agenda'];
+                            if(!c || !c.attributes.start_time) return 'geen afspraken';
+                            var dt = new Date(c.attributes.start_time.replace(' ','T'));
+                            var day = dt.toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+                            if(c.attributes.all_day) return day + ' · hele dag';
+                            return day + ' · ' + dt.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+                          ]]]
+              # KLIMAAT
+              - type: custom:mod-card
+                card_mod:
+                  style: *panel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: ov_title
+                      variables:
+                        title: KLIMAAT
+                    - type: custom:button-card
+                      template: ov_climate
+                      entity: climate.airco_woonkamer
+                      name: Airco woonkamer
+                    - type: custom:button-card
+                      template: ov_climate
+                      entity: climate.airco_zolder
+                      name: Airco zolder
+                    - type: custom:button-card
+                      template: ov_climate
+                      entity: climate.intex_purespa
+                      name: Intex PureSpa
+                    # Zonnescherm met knoppen
+                    - type: horizontal-stack
+                      card_mod:
+                        style: |
+                          #root {
+                            display: grid !important;
+                            grid-template-columns: 1fr auto auto !important;
+                            align-items: center !important;
+                            gap: 8px !important;
+                          }
+                      cards:
+                        - type: custom:button-card
+                          entity: cover.achtertuin_zonnescherm
+                          tap_action:
+                            action: more-info
+                          styles:
+                            card:
+                              - background: none
+                              - border: none
+                              - box-shadow: none
+                              - padding: 11px 2px
+                            grid:
+                              - grid-template-areas: '"n" "s"'
+                              - justify-items: start
+                          custom_fields:
+                            n: |
+                              [[[ return `<span style="font-size:14.5px;font-weight:600;color:white">Zonnescherm</span>`; ]]]
+                            s: |
+                              [[[
+                                var c = states['cover.achtertuin_zonnescherm'];
+                                var m = {open:'omhoog', closed:'omlaag', opening:'gaat omhoog', closing:'gaat omlaag'};
+                                return `<span style="font-size:12.5px;color:rgba(255,255,255,0.45)">achtertuin · ${c ? (m[c.state] || c.state) : '?'}</span>`;
+                              ]]]
+                        - type: custom:button-card
+                          icon: mdi:chevron-up
+                          tap_action:
+                            action: perform-action
+                            perform_action: cover.open_cover
+                            target:
+                              entity_id: cover.achtertuin_zonnescherm
+                          styles:
+                            card:
+                              - background: rgba(255,255,255,0.05)
+                              - border: 1px solid rgba(255,255,255,0.08)
+                              - border-radius: 12px
+                              - padding: 8px
+                              - width: 42px
+                              - height: 42px
+                            icon:
+                              - color: rgba(255,255,255,0.8)
+                              - width: 22px
+                        - type: custom:button-card
+                          icon: mdi:chevron-down
+                          tap_action:
+                            action: perform-action
+                            perform_action: cover.close_cover
+                            target:
+                              entity_id: cover.achtertuin_zonnescherm
+                          styles:
+                            card:
+                              - background: rgba(255,255,255,0.05)
+                              - border: 1px solid rgba(255,255,255,0.08)
+                              - border-radius: 12px
+                              - padding: 8px
+                              - width: 42px
+                              - height: 42px
+                            icon:
+                              - color: rgba(255,255,255,0.8)
+                              - width: 22px
+              # BRANDWEER
+              - type: custom:mod-card
+                card_mod:
+                  style: *panel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: ov_title
+                      variables:
+                        title: BRANDWEER
+                      custom_fields:
+                        b: |
+                          [[[
+                            var p = states['input_select.brandweer_dienstdoende_ploeg'];
+                            var t = p ? p.state : '—';
+                            return `<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:#38bdf8;background:rgba(56,189,248,0.15)">${t}</span>`;
+                          ]]]
+                    - type: custom:button-card
+                      entity: input_text.brandweer_laatste_melding
+                      tap_action:
+                        action: more-info
+                      styles:
+                        card:
+                          - background: none
+                          - border: none
+                          - box-shadow: none
+                          - padding: 8px 2px
+                        grid:
+                          - grid-template-areas: '"pri msg badge" "pri sub badge"'
+                          - grid-template-columns: 44px 1fr auto
+                          - align-items: center
+                          - column-gap: 12px
+                        custom_fields:
+                          pri:
+                            - grid-area: pri
+                          msg:
+                            - grid-area: msg
+                            - justify-self: start
+                          sub:
+                            - grid-area: sub
+                            - justify-self: start
+                          badge:
+                            - grid-area: badge
+                            - justify-self: end
+                      custom_fields:
+                        pri: |
+                          [[[ return `<div style="width:38px;height:38px;border-radius:10px;background:rgba(245,158,11,0.16);color:#f59e0b;display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:fire-truck" style="--mdc-icon-size:20px"></ha-icon></div>`; ]]]
+                        msg: |
+                          [[[
+                            var e = states['input_text.brandweer_laatste_melding'];
+                            var t = e && e.state ? e.state : 'Geen recente melding';
+                            if(t.length > 46) t = t.slice(0,45) + '…';
+                            return `<span style="font-size:14px;font-weight:600;color:white">${t}</span>`;
+                          ]]]
+                        sub: |
+                          [[[
+                            var d = states['input_datetime.brandweer_laatste_melding'];
+                            if(!d || !d.state) return `<span style="font-size:12px;color:rgba(255,255,255,0.42)">—</span>`;
+                            var dt = new Date(d.state.replace(' ','T'));
+                            var s = dt.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}) + ' ' + dt.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+                            return `<span style="font-size:12px;color:rgba(255,255,255,0.42)">${s}</span>`;
+                          ]]]
+                        badge: |
+                          [[[
+                            var out = states['binary_sensor.brandweer_uitgerukt_op_laatste_melding'];
+                            var secs = states['input_number.brandweer_uitruktijd_secondes'];
+                            if(!out || out.state !== 'on') return '';
+                            var s = secs ? Math.round(Number(secs.state)) + ' s' : '';
+                            return `<span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;color:#4ade80;background:rgba(52,168,120,0.15)">uitgerukt · ${s}</span>`;
+                          ]]]
+                    - type: custom:button-card
+                      tap_action:
+                        action: none
+                      styles:
+                        card:
+                          - background: none
+                          - border: none
+                          - box-shadow: none
+                          - padding: 10px 2px 2px 2px
+                          - border-top: 1px solid rgba(255,255,255,0.06)
+                        grid:
+                          - grid-template-areas: '"tot a b c"'
+                          - grid-template-columns: 1.4fr 1fr 1fr 1fr
+                          - align-items: center
+                      custom_fields:
+                        tot: |
+                          [[[
+                            var e = states['counter.brandweer_totaal_aantal_uitrukken'];
+                            return `<span><span style="font-size:16px;font-weight:700;color:white">${e ? e.state : '—'}</span> <span style="font-size:12px;color:rgba(255,255,255,0.42)">totaal</span></span>`;
+                          ]]]
+                        a: |
+                          [[[
+                            var e = states['counter.brandweer_uden_a_ploeg_uitrukken'];
+                            return `<span><span style="font-size:15px;font-weight:600;color:rgba(255,255,255,0.85)">${e ? e.state : '—'}</span> <span style="font-size:12px;color:rgba(255,255,255,0.42)">A</span></span>`;
+                          ]]]
+                        b: |
+                          [[[
+                            var e = states['counter.brandweer_uden_b_ploeg_uitrukken'];
+                            return `<span><span style="font-size:15px;font-weight:600;color:rgba(255,255,255,0.85)">${e ? e.state : '—'}</span> <span style="font-size:12px;color:rgba(255,255,255,0.42)">B</span></span>`;
+                          ]]]
+                        c: |
+                          [[[
+                            var e = states['counter.brandweer_uden_c_ploeg_uitrukken'];
+                            return `<span><span style="font-size:15px;font-weight:600;color:rgba(255,255,255,0.85)">${e ? e.state : '—'}</span> <span style="font-size:12px;color:rgba(255,255,255,0.42)">C</span></span>`;
+                          ]]]
