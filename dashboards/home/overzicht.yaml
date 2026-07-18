@@ -166,6 +166,9 @@ cards:
                   cards:
                     - type: custom:button-card
                       template: ov_title
+                      tap_action:
+                        action: navigate
+                        navigation_path: "#ov-personen"
                       variables:
                         title: PERSONEN
                       custom_fields:
@@ -281,6 +284,9 @@ cards:
                   cards:
                     - type: custom:button-card
                       template: ov_title
+                      tap_action:
+                        action: navigate
+                        navigation_path: "#ov-auto"
                       variables:
                         title: AUTO
                       custom_fields:
@@ -300,7 +306,8 @@ cards:
                       show_name: false
                       show_state: false
                       tap_action:
-                        action: more-info
+                        action: navigate
+                        navigation_path: "#ov-auto"
                       styles:
                         card:
                           - background: none
@@ -346,6 +353,9 @@ cards:
                   cards:
                     - type: custom:button-card
                       template: ov_title
+                      tap_action:
+                        action: navigate
+                        navigation_path: "#ov-energie"
                       variables:
                         title: ENERGIE · NU
                       custom_fields:
@@ -363,7 +373,7 @@ cards:
                     - type: custom:button-card
                       tap_action:
                         action: navigate
-                        navigation_path: /lovelace/woning#liveenergy
+                        navigation_path: "#ov-energie"
                       styles:
                         card:
                           - background: none
@@ -548,42 +558,41 @@ cards:
                       template: ov_title
                       variables:
                         title: VEELGEBRUIKERS
-                    - type: custom:button-card
-                      template: ov_bar
-                      entity: sensor.energieverbruik_fase_l1_in_watt
-                      name: Verbruik fase L1
-                      variables:
-                        max: 3680
-                    - type: custom:button-card
-                      template: ov_bar
-                      entity: sensor.energieverbruik_fase_l2_in_watt
-                      name: Verbruik fase L2
-                      variables:
-                        max: 3680
-                    - type: custom:button-card
-                      template: ov_bar
-                      entity: sensor.energieverbruik_fase_l3_in_watt
-                      name: Verbruik fase L3
-                      variables:
-                        max: 3680
-                    - type: custom:button-card
-                      template: ov_bar
-                      entity: sensor.speelkamer_stopcontact_verwarming_power
-                      name: Speelkamer verwarming
-                      variables:
-                        max: 1500
-                    - type: custom:button-card
-                      template: ov_bar
-                      entity: sensor.woonkamer_verlichting_power
-                      name: Woonkamer verlichting
-                      variables:
-                        max: 400
-                    - type: custom:button-card
-                      template: ov_bar
-                      entity: sensor.keuken_verlichting_power
-                      name: Keuken verlichting
-                      variables:
-                        max: 400
+                    - type: custom:auto-entities
+                      card:
+                        type: vertical-stack
+                      card_param: cards
+                      filter:
+                        include:
+                          - attributes:
+                              device_class: power
+                              unit_of_measurement: W
+                            options:
+                              type: custom:button-card
+                              template: ov_bar
+                              variables:
+                                max: 800
+                              tap_action:
+                                action: more-info
+                        exclude:
+                          - entity_id: sensor.*fase*
+                          - entity_id: sensor.*marstek*
+                          - entity_id: sensor.*goodwe*
+                          - entity_id: sensor.*omvormer*
+                          - entity_id: sensor.*battery*
+                          - entity_id: sensor.electricity_meter*
+                          - entity_id: sensor.live_energie*
+                          - entity_id: sensor.zonneplan*
+                          - entity_id: sensor.energie*
+                          - entity_id: sensor.solar*
+                          - state: unavailable
+                          - state: unknown
+                          - state: "0"
+                      sort:
+                        method: state
+                        numeric: true
+                        reverse: true
+                        count: 6
 
           # ----------- RIGHT COLUMN -----------
           - type: vertical-stack
@@ -603,6 +612,9 @@ cards:
                   cards:
                     - type: custom:button-card
                       template: ov_title
+                      tap_action:
+                        action: navigate
+                        navigation_path: "#ov-vandaag"
                       variables:
                         title: VANDAAG
                     - type: custom:button-card
@@ -670,6 +682,9 @@ cards:
                   cards:
                     - type: custom:button-card
                       template: ov_title
+                      tap_action:
+                        action: navigate
+                        navigation_path: "#ov-klimaat"
                       variables:
                         title: KLIMAAT
                     - type: custom:button-card
@@ -765,6 +780,9 @@ cards:
                   cards:
                     - type: custom:button-card
                       template: ov_title
+                      tap_action:
+                        action: navigate
+                        navigation_path: "#ov-brandweer"
                       variables:
                         title: BRANDWEER
                       custom_fields:
@@ -780,7 +798,8 @@ cards:
                       show_name: false
                       show_state: false
                       tap_action:
-                        action: more-info
+                        action: navigate
+                        navigation_path: "#ov-brandweer"
                       styles:
                         card:
                           - background: none
@@ -875,3 +894,206 @@ cards:
                             var e = states['counter.brandweer_uden_c_ploeg_uitrukken'];
                             return `<span><span style="font-size:15px;font-weight:600;color:rgba(255,255,255,0.85)">${e ? e.state : '—'}</span> <span style="font-size:12px;color:rgba(255,255,255,0.42)">C</span></span>`;
                           ]]]
+
+      # =================== POPUPS ===================
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: "#ov-personen"
+            name: Personen
+            icon: mdi:account-group
+          - type: map
+            default_zoom: 11
+            hours_to_show: 12
+            entities:
+              - person.robin_bohnen
+              - person.samantha_henkelman
+              - person.emma_bohnen
+              - person.logan_veen
+          - type: entities
+            title: Status
+            entities:
+              - entity: person.robin_bohnen
+                secondary_info: last-changed
+              - entity: sensor.iphone_van_robin_battery_level
+                name: Batterij Robin
+              - entity: person.samantha_henkelman
+                secondary_info: last-changed
+              - entity: sensor.iphone_van_samantha_battery_level
+                name: Batterij Samantha
+              - entity: person.emma_bohnen
+                secondary_info: last-changed
+              - entity: sensor.iphone_van_emma_battery_level
+                name: Batterij Emma
+              - entity: person.logan_veen
+                secondary_info: last-changed
+              - entity: sensor.iphone_battery_level
+                name: Batterij Logan
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: "#ov-energie"
+            name: Energie
+            icon: mdi:flash
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            header:
+              show: true
+              title: Verbruik & productie (24u)
+            series:
+              - entity: sensor.electricity_meter_energieverbruik
+                name: Verbruik
+                type: area
+                color: "#3b82f6"
+                stroke_width: 2
+                group_by:
+                  duration: 5m
+                  func: avg
+              - entity: sensor.solar_power_generated_now
+                name: Productie
+                type: area
+                color: "#4ade80"
+                stroke_width: 2
+                group_by:
+                  duration: 5m
+                  func: avg
+          - type: entities
+            title: Vandaag
+            entities:
+              - entity: sensor.solar_power_generated_today
+                name: Opgewekt vandaag
+              - entity: sensor.forecast_solar_production_today
+                name: Verwacht vandaag
+              - entity: sensor.zonneplan_electricity_consumption_today
+                name: Verbruik vandaag
+              - entity: sensor.zonneplan_gas_consumption_today
+                name: Gas vandaag
+              - entity: sensor.total_costs_today_calculated
+                name: Kosten vandaag
+              - entity: sensor.zonneplan_current_electricity_tariff
+                name: Huidig tarief
+              - entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
+                name: Thuisbatterij
+              - entity: sensor.lilygo_rs485_marstek_battery_power
+                name: Batterijvermogen
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: "#ov-auto"
+            name: Auto
+            icon: mdi:car-electric
+          - type: entities
+            entities:
+              - entity: sensor.hrh85f_batterij
+                name: Batterij
+              - entity: sensor.hrh85f_battery_autonomy
+                name: Bereik
+              - entity: sensor.hrh85f_kilometerstand
+                name: Kilometerstand
+              - entity: sensor.hrh85f_charge_state
+                name: Laadstatus
+              - entity: sensor.hrh85f_plug_state
+                name: Stekker
+              - entity: sensor.hrh85f_charging_remaining_time
+                name: Resterende laadtijd
+          - type: horizontal-stack
+            cards:
+              - type: button
+                entity: button.hrh85f_start_opladen
+                name: Start opladen
+                icon: mdi:ev-station
+                tap_action:
+                  action: toggle
+              - type: button
+                entity: button.hrh85f_start_air_conditioner
+                name: Airco
+                icon: mdi:air-conditioner
+                tap_action:
+                  action: toggle
+          - type: map
+            default_zoom: 10
+            entities:
+              - device_tracker.hrh85f_locatie
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: "#ov-vandaag"
+            name: Vandaag
+            icon: mdi:calendar-check
+          - type: entities
+            title: Afval
+            entities:
+              - entity: sensor.afvalinfo_home_trash_type_today
+                name: Vandaag
+              - entity: sensor.afvalinfo_home_trash_type_tomorrow
+                name: Morgen
+              - entity: sensor.afvalinfo_home_gft
+                name: GFT
+              - entity: sensor.afvalinfo_home_papier
+                name: Papier
+              - entity: sensor.afvalinfo_home_pbd
+                name: PBD
+              - entity: sensor.afvalinfo_home_restafval
+                name: Restafval
+          - type: calendar
+            initial_view: listWeek
+            entities:
+              - calendar.agenda
+              - calendar.robin_en_sam
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: "#ov-klimaat"
+            name: Klimaat
+            icon: mdi:thermometer
+          - type: thermostat
+            entity: climate.airco_woonkamer
+          - type: thermostat
+            entity: climate.airco_zolder
+          - type: thermostat
+            entity: climate.intex_purespa
+          - type: entities
+            entities:
+              - entity: cover.achtertuin_zonnescherm
+                name: Zonnescherm achtertuin
+      - type: vertical-stack
+        cards:
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: "#ov-brandweer"
+            name: Brandweer
+            icon: mdi:fire-truck
+          - type: entities
+            title: Status
+            entities:
+              - entity: input_text.brandweer_laatste_melding
+                name: Laatste melding
+              - entity: input_select.brandweer_dienstdoende_ploeg
+                name: Dienstdoende ploeg
+              - entity: input_select.brandweer_mijn_huidige_ploeg
+                name: Mijn ploeg
+              - entity: sensor.robin_reistijd_naar_brandweer_uden
+                name: Reistijd kazerne
+              - entity: sensor.bezetting_dienstdoend
+                name: Bezetting dienstdoend
+          - type: entities
+            title: Uitrukken
+            entities:
+              - entity: counter.brandweer_totaal_aantal_uitrukken
+                name: Totaal
+              - entity: counter.brandweer_uden_a_ploeg_uitrukken
+                name: A-ploeg
+              - entity: counter.brandweer_uden_b_ploeg_uitrukken
+                name: B-ploeg
+              - entity: counter.brandweer_uden_c_ploeg_uitrukken
+                name: C-ploeg
+          - type: logbook
+            hours_to_show: 336
+            entities:
+              - input_text.brandweer_laatste_melding
+              - binary_sensor.brandweer_uitgerukt_op_laatste_melding
