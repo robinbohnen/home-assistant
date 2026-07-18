@@ -126,9 +126,11 @@ cards:
                       var w = states['weather.knmi_thuis'];
                       if(!w) return 'weer';
                       var t = w.attributes.temperature;
-                      var map = {sunny:'zonnig', 'clear-night':'helder', cloudy:'bewolkt', partlycloudy:'half bewolkt', rainy:'regen', pouring:'zware regen', snowy:'sneeuw', 'snowy-rainy':'natte sneeuw', fog:'mist', windy:'winderig', 'windy-variant':'winderig', hail:'hagel', lightning:'onweer', 'lightning-rainy':'onweer'};
+                      var map = {sunny:'zonnig', 'clear-night':'helder', cloudy:'bewolkt', partlycloudy:'half bewolkt', rainy:'regen', pouring:'zware regen', snowy:'sneeuw', 'snowy-rainy':'natte sneeuw', fog:'mist', windy:'winderig', 'windy-variant':'winderig', hail:'hagel', lightning:'onweer', 'lightning-rainy':'onweer', exceptional:'extreem'};
+                      var icon = {sunny:'mdi:weather-sunny', 'clear-night':'mdi:weather-night', cloudy:'mdi:weather-cloudy', partlycloudy:'mdi:weather-partly-cloudy', rainy:'mdi:weather-rainy', pouring:'mdi:weather-pouring', snowy:'mdi:weather-snowy', 'snowy-rainy':'mdi:weather-snowy-rainy', fog:'mdi:weather-fog', windy:'mdi:weather-windy', 'windy-variant':'mdi:weather-windy-variant', hail:'mdi:weather-hail', lightning:'mdi:weather-lightning', 'lightning-rainy':'mdi:weather-lightning-rainy', exceptional:'mdi:weather-cloudy-alert'};
                       var s = map[w.state] || w.state;
-                      return `<span style="display:flex;align-items:center;gap:7px;color:rgba(255,255,255,0.7)"><ha-icon icon="mdi:weather-partly-cloudy" style="--mdc-icon-size:16px;color:rgba(255,255,255,0.55)"></ha-icon>${s} · ${t != null ? Math.round(t) : '—'}°</span>`;
+                      var ic = icon[w.state] || 'mdi:weather-cloudy';
+                      return `<span style="display:flex;align-items:center;gap:7px;color:rgba(255,255,255,0.7)"><ha-icon icon="${ic}" style="--mdc-icon-size:16px;color:rgba(255,255,255,0.55)"></ha-icon>${s} · ${t != null ? Math.round(t) : '—'}°</span>`;
                     ]]]
 
       # =================== BODY (3 columns) ===================
@@ -323,9 +325,10 @@ cards:
                           ]]]
                         b: |
                           [[[
-                            var e = states['sensor.laadpaal_verbruik'];
-                            var v = e && !isNaN(Number(e.state)) ? Number(e.state).toFixed(1).replace('.',',') + ' kWh' : '—';
-                            return `<div style="display:flex;flex-direction:column"><span style="font-size:20px;font-weight:700;color:white">${v}</span><span style="font-size:12px;color:rgba(255,255,255,0.42)">geladen</span></div>`;
+                            var e = states['sensor.hrh85f_charge_state'];
+                            var m = {charge_in_progress:'aan het laden', not_in_charge:'niet aan lader', waiting_for_a_planned_charge:'gepland', waiting_for_current_charge:'wacht', charge_error:'laadfout', energy_flap_opened:'klep open', charge_ended:'vol'};
+                            var v = e && e.state && e.state !== 'unavailable' ? (m[e.state] || e.state) : '—';
+                            return `<div style="display:flex;flex-direction:column"><span style="font-size:18px;font-weight:700;color:white">${v}</span><span style="font-size:12px;color:rgba(255,255,255,0.42)">laadstatus</span></div>`;
                           ]]]
 
           # ----------- CENTER COLUMN -----------
@@ -385,7 +388,9 @@ cards:
                         net: |
                           [[[
                             var e = states['sensor.live_energieverbruik_totaal'];
-                            var v = e ? Number(e.state).toFixed(2).replace('.',',') : '—';
+                            var raw = e && !isNaN(Number(e.state)) ? Number(e.state) : null;
+                            if(raw !== null && Math.abs(raw) < 0.005) raw = 0;
+                            var v = raw !== null ? raw.toFixed(2).replace('.',',') : '—';
                             var u = e ? (e.attributes.unit_of_measurement || 'kW') : 'kW';
                             return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:38px;font-weight:700;color:white;line-height:1">${v}</span> <span style="font-size:15px;color:rgba(255,255,255,0.5)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.42)">netto verbruik</div></div>`;
                           ]]]
@@ -452,6 +457,9 @@ cards:
                             style:
                               colors: "rgba(255,255,255,0.3)"
                               fontSize: "10px"
+                            datetimeFormatter:
+                              hour: "HH:mm"
+                              minute: "HH:mm"
                         tooltip:
                           enabled: true
                         plotOptions:
@@ -540,29 +548,42 @@ cards:
                       template: ov_title
                       variables:
                         title: VEELGEBRUIKERS
-                    - type: custom:auto-entities
-                      card:
-                        type: vertical-stack
-                      card_param: cards
-                      filter:
-                        include:
-                          - entity_id: sensor.*_power
-                            options:
-                              type: custom:button-card
-                              template: ov_bar
-                              variables:
-                                max: 800
-                        exclude:
-                          - entity_id: sensor.*fase*
-                          - entity_id: sensor.*marstek*
-                          - entity_id: sensor.*battery*
-                          - state: unavailable
-                          - state: unknown
-                      sort:
-                        method: state
-                        numeric: true
-                        reverse: true
-                        count: 6
+                    - type: custom:button-card
+                      template: ov_bar
+                      entity: sensor.energieverbruik_fase_l1_in_watt
+                      name: Verbruik fase L1
+                      variables:
+                        max: 3680
+                    - type: custom:button-card
+                      template: ov_bar
+                      entity: sensor.energieverbruik_fase_l2_in_watt
+                      name: Verbruik fase L2
+                      variables:
+                        max: 3680
+                    - type: custom:button-card
+                      template: ov_bar
+                      entity: sensor.energieverbruik_fase_l3_in_watt
+                      name: Verbruik fase L3
+                      variables:
+                        max: 3680
+                    - type: custom:button-card
+                      template: ov_bar
+                      entity: sensor.speelkamer_stopcontact_verwarming_power
+                      name: Speelkamer verwarming
+                      variables:
+                        max: 1500
+                    - type: custom:button-card
+                      template: ov_bar
+                      entity: sensor.woonkamer_verlichting_power
+                      name: Woonkamer verlichting
+                      variables:
+                        max: 400
+                    - type: custom:button-card
+                      template: ov_bar
+                      entity: sensor.keuken_verlichting_power
+                      name: Keuken verlichting
+                      variables:
+                        max: 400
 
           # ----------- RIGHT COLUMN -----------
           - type: vertical-stack
@@ -785,11 +806,21 @@ cards:
                             - justify-self: end
                       custom_fields:
                         pri: |
-                          [[[ return `<div style="width:38px;height:38px;border-radius:10px;background:rgba(245,158,11,0.16);color:#f59e0b;display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:fire-truck" style="--mdc-icon-size:20px"></ha-icon></div>`; ]]]
+                          [[[
+                            var e = states['input_text.brandweer_laatste_melding'];
+                            var t = e && e.state ? e.state : '';
+                            var m = t.match(/^\s*([A-Pa-p])\s*(\d)/);
+                            if(m){
+                              var code = (m[1] + m[2]).toUpperCase();
+                              return `<div style="min-width:34px;height:34px;padding:0 8px;box-sizing:border-box;border-radius:9px;background:rgba(245,158,11,0.16);color:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">${code}</div>`;
+                            }
+                            return `<div style="width:38px;height:38px;border-radius:10px;background:rgba(245,158,11,0.16);color:#f59e0b;display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:fire-truck" style="--mdc-icon-size:20px"></ha-icon></div>`;
+                          ]]]
                         msg: |
                           [[[
                             var e = states['input_text.brandweer_laatste_melding'];
                             var t = e && e.state ? e.state : 'Geen recente melding';
+                            t = t.replace(/^\s*[A-Pa-p]\s*\d\s*/, '');
                             if(t.length > 46) t = t.slice(0,45) + '…';
                             return `<span style="font-size:14px;font-weight:600;color:white">${t}</span>`;
                           ]]]
