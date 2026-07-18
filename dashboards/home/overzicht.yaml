@@ -16,7 +16,15 @@ cards:
   - type: vertical-stack
     card_mod:
       style: |
-        #root { gap: 18px !important; }
+        #root {
+          gap: 18px !important;
+          max-width: 1620px !important;
+          margin: 16px auto !important;
+          padding: 18px 20px 22px 20px !important;
+          background: #0b0d12 !important;
+          border: 1px solid rgba(255,255,255,0.07) !important;
+          border-radius: 26px !important;
+        }
     cards:
       # =================== HEADER ===================
       - type: horizontal-stack
@@ -27,7 +35,7 @@ cards:
               grid-template-columns: 1fr auto !important;
               align-items: center !important;
               gap: 16px !important;
-              padding: 4px 6px !important;
+              padding: 2px 4px 4px 4px !important;
             }
         cards:
           - type: custom:button-card
@@ -40,21 +48,19 @@ cards:
                 - box-shadow: none
                 - padding: 0
               grid:
-                - grid-template-areas: '"h" "d"'
+                - grid-template-areas: '"h"'
                 - justify-items: start
             custom_fields:
               h: |
                 [[[
                   var u = (user && typeof user === 'object') ? (user.name || 'thuis') : user;
-                  return `<span style="font-size:22px;font-weight:700;color:white">Hallo ${u}</span>`;
-                ]]]
-              d: |
-                [[[
+                  if(u) u = String(u).split(' ')[0];
                   var d = new Date();
                   var days = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
                   var months = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
                   var t = ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
-                  return `<span style="font-size:13px;color:rgba(255,255,255,0.4)">${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} · ${t}</span>`;
+                  var ds = `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} · ${t}`;
+                  return `<span style="display:flex;align-items:baseline;gap:12px"><span style="font-size:22px;font-weight:700;color:white">Hallo ${u}</span><span style="font-size:14px;color:rgba(255,255,255,0.4)">${ds}</span></span>`;
                 ]]]
           - type: horizontal-stack
             card_mod:
@@ -378,9 +384,14 @@ cards:
                         prod: |
                           [[[
                             var e = states['sensor.solar_power_generated_now'];
-                            var v = e ? Number(e.state).toFixed(2).replace('.',',') : '—';
-                            var u = e ? (e.attributes.unit_of_measurement || 'kW') : 'kW';
-                            return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:#4ade80;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.5)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.42)">productie</div></div>`;
+                            var v = '—';
+                            if(e && !isNaN(Number(e.state))) {
+                              var raw = Number(e.state);
+                              var u = e.attributes.unit_of_measurement || '';
+                              var kw = (u === 'W') ? raw / 1000 : raw;
+                              v = kw.toFixed(2).replace('.',',');
+                            }
+                            return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:#4ade80;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.5)">kW</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.42)">productie</div></div>`;
                           ]]]
                         cons: |
                           [[[
@@ -427,6 +438,14 @@ cards:
                         plotOptions:
                           bar:
                             columnWidth: 72%
+                            colors:
+                              ranges:
+                                - from: -1000000
+                                  to: -0.0001
+                                  color: "#4ade80"
+                                - from: 0
+                                  to: 1000000
+                                  color: "#3b82f6"
                       series:
                         - entity: sensor.live_energieverbruik_totaal
                           name: Netto
@@ -434,14 +453,10 @@ cards:
                           stroke_width: 1
                           opacity: 1
                           float_precision: 2
+                          color: "#3b82f6"
                           group_by:
                             duration: 15s
                             func: avg
-                          color_threshold:
-                            - value: -20
-                              color: "#4ade80"
-                            - value: 0
-                              color: "#3b82f6"
                     # chips row
                     - type: horizontal-stack
                       card_mod:
@@ -487,15 +502,11 @@ cards:
                           entity: sensor.total_costs_today_calculated
                           tap_action:
                             action: more-info
-                          styles:
-                            card:
-                              - background: rgba(52,168,120,0.12)
-                              - border: 1px solid rgba(52,168,120,0.2)
                           custom_fields:
                             c: |
                               [[[
                                 var k = states['sensor.total_costs_today_calculated'];
-                                var v = k ? Number(k.state) : 0;
+                                var v = k && !isNaN(Number(k.state)) ? Number(k.state) : 0;
                                 var col = v < 0 ? '#4ade80' : 'rgba(255,255,255,0.85)';
                                 return `<span style="color:${col};font-weight:600">kosten vandaag · € ${v.toFixed(2).replace('.',',')}</span>`;
                               ]]]
@@ -553,6 +564,9 @@ cards:
                   style: *panel
                 card:
                   type: vertical-stack
+                  card_mod:
+                    style: |
+                      #root > *:nth-child(n+2) { border-top: 1px solid rgba(255,255,255,0.06) !important; }
                   cards:
                     - type: custom:button-card
                       template: ov_title
@@ -617,6 +631,9 @@ cards:
                   style: *panel
                 card:
                   type: vertical-stack
+                  card_mod:
+                    style: |
+                      #root > *:nth-child(n+2) { border-top: 1px solid rgba(255,255,255,0.06) !important; }
                   cards:
                     - type: custom:button-card
                       template: ov_title
