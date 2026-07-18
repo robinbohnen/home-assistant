@@ -189,11 +189,13 @@ ov_climate:
       [[[
         var cur = entity.attributes.current_temperature;
         var tgt = entity.attributes.temperature;
-        if(entity.state === 'off') return 'uit';
-        var s = '';
-        if(cur != null) s += Number(cur).toFixed(1).replace('.',',') + '°';
-        if(tgt != null) s += ' · doel ' + Number(tgt).toFixed(1).replace('.',',') + '°';
-        return s;
+        var off = entity.state === 'off' || entity.state === 'unavailable';
+        if(cur != null) {
+          var s = Number(cur).toFixed(1).replace('.',',') + '°';
+          if(!off && tgt != null) s += ' · doel ' + Number(tgt).toFixed(1).replace('.',',') + '°';
+          return s;
+        }
+        return off ? (entity.state === 'unavailable' ? 'niet beschikbaar' : 'uit') : (entity.state || '');
       ]]]
     badge: |
       [[[

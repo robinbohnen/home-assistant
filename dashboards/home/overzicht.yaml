@@ -66,11 +66,18 @@ cards:
             card_mod:
               style: |
                 #root { gap: 10px !important; }
+                #root > * { flex: 0 0 auto !important; }
             cards:
               - type: custom:button-card
                 template: ov_pill
                 tap_action:
                   action: none
+                styles:
+                  card:
+                    - background: >
+                        [[[ var g = states['sensor.zonneplan_current_tariff_group']; return (g && g.state === 'low') ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
+                    - border: >
+                        [[[ var g = states['sensor.zonneplan_current_tariff_group']; return (g && g.state === 'low') ? '1px solid rgba(52,168,120,0.28)' : '1px solid rgba(255,255,255,0.06)'; ]]]
                 custom_fields:
                   c: |
                     [[[
@@ -80,7 +87,8 @@ cards:
                       var col = {low:'#4ade80', normal:'#f59e0b', high:'#ef4444'};
                       var gs = g ? g.state : 'normal';
                       var price = p ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '';
-                      return `<span style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:${col[gs]||'#888'}"></span><span style="color:rgba(255,255,255,0.85)">tarief ${lbl[gs]||gs} · ${price}</span></span>`;
+                      var txt = gs === 'low' ? '#4ade80' : 'rgba(255,255,255,0.85)';
+                      return `<span style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:${col[gs]||'#888'}"></span><span style="color:${txt}">tarief ${lbl[gs]||gs} · ${price}</span></span>`;
                     ]]]
               - type: custom:button-card
                 template: ov_pill
@@ -315,9 +323,9 @@ cards:
                           ]]]
                         b: |
                           [[[
-                            var e = states['sensor.car_price_add_kms'];
-                            var v = e ? '€ ' + Number(e.state).toFixed(2).replace('.',',') : '—';
-                            return `<div style="display:flex;flex-direction:column"><span style="font-size:20px;font-weight:700;color:white">${v}</span><span style="font-size:12px;color:rgba(255,255,255,0.42)">meerprijs km</span></div>`;
+                            var e = states['sensor.laadpaal_verbruik'];
+                            var v = e && !isNaN(Number(e.state)) ? Number(e.state).toFixed(1).replace('.',',') + ' kWh' : '—';
+                            return `<div style="display:flex;flex-direction:column"><span style="font-size:20px;font-weight:700;color:white">${v}</span><span style="font-size:12px;color:rgba(255,255,255,0.42)">geladen</span></div>`;
                           ]]]
 
           # ----------- CENTER COLUMN -----------
@@ -404,11 +412,12 @@ cards:
                           [[[
                             var p = states['sensor.lilygo_rs485_marstek_battery_power'];
                             var soc = states['sensor.lilygo_rs485_marstek_battery_state_of_charge'];
-                            var pv = p ? Math.round(Number(p.state)) : null;
-                            var socv = soc ? Math.round(Number(soc.state)) : '—';
+                            var pv = p && !isNaN(Number(p.state)) ? Math.round(Number(p.state)) : null;
+                            var socv = soc && !isNaN(Number(soc.state)) ? Math.round(Number(soc.state)) : null;
                             var mode = pv === null ? '' : (pv < 0 ? 'ontlaadt' : (pv > 0 ? 'laadt' : 'idle'));
                             var disp = pv === null ? '—' : pv + ' W';
-                            return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:white;line-height:1">${disp}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.42)">batterij · ${socv}%${mode ? ' · ' + mode : ''}</div></div>`;
+                            var socStr = socv === null ? '' : ` <span style="font-size:13px;color:rgba(255,255,255,0.5)">· ${socv}%</span>`;
+                            return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:white;line-height:1">${disp}</span>${socStr}</div><div style="font-size:12.5px;color:rgba(255,255,255,0.42)">batterij${mode ? ' · ' + mode : ''}</div></div>`;
                           ]]]
                     # live chart
                     - type: custom:apexcharts-card
@@ -430,9 +439,19 @@ cards:
                             left: 0
                             right: 0
                             top: -10
-                            bottom: -8
+                            bottom: 0
                         yaxis:
                           show: false
+                        xaxis:
+                          axisBorder:
+                            show: false
+                          axisTicks:
+                            show: false
+                          labels:
+                            show: true
+                            style:
+                              colors: "rgba(255,255,255,0.3)"
+                              fontSize: "10px"
                         tooltip:
                           enabled: true
                         plotOptions:
@@ -521,36 +540,29 @@ cards:
                       template: ov_title
                       variables:
                         title: VEELGEBRUIKERS
-                    - type: custom:button-card
-                      template: ov_bar
-                      entity: sensor.energieproductie_fase_l2_in_watt
-                      name: Zonneplan vermogen L2
-                      variables:
-                        max: 3680
-                    - type: custom:button-card
-                      template: ov_bar
-                      entity: sensor.energieproductie_fase_l1_in_watt
-                      name: Zonneplan vermogen L1
-                      variables:
-                        max: 3680
-                    - type: custom:button-card
-                      template: ov_bar
-                      entity: sensor.speelkamer_stopcontact_verwarming_power
-                      name: Speelkamer verwarming
-                      variables:
-                        max: 1500
-                    - type: custom:button-card
-                      template: ov_bar
-                      entity: sensor.woonkamer_verlichting_power
-                      name: Woonkamer verlichting
-                      variables:
-                        max: 400
-                    - type: custom:button-card
-                      template: ov_bar
-                      entity: sensor.keuken_verlichting_power
-                      name: Keuken verlichting
-                      variables:
-                        max: 400
+                    - type: custom:auto-entities
+                      card:
+                        type: vertical-stack
+                      card_param: cards
+                      filter:
+                        include:
+                          - entity_id: sensor.*_power
+                            options:
+                              type: custom:button-card
+                              template: ov_bar
+                              variables:
+                                max: 800
+                        exclude:
+                          - entity_id: sensor.*fase*
+                          - entity_id: sensor.*marstek*
+                          - entity_id: sensor.*battery*
+                          - state: unavailable
+                          - state: unknown
+                      sort:
+                        method: state
+                        numeric: true
+                        reverse: true
+                        count: 6
 
           # ----------- RIGHT COLUMN -----------
           - type: vertical-stack
