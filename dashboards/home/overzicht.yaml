@@ -611,6 +611,81 @@ cards:
                         numeric: true
                         reverse: true
                         count: 6
+              # MEDIA
+              - type: custom:mod-card
+                card_mod:
+                  style: *panel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: ov_title
+                      tap_action:
+                        action: navigate
+                        navigation_path: "#ov-media"
+                      variables:
+                        title: MEDIA
+                    - type: custom:button-card
+                      show_icon: false
+                      show_name: false
+                      show_state: false
+                      tap_action:
+                        action: navigate
+                        navigation_path: "#ov-media"
+                      styles:
+                        card:
+                          - background: none
+                          - border: none
+                          - box-shadow: none
+                          - padding: 6px 2px 2px 2px
+                        grid:
+                          - grid-template-areas: '"art info ctl"'
+                          - grid-template-columns: 52px 1fr auto
+                          - align-items: center
+                          - column-gap: 14px
+                        custom_fields:
+                          art:
+                            - grid-area: art
+                          info:
+                            - grid-area: info
+                            - justify-self: start
+                            - overflow: hidden
+                          ctl:
+                            - grid-area: ctl
+                            - justify-self: end
+                      custom_fields:
+                        art: |
+                          [[[
+                            var sonos = ['media_player.woonkamer_sonos','media_player.keuken_sonos','media_player.overkapping_sonos','media_player.speelkamer_sonos','media_player.kantoor_sonos','media_player.badkamer_sonos','media_player.entree_sonos','media_player.toilet_sonos','media_player.garage_sonos','media_player.slaapkamer_maxi_sonos','media_player.slaapkamer_mini_sonos'];
+                            var active = sonos.find(e => states[e] && states[e].state === 'playing');
+                            var s = active ? states[active] : null;
+                            var pic = s && s.attributes.entity_picture ? s.attributes.entity_picture : null;
+                            if(pic) return `<div style="width:52px;height:52px;border-radius:10px;background-image:url('${pic}');background-size:cover;background-position:center"></div>`;
+                            return `<div style="width:52px;height:52px;border-radius:10px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:music" style="--mdc-icon-size:24px;color:rgba(255,255,255,0.5)"></ha-icon></div>`;
+                          ]]]
+                        info: |
+                          [[[
+                            var sonos = ['media_player.woonkamer_sonos','media_player.keuken_sonos','media_player.overkapping_sonos','media_player.speelkamer_sonos','media_player.kantoor_sonos','media_player.badkamer_sonos','media_player.entree_sonos','media_player.toilet_sonos','media_player.garage_sonos','media_player.slaapkamer_maxi_sonos','media_player.slaapkamer_mini_sonos'];
+                            var active = sonos.find(e => states[e] && states[e].state === 'playing');
+                            if(!active) return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px;font-weight:600;color:white">Niets speelt</span><span style="font-size:12.5px;color:rgba(255,255,255,0.42)">tik voor multiroom</span></div>`;
+                            var s = states[active];
+                            var title = s.attributes.media_title || 'Speelt';
+                            var artist = s.attributes.media_artist || s.attributes.media_album_name || '';
+                            if(title.length > 34) title = title.slice(0,33) + '…';
+                            if(artist.length > 38) artist = artist.slice(0,37) + '…';
+                            return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</span><span style="font-size:12.5px;color:rgba(255,255,255,0.42);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${artist}</span></div>`;
+                          ]]]
+                        ctl: |
+                          [[[
+                            var sonos = ['media_player.woonkamer_sonos','media_player.keuken_sonos','media_player.overkapping_sonos','media_player.speelkamer_sonos','media_player.kantoor_sonos','media_player.badkamer_sonos','media_player.entree_sonos','media_player.toilet_sonos','media_player.garage_sonos','media_player.slaapkamer_maxi_sonos','media_player.slaapkamer_mini_sonos'];
+                            var active = sonos.find(e => states[e] && states[e].state === 'playing');
+                            if(!active) return `<ha-icon icon="mdi:speaker-off" style="--mdc-icon-size:20px;color:rgba(255,255,255,0.25)"></ha-icon>`;
+                            var s = states[active];
+                            var name = s.attributes.friendly_name ? s.attributes.friendly_name.replace(/ ?Sonos/i,'').trim() : '';
+                            var grp = s.attributes.group_members ? s.attributes.group_members.length : 1;
+                            var badge = grp > 1 ? ` <span style="color:#3b82f6;font-weight:600">+${grp-1}</span>` : '';
+                            return `<span style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:rgba(255,255,255,0.6)"><ha-icon icon="mdi:speaker" style="--mdc-icon-size:16px;color:#4ade80"></ha-icon>${name}${badge}</span>`;
+                          ]]]
 
           # ----------- RIGHT COLUMN -----------
           - type: vertical-stack
@@ -1488,3 +1563,189 @@ cards:
             name: Zonnescherm achtertuin
             show_buttons_control: true
             show_position_control: true
+
+      # --------- Media / multiroom popup ---------
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-media"
+        name: Media
+        icon: mdi:music
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Overkapping erbij
+                secondary: bij Woonkamer voegen
+                icon: mdi:speaker-multiple
+                icon_color: blue
+                tap_action:
+                  action: perform-action
+                  perform_action: media_player.join
+                  target:
+                    entity_id: media_player.woonkamer_sonos
+                  data:
+                    group_members:
+                      - media_player.overkapping_sonos
+              - type: custom:mushroom-template-card
+                primary: Benedenverdieping
+                secondary: Woonkamer + keuken + entree
+                icon: mdi:home-floor-0
+                icon_color: blue
+                tap_action:
+                  action: perform-action
+                  perform_action: media_player.join
+                  target:
+                    entity_id: media_player.woonkamer_sonos
+                  data:
+                    group_members:
+                      - media_player.keuken_sonos
+                      - media_player.entree_sonos
+                      - media_player.toilet_sonos
+                      - media_player.overkapping_sonos
+              - type: custom:mushroom-template-card
+                primary: Gehele huis
+                secondary: alle speakers samen
+                icon: mdi:home-group
+                icon_color: green
+                tap_action:
+                  action: perform-action
+                  perform_action: media_player.join
+                  target:
+                    entity_id: media_player.woonkamer_sonos
+                  data:
+                    group_members:
+                      - media_player.keuken_sonos
+                      - media_player.overkapping_sonos
+                      - media_player.entree_sonos
+                      - media_player.toilet_sonos
+                      - media_player.kantoor_sonos
+                      - media_player.speelkamer_sonos
+                      - media_player.garage_sonos
+                      - media_player.badkamer_sonos
+                      - media_player.slaapkamer_maxi_sonos
+                      - media_player.slaapkamer_mini_sonos
+              - type: custom:mushroom-template-card
+                primary: Alles los
+                secondary: alle groepen ontkoppelen
+                icon: mdi:speaker-off
+                icon_color: red
+                tap_action:
+                  action: perform-action
+                  perform_action: media_player.unjoin
+                  target:
+                    entity_id:
+                      - media_player.woonkamer_sonos
+                      - media_player.keuken_sonos
+                      - media_player.overkapping_sonos
+                      - media_player.entree_sonos
+                      - media_player.toilet_sonos
+                      - media_player.kantoor_sonos
+                      - media_player.speelkamer_sonos
+                      - media_player.garage_sonos
+                      - media_player.badkamer_sonos
+                      - media_player.slaapkamer_maxi_sonos
+                      - media_player.slaapkamer_mini_sonos
+          - type: custom:mini-media-player
+            entity: media_player.woonkamer_sonos
+            artwork: cover
+            source: icon
+            info: short
+            hide:
+              power_state: false
+            speaker_group: &sonos_group
+              platform: sonos
+              show_group_count: true
+              entities:
+                - entity_id: media_player.woonkamer_sonos
+                  name: Woonkamer
+                - entity_id: media_player.keuken_sonos
+                  name: Keuken
+                - entity_id: media_player.overkapping_sonos
+                  name: Overkapping
+                - entity_id: media_player.entree_sonos
+                  name: Entree
+                - entity_id: media_player.toilet_sonos
+                  name: Toilet
+                - entity_id: media_player.kantoor_sonos
+                  name: Kantoor
+                - entity_id: media_player.speelkamer_sonos
+                  name: Speelkamer
+                - entity_id: media_player.garage_sonos
+                  name: Garage
+                - entity_id: media_player.badkamer_sonos
+                  name: Badkamer
+                - entity_id: media_player.slaapkamer_maxi_sonos
+                  name: Slaapkamer Logan
+                - entity_id: media_player.slaapkamer_mini_sonos
+                  name: Slaapkamer Emma
+          - type: custom:mushroom-title-card
+            title: Kamers
+          - type: custom:mini-media-player
+            entity: media_player.keuken_sonos
+            hide:
+              power: true
+            speaker_group: *sonos_group
+          - type: custom:mini-media-player
+            entity: media_player.overkapping_sonos
+            hide:
+              power: true
+            speaker_group: *sonos_group
+          - type: custom:mini-media-player
+            entity: media_player.entree_sonos
+            hide:
+              power: true
+            speaker_group: *sonos_group
+          - type: custom:mini-media-player
+            entity: media_player.toilet_sonos
+            hide:
+              power: true
+            speaker_group: *sonos_group
+          - type: custom:mini-media-player
+            entity: media_player.kantoor_sonos
+            hide:
+              power: true
+            speaker_group: *sonos_group
+          - type: custom:mini-media-player
+            entity: media_player.speelkamer_sonos
+            hide:
+              power: true
+            speaker_group: *sonos_group
+          - type: custom:mini-media-player
+            entity: media_player.garage_sonos
+            hide:
+              power: true
+            speaker_group: *sonos_group
+          - type: custom:mini-media-player
+            entity: media_player.badkamer_sonos
+            hide:
+              power: true
+            speaker_group: *sonos_group
+          - type: custom:mini-media-player
+            entity: media_player.slaapkamer_maxi_sonos
+            name: Slaapkamer Logan
+            hide:
+              power: true
+            speaker_group: *sonos_group
+          - type: custom:mini-media-player
+            entity: media_player.slaapkamer_mini_sonos
+            name: Slaapkamer Emma
+            hide:
+              power: true
+            speaker_group: *sonos_group
+          - type: custom:mushroom-title-card
+            title: TV
+          - type: custom:mini-media-player
+            entity: media_player.woonkamer_77_oled
+            artwork: cover
+            hide:
+              power_state: false
+          - type: custom:mini-media-player
+            entity: media_player.woonkamer_appletv
+            hide:
+              power: true
+          - type: custom:mini-media-player
+            entity: media_player.speelkamer_tv
+            hide:
+              power: true
