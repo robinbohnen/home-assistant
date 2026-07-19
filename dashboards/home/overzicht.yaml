@@ -96,30 +96,64 @@ cards:
                       var txt = gs === 'low' ? '#4ade80' : 'rgba(255,255,255,0.85)';
                       return `<span style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:${col[gs]||'#888'}"></span><span style="color:${txt}">tarief ${lbl[gs]||gs} · ${price}</span></span>`;
                     ]]]
+              # Conditioneel: auto laadt
               - type: custom:button-card
                 template: ov_pill
+                entity: sensor.hrh85f_charge_state
                 tap_action:
-                  action: more-info
-                entity: sensor.cryptoinfo_bunq_xrp_2
+                  action: navigate
+                  navigation_path: "#ov-auto"
+                visibility:
+                  - condition: state
+                    entity: sensor.hrh85f_charge_state
+                    state: charge_in_progress
                 custom_fields:
                   c: |
                     [[[
-                      var n = states['input_number.xrp_portfolio'];
-                      var pr = states['sensor.cryptoinfo_bunq_xrp_2'];
-                      if(!n || !pr) return 'XRP';
-                      var v = Number(n.state) * Number(pr.state);
-                      return `<span style="color:rgba(255,255,255,0.85)">XRP € ${v.toFixed(2).replace('.',',')}</span>`;
+                      var b = states['sensor.hrh85f_batterij'];
+                      var pct = b && !isNaN(Number(b.state)) ? Math.round(Number(b.state)) : '—';
+                      return `<span style="display:flex;align-items:center;gap:7px;color:#4ade80"><ha-icon icon="mdi:ev-station" style="--mdc-icon-size:16px"></ha-icon>auto laadt · ${pct}%</span>`;
                     ]]]
+              # Conditioneel: alarm ingeschakeld
               - type: custom:button-card
                 template: ov_pill
+                entity: alarm_control_panel.alarmo
                 tap_action:
                   action: more-info
-                entity: sensor.crypto_current_value
+                visibility:
+                  - condition: state
+                    entity: alarm_control_panel.alarmo
+                    state:
+                      - armed_away
+                      - armed_home
+                      - armed_night
+                      - armed_vacation
                 custom_fields:
                   c: |
                     [[[
-                      var v = states['sensor.crypto_current_value'];
-                      return `<span style="color:rgba(255,255,255,0.85)">crypto € ${v ? Number(v.state).toFixed(2).replace('.',',') : '—'}</span>`;
+                      return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:shield-lock" style="--mdc-icon-size:16px"></ha-icon>alarm ingeschakeld</span>`;
+                    ]]]
+              # Conditioneel: stroom wordt straks duurder
+              - type: custom:button-card
+                template: ov_pill
+                tap_action:
+                  action: navigate
+                  navigation_path: "#ov-energie"
+                visibility:
+                  - condition: state
+                    entity: sensor.zonneplan_forecast_tariff_group_hour_1
+                    state: high
+                  - condition: state
+                    entity: sensor.zonneplan_current_tariff_group
+                    state:
+                      - low
+                      - normal
+                custom_fields:
+                  c: |
+                    [[[
+                      var p = states['sensor.zonneplan_forecast_tariff_hour_1'];
+                      var price = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '';
+                      return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:trending-up" style="--mdc-icon-size:16px"></ha-icon>straks duurder${price ? ' · ' + price : ''}</span>`;
                     ]]]
               - type: custom:button-card
                 template: ov_pill
@@ -953,6 +987,48 @@ cards:
                             return `<span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;color:#4ade80;background:rgba(52,168,120,0.15)">uitgerukt · ${s}</span>`;
                           ]]]
                     - type: custom:button-card
+                      entity: input_select.brandweer_dienstdoende_ploeg
+                      show_icon: false
+                      show_name: false
+                      show_state: false
+                      tap_action:
+                        action: navigate
+                        navigation_path: "#ov-brandweer"
+                      styles:
+                        card:
+                          - background: none
+                          - border: none
+                          - box-shadow: none
+                          - padding: 11px 2px
+                          - border-top: 1px solid rgba(255,255,255,0.06)
+                        grid:
+                          - grid-template-areas: '"lbl val"'
+                          - grid-template-columns: 1fr auto
+                          - align-items: center
+                        custom_fields:
+                          lbl:
+                            - justify-self: start
+                          val:
+                            - justify-self: end
+                      custom_fields:
+                        lbl: |
+                          [[[
+                            var ds = states['input_select.brandweer_dienstdoende_ploeg'];
+                            var p = ds && ds.state ? ds.state.charAt(0).toUpperCase() : '?';
+                            return `<span style="font-size:14px;font-weight:600;color:white">Bezetting ${p}-ploeg</span>`;
+                          ]]]
+                        val: |
+                          [[[
+                            var ds = states['input_select.brandweer_dienstdoende_ploeg'];
+                            var letter = ds && ds.state ? ds.state.charAt(0).toUpperCase() : '';
+                            var map = {A:'sensor.bezetting_ploeg_a', B:'sensor.bezetting_ploeg_b', C:'sensor.bezetting_ploeg_c'};
+                            var s = states[map[letter]];
+                            var n = s && !isNaN(Number(s.state)) ? Number(s.state) : null;
+                            if(n === null) return `<span style="font-size:13px;color:rgba(255,255,255,0.4)">—</span>`;
+                            var col = n < 4 ? '#ef4444' : (n < 6 ? '#f59e0b' : '#4ade80');
+                            return `<span style="display:flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:50%;background:${col}"></span><span style="font-size:17px;font-weight:700;color:${col}">${n}</span><span style="font-size:12px;color:rgba(255,255,255,0.42)">beschikbaar</span></span>`;
+                          ]]]
+                    - type: custom:button-card
                       tap_action:
                         action: none
                       styles:
@@ -1365,11 +1441,19 @@ cards:
                 icon: mdi:fire-station
                 icon_color: orange
               - type: custom:mushroom-template-card
-                entity: sensor.bezetting_dienstdoend
-                primary: Bezetting
-                secondary: "{{ states('sensor.bezetting_dienstdoend') }}"
+                primary: Bezetting dienstdoend
+                secondary: >-
+                  {% set l = states('input_select.brandweer_dienstdoende_ploeg')[0] | upper %}
+                  {% set n = states('sensor.bezetting_ploeg_' ~ (l | lower)) | int(0) %}
+                  {{ l }}-ploeg · {{ n }} beschikbaar
                 icon: mdi:account-multiple-check
-                icon_color: green
+                icon_color: >-
+                  {% set l = states('input_select.brandweer_dienstdoende_ploeg')[0] | lower %}
+                  {% set n = states('sensor.bezetting_ploeg_' ~ l) | int(0) %}
+                  {{ 'red' if n < 4 else ('orange' if n < 6 else 'green') }}
+                tap_action:
+                  action: more-info
+                  entity: sensor.bezetting_ploeg_a
           - type: custom:mushroom-title-card
             title: Uitrukken
           - type: grid
