@@ -1,0 +1,27 @@
+# Template binary sensors voor Sonos-groepsstatus.
+# Gebruikt door het "Overzicht"-dashboard om de multiroom-knoppen te togglen
+# (erbij / eraf) via een simpele condition: state.
+sonos_groups_package:
+  template:
+    - binary_sensor:
+        - name: Sonos Overkapping bij Woonkamer
+          unique_id: sonos_overkapping_bij_woonkamer
+          icon: mdi:speaker-multiple
+          state: >
+            {{ 'media_player.overkapping_sonos' in (state_attr('media_player.woonkamer_sonos','group_members') or []) }}
+
+        - name: Sonos Benedenverdieping samen
+          unique_id: sonos_benedenverdieping_samen
+          icon: mdi:home-floor-0
+          state: >
+            {% set g = state_attr('media_player.woonkamer_sonos','group_members') or [] %}
+            {{ 'media_player.keuken_sonos' in g
+               and 'media_player.entree_sonos' in g
+               and 'media_player.toilet_sonos' in g
+               and 'media_player.overkapping_sonos' in g }}
+
+        - name: Sonos Gehele huis samen
+          unique_id: sonos_gehele_huis_samen
+          icon: mdi:home-group
+          state: >
+            {{ (state_attr('media_player.woonkamer_sonos','group_members') or []) | length >= 11 }}
