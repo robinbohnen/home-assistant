@@ -155,6 +155,73 @@ cards:
                       var price = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '';
                       return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:trending-up" style="--mdc-icon-size:16px"></ha-icon>straks duurder${price ? ' · ' + price : ''}</span>`;
                     ]]]
+              # Conditioneel: regen op komst
+              - type: custom:button-card
+                template: ov_pill
+                entity: sensor.neerslag_komende_30_minuten
+                tap_action:
+                  action: more-info
+                visibility:
+                  - condition: numeric_state
+                    entity: sensor.neerslag_komende_30_minuten
+                    above: 0.1
+                custom_fields:
+                  c: |
+                    [[[
+                      var r = states['sensor.neerslag_komende_30_minuten'];
+                      var mm = r && !isNaN(Number(r.state)) ? Number(r.state).toFixed(1).replace('.',',') : '?';
+                      return `<span style="display:flex;align-items:center;gap:7px;color:#38bdf8"><ha-icon icon="mdi:weather-pouring" style="--mdc-icon-size:16px"></ha-icon>regen · ${mm} mm (30 min)</span>`;
+                    ]]]
+              # Conditioneel: iemand onderweg naar huis
+              - type: custom:button-card
+                template: ov_pill
+                tap_action:
+                  action: navigate
+                  navigation_path: "#ov-personen"
+                visibility:
+                  - condition: state
+                    entity: binary_sensor.iemand_onderweg_naar_huis
+                    state: "on"
+                custom_fields:
+                  c: |
+                    [[[
+                      var ppl = [
+                        ['Robin','person.robin_bohnen','sensor.robin_reistijd_naar_huis'],
+                        ['Samantha','person.samantha_henkelman','sensor.samantha_reistijd_naar_huis'],
+                        ['Emma','person.emma_bohnen','sensor.emma_reistijd_naar_huis'],
+                        ['Logan','person.logan_veen','sensor.logan_reistijd_naar_huis']
+                      ];
+                      var best = null;
+                      ppl.forEach(function(x){
+                        var ps = states[x[1]]; var rs = states[x[2]];
+                        if(ps && ['home','unknown','unavailable'].indexOf(ps.state) === -1 && rs && !isNaN(Number(rs.state)) && Number(rs.state) > 0){
+                          var t = Number(rs.state);
+                          if(best === null || t < best.t) best = {name:x[0], t:t};
+                        }
+                      });
+                      if(!best) return '';
+                      return `<span style="display:flex;align-items:center;gap:7px;color:rgba(255,255,255,0.85)"><ha-icon icon="mdi:car" style="--mdc-icon-size:16px;color:#4ade80"></ha-icon>${best.name} thuis · ${Math.round(best.t)} min</span>`;
+                    ]]]
+              # Conditioneel: zonnescherm-tip (veel zon + scherm omhoog)
+              - type: custom:button-card
+                template: ov_pill
+                tap_action:
+                  action: perform-action
+                  perform_action: cover.close_cover
+                  target:
+                    entity_id: cover.achtertuin_zonnescherm
+                visibility:
+                  - condition: numeric_state
+                    entity: sensor.achtertuin_zon_luminance
+                    above: 25000
+                  - condition: state
+                    entity: cover.achtertuin_zonnescherm
+                    state: open
+                custom_fields:
+                  c: |
+                    [[[
+                      return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:blinds-horizontal" style="--mdc-icon-size:16px"></ha-icon>veel zon · zonnescherm omlaag?</span>`;
+                    ]]]
               - type: custom:button-card
                 template: ov_pill
                 tap_action:

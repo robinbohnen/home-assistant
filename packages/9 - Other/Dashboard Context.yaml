@@ -1,0 +1,20 @@
+# Hulp-sensoren voor de contextuele "pills" in de header van het Overzicht-dashboard.
+dashboard_context_package:
+  template:
+    - binary_sensor:
+        - name: Iemand onderweg naar huis
+          unique_id: iemand_onderweg_naar_huis
+          icon: mdi:car-arrow-right
+          state: >
+            {% set ns = namespace(any=false) %}
+            {% for p, r in [
+              ('person.robin_bohnen','sensor.robin_reistijd_naar_huis'),
+              ('person.samantha_henkelman','sensor.samantha_reistijd_naar_huis'),
+              ('person.emma_bohnen','sensor.emma_reistijd_naar_huis'),
+              ('person.logan_veen','sensor.logan_reistijd_naar_huis') ] %}
+              {% if states(p) not in ['home','unknown','unavailable']
+                    and states(r) | float(-1) > 0 %}
+                {% set ns.any = true %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.any }}
