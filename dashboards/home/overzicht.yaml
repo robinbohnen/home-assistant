@@ -223,7 +223,7 @@ cards:
                       name: Begane grond
                       tap_action:
                         action: navigate
-                        navigation_path: /lovelace/woning#groundfloor
+                        navigation_path: "#ov-groundfloor"
                       variables:
                         lights:
                           - light.woonkamer_lampen
@@ -236,7 +236,7 @@ cards:
                       name: Eerste verdieping
                       tap_action:
                         action: navigate
-                        navigation_path: /lovelace/woning#firstfloor
+                        navigation_path: "#ov-firstfloor"
                       variables:
                         lights:
                           - light.badkamer_lampen
@@ -249,7 +249,7 @@ cards:
                       name: Tweede verdieping
                       tap_action:
                         action: navigate
-                        navigation_path: /lovelace/woning#secondfloor
+                        navigation_path: "#ov-secondfloor"
                       variables:
                         lights:
                           - light.overloop_zolder_lampen
@@ -259,7 +259,7 @@ cards:
                       name: Garage / speelkamer
                       tap_action:
                         action: navigate
-                        navigation_path: /lovelace/woning#garage
+                        navigation_path: "#ov-garage"
                       variables:
                         lights:
                           - light.garage_lampen
@@ -270,7 +270,7 @@ cards:
                       entity: cover.achtertuin_zonnescherm
                       tap_action:
                         action: navigate
-                        navigation_path: /lovelace/woning#outside
+                        navigation_path: "#ov-outside"
                       custom_fields:
                         sum: |
                           [[[
@@ -640,7 +640,7 @@ cards:
                       entity: sensor.afvalinfo_home_trash_type_today
                       tap_action:
                         action: navigate
-                        navigation_path: /lovelace/woning#afval
+                        navigation_path: "#ov-vandaag"
                       variables:
                         title: Afval vandaag
                         mdi: mdi:trash-can-outline
@@ -655,7 +655,7 @@ cards:
                       entity: sensor.afvalinfo_home_trash_type_tomorrow
                       tap_action:
                         action: navigate
-                        navigation_path: /lovelace/woning#afval
+                        navigation_path: "#ov-vandaag"
                       variables:
                         title: Afval morgen
                         mdi: mdi:recycle
@@ -670,7 +670,7 @@ cards:
                       entity: calendar.agenda
                       tap_action:
                         action: navigate
-                        navigation_path: /lovelace/kalender
+                        navigation_path: "#ov-vandaag"
                       variables:
                         mdi: mdi:calendar
                       custom_fields:
@@ -920,33 +920,55 @@ cards:
         name: Personen
         icon: mdi:account-group
         cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: person.robin_bohnen
+                primary: Robin
+                secondary: >-
+                  {{ 'Thuis' if is_state('person.robin_bohnen','home') else 'Afwezig' }} · {{ states('sensor.iphone_van_robin_battery_level') }}%
+                icon: mdi:account
+                icon_color: "{{ 'green' if is_state('person.robin_bohnen','home') else 'grey' }}"
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: person.samantha_henkelman
+                primary: Samantha
+                secondary: >-
+                  {{ 'Thuis' if is_state('person.samantha_henkelman','home') else 'Afwezig' }} · {{ states('sensor.iphone_van_samantha_battery_level') }}%
+                icon: mdi:account
+                icon_color: "{{ 'green' if is_state('person.samantha_henkelman','home') else 'grey' }}"
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: person.emma_bohnen
+                primary: Emma
+                secondary: >-
+                  {{ 'Thuis' if is_state('person.emma_bohnen','home') else 'Afwezig' }} · {{ states('sensor.iphone_van_emma_battery_level') }}%
+                icon: mdi:account
+                icon_color: "{{ 'green' if is_state('person.emma_bohnen','home') else 'grey' }}"
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: person.logan_veen
+                primary: Logan
+                secondary: >-
+                  {{ 'Thuis' if is_state('person.logan_veen','home') else 'Afwezig' }} · {{ states('sensor.iphone_battery_level') }}%
+                icon: mdi:account
+                icon_color: "{{ 'green' if is_state('person.logan_veen','home') else 'grey' }}"
+                tap_action:
+                  action: more-info
           - type: map
             default_zoom: 11
             hours_to_show: 12
+            aspect_ratio: "16:9"
             entities:
               - person.robin_bohnen
               - person.samantha_henkelman
               - person.emma_bohnen
               - person.logan_veen
-          - type: entities
-            title: Status
-            entities:
-              - entity: person.robin_bohnen
-                secondary_info: last-changed
-              - entity: sensor.iphone_van_robin_battery_level
-                name: Batterij Robin
-              - entity: person.samantha_henkelman
-                secondary_info: last-changed
-              - entity: sensor.iphone_van_samantha_battery_level
-                name: Batterij Samantha
-              - entity: person.emma_bohnen
-                secondary_info: last-changed
-              - entity: sensor.iphone_van_emma_battery_level
-                name: Batterij Emma
-              - entity: person.logan_veen
-                secondary_info: last-changed
-              - entity: sensor.iphone_battery_level
-                name: Batterij Logan
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-energie"
@@ -975,61 +997,116 @@ cards:
                 group_by:
                   duration: 5m
                   func: avg
-          - type: entities
-            title: Vandaag
-            entities:
-              - entity: sensor.solar_power_generated_today
-                name: Opgewekt vandaag
-              - entity: sensor.forecast_solar_production_today
-                name: Verwacht vandaag
-              - entity: sensor.zonneplan_electricity_consumption_today
-                name: Verbruik vandaag
-              - entity: sensor.zonneplan_gas_consumption_today
-                name: Gas vandaag
-              - entity: sensor.total_costs_today_calculated
-                name: Kosten vandaag
-              - entity: sensor.zonneplan_current_electricity_tariff
-                name: Huidig tarief
-              - entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
-                name: Thuisbatterij
-              - entity: sensor.lilygo_rs485_marstek_battery_power
-                name: Batterijvermogen
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.solar_power_generated_today
+                primary: Opgewekt vandaag
+                secondary: "{{ states('sensor.solar_power_generated_today') }} kWh"
+                icon: mdi:solar-power-variant
+                icon_color: amber
+              - type: custom:mushroom-template-card
+                entity: sensor.forecast_solar_production_today
+                primary: Verwacht
+                secondary: "{{ states('sensor.forecast_solar_production_today') }} kWh"
+                icon: mdi:weather-sunny
+                icon_color: amber
+              - type: custom:mushroom-template-card
+                entity: sensor.zonneplan_electricity_consumption_today
+                primary: Verbruik vandaag
+                secondary: "{{ states('sensor.zonneplan_electricity_consumption_today') }} kWh"
+                icon: mdi:flash
+                icon_color: blue
+              - type: custom:mushroom-template-card
+                entity: sensor.zonneplan_gas_consumption_today
+                primary: Gas vandaag
+                secondary: "{{ states('sensor.zonneplan_gas_consumption_today') }} m³"
+                icon: mdi:fire
+                icon_color: orange
+              - type: custom:mushroom-template-card
+                entity: sensor.total_costs_today_calculated
+                primary: Kosten vandaag
+                secondary: "€ {{ states('sensor.total_costs_today_calculated') }}"
+                icon: mdi:currency-eur
+                icon_color: "{{ 'green' if states('sensor.total_costs_today_calculated')|float(0) < 0 else 'grey' }}"
+              - type: custom:mushroom-template-card
+                entity: sensor.zonneplan_current_electricity_tariff
+                primary: Huidig tarief
+                secondary: "€ {{ states('sensor.zonneplan_current_electricity_tariff') }}"
+                icon: mdi:cash-clock
+                icon_color: "{{ 'green' if is_state('sensor.zonneplan_current_tariff_group','low') else 'grey' }}"
+              - type: custom:mushroom-template-card
+                entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
+                primary: Thuisbatterij
+                secondary: >-
+                  {{ states('sensor.lilygo_rs485_marstek_battery_state_of_charge') }}% · {{ states('sensor.lilygo_rs485_marstek_battery_power') }} W
+                icon: mdi:home-battery
+                icon_color: green
+              - type: custom:mushroom-template-card
+                entity: sensor.solar_power_generated_now
+                primary: Productie nu
+                secondary: "{{ states('sensor.solar_power_generated_now') }} W"
+                icon: mdi:solar-power
+                icon_color: amber
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-auto"
         name: Auto
         icon: mdi:car-electric
         cards:
-          - type: entities
-            entities:
-              - entity: sensor.hrh85f_batterij
-                name: Batterij
-              - entity: sensor.hrh85f_battery_autonomy
-                name: Bereik
-              - entity: sensor.hrh85f_kilometerstand
-                name: Kilometerstand
-              - entity: sensor.hrh85f_charge_state
-                name: Laadstatus
-              - entity: sensor.hrh85f_plug_state
-                name: Stekker
-              - entity: sensor.hrh85f_charging_remaining_time
-                name: Resterende laadtijd
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.hrh85f_batterij
+                primary: Batterij
+                secondary: "{{ states('sensor.hrh85f_batterij') }}%"
+                icon: mdi:battery-charging
+                icon_color: "{{ 'green' if states('sensor.hrh85f_batterij')|float(0) > 20 else 'amber' }}"
+              - type: custom:mushroom-template-card
+                entity: sensor.hrh85f_battery_autonomy
+                primary: Bereik
+                secondary: "{{ states('sensor.hrh85f_battery_autonomy') }} km"
+                icon: mdi:map-marker-distance
+                icon_color: blue
+              - type: custom:mushroom-template-card
+                entity: sensor.hrh85f_kilometerstand
+                primary: Kilometerstand
+                secondary: "{{ states('sensor.hrh85f_kilometerstand') }} km"
+                icon: mdi:counter
+                icon_color: grey
+              - type: custom:mushroom-template-card
+                entity: sensor.hrh85f_charge_state
+                primary: Laadstatus
+                secondary: "{{ states('sensor.hrh85f_charge_state') }}"
+                icon: mdi:ev-station
+                icon_color: "{{ 'green' if is_state('sensor.hrh85f_charge_state','charge_in_progress') else 'grey' }}"
           - type: horizontal-stack
             cards:
-              - type: button
-                entity: button.hrh85f_start_opladen
-                name: Start opladen
+              - type: custom:mushroom-template-card
+                primary: Start opladen
                 icon: mdi:ev-station
+                icon_color: green
                 tap_action:
-                  action: toggle
-              - type: button
-                entity: button.hrh85f_start_air_conditioner
-                name: Airco
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.hrh85f_start_opladen
+              - type: custom:mushroom-template-card
+                primary: Airco starten
                 icon: mdi:air-conditioner
+                icon_color: blue
                 tap_action:
-                  action: toggle
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.hrh85f_start_air_conditioner
           - type: map
             default_zoom: 10
+            aspect_ratio: "16:9"
             entities:
               - device_tracker.hrh85f_locatie
       - type: custom:bubble-card
@@ -1038,21 +1115,51 @@ cards:
         name: Vandaag
         icon: mdi:calendar-check
         cards:
-          - type: entities
+          - type: custom:mushroom-title-card
             title: Afval
-            entities:
-              - entity: sensor.afvalinfo_home_trash_type_today
-                name: Vandaag
-              - entity: sensor.afvalinfo_home_trash_type_tomorrow
-                name: Morgen
-              - entity: sensor.afvalinfo_home_gft
-                name: GFT
-              - entity: sensor.afvalinfo_home_papier
-                name: Papier
-              - entity: sensor.afvalinfo_home_pbd
-                name: PBD
-              - entity: sensor.afvalinfo_home_restafval
-                name: Restafval
+            subtitle: Ophaalmomenten
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.afvalinfo_home_trash_type_today
+                primary: Vandaag
+                secondary: "{{ states('sensor.afvalinfo_home_trash_type_today') }}"
+                icon: mdi:trash-can
+                icon_color: teal
+              - type: custom:mushroom-template-card
+                entity: sensor.afvalinfo_home_trash_type_tomorrow
+                primary: Morgen
+                secondary: "{{ states('sensor.afvalinfo_home_trash_type_tomorrow') }}"
+                icon: mdi:trash-can-outline
+                icon_color: teal
+              - type: custom:mushroom-template-card
+                entity: sensor.afvalinfo_home_gft
+                primary: GFT
+                secondary: "{{ states('sensor.afvalinfo_home_gft') }}"
+                icon: mdi:leaf
+                icon_color: green
+              - type: custom:mushroom-template-card
+                entity: sensor.afvalinfo_home_papier
+                primary: Papier
+                secondary: "{{ states('sensor.afvalinfo_home_papier') }}"
+                icon: mdi:newspaper
+                icon_color: blue
+              - type: custom:mushroom-template-card
+                entity: sensor.afvalinfo_home_pbd
+                primary: PBD
+                secondary: "{{ states('sensor.afvalinfo_home_pbd') }}"
+                icon: mdi:recycle
+                icon_color: orange
+              - type: custom:mushroom-template-card
+                entity: sensor.afvalinfo_home_restafval
+                primary: Restafval
+                secondary: "{{ states('sensor.afvalinfo_home_restafval') }}"
+                icon: mdi:delete
+                icon_color: grey
+          - type: custom:mushroom-title-card
+            title: Agenda
           - type: calendar
             initial_view: listWeek
             entities:
@@ -1064,48 +1171,320 @@ cards:
         name: Klimaat
         icon: mdi:thermometer
         cards:
-          - type: thermostat
+          - type: custom:mushroom-climate-card
             entity: climate.airco_woonkamer
-          - type: thermostat
+            name: Airco woonkamer
+            hvac_modes:
+              - "off"
+              - cool
+              - heat
+              - dry
+              - fan_only
+            show_temperature_control: true
+            collapsible_controls: true
+          - type: custom:mushroom-climate-card
             entity: climate.airco_zolder
-          - type: thermostat
+            name: Airco zolder
+            hvac_modes:
+              - "off"
+              - cool
+              - heat
+              - dry
+              - fan_only
+            show_temperature_control: true
+            collapsible_controls: true
+          - type: custom:mushroom-climate-card
             entity: climate.intex_purespa
-          - type: entities
-            entities:
-              - entity: cover.achtertuin_zonnescherm
-                name: Zonnescherm achtertuin
+            name: Intex PureSpa
+            show_temperature_control: true
+            collapsible_controls: true
+          - type: custom:mushroom-cover-card
+            entity: cover.achtertuin_zonnescherm
+            name: Zonnescherm achtertuin
+            show_buttons_control: true
+            show_position_control: true
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-brandweer"
         name: Brandweer
         icon: mdi:fire-truck
         cards:
-          - type: entities
-            title: Status
-            entities:
-              - entity: input_text.brandweer_laatste_melding
-                name: Laatste melding
-              - entity: input_select.brandweer_dienstdoende_ploeg
-                name: Dienstdoende ploeg
-              - entity: input_select.brandweer_mijn_huidige_ploeg
-                name: Mijn ploeg
-              - entity: sensor.robin_reistijd_naar_brandweer_uden
-                name: Reistijd kazerne
-              - entity: sensor.bezetting_dienstdoend
-                name: Bezetting dienstdoend
-          - type: entities
+          - type: custom:mushroom-template-card
+            entity: input_text.brandweer_laatste_melding
+            primary: Laatste melding
+            secondary: "{{ states('input_text.brandweer_laatste_melding') }}"
+            icon: mdi:message-alert
+            icon_color: red
+            multiline_secondary: true
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: input_select.brandweer_dienstdoende_ploeg
+                primary: Dienstdoend
+                secondary: "{{ states('input_select.brandweer_dienstdoende_ploeg') }}"
+                icon: mdi:account-group
+                icon_color: blue
+              - type: custom:mushroom-template-card
+                entity: input_select.brandweer_mijn_huidige_ploeg
+                primary: Mijn ploeg
+                secondary: "{{ states('input_select.brandweer_mijn_huidige_ploeg') }}"
+                icon: mdi:account
+                icon_color: blue
+              - type: custom:mushroom-template-card
+                entity: sensor.robin_reistijd_naar_brandweer_uden
+                primary: Reistijd kazerne
+                secondary: "{{ states('sensor.robin_reistijd_naar_brandweer_uden') }} min"
+                icon: mdi:fire-station
+                icon_color: orange
+              - type: custom:mushroom-template-card
+                entity: sensor.bezetting_dienstdoend
+                primary: Bezetting
+                secondary: "{{ states('sensor.bezetting_dienstdoend') }}"
+                icon: mdi:account-multiple-check
+                icon_color: green
+          - type: custom:mushroom-title-card
             title: Uitrukken
-            entities:
-              - entity: counter.brandweer_totaal_aantal_uitrukken
-                name: Totaal
-              - entity: counter.brandweer_uden_a_ploeg_uitrukken
-                name: A-ploeg
-              - entity: counter.brandweer_uden_b_ploeg_uitrukken
-                name: B-ploeg
-              - entity: counter.brandweer_uden_c_ploeg_uitrukken
-                name: C-ploeg
+          - type: grid
+            columns: 4
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: counter.brandweer_totaal_aantal_uitrukken
+                primary: Totaal
+                secondary: "{{ states('counter.brandweer_totaal_aantal_uitrukken') }}"
+                icon: mdi:sigma
+                icon_color: grey
+              - type: custom:mushroom-template-card
+                entity: counter.brandweer_uden_a_ploeg_uitrukken
+                primary: A
+                secondary: "{{ states('counter.brandweer_uden_a_ploeg_uitrukken') }}"
+                icon: mdi:alpha-a-circle
+                icon_color: blue
+              - type: custom:mushroom-template-card
+                entity: counter.brandweer_uden_b_ploeg_uitrukken
+                primary: B
+                secondary: "{{ states('counter.brandweer_uden_b_ploeg_uitrukken') }}"
+                icon: mdi:alpha-b-circle
+                icon_color: blue
+              - type: custom:mushroom-template-card
+                entity: counter.brandweer_uden_c_ploeg_uitrukken
+                primary: C
+                secondary: "{{ states('counter.brandweer_uden_c_ploeg_uitrukken') }}"
+                icon: mdi:alpha-c-circle
+                icon_color: blue
           - type: logbook
             hours_to_show: 336
             entities:
               - input_text.brandweer_laatste_melding
               - binary_sensor.brandweer_uitgerukt_op_laatste_melding
+
+      # --------- Ruimte-popups (lichtbediening) ---------
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-groundfloor"
+        name: Begane grond
+        icon: mdi:home-floor-0
+        cards:
+          - type: custom:mushroom-template-card
+            primary: Alles uit
+            secondary: Begane grond
+            icon: mdi:lightbulb-group-off
+            icon_color: grey
+            tap_action:
+              action: perform-action
+              perform_action: light.turn_off
+              target:
+                entity_id:
+                  - light.woonkamer_lampen
+                  - light.keuken_lampen
+                  - light.eettafel_lampen
+                  - light.entree_lampen
+                  - light.trapkast_lampen
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-light-card
+                entity: light.woonkamer_lampen
+                name: Woonkamer
+                show_brightness_control: true
+                use_light_color: true
+              - type: custom:mushroom-light-card
+                entity: light.keuken_lampen
+                name: Keuken
+                show_brightness_control: true
+                use_light_color: true
+              - type: custom:mushroom-light-card
+                entity: light.eettafel_lampen
+                name: Eettafel
+                show_brightness_control: true
+                use_light_color: true
+              - type: custom:mushroom-light-card
+                entity: light.entree_lampen
+                name: Entree
+                show_brightness_control: true
+                use_light_color: true
+              - type: custom:mushroom-light-card
+                entity: light.trapkast_lampen
+                name: Trapkast
+                show_brightness_control: true
+                use_light_color: true
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-firstfloor"
+        name: Eerste verdieping
+        icon: mdi:home-floor-1
+        cards:
+          - type: custom:mushroom-template-card
+            primary: Alles uit
+            secondary: Eerste verdieping
+            icon: mdi:lightbulb-group-off
+            icon_color: grey
+            tap_action:
+              action: perform-action
+              perform_action: light.turn_off
+              target:
+                entity_id:
+                  - light.badkamer_lampen
+                  - light.slaapkamer_lampen
+                  - light.slaapkamer_maxi_lampen
+                  - light.kantoor_lampen
+                  - light.overloop_lampen
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-light-card
+                entity: light.badkamer_lampen
+                name: Badkamer
+                show_brightness_control: true
+                use_light_color: true
+              - type: custom:mushroom-light-card
+                entity: light.slaapkamer_lampen
+                name: Slaapkamer
+                show_brightness_control: true
+                use_light_color: true
+              - type: custom:mushroom-light-card
+                entity: light.slaapkamer_maxi_lampen
+                name: Slaapkamer Logan
+                show_brightness_control: true
+                use_light_color: true
+              - type: custom:mushroom-light-card
+                entity: light.kantoor_lampen
+                name: Kantoor
+                show_brightness_control: true
+                use_light_color: true
+              - type: custom:mushroom-light-card
+                entity: light.overloop_lampen
+                name: Overloop
+                show_brightness_control: true
+                use_light_color: true
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-secondfloor"
+        name: Tweede verdieping
+        icon: mdi:home-floor-2
+        cards:
+          - type: custom:mushroom-template-card
+            primary: Alles uit
+            secondary: Tweede verdieping
+            icon: mdi:lightbulb-group-off
+            icon_color: grey
+            tap_action:
+              action: perform-action
+              perform_action: light.turn_off
+              target:
+                entity_id:
+                  - light.overloop_zolder_lampen
+                  - light.slaapkamer_mini_lampen
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-light-card
+                entity: light.overloop_zolder_lampen
+                name: Overloop zolder
+                show_brightness_control: true
+                use_light_color: true
+              - type: custom:mushroom-light-card
+                entity: light.slaapkamer_mini_lampen
+                name: Slaapkamer Emma
+                show_brightness_control: true
+                use_light_color: true
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-garage"
+        name: Garage / speelkamer
+        icon: mdi:garage
+        cards:
+          - type: custom:mushroom-template-card
+            primary: Alles uit
+            secondary: Garage / speelkamer
+            icon: mdi:lightbulb-group-off
+            icon_color: grey
+            tap_action:
+              action: perform-action
+              perform_action: light.turn_off
+              target:
+                entity_id:
+                  - light.garage_lampen
+                  - light.speelkamer_lampen
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-light-card
+                entity: light.garage_lampen
+                name: Garage
+                show_brightness_control: true
+                use_light_color: true
+              - type: custom:mushroom-light-card
+                entity: light.speelkamer_lampen
+                name: Speelkamer
+                show_brightness_control: true
+                use_light_color: true
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-outside"
+        name: Buiten
+        icon: mdi:flower-tulip-outline
+        cards:
+          - type: custom:mushroom-template-card
+            primary: Alle buitenverlichting uit
+            secondary: Buiten
+            icon: mdi:lightbulb-group-off
+            icon_color: grey
+            tap_action:
+              action: perform-action
+              perform_action: light.turn_off
+              target:
+                entity_id:
+                  - light.voortuin_lampen
+                  - light.achtertuin_lampen
+                  - light.carport_lampen
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-light-card
+                entity: light.voortuin_lampen
+                name: Voortuin
+                show_brightness_control: true
+                use_light_color: true
+              - type: custom:mushroom-light-card
+                entity: light.achtertuin_lampen
+                name: Achtertuin
+                show_brightness_control: true
+                use_light_color: true
+              - type: custom:mushroom-light-card
+                entity: light.carport_lampen
+                name: Carport
+                show_brightness_control: true
+                use_light_color: true
+          - type: custom:mushroom-cover-card
+            entity: cover.achtertuin_zonnescherm
+            name: Zonnescherm achtertuin
+            show_buttons_control: true
+            show_position_control: true
