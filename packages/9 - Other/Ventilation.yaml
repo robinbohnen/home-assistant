@@ -1,0 +1,176 @@
+ventilation_cooling_package:
+
+  #############################################################################
+  ## Ventilatoren schuur & meterkast
+  ##
+  ## Doel: ventilator AAN als het warm is én ventileren écht koelt
+  ## (aangevoerde lucht is kouder dan de ruimte), en UIT zodra afkoelen
+  ## geen effect meer heeft (buiten/omgeving niet meer koeler dan binnen)
+  ## of de ruimte voldoende is afgekoeld.
+  ##
+  ## Gebruikte entiteiten:
+  ##   sensor.achtertuin_schuur_temperatuur_temperature  (temp schuur)
+  ##   switch.achtertuin_schuur_ventilatoren             (ventilatoren schuur)
+  ##   sensor.meterkast_temperatuur_temperature          (temp meterkast)
+  ##   switch.meterkast_ventilator                       (ventilator meterkast)
+  ## Referentie schuur (blaast naar buiten): sensor.knmi_temperatuur
+  ## Referentie meterkast (blaast de hal in): sensor.woonkamer_kamertemperatuur
+  #############################################################################
+
+  input_number:
+    # Warm genoeg om te willen koelen: ventilator mag pas hierboven aan
+    ventilation_warm_threshold:
+      name: "Ventilatie - Warm drempel (aan boven)"
+      icon: mdi:thermometer-high
+      min: 18
+      max: 35
+      step: 0.5
+      initial: 24
+      unit_of_measurement: "°C"
+      mode: box
+    # Afgekoeld genoeg: onder deze binnentemperatuur nooit ventileren
+    ventilation_cool_threshold:
+      name: "Ventilatie - Koel drempel (uit onder)"
+      icon: mdi:thermometer-low
+      min: 15
+      max: 30
+      step: 0.5
+      initial: 21
+      unit_of_measurement: "°C"
+      mode: box
+    # Hoeveel koeler moet buiten zijn voordat ventileren nut heeft (aanzetten)
+    ventilation_delta_on:
+      name: "Ventilatie - Min. verschil om aan te zetten"
+      icon: mdi:thermometer-plus
+      min: 0.5
+      max: 6
+      step: 0.5
+      initial: 2
+      unit_of_measurement: "°C"
+      mode: box
+    # Zodra het verschil hieronder zakt heeft ventileren geen effect meer (uit)
+    ventilation_delta_off:
+      name: "Ventilatie - Min. verschil om aan te houden"
+      icon: mdi:thermometer-minus
+      min: 0
+      max: 4
+      step: 0.5
+      initial: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+
+  automation:
+    - id: ventilation_cooling_shed
+      alias: Ventilation - Schuur ventilator koelen
+      description: >-
+        Zet de schuurventilator aan als de schuur warm is en de buitenlucht
+        duidelijk koeler, en uit zodra ventileren niet meer koelt.
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - sensor.achtertuin_schuur_temperatuur_temperature
+          id: eval
+        - trigger: state
+          entity_id:
+            - sensor.knmi_temperatuur
+          id: eval
+        # Veiligheids-herevaluatie, ook als sensoren stil blijven
+        - trigger: time_pattern
+          minutes: "/15"
+          id: eval
+      conditions:
+        # Alleen als beide temperaturen een geldig getal zijn
+        - condition: template
+          value_template: >-
+            {{ states('sensor.achtertuin_schuur_temperatuur_temperature') | float(none) is not none
+               and states('sensor.knmi_temperatuur') | float(none) is not none }}
+      variables:
+        binnen: "{{ states('sensor.achtertuin_schuur_temperatuur_temperature') | float }}"
+        buiten: "{{ states('sensor.knmi_temperatuur') | float }}"
+        warm: "{{ states('input_number.ventilation_warm_threshold') | float }}"
+        koel: "{{ states('input_number.ventilation_cool_threshold') | float }}"
+        delta_on: "{{ states('input_number.ventilation_delta_on') | float }}"
+        delta_off: "{{ states('input_number.ventilation_delta_off') | float }}"
+      actions:
+        - choose:
+            # AAN: warm binnen én buiten voldoende koeler
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {{ binnen >= warm and (binnen - buiten) >= delta_on }}
+                - condition: state
+                  entity_id: switch.achtertuin_schuur_ventilatoren
+                  state: "off"
+              sequence:
+                - action: switch.turn_on
+                  target:
+                    entity_id: switch.achtertuin_schuur_ventilatoren
+            # UIT: afgekoeld genoeg of ventileren heeft geen effect meer
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {{ binnen <= koel or (binnen - buiten) <= delta_off }}
+                - condition: state
+                  entity_id: switch.achtertuin_schuur_ventilatoren
+                  state: "on"
+              sequence:
+                - action: switch.turn_off
+                  target:
+                    entity_id: switch.achtertuin_schuur_ventilatoren
+
+    - id: ventilation_cooling_meter_cupboard
+      alias: Ventilation - Meterkast ventilator koelen
+      description: >-
+        Zet de meterkastventilator aan als de meterkast warm is en de
+        aangevoerde lucht koeler, en uit zodra ventileren niet meer koelt.
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - sensor.meterkast_temperatuur_temperature
+          id: eval
+        - trigger: state
+          entity_id:
+            - sensor.woonkamer_kamertemperatuur
+          id: eval
+        - trigger: time_pattern
+          minutes: "/15"
+          id: eval
+      conditions:
+        - condition: template
+          value_template: >-
+            {{ states('sensor.meterkast_temperatuur_temperature') | float(none) is not none
+               and states('sensor.woonkamer_kamertemperatuur') | float(none) is not none }}
+      variables:
+        binnen: "{{ states('sensor.meterkast_temperatuur_temperature') | float }}"
+        # Meterkastventilator blaast de hal in -> referentie is binnenlucht
+        buiten: "{{ states('sensor.woonkamer_kamertemperatuur') | float }}"
+        warm: "{{ states('input_number.ventilation_warm_threshold') | float }}"
+        koel: "{{ states('input_number.ventilation_cool_threshold') | float }}"
+        delta_on: "{{ states('input_number.ventilation_delta_on') | float }}"
+        delta_off: "{{ states('input_number.ventilation_delta_off') | float }}"
+      actions:
+        - choose:
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {{ binnen >= warm and (binnen - buiten) >= delta_on }}
+                - condition: state
+                  entity_id: switch.meterkast_ventilator
+                  state: "off"
+              sequence:
+                - action: switch.turn_on
+                  target:
+                    entity_id: switch.meterkast_ventilator
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {{ binnen <= koel or (binnen - buiten) <= delta_off }}
+                - condition: state
+                  entity_id: switch.meterkast_ventilator
+                  state: "on"
+              sequence:
+                - action: switch.turn_off
+                  target:
+                    entity_id: switch.meterkast_ventilator
