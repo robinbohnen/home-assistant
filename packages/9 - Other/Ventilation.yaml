@@ -8,6 +8,8 @@ ventilation_cooling_package:
   ## geen effect meer heeft (referentielucht niet meer koeler dan binnen)
   ## of de ruimte voldoende is afgekoeld.
   ##
+  ## Schuur en meterkast hebben elk hun eigen drempel-helpers.
+  ##
   ## Gebruikte entiteiten:
   ##   sensor.achtertuin_schuur_temperatuur_temperature  (temp schuur)
   ##   switch.achtertuin_schuur_ventilatoren             (ventilatoren schuur)
@@ -18,9 +20,10 @@ ventilation_cooling_package:
   #############################################################################
 
   input_number:
+    ## --- Schuur ---
     # Warm genoeg om te willen koelen: ventilator mag pas hierboven aan
-    ventilation_warm_threshold:
-      name: "Ventilatie - Warm drempel (aan boven)"
+    ventilation_schuur_warm_threshold:
+      name: "Ventilatie Schuur - Warm drempel (aan boven)"
       icon: mdi:thermometer-high
       min: 18
       max: 35
@@ -29,8 +32,8 @@ ventilation_cooling_package:
       unit_of_measurement: "°C"
       mode: box
     # Afgekoeld genoeg: onder deze binnentemperatuur nooit ventileren
-    ventilation_cool_threshold:
-      name: "Ventilatie - Koel drempel (uit onder)"
+    ventilation_schuur_cool_threshold:
+      name: "Ventilatie Schuur - Koel drempel (uit onder)"
       icon: mdi:thermometer-low
       min: 15
       max: 30
@@ -39,8 +42,8 @@ ventilation_cooling_package:
       unit_of_measurement: "°C"
       mode: box
     # Hoeveel koeler moet de referentie zijn voordat ventileren nut heeft (aanzetten)
-    ventilation_delta_on:
-      name: "Ventilatie - Min. verschil om aan te zetten"
+    ventilation_schuur_delta_on:
+      name: "Ventilatie Schuur - Min. verschil om aan te zetten"
       icon: mdi:thermometer-plus
       min: 0.5
       max: 6
@@ -49,8 +52,46 @@ ventilation_cooling_package:
       unit_of_measurement: "°C"
       mode: box
     # Zodra het verschil hieronder zakt heeft ventileren geen effect meer (uit)
-    ventilation_delta_off:
-      name: "Ventilatie - Min. verschil om aan te houden"
+    ventilation_schuur_delta_off:
+      name: "Ventilatie Schuur - Min. verschil om aan te houden"
+      icon: mdi:thermometer-minus
+      min: 0
+      max: 4
+      step: 0.5
+      initial: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+
+    ## --- Meterkast ---
+    ventilation_meterkast_warm_threshold:
+      name: "Ventilatie Meterkast - Warm drempel (aan boven)"
+      icon: mdi:thermometer-high
+      min: 18
+      max: 35
+      step: 0.5
+      initial: 22
+      unit_of_measurement: "°C"
+      mode: box
+    ventilation_meterkast_cool_threshold:
+      name: "Ventilatie Meterkast - Koel drempel (uit onder)"
+      icon: mdi:thermometer-low
+      min: 15
+      max: 30
+      step: 0.5
+      initial: 20
+      unit_of_measurement: "°C"
+      mode: box
+    ventilation_meterkast_delta_on:
+      name: "Ventilatie Meterkast - Min. verschil om aan te zetten"
+      icon: mdi:thermometer-plus
+      min: 0.5
+      max: 6
+      step: 0.5
+      initial: 1
+      unit_of_measurement: "°C"
+      mode: box
+    ventilation_meterkast_delta_off:
+      name: "Ventilatie Meterkast - Min. verschil om aan te houden"
       icon: mdi:thermometer-minus
       min: 0
       max: 4
@@ -88,8 +129,8 @@ ventilation_cooling_package:
                   value_template: >-
                     {% set binnen = states('sensor.achtertuin_schuur_temperatuur_temperature') | float(none) %}
                     {% set buiten = states('sensor.knmi_temperatuur') | float(none) %}
-                    {% set warm = states('input_number.ventilation_warm_threshold') | float %}
-                    {% set delta_on = states('input_number.ventilation_delta_on') | float %}
+                    {% set warm = states('input_number.ventilation_schuur_warm_threshold') | float %}
+                    {% set delta_on = states('input_number.ventilation_schuur_delta_on') | float %}
                     {{ binnen is not none and buiten is not none
                        and binnen >= warm and (binnen - buiten) >= delta_on }}
                 - condition: state
@@ -105,8 +146,8 @@ ventilation_cooling_package:
                   value_template: >-
                     {% set binnen = states('sensor.achtertuin_schuur_temperatuur_temperature') | float(none) %}
                     {% set buiten = states('sensor.knmi_temperatuur') | float(none) %}
-                    {% set koel = states('input_number.ventilation_cool_threshold') | float %}
-                    {% set delta_off = states('input_number.ventilation_delta_off') | float %}
+                    {% set koel = states('input_number.ventilation_schuur_cool_threshold') | float %}
+                    {% set delta_off = states('input_number.ventilation_schuur_delta_off') | float %}
                     {{ binnen is not none and buiten is not none
                        and (binnen <= koel or (binnen - buiten) <= delta_off) }}
                 - condition: state
@@ -144,8 +185,8 @@ ventilation_cooling_package:
                   value_template: >-
                     {% set binnen = states('sensor.meterkast_temperatuur_temperature') | float(none) %}
                     {% set buiten = states('sensor.woonkamer_kamertemperatuur') | float(none) %}
-                    {% set warm = states('input_number.ventilation_warm_threshold') | float %}
-                    {% set delta_on = states('input_number.ventilation_delta_on') | float %}
+                    {% set warm = states('input_number.ventilation_meterkast_warm_threshold') | float %}
+                    {% set delta_on = states('input_number.ventilation_meterkast_delta_on') | float %}
                     {{ binnen is not none and buiten is not none
                        and binnen >= warm and (binnen - buiten) >= delta_on }}
                 - condition: state
@@ -161,8 +202,8 @@ ventilation_cooling_package:
                   value_template: >-
                     {% set binnen = states('sensor.meterkast_temperatuur_temperature') | float(none) %}
                     {% set buiten = states('sensor.woonkamer_kamertemperatuur') | float(none) %}
-                    {% set koel = states('input_number.ventilation_cool_threshold') | float %}
-                    {% set delta_off = states('input_number.ventilation_delta_off') | float %}
+                    {% set koel = states('input_number.ventilation_meterkast_cool_threshold') | float %}
+                    {% set delta_off = states('input_number.ventilation_meterkast_delta_off') | float %}
                     {{ binnen is not none and buiten is not none
                        and (binnen <= koel or (binnen - buiten) <= delta_off) }}
                 - condition: state
