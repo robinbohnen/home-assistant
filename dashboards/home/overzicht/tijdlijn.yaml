@@ -1,0 +1,258 @@
+# Tijdlijn van de komende twaalf uur, als voetregel onder de drie kolommen.
+#
+# Alle lagen delen één schaalfunctie pct(t); daardoor kunnen ze niet uit elkaar
+# lopen. Vormen worden met SVG getekend (die mag uitgerekt worden), alles met
+# letters met HTML op percentages (blijft scherp bij elke kolombreedte).
+#
+# update_timer laat de kaart periodiek opnieuw renderen zodat de nu-lijn
+# meeschuift. Let op: met update_timer ververst button-card *alleen* nog op de
+# timer en niet meer op statuswijzigingen — voor een tijdlijn is een minuut ruim.
+type: custom:mod-card
+card_mod:
+  style: |
+    ha-card {
+      background: var(--ov-panel-bg) !important;
+      border: var(--ov-panel-border) !important;
+      border-radius: var(--ov-panel-radius) !important;
+      box-shadow: none !important;
+      padding: var(--ov-panel-padding) !important;
+    }
+card:
+  type: vertical-stack
+  cards:
+    - type: custom:button-card
+      template: ov_title
+      variables:
+        title: KOMENDE 12 UUR
+      custom_fields:
+        b: |
+          [[[
+            var z = states['sun.sun'];
+            if(!z || !z.attributes.next_setting) return '';
+            var t = new Date(z.attributes.next_setting);
+            var klok = ('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2);
+            var op = z.state === 'below_horizon';
+            return `<span style="font-size:12px;color:rgba(255,255,255,0.55)">${op ? 'zon op' : 'zon onder'} ${klok}</span>`;
+          ]]]
+    - type: custom:button-card
+      entity: sensor.zonneplan_current_electricity_tariff
+      show_icon: false
+      show_name: false
+      show_state: false
+      update_timer: 60s
+      tap_action:
+        action: navigate
+        navigation_path: "#ov-energie"
+      variables:
+        uren_terug: 1
+        uren_vooruit: 11
+        laadvenster_uren: 3
+      styles:
+        card:
+          - background: none
+          - border: none
+          - box-shadow: none
+          - padding: 2px 0 0 0
+        grid:
+          - grid-template-areas: '"lijn"'
+      custom_fields:
+        lijn: |
+          [[[
+            // ---------- schaal ----------
+            var nu = Date.now();
+            var start = nu - variables.uren_terug * 3600000;
+            var eind = nu + variables.uren_vooruit * 3600000;
+            var pct = function(t){ return (t - start) / (eind - start) * 100; };
+            var klem = function(v){ return Math.max(0, Math.min(100, v)); };
+            var klok = function(t){ var d = new Date(t); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); };
+            var H = {zon: 26, prijs: 10, markers: 24, as: 11};
+            var top = {zon: 0, prijs: 29, markers: 42, as: 67};
+            var totaal = top.as + H.as;
+            var lagen = [];
+
+            // ---------- laag 1: nacht ----------
+            var z = states['sun.sun'];
+            var onder = z && z.attributes.next_setting ? new Date(z.attributes.next_setting).getTime() : null;
+            var op = z && z.attributes.next_rising ? new Date(z.attributes.next_rising).getTime() : null;
+            var nachten = [];
+            if(z){
+              if(z.state === 'below_horizon' && op) nachten.push([start, op]);
+              if(onder) nachten.push([onder, (op && op > onder) ? op : eind]);
+            }
+            nachten.forEach(function(n){
+              var a = klem(pct(n[0])), b = klem(pct(n[1]));
+              if(b - a > 0.2) lagen.push(`<div style="position:absolute;left:${a}%;width:${b-a}%;top:0;height:${H.zon}px;background:rgba(10,12,18,0.55)"></div>`);
+            });
+
+            // ---------- laag 2: zon ----------
+            // Echte voorspelling als Forecast.Solar die per tijdstip levert,
+            // anders een klokvorm tussen op- en ondergang op het dagtotaal.
+            var zonBron = null, punten = [];
+            ['sensor.energy_production_today','sensor.forecast_solar_production_today'].forEach(function(id){
+              if(zonBron) return;
+              var e = states[id];
+              if(!e || !e.attributes) return;
+              var d = e.attributes.watts || e.attributes.wh_hours || e.attributes.wh_period;
+              if(d && typeof d === 'object' && Object.keys(d).length > 2){ zonBron = 'echt';
+                Object.keys(d).forEach(function(k){
+                  var t = new Date(k).getTime();
+                  if(!isNaN(t)) punten.push({t: t, v: Number(d[k]) || 0});
+                });
+              }
+            });
+            if(zonBron) punten.sort(function(a,b){ return a.t - b.t; });
+            if(!zonBron && onder && op){
+              // benadering: zonsopkomst afleiden en een sinusboog leggen
+              var zonOp = (op > onder) ? op - 86400000 : op;
+              var zonOnder = (onder > zonOp) ? onder : onder + 86400000;
+              var totaalKwh = 0;
+              var f = states['sensor.forecast_solar_production_today'];
+              if(f && !isNaN(Number(f.state))) totaalKwh = Number(f.state);
+              for(var i = 0; i <= 48; i++){
+                var t = zonOp + (zonOnder - zonOp) * i / 48;
+                var v = Math.sin(Math.PI * i / 48);
+                punten.push({t: t, v: v * Math.max(totaalKwh, 1)});
+              }
+              zonBron = 'benadering';
+            }
+            var zichtbaar = punten.filter(function(p){ return p.t >= start - 3600000 && p.t <= eind + 3600000; });
+            if(zichtbaar.length > 1){
+              var max = Math.max.apply(null, zichtbaar.map(function(p){ return p.v; })) || 1;
+              var d = zichtbaar.map(function(p, i){
+                var x = klem(pct(p.t));
+                var y = H.zon - (p.v / max) * (H.zon - 2);
+                return (i === 0 ? 'M' : 'L') + x.toFixed(2) + ',' + y.toFixed(2);
+              }).join(' ');
+              var eersteX = klem(pct(zichtbaar[0].t)).toFixed(2);
+              var laatsteX = klem(pct(zichtbaar[zichtbaar.length-1].t)).toFixed(2);
+              var streep = zonBron === 'benadering' ? 'stroke-dasharray="2 2"' : '';
+              lagen.push(`<svg viewBox="0 0 100 ${H.zon}" preserveAspectRatio="none" style="position:absolute;left:0;top:0;width:100%;height:${H.zon}px">
+                <path d="${d} L${laatsteX},${H.zon} L${eersteX},${H.zon} Z" fill="rgba(74,222,128,0.16)"/>
+                <path d="${d}" fill="none" stroke="#4ade80" stroke-width="0.6" vector-effect="non-scaling-stroke" ${streep}/>
+              </svg>`);
+              lagen.push(`<div style="position:absolute;left:6px;top:2px;font-size:9.5px;color:rgba(255,255,255,0.45)">zon ${zonBron === 'benadering' ? '(benadering)' : '(verwacht)'}</div>`);
+            }
+
+            // ---------- laag 3: prijsblokken ----------
+            var pt = states['sensor.zonneplan_current_electricity_tariff'];
+            var raw = (pt && pt.attributes && pt.attributes.forecast) || [];
+            var norm = function(x){ if(x === null || x === undefined || isNaN(Number(x))) return null; var n = Number(x); if(Math.abs(n) > 100) n = n / 10000000; return n; };
+            var slots = raw.map(function(e){
+              var d = new Date(e.datetime || e.date || e.time || e.start);
+              var p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
+              return (isNaN(d.getTime()) || p === null) ? null : {t: d.getTime(), p: p};
+            }).filter(Boolean).sort(function(a,b){ return a.t - b.t; });
+            var stap = slots.length > 1 ? slots[1].t - slots[0].t : 3600000;
+            // dezelfde bandindeling als de stroomprijsgrafiek: per kalenderdag
+            var perDag = {};
+            slots.forEach(function(s){
+              var k = new Date(s.t).toDateString();
+              if(!perDag[k]) perDag[k] = {min: s.p, max: s.p};
+              else { perDag[k].min = Math.min(perDag[k].min, s.p); perDag[k].max = Math.max(perDag[k].max, s.p); }
+            });
+            slots.forEach(function(s){
+              if(s.t + stap < start || s.t > eind) return;
+              var d = perDag[new Date(s.t).toDateString()];
+              var spreiding = d.max - d.min;
+              var r = spreiding < 0.02 ? 0.5 : (s.p - d.min) / spreiding;
+              var kleur = r <= 0.33 ? '#4ade80' : (r >= 0.66 ? '#ef4444' : '#f59e0b');
+              var a = klem(pct(s.t)), b = klem(pct(s.t + stap));
+              if(b - a > 0.05) lagen.push(`<div title="${klok(s.t)} · € ${s.p.toFixed(3)}" style="position:absolute;left:${a}%;width:${b-a}%;top:${top.prijs}px;height:${H.prijs}px;background:${kleur};opacity:0.85"></div>`);
+            });
+
+            // ---------- goedkoopste laadvenster als beugel ----------
+            if(slots.length > 1){
+              var nodig = Math.max(1, Math.round(variables.laadvenster_uren * 3600000 / stap));
+              var beste = null;
+              for(var len = nodig; len >= 1 && beste === null; len--){
+                for(var i = 0; i + len <= slots.length; i++){
+                  if(slots[i].t + stap <= nu) continue;
+                  var som = 0, aaneen = true;
+                  for(var j = 0; j < len; j++){
+                    if(j > 0 && slots[i+j].t - slots[i+j-1].t !== stap){ aaneen = false; break; }
+                    som += slots[i+j].p;
+                  }
+                  if(!aaneen) continue;
+                  var gem = som / len;
+                  if(beste === null || gem < beste.gem) beste = {gem: gem, van: slots[i].t, tot: slots[i+len-1].t + stap};
+                }
+              }
+              if(beste && beste.van < eind){
+                var a = klem(pct(beste.van)), b = klem(pct(beste.tot));
+                if(b - a > 1) lagen.push(`<div style="position:absolute;left:${a}%;width:${b-a}%;top:${top.prijs + H.prijs + 1}px;height:5px;border:1px solid rgba(56,189,248,0.7);border-top:none;border-radius:0 0 4px 4px"></div>
+                  <div style="position:absolute;left:${(a+b)/2}%;transform:translateX(-50%);top:${top.prijs + H.prijs + 6}px;font-size:9px;color:#38bdf8;white-space:nowrap">laden</div>`);
+              }
+            }
+
+            // ---------- laag 4: markers ----------
+            var markers = [];
+            var agenda = states['sensor.agenda_afspraken_vandaag'];
+            if(agenda && agenda.attributes){
+              ['vandaag','morgen'].forEach(function(k){
+                var lijst = agenda.attributes[k];
+                if(!Array.isArray(lijst)) return;
+                lijst.forEach(function(a){
+                  if(a.hele_dag || !a.tijd) return;
+                  var t = new Date(a.datum + 'T' + a.tijd + ':00').getTime();
+                  if(!isNaN(t)) markers.push({t: t, icon: 'mdi:calendar', kleur: '#38bdf8', tekst: a.titel});
+                });
+              });
+            } else {
+              // terugval zolang de get_events-sensor er niet is: eerstvolgende per agenda
+              [['calendar.r_bohnen_vrbn_nl_agenda','Werk'],['calendar.robin_bohnen_nl_agenda','Privé'],
+               ['calendar.robin_en_sam','Samen'],['calendar.brandweer','Brandweer'],
+               ['calendar.maxi','Logan'],['calendar.mini','Emma']].forEach(function(c){
+                var e = states[c[0]];
+                if(!e || !e.attributes || !e.attributes.start_time || e.attributes.all_day) return;
+                var t = new Date(String(e.attributes.start_time).replace(' ','T')).getTime();
+                if(!isNaN(t)) markers.push({t: t, icon: 'mdi:calendar', kleur: '#38bdf8', tekst: e.attributes.message || c[1]});
+              });
+            }
+            if(onder) markers.push({t: onder, icon: 'mdi:weather-sunset-down', kleur: '#f59e0b', tekst: 'zonsondergang'});
+            if(op && op < eind) markers.push({t: op, icon: 'mdi:weather-sunset-up', kleur: '#f59e0b', tekst: 'zonsopkomst'});
+            var afval = states['sensor.afvalinfo_home_trash_type_tomorrow'];
+            if(afval && afval.state && afval.state !== 'Geen'){
+              var m = new Date(); m.setDate(m.getDate() + 1); m.setHours(7, 30, 0, 0);
+              var soorten = [[/gft|groente|tuin/i,'#4ade80'], [/pbd|plastic|blik|drank/i,'#f59e0b'], [/papier/i,'#38bdf8']];
+              var kl = 'rgba(255,255,255,0.7)';
+              for(var i=0;i<soorten.length;i++) if(soorten[i][0].test(afval.state)) { kl = soorten[i][1]; break; }
+              markers.push({t: m.getTime(), icon: 'mdi:trash-can-outline', kleur: kl, tekst: afval.state});
+            }
+
+            markers = markers.filter(function(m){ return m.t >= start && m.t <= eind; })
+                             .sort(function(a,b){ return a.t - b.t; });
+            var rijLaatste = [-99, -99];
+            var verborgen = Math.max(0, markers.length - 8);
+            markers.slice(0, 8).forEach(function(m){
+              var x = pct(m.t);
+              // botsing: te dicht op de vorige in rij 0? dan naar rij 1
+              var rij = (x - rijLaatste[0] > 7) ? 0 : ((x - rijLaatste[1] > 7) ? 1 : -1);
+              if(rij === -1) { verborgen++; return; }   // nooit stil weglaten
+              rijLaatste[rij] = x;
+              var y = top.markers + rij * 12;
+              lagen.push(`<div title="${klok(m.t)} · ${m.tekst}" style="position:absolute;left:${klem(x)}%;transform:translateX(-50%);top:${y}px;display:flex;align-items:center;gap:3px;white-space:nowrap">
+                <ha-icon icon="${m.icon}" style="--mdc-icon-size:11px;color:${m.kleur}"></ha-icon>
+                <span style="font-size:9.5px;color:rgba(255,255,255,0.6)">${klok(m.t)}</span>
+              </div>`);
+            });
+
+            if(verborgen > 0){
+              lagen.push(`<div title="${verborgen} extra afspraak/afspraken passen niet naast elkaar" style="position:absolute;right:0;top:${top.markers}px;font-size:9.5px;color:rgba(255,255,255,0.45)">+${verborgen}</div>`);
+            }
+
+            // ---------- laag 5: nu ----------
+            lagen.push(`<div style="position:absolute;left:${klem(pct(nu))}%;top:0;height:${top.as - 2}px;border-left:1px dashed rgba(255,255,255,0.75)"></div>`);
+
+            // ---------- laag 6: tijdas ----------
+            var eersteUur = new Date(start);
+            eersteUur.setMinutes(0, 0, 0);
+            if(eersteUur.getHours() % 2 !== 0) eersteUur.setHours(eersteUur.getHours() + 1);
+            else eersteUur.setHours(eersteUur.getHours() + 2);
+            for(var t = eersteUur.getTime(); t < eind; t += 7200000){
+              var x = pct(t);
+              if(x < 2 || x > 98) continue;
+              lagen.push(`<div style="position:absolute;left:${x}%;transform:translateX(-50%);top:${top.as}px;font-size:9.5px;color:rgba(255,255,255,0.5)">${klok(t)}</div>`);
+            }
+
+            return `<div style="position:relative;width:100%;height:${totaal}px">${lagen.join('')}</div>`;
+          ]]]
