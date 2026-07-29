@@ -95,8 +95,12 @@ cards:
                 [[[
                   var nu = Date.now();
                   var reg = (hass && hass.entities) ? hass.entities : null;
+                  var apparaten = (hass && hass.devices) ? hass.devices : null;
                   var gebieden = (hass && hass.areas) ? hass.areas : null;
                   var mee = function(s){ return s.state === 'unavailable' || (variables.ook_unknown && s.state === 'unknown'); };
+                  // Per integratie een map van apparaat -> aantal entiteiten.
+                  // Eén apparaat levert vaak 2 tot 4 entiteiten; die als losse
+                  // regels tonen maakt de lijst onleesbaar.
                   var groepen = {};
                   Object.keys(states).forEach(function(id){
                     var s = states[id];
@@ -104,22 +108,35 @@ cards:
                     var e = reg ? reg[id] : null;
                     if(e && (e.hidden || e.hidden_by)) return;
                     var integratie = (e && e.platform) ? e.platform : id.split('.')[0];
+                    var devId = (e && e.device_id) ? e.device_id : null;
+                    var dev = (devId && apparaten) ? apparaten[devId] : null;
+                    var sleutel = devId || ('los:' + id);
+                    var gebiedId = (e && e.area_id) || (dev && dev.area_id) || null;
+                    var gebied = (gebiedId && gebieden && gebieden[gebiedId]) ? gebieden[gebiedId].name : null;
+                    var naam = dev ? (dev.name_by_user || dev.name || devId)
+                                   : ((s.attributes && s.attributes.friendly_name) || id);
                     var sinds = s.last_changed ? new Date(s.last_changed).getTime() : null;
-                    var gebied = null;
-                    if(e && e.area_id && gebieden && gebieden[e.area_id]) gebied = gebieden[e.area_id].name;
-                    if(!groepen[integratie]) groepen[integratie] = [];
-                    groepen[integratie].push({
-                      naam: (s.attributes && s.attributes.friendly_name) || id,
-                      gebied: gebied,
-                      duur: sinds === null ? null : nu - sinds,
-                      onbekend: s.state === 'unknown'
-                    });
+                    var duur = sinds === null ? null : nu - sinds;
+                    if(!groepen[integratie]) groepen[integratie] = {};
+                    var g = groepen[integratie];
+                    if(!g[sleutel]) g[sleutel] = {naam: naam, gebied: gebied, aantal: 0, duur: duur, los: !devId};
+                    g[sleutel].aantal++;
+                    // langst weg binnen het apparaat telt
+                    if(duur !== null && (g[sleutel].duur === null || duur > g[sleutel].duur)) g[sleutel].duur = duur;
                   });
                   var namen = Object.keys(groepen);
                   if(!namen.length) return `<span style="font-size:14px;color:#4ade80">Alles bereikbaar.</span>`;
+                  var lijstVan = function(g){ return Object.keys(groepen[g]).map(function(k){ return groepen[g][k]; }); };
+                  var tel = {};
+                  namen.forEach(function(g){
+                    var l = lijstVan(g).sort(function(a,b){ return (b.duur||0) - (a.duur||0); });
+                    tel[g] = {apparaten: l, entiteiten: l.reduce(function(a,x){ return a + x.aantal; }, 0)};
+                  });
                   var focus = variables.focus || [];
                   var uitgeklapt = namen.filter(function(g){ return focus.indexOf(g) !== -1; });
                   var rest = namen.filter(function(g){ return focus.indexOf(g) === -1; });
+                  uitgeklapt.sort(function(a,b){ return (tel[b].apparaten[0].duur||0) - (tel[a].apparaten[0].duur||0); });
+                  rest.sort(function(a,b){ return tel[b].entiteiten - tel[a].entiteiten; });
                   var duurTxt = function(ms){
                     if(ms === null) return 'onbekend';
                     var m = Math.floor(ms / 60000);
@@ -136,38 +153,39 @@ cards:
                     if(ms > 86400000) return '#f59e0b';
                     return 'rgba(255,255,255,0.6)';
                   };
-                  // langst kapot bovenaan, zowel de groepen als daarbinnen
-                  namen.forEach(function(g){ groepen[g].sort(function(a,b){ return (b.duur||0) - (a.duur||0); }); });
-                  uitgeklapt.sort(function(a,b){ return (groepen[b][0].duur||0) - (groepen[a][0].duur||0); });
-                  rest.sort(function(a,b){ return groepen[b].length - groepen[a].length; });
+                  var limiet = variables.max_per_groep || 25;
                   var blokken = uitgeklapt.map(function(g){
-                    var limiet = variables.max_per_groep || 25;
-                    var teveel = Math.max(0, groepen[g].length - limiet);
-                    var rijen = groepen[g].slice(0, limiet).map(function(x){
+                    var app = tel[g].apparaten;
+                    var teveel = Math.max(0, app.length - limiet);
+                    var rijen = app.slice(0, limiet).map(function(x){
                       var plek = x.gebied ? `<span style="color:rgba(255,255,255,0.35)"> · ${x.gebied}</span>` : '';
-                      var vlag = x.onbekend ? `<span style="font-size:10px;color:rgba(255,255,255,0.35)"> unknown</span>` : '';
+                      var aantal = x.aantal > 1
+                        ? `<span style="font-size:11.5px;color:rgba(255,255,255,0.45);white-space:nowrap">${x.aantal} entiteiten</span>` : '';
                       return `<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.04)">
-                        <span style="flex:1;font-size:13.5px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}${vlag}</span>
+                        <span style="flex:1;font-size:13.5px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
+                        ${aantal}
                         <span style="font-size:13px;font-weight:600;white-space:nowrap;color:${duurKleur(x.duur)}">${duurTxt(x.duur)}</span></div>`;
                     }).join('');
                     return `<div style="margin-bottom:12px">
                       <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:2px">
                         <span style="font-size:12.5px;font-weight:700;color:#38bdf8">${g}</span>
-                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${groepen[g].length}</span></div>
+                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${app.every(function(x){ return x.los; })
+                          ? `${tel[g].entiteiten} entiteiten`
+                          : `${app.length} ${app.length === 1 ? 'apparaat' : 'apparaten'} · ${tel[g].entiteiten} entiteiten`}</span></div>
                       ${rijen}
-                      ${teveel ? `<div style="padding:5px 0;font-size:12px;color:rgba(255,255,255,0.45)">+ ${teveel} meer in deze integratie</div>` : ''}</div>`;
+                      ${teveel ? `<div style="padding:5px 0;font-size:12px;color:rgba(255,255,255,0.45)">+ ${teveel} ${teveel === 1 ? 'apparaat' : 'apparaten'} meer</div>` : ''}</div>`;
                   }).join('');
-                  // De overige integraties niet weglaten, wel samenvatten
                   var overig = '';
                   if(rest.length){
-                    var totaal = rest.reduce(function(a, g){ return a + groepen[g].length; }, 0);
+                    var totApp = rest.reduce(function(a,g){ return a + tel[g].apparaten.length; }, 0);
+                    var totEnt = rest.reduce(function(a,g){ return a + tel[g].entiteiten; }, 0);
                     var stukjes = rest.map(function(g){
-                      return `<span style="white-space:nowrap"><span style="color:rgba(255,255,255,0.7)">${g}</span> <span style="color:rgba(255,255,255,0.45)">${groepen[g].length}</span></span>`;
+                      return `<span style="white-space:nowrap"><span style="color:rgba(255,255,255,0.7)">${g}</span> <span style="color:rgba(255,255,255,0.45)">${tel[g].apparaten.length}</span></span>`;
                     }).join('<span style="color:rgba(255,255,255,0.2)"> · </span>');
                     overig = `<div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;margin-top:4px">
                       <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:4px">
                         <span style="font-size:12.5px;font-weight:700;color:rgba(255,255,255,0.55)">overige integraties</span>
-                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${totaal}</span></div>
+                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${totApp} apparaten · ${totEnt} entiteiten</span></div>
                       <div style="font-size:12.5px;line-height:1.7">${stukjes}</div></div>`;
                   }
                   var waarschuwing = reg ? '' : `<div style="font-size:11.5px;color:#f59e0b;padding-bottom:8px">Entiteitenregister niet beschikbaar — gegroepeerd op domein in plaats van integratie.</div>`;
@@ -223,14 +241,17 @@ cards:
                 [[[
                   var drempel = variables.drempel;
                   var reg = (hass && hass.entities) ? hass.entities : null;
+                  var apparaten = (hass && hass.devices) ? hass.devices : null;
                   var gebieden = (hass && hass.areas) ? hass.areas : null;
+                  // Ook hier per apparaat: een apparaat kan zowel een
+                  // percentagesensor als een 'bijna leeg'-binarysensor hebben.
                   var groepen = {};
                   Object.keys(states).forEach(function(id){
                     var s = states[id];
                     if(!s || !s.attributes || s.attributes.device_class !== 'battery') return;
                     var niveau = null, binair = false;
                     if(id.lastIndexOf('binary_sensor.', 0) === 0){
-                      if(s.state !== 'on') return;   // 'on' = batterij laag
+                      if(s.state !== 'on') return;
                       binair = true;
                     } else {
                       var v = Number(s.state);
@@ -240,28 +261,41 @@ cards:
                     var e = reg ? reg[id] : null;
                     if(e && (e.hidden || e.hidden_by)) return;
                     var integratie = (e && e.platform) ? e.platform : id.split('.')[0];
-                    var gebied = null;
-                    if(e && e.area_id && gebieden && gebieden[e.area_id]) gebied = gebieden[e.area_id].name;
-                    if(!groepen[integratie]) groepen[integratie] = [];
-                    groepen[integratie].push({
-                      naam: (s.attributes.friendly_name || id).replace(/ ?batter[iy][j]?[ -]?(level|niveau)?/i, '').trim() || id,
-                      gebied: gebied, niveau: niveau, binair: binair
-                    });
+                    var devId = (e && e.device_id) ? e.device_id : null;
+                    var dev = (devId && apparaten) ? apparaten[devId] : null;
+                    var sleutel = devId || ('los:' + id);
+                    var gebiedId = (e && e.area_id) || (dev && dev.area_id) || null;
+                    var gebied = (gebiedId && gebieden && gebieden[gebiedId]) ? gebieden[gebiedId].name : null;
+                    var naam = dev ? (dev.name_by_user || dev.name || devId)
+                      : ((s.attributes.friendly_name || id).replace(/ ?batter[iy][j]?[ -]?(level|niveau|low|laag)?/i, '').trim() || id);
+                    if(!groepen[integratie]) groepen[integratie] = {};
+                    var g = groepen[integratie];
+                    if(!g[sleutel]) g[sleutel] = {naam: naam, gebied: gebied, niveau: niveau, binair: binair};
+                    else {
+                      // percentage wint van een enkel 'laag'-signaal; anders de laagste
+                      if(niveau !== null && (g[sleutel].niveau === null || niveau < g[sleutel].niveau)) {
+                        g[sleutel].niveau = niveau; g[sleutel].binair = false;
+                      }
+                    }
                   });
                   var namen = Object.keys(groepen);
                   if(!namen.length) return `<span style="font-size:14px;color:#4ade80">Geen bijna lege batterijen.</span>`;
+                  var sleutelVan = function(x){ return x.niveau === null ? -1 : x.niveau; };
                   var kleurVan = function(x){
-                    if(x.binair) return '#ef4444';
+                    if(x.niveau === null) return '#ef4444';
                     return x.niveau <= 10 ? '#ef4444' : (x.niveau <= 20 ? '#f59e0b' : 'rgba(255,255,255,0.7)');
                   };
-                  var sleutel = function(x){ return x.binair ? -1 : x.niveau; };   // leegste eerst
-                  namen.forEach(function(g){ groepen[g].sort(function(a,b){ return sleutel(a) - sleutel(b); }); });
-                  namen.sort(function(a,b){ return sleutel(groepen[a][0]) - sleutel(groepen[b][0]); });
+                  var lijstVan = {};
+                  namen.forEach(function(g){
+                    lijstVan[g] = Object.keys(groepen[g]).map(function(k){ return groepen[g][k]; })
+                      .sort(function(a,b){ return sleutelVan(a) - sleutelVan(b); });
+                  });
+                  namen.sort(function(a,b){ return sleutelVan(lijstVan[a][0]) - sleutelVan(lijstVan[b][0]); });
                   var blokken = namen.map(function(g){
-                    var rijen = groepen[g].map(function(x){
+                    var rijen = lijstVan[g].map(function(x){
                       var plek = x.gebied ? `<span style="color:rgba(255,255,255,0.35)"> · ${x.gebied}</span>` : '';
-                      var pct = x.binair ? 100 : Math.max(2, x.niveau);
-                      var waarde = x.binair ? 'laag' : x.niveau + '%';
+                      var pct = x.niveau === null ? 100 : Math.max(2, x.niveau);
+                      var waarde = x.niveau === null ? 'laag' : x.niveau + '%';
                       return `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.04)">
                         <span style="flex:1;font-size:13.5px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
                         <span style="width:56px;height:6px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden;flex:0 0 auto">
@@ -271,7 +305,7 @@ cards:
                     return `<div style="margin-bottom:12px">
                       <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:2px">
                         <span style="font-size:12.5px;font-weight:700;color:#38bdf8">${g}</span>
-                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${groepen[g].length}</span></div>
+                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${lijstVan[g].length}</span></div>
                       ${rijen}</div>`;
                   }).join('');
                   return `<div style="max-height:calc(100vh - 190px);overflow-y:auto">${blokken}</div>`;
