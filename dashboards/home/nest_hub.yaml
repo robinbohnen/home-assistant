@@ -7,6 +7,9 @@ title: Mini Dashboard
 path: mini-dashboard
 icon: mdi:monitor
 panel: true
+# Kern-eigenschap van de view: werkt ook als card-mod niet laadt (Cast-sessie
+# gebruikt niet jouw thema en laadt resources onbetrouwbaar).
+background: "#0b0d12"
 cards:
   - type: vertical-stack
     card_mod:
@@ -85,6 +88,8 @@ cards:
                     - border-radius: 999px
                     - box-shadow: none
                     - padding: 1vh 1.8vh
+                    - width: max-content
+                    - overflow: visible
                   grid:
                     - grid-template-areas: '"c"'
                 custom_fields:
@@ -113,6 +118,8 @@ cards:
                     - border-radius: 999px
                     - box-shadow: none
                     - padding: 1vh 1.8vh
+                    - width: max-content
+                    - overflow: visible
                   grid:
                     - grid-template-areas: '"c"'
                 custom_fields:
@@ -129,7 +136,9 @@ cards:
                     ]]]
 
       # =================== BOVENSTE RIJ ===================
-      - type: horizontal-stack
+      - type: grid
+        columns: 2
+        square: false
         card_mod:
           style: &rij |
             #root {
@@ -142,411 +151,419 @@ cards:
             #root > * { height: 100% !important; }
         cards:
           # ---------- BRANDWEER ----------
-          - type: custom:mod-card
-            card_mod:
-              style: &paneel |
-                ha-card {
-                  background: var(--ov-panel-bg) !important;
-                  border: var(--ov-panel-border) !important;
-                  border-radius: var(--ov-panel-radius) !important;
-                  box-shadow: none !important;
-                  padding: 1.6vh 2vh !important;
-                  height: 100% !important;
-                  box-sizing: border-box !important;
-                }
-            card:
-              type: custom:button-card
-              entity: input_select.brandweer_dienstdoende_ploeg
-              show_icon: false
-              show_name: false
-              show_state: false
-              tap_action:
-                action: none
-              styles:
-                card:
-                  - background: none
-                  - border: none
+          - type: custom:button-card
+            entity: input_select.brandweer_dienstdoende_ploeg
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: none
+            styles:
+              card:
+                  - background: rgba(22,24,31,0.72)
+                  - border: 1px solid rgba(255,255,255,0.06)
+                  - border-radius: 18px
                   - box-shadow: none
-                  - padding: 0
+                  - padding: 1.6vh 2vh
                   - height: 100%
-                grid:
-                  - grid-template-areas: '"t" "ploegen" "melding"'
-                  - grid-template-rows: auto auto 1fr
-                  - row-gap: 1.4vh
-                  - height: 100%
-                custom_fields:
-                  t:
-                    - justify-self: stretch
-                  ploegen:
-                    - justify-self: stretch
-                  melding:
-                    - justify-self: stretch
-                    - align-self: end
+                  - box-sizing: border-box
+              grid:
+                - grid-template-areas: '"t" "ploegen" "uitrukken" "melding"'
+                - grid-template-rows: auto auto 1fr auto
+                - row-gap: 1.4vh
+                - height: 100%
               custom_fields:
-                t: |
-                  [[[
-                    var ds = states['input_select.brandweer_dienstdoende_ploeg'];
-                    var p = ds && ds.state ? ds.state.charAt(0).toUpperCase() : null;
-                    var staart = (p && 'ABC'.indexOf(p) !== -1)
-                      ? `<span style="color:#38bdf8;font-weight:600">${p}-ploeg heeft dienst</span>`
-                      : `<span style="color:rgba(255,255,255,0.4)">dienst onbekend</span>`;
-                    var r = states['sensor.robin_reistijd_naar_brandweer_uden'];
-                    var kazerne = (r && !isNaN(Number(r.state)))
-                      ? `<span style="font-size:1.7vh;color:rgba(255,255,255,0.45);margin-left:auto;white-space:nowrap">kazerne ${Math.round(Number(r.state))} min</span>` : '';
-                    return `<span style="display:flex;align-items:baseline;gap:1.2vh;width:100%">
-                      <span style="font-size:1.9vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.45)">BRANDWEER</span>
-                      <span style="font-size:1.9vh">${staart}</span>${kazerne}</span>`;
-                  ]]]
-                ploegen: |
-                  [[[
-                    var ds = states['input_select.brandweer_dienstdoende_ploeg'];
-                    var dienst = ds && ds.state ? ds.state.charAt(0).toUpperCase() : '';
-                    var cellen = ['A','B','C'].map(function(letter){
-                      var s = states['sensor.bezetting_ploeg_' + letter.toLowerCase()];
-                      var n = s && !isNaN(Number(s.state)) ? Number(s.state) : null;
-                      var col = n === null ? 'rgba(255,255,255,0.35)' : (n < 4 ? '#ef4444' : (n < 6 ? '#f59e0b' : '#4ade80'));
-                      var aan = letter === dienst;
-                      var onder = aan
-                        ? `<span style="font-size:1.3vh;font-weight:700;letter-spacing:0.08vh;color:#38bdf8">DIENST</span>`
-                        : `<span style="font-size:1.3vh">&nbsp;</span>`;
-                      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.2vh;padding:1vh 0 0.8vh 0;border-radius:1.4vh;background:${aan ? 'rgba(56,189,248,0.12)' : 'rgba(255,255,255,0.04)'};border:1px solid ${aan ? 'rgba(56,189,248,0.35)' : 'rgba(255,255,255,0.06)'}">
-                        <span style="font-size:1.6vh;font-weight:700;letter-spacing:0.1vh;color:${aan ? '#38bdf8' : 'rgba(255,255,255,0.5)'}">${letter}</span>
-                        <span style="font-size:3.6vh;font-weight:700;line-height:1.05;color:${col}">${n === null ? '—' : n}</span>${onder}</div>`;
-                    });
-                    return `<div style="display:flex;gap:1.2vh">${cellen.join('')}</div>`;
-                  ]]]
-                melding: |
-                  [[[
-                    var e = states['input_text.brandweer_laatste_melding'];
-                    var tekst = e && e.state ? e.state : '';
-                    if(!tekst) return `<span style="font-size:1.9vh;color:rgba(255,255,255,0.4)">geen recente melding</span>`;
-                    var m = tekst.match(/^\s*([A-Pa-p])\s*(\d)/);
-                    var code = m ? (m[1] + m[2]).toUpperCase() : null;
-                    var kort = tekst.replace(/^\s*[A-Pa-p]\s*\d\s*/, '');
-                    if(kort.length > 58) kort = kort.slice(0,57) + '…';
-                    var d = states['input_datetime.brandweer_laatste_melding'];
-                    var wanneer = '';
-                    if(d && d.state){
-                      var dt = new Date(String(d.state).replace(' ','T'));
-                      if(!isNaN(dt.getTime())) wanneer = dt.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}) + ' ' + ('0'+dt.getHours()).slice(-2)+':'+('0'+dt.getMinutes()).slice(-2);
-                    }
-                    var badge = code
-                      ? `<div style="min-width:4.4vh;padding:0.4vh 1vh;border-radius:1vh;background:rgba(245,158,11,0.16);color:#f59e0b;font-size:1.9vh;font-weight:700;text-align:center">${code}</div>`
-                      : `<ha-icon icon="mdi:fire-truck" style="--mdc-icon-size:2.6vh;color:#f59e0b"></ha-icon>`;
-                    return `<div style="display:flex;align-items:center;gap:1.4vh;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">${badge}
-                      <div style="display:flex;flex-direction:column;gap:0.3vh;overflow:hidden">
-                        <span style="font-size:1.9vh;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${kort}</span>
-                        <span style="font-size:1.6vh;color:rgba(255,255,255,0.45)">${wanneer}</span></div></div>`;
-                  ]]]
+                t:
+                  - justify-self: stretch
+                ploegen:
+                  - justify-self: stretch
+                uitrukken:
+                  - justify-self: stretch
+                  - width: 100%
+                  - align-self: center
+                melding:
+                  - justify-self: stretch
+                  - align-self: end
+            custom_fields:
+              t: |
+                [[[
+                  var ds = states['input_select.brandweer_dienstdoende_ploeg'];
+                  var p = ds && ds.state ? ds.state.charAt(0).toUpperCase() : null;
+                  var staart = (p && 'ABC'.indexOf(p) !== -1)
+                    ? `<span style="color:#38bdf8;font-weight:600">${p}-ploeg heeft dienst</span>`
+                    : `<span style="color:rgba(255,255,255,0.4)">dienst onbekend</span>`;
+                  var r = states['sensor.robin_reistijd_naar_brandweer_uden'];
+                  var kazerne = (r && !isNaN(Number(r.state)))
+                    ? `<span style="font-size:1.7vh;color:rgba(255,255,255,0.45);margin-left:auto;white-space:nowrap">kazerne ${Math.round(Number(r.state))} min</span>` : '';
+                  return `<span style="display:flex;align-items:baseline;gap:1.2vh;width:100%">
+                    <span style="font-size:1.9vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.45)">BRANDWEER</span>
+                    <span style="font-size:1.9vh">${staart}</span>${kazerne}</span>`;
+                ]]]
+              ploegen: |
+                [[[
+                  var ds = states['input_select.brandweer_dienstdoende_ploeg'];
+                  var dienst = ds && ds.state ? ds.state.charAt(0).toUpperCase() : '';
+                  var cellen = ['A','B','C'].map(function(letter){
+                    var s = states['sensor.bezetting_ploeg_' + letter.toLowerCase()];
+                    var n = s && !isNaN(Number(s.state)) ? Number(s.state) : null;
+                    var col = n === null ? 'rgba(255,255,255,0.35)' : (n < 4 ? '#ef4444' : (n < 6 ? '#f59e0b' : '#4ade80'));
+                    var aan = letter === dienst;
+                    var onder = aan
+                      ? `<span style="font-size:1.3vh;font-weight:700;letter-spacing:0.08vh;color:#38bdf8">DIENST</span>`
+                      : `<span style="font-size:1.3vh">&nbsp;</span>`;
+                    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.2vh;padding:1vh 0 0.8vh 0;border-radius:1.4vh;background:${aan ? 'rgba(56,189,248,0.12)' : 'rgba(255,255,255,0.04)'};border:1px solid ${aan ? 'rgba(56,189,248,0.35)' : 'rgba(255,255,255,0.06)'}">
+                      <span style="font-size:1.6vh;font-weight:700;letter-spacing:0.1vh;color:${aan ? '#38bdf8' : 'rgba(255,255,255,0.5)'}">${letter}</span>
+                      <span style="font-size:3.6vh;font-weight:700;line-height:1.05;color:${col}">${n === null ? '—' : n}</span>${onder}</div>`;
+                  });
+                  return `<div style="display:flex;gap:1.2vh">${cellen.join('')}</div>`;
+                ]]]
+              uitrukken: |
+                [[[
+                  var lees = function(id){ var e = states[id]; return (e && !isNaN(Number(e.state))) ? Number(e.state) : null; };
+                  var tot = lees('counter.brandweer_totaal_aantal_uitrukken');
+                  var perPloeg = ['a','b','c'].map(function(l){ return [l.toUpperCase(), lees('counter.brandweer_uden_' + l + '_ploeg_uitrukken')]; });
+                  if(tot === null && perPloeg.every(function(x){ return x[1] === null; })) return '';
+                  var cel = function(waarde, label, groot){
+                    return `<div style="display:flex;flex-direction:column;align-items:center;gap:0.2vh">
+                      <span style="font-size:${groot ? '2.8vh' : '2.2vh'};font-weight:700;color:${groot ? 'white' : 'rgba(255,255,255,0.8)'}">${waarde === null ? '—' : waarde}</span>
+                      <span style="font-size:1.4vh;color:rgba(255,255,255,0.45)">${label}</span></div>`;
+                  };
+                  return `<div style="display:flex;justify-content:space-around;align-items:end;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">
+                    ${cel(tot, 'uitrukken totaal', true)}
+                    ${perPloeg.map(function(x){ return cel(x[1], x[0] + '-ploeg', false); }).join('')}</div>`;
+                ]]]
+              melding: |
+                [[[
+                  var e = states['input_text.brandweer_laatste_melding'];
+                  var tekst = e && e.state ? e.state : '';
+                  if(!tekst) return `<span style="font-size:1.9vh;color:rgba(255,255,255,0.4)">geen recente melding</span>`;
+                  var m = tekst.match(/^\s*([A-Pa-p])\s*(\d)/);
+                  var code = m ? (m[1] + m[2]).toUpperCase() : null;
+                  var kort = tekst.replace(/^\s*[A-Pa-p]\s*\d\s*/, '');
+                  if(kort.length > 58) kort = kort.slice(0,57) + '…';
+                  var d = states['input_datetime.brandweer_laatste_melding'];
+                  var wanneer = '';
+                  if(d && d.state){
+                    var dt = new Date(String(d.state).replace(' ','T'));
+                    if(!isNaN(dt.getTime())) wanneer = dt.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}) + ' ' + ('0'+dt.getHours()).slice(-2)+':'+('0'+dt.getMinutes()).slice(-2);
+                  }
+                  var badge = code
+                    ? `<div style="min-width:4.4vh;padding:0.4vh 1vh;border-radius:1vh;background:rgba(245,158,11,0.16);color:#f59e0b;font-size:1.9vh;font-weight:700;text-align:center">${code}</div>`
+                    : `<ha-icon icon="mdi:fire-truck" style="--mdc-icon-size:2.6vh;color:#f59e0b"></ha-icon>`;
+                  return `<div style="display:flex;align-items:center;gap:1.4vh;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">${badge}
+                    <div style="display:flex;flex-direction:column;gap:0.3vh;overflow:hidden">
+                      <span style="font-size:1.9vh;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${kort}</span>
+                      <span style="font-size:1.6vh;color:rgba(255,255,255,0.45)">${wanneer}</span></div></div>`;
+                ]]]
 
-          # ---------- ENERGIE ----------
-          - type: custom:mod-card
-            card_mod:
-              style: *paneel
-            card:
-              type: custom:button-card
-              entity: sensor.live_energieverbruik_totaal
-              show_icon: false
-              show_name: false
-              show_state: false
-              update_timer: 60s
-              tap_action:
-                action: none
-              styles:
-                card:
-                  - background: none
-                  - border: none
+        # ---------- ENERGIE ----------
+          - type: custom:button-card
+            entity: sensor.live_energieverbruik_totaal
+            show_icon: false
+            show_name: false
+            show_state: false
+            update_timer: 60s
+            tap_action:
+              action: none
+            styles:
+              card:
+                  - background: rgba(22,24,31,0.72)
+                  - border: 1px solid rgba(255,255,255,0.06)
+                  - border-radius: 18px
                   - box-shadow: none
-                  - padding: 0
+                  - padding: 1.6vh 2vh
                   - height: 100%
-                grid:
-                  - grid-template-areas: '"t" "cijfers" "strook"'
-                  - grid-template-rows: auto auto 1fr
-                  - row-gap: 1.2vh
-                  - height: 100%
-                custom_fields:
-                  t:
-                    - justify-self: stretch
-                  cijfers:
-                    - justify-self: stretch
-                  strook:
-                    - justify-self: stretch
-                    - align-self: end
+                  - box-sizing: border-box
+              grid:
+                - grid-template-areas: '"t" "cijfers" "strook"'
+                - grid-template-rows: auto auto 1fr
+                - row-gap: 1.2vh
+                - height: 100%
               custom_fields:
-                t: |
-                  [[[
-                    var g = states['sensor.zonneplan_current_tariff_group'];
-                    var s = states['sensor.solar_power_generated_now'];
-                    var goedkoop = g && g.state === 'low';
-                    var groen = s && !isNaN(Number(s.state)) && Number(s.state) > 0.1;
-                    var txt = (groen && goedkoop) ? 'groen en goedkoop' : (goedkoop ? 'goedkoop' : (groen ? 'groen' : 'normaal tarief'));
-                    var col = (groen || goedkoop) ? '#4ade80' : 'rgba(255,255,255,0.6)';
-                    var k = states['sensor.total_costs_today_calculated'];
-                    var kosten = '';
-                    if(k && !isNaN(Number(k.state))){
-                      var kv = Number(k.state);
-                      kosten = `<span style="font-size:1.7vh;margin-left:auto;white-space:nowrap;color:${kv < 0 ? '#4ade80' : 'rgba(255,255,255,0.55)'}">€ ${kv.toFixed(2).replace('.',',')} vandaag</span>`;
-                    }
-                    return `<span style="display:flex;align-items:baseline;gap:1.2vh;width:100%">
-                      <span style="font-size:1.9vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.45)">ENERGIE · NU</span>
-                      <span style="font-size:1.9vh;color:${col}">stroom is ${txt}</span>${kosten}</span>`;
-                  ]]]
-                cijfers: |
-                  [[[
-                    var lees = function(id, alsW){
-                      var e = states[id];
-                      if(!e || isNaN(Number(e.state))) return null;
-                      var v = Number(e.state);
-                      var u = e.attributes.unit_of_measurement || '';
-                      return (alsW && u === 'W') ? v / 1000 : v;
-                    };
-                    var netto = lees('sensor.live_energieverbruik_totaal');
-                    if(netto !== null && Math.abs(netto) < 0.005) netto = 0;
-                    var prod = lees('sensor.solar_power_generated_now', true);
-                    var verbr = lees('sensor.electricity_meter_energieverbruik');
-                    var soc = states['sensor.lilygo_rs485_marstek_battery_state_of_charge'];
-                    var bp = states['sensor.lilygo_rs485_marstek_battery_power'];
-                    var socv = soc && !isNaN(Number(soc.state)) ? Math.round(Number(soc.state)) : null;
-                    var bpv = bp && !isNaN(Number(bp.state)) ? Math.round(Number(bp.state)) : null;
-                    var fmt = function(v){ return v === null ? '—' : v.toFixed(2).replace('.',','); };
-                    var klein = function(waarde, label, kleur){
-                      return `<div style="display:flex;flex-direction:column;gap:0.3vh">
-                        <span style="font-size:3.2vh;font-weight:700;line-height:1;color:${kleur}">${waarde}</span>
-                        <span style="font-size:1.6vh;color:rgba(255,255,255,0.5)">${label}</span></div>`;
-                    };
-                    var nettoKleur = (netto !== null && netto < 0) ? '#4ade80' : 'white';
-                    return `<div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1.1fr;align-items:end;column-gap:1.2vh">
-                      <div style="display:flex;flex-direction:column;gap:0.3vh">
-                        <span><span style="font-size:5.4vh;font-weight:700;line-height:1;color:${nettoKleur}">${fmt(netto)}</span>
-                        <span style="font-size:2vh;color:rgba(255,255,255,0.55)">kW</span></span>
-                        <span style="font-size:1.6vh;color:rgba(255,255,255,0.5)">netto verbruik</span></div>
-                      ${klein(fmt(prod), 'productie', '#4ade80')}
-                      ${klein(fmt(verbr), 'verbruik', '#3b82f6')}
-                      ${klein(socv === null ? '—' : socv + '%', 'batterij' + (bpv === null ? '' : (bpv > 0 ? ' · laadt' : (bpv < 0 ? ' · ontlaadt' : ' · idle'))), 'white')}
-                    </div>`;
-                  ]]]
-                strook: |
-                  [[[
-                    // Compacte prijsstrook voor de komende 12 uur: dezelfde
-                    // bandindeling per kalenderdag als op het grote dashboard.
-                    var nu = Date.now();
-                    var start = nu - 3600000, eind = nu + 11 * 3600000;
-                    var pct = function(t){ return (t - start) / (eind - start) * 100; };
-                    var klem = function(v){ return Math.max(0, Math.min(100, v)); };
-                    var t = states['sensor.zonneplan_current_electricity_tariff'];
-                    var raw = (t && t.attributes && t.attributes.forecast) || [];
-                    var norm = function(x){ if(x === null || x === undefined || isNaN(Number(x))) return null; var n = Number(x); if(Math.abs(n) > 100) n = n / 10000000; return n; };
-                    var slots = raw.map(function(e){
-                      var d = new Date(e.datetime || e.date || e.time || e.start);
-                      var p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
-                      return (isNaN(d.getTime()) || p === null) ? null : {t: d.getTime(), p: p};
-                    }).filter(Boolean).sort(function(a,b){ return a.t - b.t; });
-                    if(slots.length < 2) return `<span style="font-size:1.6vh;color:rgba(255,255,255,0.35)">geen prijsvoorspelling</span>`;
-                    var stap = slots[1].t - slots[0].t;
-                    var perDag = {};
-                    slots.forEach(function(s){
-                      var k = new Date(s.t).toDateString();
-                      if(!perDag[k]) perDag[k] = {min: s.p, max: s.p};
-                      else { perDag[k].min = Math.min(perDag[k].min, s.p); perDag[k].max = Math.max(perDag[k].max, s.p); }
-                    });
-                    var blokken = [];
-                    slots.forEach(function(s){
-                      if(s.t + stap < start || s.t > eind) return;
-                      var d = perDag[new Date(s.t).toDateString()];
-                      var spreiding = d.max - d.min;
-                      var r = spreiding < 0.02 ? 0.5 : (s.p - d.min) / spreiding;
-                      var kleur = r <= 0.33 ? '#4ade80' : (r >= 0.66 ? '#ef4444' : '#f59e0b');
-                      var a = klem(pct(s.t)), b = klem(pct(s.t + stap));
-                      if(b - a > 0.05) blokken.push(`<div style="position:absolute;left:${a}%;width:${b-a}%;top:0;bottom:0;background:${kleur};opacity:0.85"></div>`);
-                    });
-                    var assen = [];
-                    var u = new Date(start); u.setMinutes(0,0,0);
-                    u.setHours(u.getHours() + (3 - (u.getHours() % 3)));
-                    for(var x = u.getTime(); x < eind; x += 10800000){
-                      var px = pct(x);
-                      if(px < 3 || px > 97) continue;
-                      assen.push(`<div style="position:absolute;left:${px}%;transform:translateX(-50%);top:2.4vh;font-size:1.4vh;color:rgba(255,255,255,0.45)">${('0'+new Date(x).getHours()).slice(-2)}:00</div>`);
-                    }
-                    return `<div style="position:relative;width:100%;height:4.4vh">
-                      <div style="position:absolute;left:0;right:0;top:0;height:1.8vh;border-radius:0.5vh;overflow:hidden;background:rgba(255,255,255,0.05)">${blokken.join('')}</div>
-                      <div style="position:absolute;left:${klem(pct(nu))}%;top:0;height:1.8vh;border-left:2px dashed rgba(255,255,255,0.85)"></div>
-                      ${assen.join('')}</div>`;
-                  ]]]
+                t:
+                  - justify-self: stretch
+                cijfers:
+                  - justify-self: stretch
+                strook:
+                  - justify-self: stretch
+                  - align-self: end
+            custom_fields:
+              t: |
+                [[[
+                  var g = states['sensor.zonneplan_current_tariff_group'];
+                  var s = states['sensor.solar_power_generated_now'];
+                  var goedkoop = g && g.state === 'low';
+                  var groen = s && !isNaN(Number(s.state)) && Number(s.state) > 0.1;
+                  var txt = (groen && goedkoop) ? 'groen en goedkoop' : (goedkoop ? 'goedkoop' : (groen ? 'groen' : 'normaal tarief'));
+                  var col = (groen || goedkoop) ? '#4ade80' : 'rgba(255,255,255,0.6)';
+                  var k = states['sensor.total_costs_today_calculated'];
+                  var kosten = '';
+                  if(k && !isNaN(Number(k.state))){
+                    var kv = Number(k.state);
+                    kosten = `<span style="font-size:1.7vh;margin-left:auto;white-space:nowrap;color:${kv < 0 ? '#4ade80' : 'rgba(255,255,255,0.55)'}">€ ${kv.toFixed(2).replace('.',',')} vandaag</span>`;
+                  }
+                  return `<span style="display:flex;align-items:baseline;gap:1.2vh;width:100%">
+                    <span style="font-size:1.9vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.45)">ENERGIE · NU</span>
+                    <span style="font-size:1.9vh;color:${col}">stroom is ${txt}</span>${kosten}</span>`;
+                ]]]
+              cijfers: |
+                [[[
+                  var lees = function(id, alsW){
+                    var e = states[id];
+                    if(!e || isNaN(Number(e.state))) return null;
+                    var v = Number(e.state);
+                    var u = e.attributes.unit_of_measurement || '';
+                    return (alsW && u === 'W') ? v / 1000 : v;
+                  };
+                  var netto = lees('sensor.live_energieverbruik_totaal');
+                  if(netto !== null && Math.abs(netto) < 0.005) netto = 0;
+                  var prod = lees('sensor.solar_power_generated_now', true);
+                  var verbr = lees('sensor.electricity_meter_energieverbruik');
+                  var soc = states['sensor.lilygo_rs485_marstek_battery_state_of_charge'];
+                  var bp = states['sensor.lilygo_rs485_marstek_battery_power'];
+                  var socv = soc && !isNaN(Number(soc.state)) ? Math.round(Number(soc.state)) : null;
+                  var bpv = bp && !isNaN(Number(bp.state)) ? Math.round(Number(bp.state)) : null;
+                  var fmt = function(v){ return v === null ? '—' : v.toFixed(2).replace('.',','); };
+                  var klein = function(waarde, label, kleur){
+                    return `<div style="display:flex;flex-direction:column;gap:0.3vh">
+                      <span style="font-size:3.2vh;font-weight:700;line-height:1;color:${kleur}">${waarde}</span>
+                      <span style="font-size:1.6vh;color:rgba(255,255,255,0.5)">${label}</span></div>`;
+                  };
+                  var nettoKleur = (netto !== null && netto < 0) ? '#4ade80' : 'white';
+                  return `<div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1.1fr;align-items:end;column-gap:1.2vh">
+                    <div style="display:flex;flex-direction:column;gap:0.3vh">
+                      <span><span style="font-size:5.4vh;font-weight:700;line-height:1;color:${nettoKleur}">${fmt(netto)}</span>
+                      <span style="font-size:2vh;color:rgba(255,255,255,0.55)">kW</span></span>
+                      <span style="font-size:1.6vh;color:rgba(255,255,255,0.5)">netto verbruik</span></div>
+                    ${klein(fmt(prod), 'productie', '#4ade80')}
+                    ${klein(fmt(verbr), 'verbruik', '#3b82f6')}
+                    ${klein(socv === null ? '—' : socv + '%', 'batterij' + (bpv === null ? '' : (bpv > 0 ? ' · laadt' : (bpv < 0 ? ' · ontlaadt' : ' · idle'))), 'white')}
+                  </div>`;
+                ]]]
+              strook: |
+                [[[
+                  // Compacte prijsstrook voor de komende 12 uur: dezelfde
+                  // bandindeling per kalenderdag als op het grote dashboard.
+                  var nu = Date.now();
+                  var start = nu - 3600000, eind = nu + 11 * 3600000;
+                  var pct = function(t){ return (t - start) / (eind - start) * 100; };
+                  var klem = function(v){ return Math.max(0, Math.min(100, v)); };
+                  var t = states['sensor.zonneplan_current_electricity_tariff'];
+                  var raw = (t && t.attributes && t.attributes.forecast) || [];
+                  var norm = function(x){ if(x === null || x === undefined || isNaN(Number(x))) return null; var n = Number(x); if(Math.abs(n) > 100) n = n / 10000000; return n; };
+                  var slots = raw.map(function(e){
+                    var d = new Date(e.datetime || e.date || e.time || e.start);
+                    var p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
+                    return (isNaN(d.getTime()) || p === null) ? null : {t: d.getTime(), p: p};
+                  }).filter(Boolean).sort(function(a,b){ return a.t - b.t; });
+                  if(slots.length < 2) return `<span style="font-size:1.6vh;color:rgba(255,255,255,0.35)">geen prijsvoorspelling</span>`;
+                  var stap = slots[1].t - slots[0].t;
+                  var perDag = {};
+                  slots.forEach(function(s){
+                    var k = new Date(s.t).toDateString();
+                    if(!perDag[k]) perDag[k] = {min: s.p, max: s.p};
+                    else { perDag[k].min = Math.min(perDag[k].min, s.p); perDag[k].max = Math.max(perDag[k].max, s.p); }
+                  });
+                  var blokken = [];
+                  slots.forEach(function(s){
+                    if(s.t + stap < start || s.t > eind) return;
+                    var d = perDag[new Date(s.t).toDateString()];
+                    var spreiding = d.max - d.min;
+                    var r = spreiding < 0.02 ? 0.5 : (s.p - d.min) / spreiding;
+                    var kleur = r <= 0.33 ? '#4ade80' : (r >= 0.66 ? '#ef4444' : '#f59e0b');
+                    var a = klem(pct(s.t)), b = klem(pct(s.t + stap));
+                    if(b - a > 0.05) blokken.push(`<div style="position:absolute;left:${a}%;width:${b-a}%;top:0;bottom:0;background:${kleur};opacity:0.85"></div>`);
+                  });
+                  var assen = [];
+                  var u = new Date(start); u.setMinutes(0,0,0);
+                  u.setHours(u.getHours() + (3 - (u.getHours() % 3)));
+                  for(var x = u.getTime(); x < eind; x += 10800000){
+                    var px = pct(x);
+                    if(px < 3 || px > 97) continue;
+                    assen.push(`<div style="position:absolute;left:${px}%;transform:translateX(-50%);top:2.4vh;font-size:1.4vh;color:rgba(255,255,255,0.45)">${('0'+new Date(x).getHours()).slice(-2)}:00</div>`);
+                  }
+                  return `<div style="position:relative;width:100%;height:4.4vh">
+                    <div style="position:absolute;left:0;right:0;top:0;height:1.8vh;border-radius:0.5vh;overflow:hidden;background:rgba(255,255,255,0.05)">${blokken.join('')}</div>
+                    <div style="position:absolute;left:${klem(pct(nu))}%;top:0;height:1.8vh;border-left:2px dashed rgba(255,255,255,0.85)"></div>
+                    ${assen.join('')}</div>`;
+                ]]]
 
-      # =================== ONDERSTE RIJ ===================
-      - type: horizontal-stack
+    # =================== ONDERSTE RIJ ===================
+      - type: grid
+        columns: 2
+        square: false
         card_mod:
           style: *rij
         cards:
           # ---------- VANDAAG ----------
-          - type: custom:mod-card
-            card_mod:
-              style: *paneel
-            card:
-              type: custom:button-card
-              entity: sensor.afvalinfo_home_trash_type_today
-              show_icon: false
-              show_name: false
-              show_state: false
-              tap_action:
-                action: none
-              styles:
-                card:
-                  - background: none
-                  - border: none
+          - type: custom:button-card
+            entity: sensor.afvalinfo_home_trash_type_today
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: none
+            styles:
+              card:
+                  - background: rgba(22,24,31,0.72)
+                  - border: 1px solid rgba(255,255,255,0.06)
+                  - border-radius: 18px
                   - box-shadow: none
-                  - padding: 0
+                  - padding: 1.6vh 2vh
                   - height: 100%
-                grid:
-                  - grid-template-areas: '"t" "afval" "agenda"'
-                  - grid-template-rows: auto auto 1fr
-                  - row-gap: 1.2vh
-                  - height: 100%
-                custom_fields:
-                  t:
-                    - justify-self: start
-                  afval:
-                    - justify-self: stretch
-                  agenda:
-                    - justify-self: stretch
-                    - align-self: end
+                  - box-sizing: border-box
+              grid:
+                - grid-template-areas: '"t" "afval" "agenda"'
+                - grid-template-rows: auto auto 1fr
+                - row-gap: 1.2vh
+                - height: 100%
               custom_fields:
-                t: |
-                  [[[ return `<span style="font-size:1.9vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.45)">VANDAAG</span>`; ]]]
-                afval: |
-                  [[[
-                    // PBD vóór papier: "Drinkkartons" bevat 'karton'
-                    var soorten = [[/gft|groente|tuin/i,'#4ade80'], [/pbd|plastic|blik|drank/i,'#f59e0b'], [/papier/i,'#38bdf8'], [/rest/i,'rgba(255,255,255,0.7)']];
-                    var kleurVan = function(v){ for(var i=0;i<soorten.length;i++) if(soorten[i][0].test(v)) return soorten[i][1]; return 'rgba(255,255,255,0.35)'; };
-                    var regel = function(id, label){
-                      var e = states[id];
-                      var v = e && e.state && e.state !== 'Geen' ? e.state : null;
-                      var kl = v ? kleurVan(v) : 'rgba(255,255,255,0.3)';
-                      if(v && v.length > 30) v = v.slice(0,29) + '…';
-                      return `<div style="display:flex;align-items:center;gap:1.2vh">
-                        <ha-icon icon="mdi:trash-can-outline" style="--mdc-icon-size:2.4vh;color:${kl}"></ha-icon>
-                        <span style="font-size:1.7vh;color:rgba(255,255,255,0.5);min-width:6vh">${label}</span>
-                        <span style="font-size:2vh;font-weight:600;color:${v ? kl : 'rgba(255,255,255,0.35)'}">${v || 'geen ophaal'}</span></div>`;
-                    };
-                    return `<div style="display:flex;flex-direction:column;gap:0.9vh">
-                      ${regel('sensor.afvalinfo_home_trash_type_today','vandaag')}
-                      ${regel('sensor.afvalinfo_home_trash_type_tomorrow','morgen')}</div>`;
-                  ]]]
-                agenda: |
-                  [[[
-                    var sen = states['sensor.agenda_afspraken_vandaag'];
-                    var v = sen && sen.attributes ? sen.attributes.volgende : null;
-                    var titel = null, sub = '';
-                    if(v && v.titel){
-                      titel = String(v.titel);
-                      var d = new Date(v.datum + 'T00:00:00');
-                      var mid = new Date(); mid.setHours(0,0,0,0);
-                      var dag = Math.round((d - mid) / 86400000);
-                      var dagTxt = dag === 0 ? 'vandaag' : (dag === 1 ? 'morgen' : d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
-                      sub = `${dagTxt} · ${v.hele_dag ? 'hele dag' : (v.tijd || '')} · ${v.agenda}`;
-                    } else {
-                      // terugval zolang de get_events-sensor er niet is
-                      var nu = new Date(), lijst = [];
-                      [['calendar.r_bohnen_vrbn_nl_agenda','Werk'],['calendar.robin_bohnen_nl_agenda','Privé'],
-                       ['calendar.robin_en_sam','Samen'],['calendar.brandweer','Brandweer'],
-                       ['calendar.maxi','Logan'],['calendar.mini','Emma']].forEach(function(c){
-                        var e = states[c[0]];
-                        if(!e || !e.attributes || !e.attributes.start_time) return;
-                        var st = new Date(String(e.attributes.start_time).replace(' ','T'));
-                        if(isNaN(st.getTime())) return;
-                        var en = e.attributes.end_time ? new Date(String(e.attributes.end_time).replace(' ','T')) : null;
-                        if(en && !isNaN(en.getTime()) && en < nu) return;
-                        lijst.push({msg: e.attributes.message || 'Afspraak', st: st, allday: !!e.attributes.all_day, bron: c[1]});
-                      });
-                      lijst.sort(function(a,b){ return a.allday !== b.allday ? (a.allday ? 1 : -1) : a.st - b.st; });
-                      if(lijst.length){
-                        var it = lijst[0];
-                        titel = it.msg;
-                        var mid2 = new Date(); mid2.setHours(0,0,0,0);
-                        var dag2 = Math.round((new Date(it.st).setHours(0,0,0,0) - mid2.getTime()) / 86400000);
-                        var dt2 = dag2 === 0 ? 'vandaag' : (dag2 === 1 ? 'morgen' : it.st.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
-                        sub = `${dt2} · ${it.allday ? 'hele dag' : it.st.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})} · ${it.bron}`;
+                t:
+                  - justify-self: start
+                afval:
+                  - justify-self: stretch
+                  - width: 100%
+                  - text-align: left
+                agenda:
+                  - justify-self: stretch
+                  - width: 100%
+                  - text-align: left
+                  - align-self: end
+            custom_fields:
+              t: |
+                [[[ return `<span style="font-size:1.9vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.45)">VANDAAG</span>`; ]]]
+              afval: |
+                [[[
+                  // PBD vóór papier: "Drinkkartons" bevat 'karton'
+                  var soorten = [[/gft|groente|tuin/i,'#4ade80'], [/pbd|plastic|blik|drank/i,'#f59e0b'], [/papier/i,'#38bdf8'], [/rest/i,'rgba(255,255,255,0.7)']];
+                  var kleurVan = function(v){ for(var i=0;i<soorten.length;i++) if(soorten[i][0].test(v)) return soorten[i][1]; return 'rgba(255,255,255,0.35)'; };
+                  var regel = function(id, label){
+                    var e = states[id];
+                    var v = e && e.state && e.state !== 'Geen' ? e.state : null;
+                    var kl = v ? kleurVan(v) : 'rgba(255,255,255,0.3)';
+                    if(v && v.length > 30) v = v.slice(0,29) + '…';
+                    return `<div style="display:flex;align-items:center;gap:1.2vh">
+                      <ha-icon icon="mdi:trash-can-outline" style="--mdc-icon-size:2.4vh;color:${kl}"></ha-icon>
+                      <span style="font-size:1.7vh;color:rgba(255,255,255,0.5);min-width:6vh">${label}</span>
+                      <span style="font-size:2vh;font-weight:600;color:${v ? kl : 'rgba(255,255,255,0.35)'}">${v || 'geen ophaal'}</span></div>`;
+                  };
+                  return `<div style="display:flex;flex-direction:column;gap:0.9vh">
+                    ${regel('sensor.afvalinfo_home_trash_type_today','vandaag')}
+                    ${regel('sensor.afvalinfo_home_trash_type_tomorrow','morgen')}</div>`;
+                ]]]
+              agenda: |
+                [[[
+                  var sen = states['sensor.agenda_afspraken_vandaag'];
+                  var v = sen && sen.attributes ? sen.attributes.volgende : null;
+                  var titel = null, sub = '';
+                  if(v && v.titel){
+                    titel = String(v.titel);
+                    var d = new Date(v.datum + 'T00:00:00');
+                    var mid = new Date(); mid.setHours(0,0,0,0);
+                    var dag = Math.round((d - mid) / 86400000);
+                    var dagTxt = dag === 0 ? 'vandaag' : (dag === 1 ? 'morgen' : d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
+                    sub = `${dagTxt} · ${v.hele_dag ? 'hele dag' : (v.tijd || '')} · ${v.agenda}`;
+                  } else {
+                    // terugval zolang de get_events-sensor er niet is
+                    var nu = new Date(), lijst = [];
+                    [['calendar.r_bohnen_vrbn_nl_agenda','Werk'],['calendar.robin_bohnen_nl_agenda','Privé'],
+                     ['calendar.robin_en_sam','Samen'],['calendar.brandweer','Brandweer'],
+                     ['calendar.maxi','Logan'],['calendar.mini','Emma']].forEach(function(c){
+                      var e = states[c[0]];
+                      if(!e || !e.attributes || !e.attributes.start_time) return;
+                      var st = new Date(String(e.attributes.start_time).replace(' ','T'));
+                      if(isNaN(st.getTime())) return;
+                      var en = e.attributes.end_time ? new Date(String(e.attributes.end_time).replace(' ','T')) : null;
+                      if(en && !isNaN(en.getTime()) && en < nu) return;
+                      lijst.push({msg: e.attributes.message || 'Afspraak', st: st, allday: !!e.attributes.all_day, bron: c[1]});
+                    });
+                    lijst.sort(function(a,b){ return a.allday !== b.allday ? (a.allday ? 1 : -1) : a.st - b.st; });
+                    if(lijst.length){
+                      var it = lijst[0];
+                      titel = it.msg;
+                      var mid2 = new Date(); mid2.setHours(0,0,0,0);
+                      var dag2 = Math.round((new Date(it.st).setHours(0,0,0,0) - mid2.getTime()) / 86400000);
+                      var dt2 = dag2 === 0 ? 'vandaag' : (dag2 === 1 ? 'morgen' : it.st.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
+                      sub = `${dt2} · ${it.allday ? 'hele dag' : it.st.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})} · ${it.bron}`;
+                    }
+                  }
+                  if(!titel) return `<div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh"><span style="font-size:1.9vh;color:rgba(255,255,255,0.4)">geen afspraken</span></div>`;
+                  if(titel.length > 34) titel = titel.slice(0,33) + '…';
+                  return `<div style="display:flex;align-items:center;gap:1.4vh;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">
+                    <ha-icon icon="mdi:calendar" style="--mdc-icon-size:2.6vh;color:#38bdf8"></ha-icon>
+                    <div style="display:flex;flex-direction:column;gap:0.3vh;overflow:hidden">
+                      <span style="font-size:2vh;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${titel}</span>
+                      <span style="font-size:1.6vh;color:rgba(255,255,255,0.5)">${sub}</span></div></div>`;
+                ]]]
+
+        # ---------- PERSONEN ----------
+          - type: custom:button-card
+            entity: person.robin_bohnen
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: none
+            styles:
+              card:
+                  - background: rgba(22,24,31,0.72)
+                  - border: 1px solid rgba(255,255,255,0.06)
+                  - border-radius: 18px
+                  - box-shadow: none
+                  - padding: 1.6vh 2vh
+                  - height: 100%
+                  - box-sizing: border-box
+              grid:
+                - grid-template-areas: '"t" "mensen"'
+                - grid-template-rows: auto 1fr
+                - row-gap: 1.2vh
+                - height: 100%
+              custom_fields:
+                t:
+                  - justify-self: start
+                mensen:
+                  - justify-self: stretch
+                  - align-self: center
+            custom_fields:
+              t: |
+                [[[
+                  var ppl = ['person.robin_bohnen','person.samantha_henkelman','person.emma_bohnen','person.logan_veen'];
+                  var n = ppl.filter(function(e){ return states[e] && states[e].state === 'home'; }).length;
+                  return `<span style="display:flex;align-items:baseline;gap:1.2vh">
+                    <span style="font-size:1.9vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.45)">PERSONEN</span>
+                    <span style="font-size:1.7vh;font-weight:600;padding:0.3vh 1.2vh;border-radius:999px;color:#4ade80;background:rgba(52,168,120,0.15)">${n} thuis</span></span>`;
+                ]]]
+              mensen: |
+                [[[
+                  var mensen = [
+                    ['person.robin_bohnen','sensor.iphone_van_robin_battery_level','sensor.robin_reistijd_naar_huis'],
+                    ['person.samantha_henkelman','sensor.iphone_van_samantha_battery_level','sensor.samantha_reistijd_naar_huis'],
+                    ['person.emma_bohnen','sensor.iphone_van_emma_battery_level','sensor.emma_reistijd_naar_huis'],
+                    ['person.logan_veen','sensor.iphone_battery_level','sensor.logan_reistijd_naar_huis']
+                  ];
+                  var cellen = mensen.map(function(m){
+                    var p = states[m[0]];
+                    if(!p) return '';
+                    var naam = p.attributes.friendly_name ? p.attributes.friendly_name.split(' ')[0] : '?';
+                    var thuis = p.state === 'home';
+                    var st = thuis ? 'thuis' : 'afwezig';
+                    var stKleur = 'rgba(255,255,255,0.5)';
+                    if(!thuis){
+                      var r = states[m[2]];
+                      if(r && !isNaN(Number(r.state)) && Number(r.state) > 0){
+                        st = Math.round(Number(r.state)) + ' min';
+                        stKleur = '#38bdf8';
                       }
                     }
-                    if(!titel) return `<div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh"><span style="font-size:1.9vh;color:rgba(255,255,255,0.4)">geen afspraken</span></div>`;
-                    if(titel.length > 34) titel = titel.slice(0,33) + '…';
-                    return `<div style="display:flex;align-items:center;gap:1.4vh;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">
-                      <ha-icon icon="mdi:calendar" style="--mdc-icon-size:2.6vh;color:#38bdf8"></ha-icon>
-                      <div style="display:flex;flex-direction:column;gap:0.3vh;overflow:hidden">
-                        <span style="font-size:2vh;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${titel}</span>
-                        <span style="font-size:1.6vh;color:rgba(255,255,255,0.5)">${sub}</span></div></div>`;
-                  ]]]
-
-          # ---------- PERSONEN ----------
-          - type: custom:mod-card
-            card_mod:
-              style: *paneel
-            card:
-              type: custom:button-card
-              entity: person.robin_bohnen
-              show_icon: false
-              show_name: false
-              show_state: false
-              tap_action:
-                action: none
-              styles:
-                card:
-                  - background: none
-                  - border: none
-                  - box-shadow: none
-                  - padding: 0
-                  - height: 100%
-                grid:
-                  - grid-template-areas: '"t" "mensen"'
-                  - grid-template-rows: auto 1fr
-                  - row-gap: 1.2vh
-                  - height: 100%
-                custom_fields:
-                  t:
-                    - justify-self: start
-                  mensen:
-                    - justify-self: stretch
-                    - align-self: center
-              custom_fields:
-                t: |
-                  [[[
-                    var ppl = ['person.robin_bohnen','person.samantha_henkelman','person.emma_bohnen','person.logan_veen'];
-                    var n = ppl.filter(function(e){ return states[e] && states[e].state === 'home'; }).length;
-                    return `<span style="display:flex;align-items:baseline;gap:1.2vh">
-                      <span style="font-size:1.9vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.45)">PERSONEN</span>
-                      <span style="font-size:1.7vh;font-weight:600;padding:0.3vh 1.2vh;border-radius:999px;color:#4ade80;background:rgba(52,168,120,0.15)">${n} thuis</span></span>`;
-                  ]]]
-                mensen: |
-                  [[[
-                    var mensen = [
-                      ['person.robin_bohnen','sensor.iphone_van_robin_battery_level','sensor.robin_reistijd_naar_huis'],
-                      ['person.samantha_henkelman','sensor.iphone_van_samantha_battery_level','sensor.samantha_reistijd_naar_huis'],
-                      ['person.emma_bohnen','sensor.iphone_van_emma_battery_level','sensor.emma_reistijd_naar_huis'],
-                      ['person.logan_veen','sensor.iphone_battery_level','sensor.logan_reistijd_naar_huis']
-                    ];
-                    var cellen = mensen.map(function(m){
-                      var p = states[m[0]];
-                      if(!p) return '';
-                      var naam = p.attributes.friendly_name ? p.attributes.friendly_name.split(' ')[0] : '?';
-                      var thuis = p.state === 'home';
-                      var st = thuis ? 'thuis' : 'afwezig';
-                      var stKleur = 'rgba(255,255,255,0.5)';
-                      if(!thuis){
-                        var r = states[m[2]];
-                        if(r && !isNaN(Number(r.state)) && Number(r.state) > 0){
-                          st = Math.round(Number(r.state)) + ' min';
-                          stKleur = '#38bdf8';
-                        }
-                      }
-                      var b = states[m[1]];
-                      var acc = b && !isNaN(Number(b.state)) ? Math.round(Number(b.state)) : null;
-                      var accKleur = acc === null ? 'rgba(255,255,255,0.3)' : (acc <= 10 ? '#ef4444' : (acc <= 20 ? '#f59e0b' : 'rgba(255,255,255,0.75)'));
-                      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5vh">
-                        <div style="width:5.2vh;height:5.2vh;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2.4vh;font-weight:600;
-                             background:${thuis ? 'rgba(52,168,120,0.16)' : 'rgba(255,255,255,0.06)'};color:${thuis ? '#4ade80' : 'rgba(255,255,255,0.55)'}">${naam.charAt(0)}</div>
-                        <span style="font-size:1.9vh;font-weight:600;color:white">${naam}</span>
-                        <span style="font-size:1.6vh;color:${stKleur}">${st}</span>
-                        <span style="font-size:1.6vh;font-weight:600;color:${accKleur}">${acc === null ? '—' : acc + '%'}</span></div>`;
-                    });
-                    return `<div style="display:flex;gap:1vh">${cellen.join('')}</div>`;
-                  ]]]
+                    var b = states[m[1]];
+                    var acc = b && !isNaN(Number(b.state)) ? Math.round(Number(b.state)) : null;
+                    var accKleur = acc === null ? 'rgba(255,255,255,0.3)' : (acc <= 10 ? '#ef4444' : (acc <= 20 ? '#f59e0b' : 'rgba(255,255,255,0.75)'));
+                    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5vh">
+                      <div style="width:6.4vh;height:6.4vh;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2.9vh;font-weight:600;
+                           background:${thuis ? 'rgba(52,168,120,0.16)' : 'rgba(255,255,255,0.06)'};color:${thuis ? '#4ade80' : 'rgba(255,255,255,0.55)'}">${naam.charAt(0)}</div>
+                      <span style="font-size:1.9vh;font-weight:600;color:white">${naam}</span>
+                      <span style="font-size:1.6vh;color:${stKleur}">${st}</span>
+                      <span style="font-size:1.6vh;font-weight:600;color:${accKleur}">${acc === null ? '—' : acc + '%'}</span></div>`;
+                  });
+                  return `<div style="display:flex;gap:1vh">${cellen.join('')}</div>`;
+                ]]]
