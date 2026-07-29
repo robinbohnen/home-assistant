@@ -79,7 +79,9 @@ cards:
                 if(raw !== null && Math.abs(raw) < 0.005) raw = 0;
                 var v = raw !== null ? raw.toFixed(2).replace('.',',') : '—';
                 var u = e ? (e.attributes.unit_of_measurement || 'kW') : 'kW';
-                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:38px;font-weight:700;color:white;line-height:1">${v}</span> <span style="font-size:15px;color:rgba(255,255,255,0.60)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">netto verbruik</div></div>`;
+                // Negatief netto = teruglevering aan het net; groen, gelijk aan productie.
+                var netKleur = (raw !== null && raw < 0) ? '#4ade80' : 'white';
+                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:38px;font-weight:700;color:${netKleur};line-height:1">${v}</span> <span style="font-size:15px;color:rgba(255,255,255,0.60)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">netto verbruik</div></div>`;
               ]]]
             prod: |
               [[[
@@ -98,7 +100,8 @@ cards:
                 var e = states['sensor.electricity_meter_energieverbruik'];
                 var v = e && !isNaN(Number(e.state)) ? Number(e.state).toFixed(2).replace('.',',') : '—';
                 var u = e ? (e.attributes.unit_of_measurement || 'kW') : 'kW';
-                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:white;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.60)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">verbruik</div></div>`;
+                // #3b82f6 = dezelfde kleur als de verbruikslijn in de grafiek eronder
+                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:#3b82f6;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.60)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">verbruik</div></div>`;
               ]]]
             batt: |
               [[[

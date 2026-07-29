@@ -87,7 +87,10 @@ cards:
               - light.eettafel_lampen
               - light.entree_lampen
               - light.trapkast_lampen
-            temp: sensor.woonkamer_temperatuur
+            temp:
+              - sensor.woonkamer_temperatuur
+              - sensor.woonkamer_kamertemperatuur
+              - climate.airco_woonkamer
         - type: custom:button-card
           template: ov_room
           name: Eerste verdieping
@@ -101,7 +104,10 @@ cards:
               - light.slaapkamer_maxi_lampen
               - light.kantoor_lampen
               - light.overloop_lampen
-            temp: sensor.slaapkamer_temperatuur_temperature
+            temp:
+              - sensor.slaapkamer_temperatuur_temperature
+              - sensor.badkamer_temperatuur_temperature
+              - sensor.kantoor_temperatuur_temperature
         - type: custom:button-card
           template: ov_room
           name: Tweede verdieping
@@ -112,7 +118,9 @@ cards:
             lights:
               - light.overloop_zolder_lampen
               - light.slaapkamer_mini_lampen
-            temp: sensor.slaapkamer_mini_temperatuur_temperature
+            temp:
+              - sensor.slaapkamer_mini_temperatuur_temperature
+              - climate.airco_zolder
         - type: custom:button-card
           template: ov_room
           name: Garage / speelkamer
@@ -123,7 +131,9 @@ cards:
             lights:
               - light.garage_lampen
               - light.speelkamer_lampen
-            temp: sensor.speelkamer_temperatuur_temperature
+            temp:
+              - sensor.speelkamer_temperatuur_temperature
+              - sensor.garage_temperatuur_temperature
         - type: custom:button-card
           template: ov_room
           name: Buiten
@@ -465,13 +475,20 @@ cards:
                     if(pauze) act = sp.find(function(e){ return states[e] && states[e].state === 'paused'; });
                     if(!act) return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px;font-weight:600;color:white">Niets speelt</span><span style="font-size:12.5px;color:rgba(255,255,255,0.55)">tik voor multiroom</span></div>`;
                     var s = states[act];
-                    var titel = s.attributes.media_title || 'Speelt';
+                    // Radiostreams sturen tijdens de reclame technische markers mee
+                    // ("commercial-in"), en soms een URL. Dan liever de zendernaam.
+                    var titel = (s.attributes.media_title || '').trim();
+                    var zender = (s.attributes.media_channel || s.attributes.app_name || s.attributes.source || '').trim();
+                    var reclame = /^(commercial|advert(isement)?|adbreak|ad)[-_ ]?(in|out|start|end|break)?$/i.test(titel);
+                    var onbruikbaar = !titel || reclame || /^https?:\/\//i.test(titel) || titel.toLowerCase() === 'unknown';
+                    if(onbruikbaar) titel = zender || 'Radio';
                     var naam = s.attributes.friendly_name ? s.attributes.friendly_name.replace(/ ?Sonos/i,'').trim() : '';
                     var grp = s.attributes.group_members ? s.attributes.group_members.length : 1;
                     var extra = grp > 1 ? `<span style="color:#3b82f6;font-weight:600"> +${grp-1}</span>` : '';
-                    var artiest = s.attributes.media_artist || s.attributes.media_album_name || '';
+                    var artiest = onbruikbaar ? '' : (s.attributes.media_artist || s.attributes.media_album_name || '');
                     var kleur = pauze ? 'rgba(255,255,255,0.4)' : '#4ade80';
                     var staat = pauze ? '<span style="color:rgba(255,255,255,0.52)">gepauzeerd</span> <span style="color:rgba(255,255,255,0.25)">·</span> ' : '';
+                    if(!pauze && reclame) staat = '<span style="color:rgba(255,255,255,0.52)">reclame</span> <span style="color:rgba(255,255,255,0.25)">·</span> ';
                     var sub = staat + `<ha-icon icon="mdi:speaker" style="--mdc-icon-size:13px;color:${kleur};vertical-align:-2px"></ha-icon> ${naam}${extra}` + (artiest ? ` <span style="color:rgba(255,255,255,0.25)">·</span> ${artiest}` : '');
                     return `<div style="display:flex;flex-direction:column;gap:2px;overflow:hidden"><span style="font-size:14.5px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${titel}</span><span style="font-size:12.5px;color:rgba(255,255,255,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</span></div>`;
                   ]]]

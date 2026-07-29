@@ -105,9 +105,20 @@ ov_room:
         var lamp = on === 0
           ? `<span style="color:rgba(255,255,255,0.60)">alles uit</span>`
           : `<span style="color:rgba(255,255,255,0.72)">${on} ${on===1?'lamp':'lampen'} aan</span>`;
-        var t = states[variables.temp];
-        if(!t || isNaN(Number(t.state))) return lamp;
-        var g = Number(t.state);
+        // temp mag één entiteit zijn of een lijstje; de eerste met een bruikbaar
+        // getal wint. Klimaatentiteiten leveren hem via current_temperature.
+        var bronnen = variables.temp;
+        if(typeof bronnen === 'string') bronnen = [bronnen];
+        var g = null;
+        (bronnen || []).some(function(id){
+          var e = states[id];
+          if(!e) return false;
+          if(!isNaN(Number(e.state))) { g = Number(e.state); return true; }
+          var a = e.attributes ? e.attributes.current_temperature : null;
+          if(a != null && !isNaN(Number(a))) { g = Number(a); return true; }
+          return false;
+        });
+        if(g === null) return lamp;
         // Alleen kleuren bij uitschieters; anders blijft het rustig.
         var kleur = g < 17 ? '#38bdf8' : (g > 25 ? '#f59e0b' : 'rgba(255,255,255,0.85)');
         var graden = `<span style="color:${kleur};font-weight:600">${g.toFixed(1).replace('.',',')}°</span>`;
