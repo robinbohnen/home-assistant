@@ -53,6 +53,12 @@ cards:
               # 'unknown' erbij? Vaak ruis van entiteiten die nog nooit een waarde
               # hadden, daarom standaard uit.
               ook_unknown: false
+              # Alleen deze integraties krijgen een uitgeklapte lijst; de rest
+              # verschijnt onderaan als telling, zodat niets stilletjes wegvalt.
+              focus:
+                - mqtt
+                - group
+              max_per_groep: 25
             styles:
               card:
                 - background: var(--ov-panel-bg)
@@ -111,6 +117,9 @@ cards:
                   });
                   var namen = Object.keys(groepen);
                   if(!namen.length) return `<span style="font-size:14px;color:#4ade80">Alles bereikbaar.</span>`;
+                  var focus = variables.focus || [];
+                  var uitgeklapt = namen.filter(function(g){ return focus.indexOf(g) !== -1; });
+                  var rest = namen.filter(function(g){ return focus.indexOf(g) === -1; });
                   var duurTxt = function(ms){
                     if(ms === null) return 'onbekend';
                     var m = Math.floor(ms / 60000);
@@ -129,8 +138,9 @@ cards:
                   };
                   // langst kapot bovenaan, zowel de groepen als daarbinnen
                   namen.forEach(function(g){ groepen[g].sort(function(a,b){ return (b.duur||0) - (a.duur||0); }); });
-                  namen.sort(function(a,b){ return (groepen[b][0].duur||0) - (groepen[a][0].duur||0); });
-                  var blokken = namen.map(function(g){
+                  uitgeklapt.sort(function(a,b){ return (groepen[b][0].duur||0) - (groepen[a][0].duur||0); });
+                  rest.sort(function(a,b){ return groepen[b].length - groepen[a].length; });
+                  var blokken = uitgeklapt.map(function(g){
                     var limiet = variables.max_per_groep || 25;
                     var teveel = Math.max(0, groepen[g].length - limiet);
                     var rijen = groepen[g].slice(0, limiet).map(function(x){
