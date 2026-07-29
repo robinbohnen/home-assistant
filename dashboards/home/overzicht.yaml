@@ -512,6 +512,60 @@ cards:
                             var buiten = temp === null ? '' : ` · buiten ${temp}°`;
                             return `<span style="font-size:12.5px;color:rgba(255,255,255,0.45)">tik om te starten${buiten}</span>`;
                           ]]]
+              # VEELGEBRUIKERS
+              - type: custom:mod-card
+                card_mod:
+                  style: *panel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: ov_title
+                      variables:
+                        title: VEELGEBRUIKERS
+                    - type: custom:auto-entities
+                      show_empty: false
+                      card:
+                        type: vertical-stack
+                      card_param: cards
+                      filter:
+                        include:
+                          - domain: sensor
+                            name: "*Vermogen*"
+                            options:
+                              type: custom:button-card
+                              template: ov_bar
+                              variables:
+                                max: 2500
+                              name: "[[[ return entity.attributes.friendly_name.replace(/ ?vermogen/i, '').trim(); ]]]"
+                              tap_action:
+                                action: more-info
+                              # smallere kolom: naam/waarde krimpen zodat de balk ruimte houdt
+                              styles:
+                                grid:
+                                  - grid-template-columns: 112px 1fr 62px
+                                  - column-gap: 10px
+                                card:
+                                  - padding: 7px 2px
+                                name:
+                                  - font-size: 13px
+                        exclude:
+                          - name: Inverter*
+                          - name: "*Zonnepanel*"
+                          - name: "*zonneplan*"
+                          - name: "*SlimHuys*"
+                          - name: "*GoodWe*"
+                          - name: "*mvormer*"
+                          - state: "off"
+                          - state: unavailable
+                          - state: unknown
+                          - state: "0"
+                          - hidden_by: user
+                      sort:
+                        method: state
+                        numeric: true
+                        reverse: true
+                        count: 4
 
           # ----------- CENTER COLUMN -----------
           - type: vertical-stack
@@ -774,9 +828,10 @@ cards:
                       stacked: true
                       span:
                         start: day
+                      # Alleen de stippellijn: een `label` rendert een ongestyled
+                      # wit annotatieblok bovenin de grafiek.
                       now:
                         show: true
-                        label: nu
                         color: rgba(255,255,255,0.75)
                       card_mod:
                         style: |
@@ -785,7 +840,7 @@ cards:
                         show: false
                       apex_config:
                         chart:
-                          height: 195
+                          height: 150
                           toolbar:
                             show: false
                         grid:
@@ -796,19 +851,7 @@ cards:
                             top: -8
                             bottom: 0
                         legend:
-                          show: true
-                          position: bottom
-                          horizontalAlign: left
-                          fontSize: "11px"
-                          offsetY: 2
-                          itemMargin:
-                            horizontal: 8
-                          labels:
-                            colors: "rgba(255,255,255,0.45)"
-                          markers:
-                            width: 8
-                            height: 8
-                            radius: 4
+                          show: false
                         yaxis:
                           show: true
                           tickAmount: 3
@@ -958,7 +1001,7 @@ cards:
                               const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
                               return [ts, band === BAND ? p : null];
                             });
-                    # samenvatting laagste / hoogste per dag
+                    # samenvatting laagste / hoogste per dag + kleurlegenda (één regel)
                     - type: custom:button-card
                       tap_action:
                         action: navigate
@@ -968,101 +1011,49 @@ cards:
                           - background: none
                           - border: none
                           - box-shadow: none
-                          - padding: 4px 2px 0 2px
+                          - padding: 6px 2px 0 2px
                         grid:
-                          - grid-template-areas: '"vandaag morgen"'
-                          - grid-template-columns: 1fr 1fr
+                          - grid-template-areas: '"dagen key"'
+                          - grid-template-columns: 1fr auto
+                          - align-items: center
                           - column-gap: 12px
                         custom_fields:
-                          vandaag:
+                          dagen:
                             - justify-self: start
-                          morgen:
-                            - justify-self: start
+                          key:
+                            - justify-self: end
                       custom_fields:
-                        vandaag: |
+                        dagen: |
                           [[[
                             var t = states['sensor.zonneplan_current_electricity_tariff'];
                             var raw = (t && t.attributes && t.attributes.forecast) || [];
                             var norm = function(v){ if(v === null || v === undefined || isNaN(Number(v))) return null; var n = Number(v); if(Math.abs(n) > 100) n = n / 10000000; return n; };
-                            var d0 = new Date().toDateString();
-                            var lo = null, hi = null;
-                            raw.forEach(function(e){
-                              var d = new Date(e.datetime || e.date || e.time || e.start);
-                              if(isNaN(d.getTime()) || d.toDateString() !== d0) return;
-                              var p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
-                              if(p === null) return;
-                              if(lo === null || p < lo.p) lo = {p: p, d: d};
-                              if(hi === null || p > hi.p) hi = {p: p, d: d};
-                            });
-                            if(lo === null) return `<span style="font-size:12.5px;color:rgba(255,255,255,0.35)">vandaag · geen prijzen</span>`;
-                            var f = function(x){ return '€ ' + x.p.toFixed(3).replace('.',',') + ' om ' + ('0'+x.d.getHours()).slice(-2) + ':00'; };
-                            return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12px;color:rgba(255,255,255,0.42)">vandaag</span><span style="font-size:12.5px;color:#4ade80">${f(lo)}</span><span style="font-size:12.5px;color:#ef4444">${f(hi)}</span></div>`;
+                            var extremen = function(offset){
+                              var ref = new Date(); ref.setDate(ref.getDate() + offset);
+                              var key = ref.toDateString();
+                              var lo = null, hi = null;
+                              raw.forEach(function(e){
+                                var d = new Date(e.datetime || e.date || e.time || e.start);
+                                if(isNaN(d.getTime()) || d.toDateString() !== key) return;
+                                var p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
+                                if(p === null) return;
+                                if(lo === null || p < lo.p) lo = {p: p, d: d};
+                                if(hi === null || p > hi.p) hi = {p: p, d: d};
+                              });
+                              return lo === null ? null : {lo: lo, hi: hi};
+                            };
+                            var f = function(x, col){ return `<span style="color:${col}">€ ${x.p.toFixed(3).replace('.',',')}</span><span style="color:rgba(255,255,255,0.35)"> ${('0'+x.d.getHours()).slice(-2)}:00</span>`; };
+                            var deel = function(lbl, x){
+                              if(!x) return `<span style="color:rgba(255,255,255,0.42)">${lbl}</span> <span style="color:rgba(255,255,255,0.3)">nog niet bekend</span>`;
+                              return `<span style="color:rgba(255,255,255,0.42)">${lbl}</span> ${f(x.lo,'#4ade80')} <span style="color:rgba(255,255,255,0.2)">·</span> ${f(x.hi,'#ef4444')}`;
+                            };
+                            return `<span style="display:flex;align-items:center;gap:14px;font-size:12px;white-space:nowrap">${deel('vandaag', extremen(0))}${deel('morgen', extremen(1))}</span>`;
                           ]]]
-                        morgen: |
+                        key: |
                           [[[
-                            var t = states['sensor.zonneplan_current_electricity_tariff'];
-                            var raw = (t && t.attributes && t.attributes.forecast) || [];
-                            var norm = function(v){ if(v === null || v === undefined || isNaN(Number(v))) return null; var n = Number(v); if(Math.abs(n) > 100) n = n / 10000000; return n; };
-                            var tm = new Date(); tm.setDate(tm.getDate() + 1);
-                            var d1 = tm.toDateString();
-                            var lo = null, hi = null;
-                            raw.forEach(function(e){
-                              var d = new Date(e.datetime || e.date || e.time || e.start);
-                              if(isNaN(d.getTime()) || d.toDateString() !== d1) return;
-                              var p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
-                              if(p === null) return;
-                              if(lo === null || p < lo.p) lo = {p: p, d: d};
-                              if(hi === null || p > hi.p) hi = {p: p, d: d};
-                            });
-                            if(lo === null) return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12px;color:rgba(255,255,255,0.42)">morgen</span><span style="font-size:12.5px;color:rgba(255,255,255,0.35)">nog niet bekend</span></div>`;
-                            var f = function(x){ return '€ ' + x.p.toFixed(3).replace('.',',') + ' om ' + ('0'+x.d.getHours()).slice(-2) + ':00'; };
-                            return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:12px;color:rgba(255,255,255,0.42)">morgen</span><span style="font-size:12.5px;color:#4ade80">${f(lo)}</span><span style="font-size:12.5px;color:#ef4444">${f(hi)}</span></div>`;
+                            var dot = function(c, lbl){ return `<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${lbl}</span>`; };
+                            return `<span style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:rgba(255,255,255,0.4)">${dot('#4ade80','goedkoop')}${dot('#f59e0b','gemiddeld')}${dot('#ef4444','duur')}</span>`;
                           ]]]
-              # VEELGEBRUIKERS
-              - type: custom:mod-card
-                card_mod:
-                  style: *panel
-                card:
-                  type: vertical-stack
-                  cards:
-                    - type: custom:button-card
-                      template: ov_title
-                      variables:
-                        title: VEELGEBRUIKERS
-                    - type: custom:auto-entities
-                      show_empty: false
-                      card:
-                        type: vertical-stack
-                      card_param: cards
-                      filter:
-                        include:
-                          - domain: sensor
-                            name: "*Vermogen*"
-                            options:
-                              type: custom:button-card
-                              template: ov_bar
-                              variables:
-                                max: 2500
-                              name: "[[[ return entity.attributes.friendly_name.replace(/ ?vermogen/i, '').trim(); ]]]"
-                              tap_action:
-                                action: more-info
-                        exclude:
-                          - name: Inverter*
-                          - name: "*Zonnepanel*"
-                          - name: "*zonneplan*"
-                          - name: "*SlimHuys*"
-                          - name: "*GoodWe*"
-                          - name: "*mvormer*"
-                          - state: "off"
-                          - state: unavailable
-                          - state: unknown
-                          - state: "0"
-                          - hidden_by: user
-                      sort:
-                        method: state
-                        numeric: true
-                        reverse: true
-                        count: 5
               # MEDIA
               - type: custom:mod-card
                 card_mod:
