@@ -1,0 +1,251 @@
+# Onderhoudsweergave: wat is er stuk of bijna leeg.
+#
+# De integratie per entiteit staat niet in `states` maar in het entiteitenregister
+# (`hass.entities[...].platform`). Is dat register er niet, dan valt de groepering
+# terug op het domein van de entiteit.
+#
+# Beide kaarten lezen alle entiteiten. Omdat button-card elke uitgelezen entiteit
+# gaat volgen, zou dat bij elke statuswijziging in huis opnieuw renderen; daarom
+# staat er een update_timer op. Die begrenst het tot één render per interval.
+title: Systeem
+path: systeem
+icon: mdi:heart-pulse
+panel: true
+background: "#0b0d12"
+cards:
+  - type: vertical-stack
+    card_mod:
+      style: |
+        :host { height: 100% !important; }
+        #root {
+          --ov-panel-bg: rgba(22,24,31,0.72);
+          --ov-panel-border: 1px solid rgba(255,255,255,0.06);
+          gap: 16px !important;
+          min-height: calc(100vh - 8px) !important;
+          margin: 0 !important;
+          padding: 20px 24px 24px 24px !important;
+          background: #0b0d12 !important;
+          box-sizing: border-box !important;
+        }
+    cards:
+      - type: horizontal-stack
+        card_mod:
+          style: |
+            #root {
+              display: grid !important;
+              grid-template-columns: 1fr 1fr !important;
+              gap: 16px !important;
+              align-items: start !important;
+            }
+            @media (max-width: 1000px) {
+              #root { grid-template-columns: 1fr !important; }
+            }
+        cards:
+          # =============== ONBESCHIKBARE ENTITEITEN ===============
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            show_state: false
+            update_timer: 30s
+            tap_action:
+              action: none
+            variables:
+              # 'unknown' erbij? Vaak ruis van entiteiten die nog nooit een waarde
+              # hadden, daarom standaard uit.
+              ook_unknown: false
+            styles:
+              card:
+                - background: var(--ov-panel-bg)
+                - border: var(--ov-panel-border)
+                - border-radius: 20px
+                - box-shadow: none
+                - padding: 16px 18px
+              grid:
+                - grid-template-areas: '"t" "lijst"'
+                - row-gap: 12px
+              custom_fields:
+                t:
+                  - justify-self: stretch
+                lijst:
+                  - justify-self: stretch
+            custom_fields:
+              t: |
+                [[[
+                  var mee = function(s){ return s.state === 'unavailable' || (variables.ook_unknown && s.state === 'unknown'); };
+                  var reg = (hass && hass.entities) ? hass.entities : null;
+                  var n = Object.keys(states).filter(function(id){
+                    var s = states[id];
+                    if(!s || !mee(s)) return false;
+                    var e = reg ? reg[id] : null;
+                    return !(e && (e.hidden || e.hidden_by));   // zelfde filter als de lijst
+                  }).length;
+                  var kleur = n === 0 ? '#4ade80' : (n > 10 ? '#ef4444' : '#f59e0b');
+                  return `<span style="display:flex;align-items:baseline;gap:12px;width:100%">
+                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:rgba(255,255,255,0.55)">ONBESCHIKBAAR</span>
+                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:rgba(255,255,255,0.06)">${n}</span></span>`;
+                ]]]
+              lijst: |
+                [[[
+                  var nu = Date.now();
+                  var reg = (hass && hass.entities) ? hass.entities : null;
+                  var gebieden = (hass && hass.areas) ? hass.areas : null;
+                  var mee = function(s){ return s.state === 'unavailable' || (variables.ook_unknown && s.state === 'unknown'); };
+                  var groepen = {};
+                  Object.keys(states).forEach(function(id){
+                    var s = states[id];
+                    if(!s || !mee(s)) return;
+                    var e = reg ? reg[id] : null;
+                    if(e && (e.hidden || e.hidden_by)) return;
+                    var integratie = (e && e.platform) ? e.platform : id.split('.')[0];
+                    var sinds = s.last_changed ? new Date(s.last_changed).getTime() : null;
+                    var gebied = null;
+                    if(e && e.area_id && gebieden && gebieden[e.area_id]) gebied = gebieden[e.area_id].name;
+                    if(!groepen[integratie]) groepen[integratie] = [];
+                    groepen[integratie].push({
+                      naam: (s.attributes && s.attributes.friendly_name) || id,
+                      gebied: gebied,
+                      duur: sinds === null ? null : nu - sinds,
+                      onbekend: s.state === 'unknown'
+                    });
+                  });
+                  var namen = Object.keys(groepen);
+                  if(!namen.length) return `<span style="font-size:14px;color:#4ade80">Alles bereikbaar.</span>`;
+                  var duurTxt = function(ms){
+                    if(ms === null) return 'onbekend';
+                    var m = Math.floor(ms / 60000);
+                    if(m < 1) return 'net';
+                    if(m < 60) return m + ' min';
+                    var u = Math.floor(m / 60);
+                    if(u < 48) return u + ' uur';
+                    var d = Math.floor(u / 24);
+                    return d + ' ' + (d === 1 ? 'dag' : 'dagen');
+                  };
+                  var duurKleur = function(ms){
+                    if(ms === null) return 'rgba(255,255,255,0.4)';
+                    if(ms > 7 * 86400000) return '#ef4444';
+                    if(ms > 86400000) return '#f59e0b';
+                    return 'rgba(255,255,255,0.6)';
+                  };
+                  // langst kapot bovenaan, zowel de groepen als daarbinnen
+                  namen.forEach(function(g){ groepen[g].sort(function(a,b){ return (b.duur||0) - (a.duur||0); }); });
+                  namen.sort(function(a,b){ return (groepen[b][0].duur||0) - (groepen[a][0].duur||0); });
+                  var blokken = namen.map(function(g){
+                    var rijen = groepen[g].map(function(x){
+                      var plek = x.gebied ? `<span style="color:rgba(255,255,255,0.35)"> · ${x.gebied}</span>` : '';
+                      var vlag = x.onbekend ? `<span style="font-size:10px;color:rgba(255,255,255,0.35)"> unknown</span>` : '';
+                      return `<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.04)">
+                        <span style="flex:1;font-size:13.5px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}${vlag}</span>
+                        <span style="font-size:13px;font-weight:600;white-space:nowrap;color:${duurKleur(x.duur)}">${duurTxt(x.duur)}</span></div>`;
+                    }).join('');
+                    return `<div style="margin-bottom:12px">
+                      <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:2px">
+                        <span style="font-size:12.5px;font-weight:700;color:#38bdf8">${g}</span>
+                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${groepen[g].length}</span></div>
+                      ${rijen}</div>`;
+                  }).join('');
+                  var waarschuwing = reg ? '' : `<div style="font-size:11.5px;color:#f59e0b;padding-bottom:8px">Entiteitenregister niet beschikbaar — gegroepeerd op domein in plaats van integratie.</div>`;
+                  return `<div style="max-height:calc(100vh - 190px);overflow-y:auto">${waarschuwing}${blokken}</div>`;
+                ]]]
+
+          # =============== BIJNA LEGE BATTERIJEN ===============
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            show_state: false
+            update_timer: 30s
+            tap_action:
+              action: none
+            variables:
+              drempel: 25
+            styles:
+              card:
+                - background: var(--ov-panel-bg)
+                - border: var(--ov-panel-border)
+                - border-radius: 20px
+                - box-shadow: none
+                - padding: 16px 18px
+              grid:
+                - grid-template-areas: '"t" "lijst"'
+                - row-gap: 12px
+              custom_fields:
+                t:
+                  - justify-self: stretch
+                lijst:
+                  - justify-self: stretch
+            custom_fields:
+              t: |
+                [[[
+                  var d = variables.drempel;
+                  var reg = (hass && hass.entities) ? hass.entities : null;
+                  var n = Object.keys(states).filter(function(id){
+                    var s = states[id];
+                    if(!s || !s.attributes || s.attributes.device_class !== 'battery') return false;
+                    var e = reg ? reg[id] : null;
+                    if(e && (e.hidden || e.hidden_by)) return false;
+                    if(id.lastIndexOf('binary_sensor.', 0) === 0) return s.state === 'on';
+                    var v = Number(s.state);
+                    return !isNaN(v) && v <= d;
+                  }).length;
+                  var kleur = n === 0 ? '#4ade80' : (n > 5 ? '#ef4444' : '#f59e0b');
+                  return `<span style="display:flex;align-items:baseline;gap:12px;width:100%">
+                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:rgba(255,255,255,0.55)">BATTERIJEN</span>
+                    <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">onder ${d}%</span>
+                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:rgba(255,255,255,0.06)">${n}</span></span>`;
+                ]]]
+              lijst: |
+                [[[
+                  var drempel = variables.drempel;
+                  var reg = (hass && hass.entities) ? hass.entities : null;
+                  var gebieden = (hass && hass.areas) ? hass.areas : null;
+                  var groepen = {};
+                  Object.keys(states).forEach(function(id){
+                    var s = states[id];
+                    if(!s || !s.attributes || s.attributes.device_class !== 'battery') return;
+                    var niveau = null, binair = false;
+                    if(id.lastIndexOf('binary_sensor.', 0) === 0){
+                      if(s.state !== 'on') return;   // 'on' = batterij laag
+                      binair = true;
+                    } else {
+                      var v = Number(s.state);
+                      if(isNaN(v) || v > drempel) return;
+                      niveau = v;
+                    }
+                    var e = reg ? reg[id] : null;
+                    if(e && (e.hidden || e.hidden_by)) return;
+                    var integratie = (e && e.platform) ? e.platform : id.split('.')[0];
+                    var gebied = null;
+                    if(e && e.area_id && gebieden && gebieden[e.area_id]) gebied = gebieden[e.area_id].name;
+                    if(!groepen[integratie]) groepen[integratie] = [];
+                    groepen[integratie].push({
+                      naam: (s.attributes.friendly_name || id).replace(/ ?batter[iy][j]?[ -]?(level|niveau)?/i, '').trim() || id,
+                      gebied: gebied, niveau: niveau, binair: binair
+                    });
+                  });
+                  var namen = Object.keys(groepen);
+                  if(!namen.length) return `<span style="font-size:14px;color:#4ade80">Geen bijna lege batterijen.</span>`;
+                  var kleurVan = function(x){
+                    if(x.binair) return '#ef4444';
+                    return x.niveau <= 10 ? '#ef4444' : (x.niveau <= 20 ? '#f59e0b' : 'rgba(255,255,255,0.7)');
+                  };
+                  var sleutel = function(x){ return x.binair ? -1 : x.niveau; };   // leegste eerst
+                  namen.forEach(function(g){ groepen[g].sort(function(a,b){ return sleutel(a) - sleutel(b); }); });
+                  namen.sort(function(a,b){ return sleutel(groepen[a][0]) - sleutel(groepen[b][0]); });
+                  var blokken = namen.map(function(g){
+                    var rijen = groepen[g].map(function(x){
+                      var plek = x.gebied ? `<span style="color:rgba(255,255,255,0.35)"> · ${x.gebied}</span>` : '';
+                      var pct = x.binair ? 100 : Math.max(2, x.niveau);
+                      var waarde = x.binair ? 'laag' : x.niveau + '%';
+                      return `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.04)">
+                        <span style="flex:1;font-size:13.5px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
+                        <span style="width:56px;height:6px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden;flex:0 0 auto">
+                          <span style="display:block;width:${pct}%;height:100%;background:${kleurVan(x)}"></span></span>
+                        <span style="width:44px;text-align:right;font-size:13px;font-weight:600;color:${kleurVan(x)}">${waarde}</span></div>`;
+                    }).join('');
+                    return `<div style="margin-bottom:12px">
+                      <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:2px">
+                        <span style="font-size:12.5px;font-weight:700;color:#38bdf8">${g}</span>
+                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${groepen[g].length}</span></div>
+                      ${rijen}</div>`;
+                  }).join('');
+                  return `<div style="max-height:calc(100vh - 190px);overflow-y:auto">${blokken}</div>`;
+                ]]]
