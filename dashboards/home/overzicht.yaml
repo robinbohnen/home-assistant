@@ -577,67 +577,150 @@ cards:
                         navigation_path: "#ov-media"
                       variables:
                         title: MEDIA
-                    - type: custom:button-card
-                      show_icon: false
-                      show_name: false
-                      show_state: false
-                      tap_action:
-                        action: navigate
-                        navigation_path: "#ov-media"
-                      styles:
-                        card:
-                          - background: none
-                          - border: none
-                          - box-shadow: none
-                          - padding: 6px 2px 2px 2px
-                        grid:
-                          - grid-template-areas: '"art info ctl"'
-                          - grid-template-columns: 52px 1fr auto
-                          - align-items: center
-                          - column-gap: 14px
-                        custom_fields:
-                          art:
-                            - grid-area: art
-                          info:
-                            - grid-area: info
-                            - justify-self: start
-                            - overflow: hidden
-                          ctl:
-                            - grid-area: ctl
-                            - justify-self: end
-                      custom_fields:
-                        art: |
-                          [[[
-                            var sonos = ['media_player.woonkamer_sonos','media_player.keuken_sonos','media_player.overkapping_sonos','media_player.speelkamer_sonos','media_player.kantoor_sonos','media_player.badkamer_sonos','media_player.entree_sonos','media_player.toilet_sonos','media_player.garage_sonos','media_player.slaapkamer_maxi_sonos','media_player.slaapkamer_mini_sonos'];
-                            var active = sonos.find(e => states[e] && states[e].state === 'playing');
-                            var s = active ? states[active] : null;
-                            var pic = s && s.attributes.entity_picture ? s.attributes.entity_picture : null;
-                            if(pic) return `<div style="width:52px;height:52px;border-radius:10px;background-image:url('${pic}');background-size:cover;background-position:center"></div>`;
-                            return `<div style="width:52px;height:52px;border-radius:10px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:music" style="--mdc-icon-size:24px;color:rgba(255,255,255,0.5)"></ha-icon></div>`;
-                          ]]]
-                        info: |
-                          [[[
-                            var sonos = ['media_player.woonkamer_sonos','media_player.keuken_sonos','media_player.overkapping_sonos','media_player.speelkamer_sonos','media_player.kantoor_sonos','media_player.badkamer_sonos','media_player.entree_sonos','media_player.toilet_sonos','media_player.garage_sonos','media_player.slaapkamer_maxi_sonos','media_player.slaapkamer_mini_sonos'];
-                            var active = sonos.find(e => states[e] && states[e].state === 'playing');
-                            if(!active) return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px;font-weight:600;color:white">Niets speelt</span><span style="font-size:12.5px;color:rgba(255,255,255,0.42)">tik voor multiroom</span></div>`;
-                            var s = states[active];
-                            var title = s.attributes.media_title || 'Speelt';
-                            var artist = s.attributes.media_artist || s.attributes.media_album_name || '';
-                            if(title.length > 34) title = title.slice(0,33) + '…';
-                            if(artist.length > 38) artist = artist.slice(0,37) + '…';
-                            return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</span><span style="font-size:12.5px;color:rgba(255,255,255,0.42);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${artist}</span></div>`;
-                          ]]]
-                        ctl: |
-                          [[[
-                            var sonos = ['media_player.woonkamer_sonos','media_player.keuken_sonos','media_player.overkapping_sonos','media_player.speelkamer_sonos','media_player.kantoor_sonos','media_player.badkamer_sonos','media_player.entree_sonos','media_player.toilet_sonos','media_player.garage_sonos','media_player.slaapkamer_maxi_sonos','media_player.slaapkamer_mini_sonos'];
-                            var active = sonos.find(e => states[e] && states[e].state === 'playing');
-                            if(!active) return `<ha-icon icon="mdi:speaker-off" style="--mdc-icon-size:20px;color:rgba(255,255,255,0.25)"></ha-icon>`;
-                            var s = states[active];
-                            var name = s.attributes.friendly_name ? s.attributes.friendly_name.replace(/ ?Sonos/i,'').trim() : '';
-                            var grp = s.attributes.group_members ? s.attributes.group_members.length : 1;
-                            var badge = grp > 1 ? ` <span style="color:#3b82f6;font-weight:600">+${grp-1}</span>` : '';
-                            return `<span style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:rgba(255,255,255,0.6)"><ha-icon icon="mdi:speaker" style="--mdc-icon-size:16px;color:#4ade80"></ha-icon>${name}${badge}</span>`;
-                          ]]]
+                    - type: horizontal-stack
+                      card_mod:
+                        style: |
+                          #root {
+                            display: grid !important;
+                            grid-template-columns: 1fr auto auto !important;
+                            align-items: center !important;
+                            gap: 8px !important;
+                          }
+                      cards:
+                        # Nu speelt (tik = multiroom-popup)
+                        - type: custom:button-card
+                          template: ov_sonos
+                          show_icon: false
+                          show_name: false
+                          show_state: false
+                          tap_action:
+                            action: navigate
+                            navigation_path: "#ov-media"
+                          styles:
+                            card:
+                              - background: none
+                              - border: none
+                              - box-shadow: none
+                              - padding: 6px 2px 2px 2px
+                            grid:
+                              - grid-template-areas: '"art info"'
+                              - grid-template-columns: 52px 1fr
+                              - align-items: center
+                              - column-gap: 14px
+                            custom_fields:
+                              art:
+                                - grid-area: art
+                              info:
+                                - grid-area: info
+                                - justify-self: start
+                                - overflow: hidden
+                          custom_fields:
+                            art: |
+                              [[[
+                                var sp = variables.speakers || [];
+                                var act = sp.find(function(e){ return states[e] && states[e].state === 'playing'; })
+                                       || sp.find(function(e){ return states[e] && states[e].state === 'paused'; });
+                                var s = act ? states[act] : null;
+                                var pic = s && s.attributes.entity_picture ? s.attributes.entity_picture : null;
+                                if(pic) return `<div style="width:52px;height:52px;border-radius:10px;background-image:url('${pic}');background-size:cover;background-position:center"></div>`;
+                                return `<div style="width:52px;height:52px;border-radius:10px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:music" style="--mdc-icon-size:24px;color:rgba(255,255,255,0.5)"></ha-icon></div>`;
+                              ]]]
+                            info: |
+                              [[[
+                                var sp = variables.speakers || [];
+                                var act = sp.find(function(e){ return states[e] && states[e].state === 'playing'; });
+                                var pauze = !act;
+                                if(pauze) act = sp.find(function(e){ return states[e] && states[e].state === 'paused'; });
+                                if(!act) return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px;font-weight:600;color:white">Niets speelt</span><span style="font-size:12.5px;color:rgba(255,255,255,0.42)">tik voor multiroom</span></div>`;
+                                var s = states[act];
+                                var titel = s.attributes.media_title || 'Speelt';
+                                if(titel.length > 26) titel = titel.slice(0,25) + '…';
+                                var naam = s.attributes.friendly_name ? s.attributes.friendly_name.replace(/ ?Sonos/i,'').trim() : '';
+                                var grp = s.attributes.group_members ? s.attributes.group_members.length : 1;
+                                var extra = grp > 1 ? `<span style="color:#3b82f6;font-weight:600"> +${grp-1}</span>` : '';
+                                var artiest = s.attributes.media_artist || s.attributes.media_album_name || '';
+                                if(artiest.length > 18) artiest = artiest.slice(0,17) + '…';
+                                var kleur = pauze ? 'rgba(255,255,255,0.4)' : '#4ade80';
+                                var staat = pauze ? '<span style="color:rgba(255,255,255,0.4)">gepauzeerd</span> <span style="color:rgba(255,255,255,0.25)">·</span> ' : '';
+                                var sub = staat + `<ha-icon icon="mdi:speaker" style="--mdc-icon-size:13px;color:${kleur};vertical-align:-2px"></ha-icon> ${naam}${extra}` + (artiest ? ` <span style="color:rgba(255,255,255,0.25)">·</span> ${artiest}` : '');
+                                return `<div style="display:flex;flex-direction:column;gap:2px;overflow:hidden"><span style="font-size:14.5px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${titel}</span><span style="font-size:12.5px;color:rgba(255,255,255,0.42);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</span></div>`;
+                              ]]]
+                        # Afspelen / pauzeren van de actieve speaker (Sonos pauzeert de hele groep)
+                        - type: custom:button-card
+                          template: ov_sonos
+                          show_icon: false
+                          show_name: false
+                          show_state: false
+                          tap_action:
+                            action: perform-action
+                            perform_action: media_player.media_play_pause
+                            target:
+                              entity_id: |
+                                [[[
+                                  var sp = variables.speakers || [];
+                                  return sp.find(function(e){ return states[e] && states[e].state === 'playing'; })
+                                      || sp.find(function(e){ return states[e] && states[e].state === 'paused'; })
+                                      || sp[0];
+                                ]]]
+                          styles:
+                            card:
+                              - background: rgba(255,255,255,0.05)
+                              - border: 1px solid rgba(255,255,255,0.08)
+                              - border-radius: 12px
+                              - box-shadow: none
+                              - padding: 0
+                              - width: 38px
+                              - height: 38px
+                            grid:
+                              - grid-template-areas: '"i"'
+                              - align-items: center
+                              - justify-items: center
+                          custom_fields:
+                            i: |
+                              [[[
+                                var sp = variables.speakers || [];
+                                var speelt = sp.some(function(e){ return states[e] && states[e].state === 'playing'; });
+                                var actief = speelt || sp.some(function(e){ return states[e] && states[e].state === 'paused'; });
+                                var col = actief ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.25)';
+                                return `<ha-icon icon="${speelt ? 'mdi:pause' : 'mdi:play'}" style="--mdc-icon-size:20px;color:${col}"></ha-icon>`;
+                              ]]]
+                        # Volgende nummer
+                        - type: custom:button-card
+                          template: ov_sonos
+                          show_icon: false
+                          show_name: false
+                          show_state: false
+                          tap_action:
+                            action: perform-action
+                            perform_action: media_player.media_next_track
+                            target:
+                              entity_id: |
+                                [[[
+                                  var sp = variables.speakers || [];
+                                  return sp.find(function(e){ return states[e] && states[e].state === 'playing'; })
+                                      || sp.find(function(e){ return states[e] && states[e].state === 'paused'; })
+                                      || sp[0];
+                                ]]]
+                          styles:
+                            card:
+                              - background: rgba(255,255,255,0.05)
+                              - border: 1px solid rgba(255,255,255,0.08)
+                              - border-radius: 12px
+                              - box-shadow: none
+                              - padding: 0
+                              - width: 38px
+                              - height: 38px
+                            grid:
+                              - grid-template-areas: '"i"'
+                              - align-items: center
+                              - justify-items: center
+                          custom_fields:
+                            i: |
+                              [[[
+                                var sp = variables.speakers || [];
+                                var actief = sp.some(function(e){ return states[e] && ['playing','paused'].indexOf(states[e].state) !== -1; });
+                                return `<ha-icon icon="mdi:skip-next" style="--mdc-icon-size:20px;color:${actief ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.25)'}"></ha-icon>`;
+                              ]]]
 
           # ----------- CENTER COLUMN -----------
           - type: vertical-stack
@@ -896,10 +979,14 @@ cards:
                             return `<span style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:rgba(255,255,255,0.55)"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span><span style="color:white;font-weight:600">nu ${nuTxt}</span>${tip}</span>`;
                           ]]]
                     - type: custom:apexcharts-card
-                      graph_span: 48h
+                      # Meeschuivend venster: 3 uur terug tot 27 uur vooruit. Een vast
+                      # etmaalvenster stond tot ~15:00 half leeg, omdat de prijzen van
+                      # morgen dan nog niet gepubliceerd zijn.
+                      graph_span: 30h
                       stacked: true
                       span:
-                        start: day
+                        start: hour
+                        offset: "-3h"
                       # Alleen de stippellijn: een `label` rendert een ongestyled
                       # wit annotatieblok bovenin de grafiek.
                       now:
@@ -1645,7 +1732,7 @@ cards:
                 entity: person.robin_bohnen
                 primary: Robin
                 secondary: >-
-                  {{ 'Thuis' if is_state('person.robin_bohnen','home') else 'Afwezig' }} · {{ states('sensor.iphone_van_robin_battery_level') }}%
+                  {{ 'Thuis' if is_state('person.robin_bohnen','home') else 'Afwezig' }}{{ (' · ' ~ states('sensor.iphone_van_robin_battery_level') ~ '%') if has_value('sensor.iphone_van_robin_battery_level') else '' }}
                 icon: mdi:account
                 icon_color: "{{ 'green' if is_state('person.robin_bohnen','home') else 'grey' }}"
                 tap_action:
@@ -1654,7 +1741,7 @@ cards:
                 entity: person.samantha_henkelman
                 primary: Samantha
                 secondary: >-
-                  {{ 'Thuis' if is_state('person.samantha_henkelman','home') else 'Afwezig' }} · {{ states('sensor.iphone_van_samantha_battery_level') }}%
+                  {{ 'Thuis' if is_state('person.samantha_henkelman','home') else 'Afwezig' }}{{ (' · ' ~ states('sensor.iphone_van_samantha_battery_level') ~ '%') if has_value('sensor.iphone_van_samantha_battery_level') else '' }}
                 icon: mdi:account
                 icon_color: "{{ 'green' if is_state('person.samantha_henkelman','home') else 'grey' }}"
                 tap_action:
@@ -1663,7 +1750,7 @@ cards:
                 entity: person.emma_bohnen
                 primary: Emma
                 secondary: >-
-                  {{ 'Thuis' if is_state('person.emma_bohnen','home') else 'Afwezig' }} · {{ states('sensor.iphone_van_emma_battery_level') }}%
+                  {{ 'Thuis' if is_state('person.emma_bohnen','home') else 'Afwezig' }}{{ (' · ' ~ states('sensor.iphone_van_emma_battery_level') ~ '%') if has_value('sensor.iphone_van_emma_battery_level') else '' }}
                 icon: mdi:account
                 icon_color: "{{ 'green' if is_state('person.emma_bohnen','home') else 'grey' }}"
                 tap_action:
@@ -1672,7 +1759,7 @@ cards:
                 entity: person.logan_veen
                 primary: Logan
                 secondary: >-
-                  {{ 'Thuis' if is_state('person.logan_veen','home') else 'Afwezig' }} · {{ states('sensor.iphone_battery_level') }}%
+                  {{ 'Thuis' if is_state('person.logan_veen','home') else 'Afwezig' }}{{ (' · ' ~ states('sensor.iphone_battery_level') ~ '%') if has_value('sensor.iphone_battery_level') else '' }}
                 icon: mdi:account
                 icon_color: "{{ 'green' if is_state('person.logan_veen','home') else 'grey' }}"
                 tap_action:
@@ -1722,50 +1809,53 @@ cards:
               - type: custom:mushroom-template-card
                 entity: sensor.solar_power_generated_today
                 primary: Opgewekt vandaag
-                secondary: "{{ states('sensor.solar_power_generated_today') }} kWh"
+                secondary: "{{ (states('sensor.solar_power_generated_today') ~ ' kWh') if has_value('sensor.solar_power_generated_today') else '—' }}"
                 icon: mdi:solar-power-variant
                 icon_color: amber
               - type: custom:mushroom-template-card
                 entity: sensor.forecast_solar_production_today
                 primary: Verwacht
-                secondary: "{{ states('sensor.forecast_solar_production_today') }} kWh"
+                secondary: "{{ (states('sensor.forecast_solar_production_today') ~ ' kWh') if has_value('sensor.forecast_solar_production_today') else '—' }}"
                 icon: mdi:weather-sunny
                 icon_color: amber
               - type: custom:mushroom-template-card
                 entity: sensor.zonneplan_electricity_consumption_today
                 primary: Verbruik vandaag
-                secondary: "{{ states('sensor.zonneplan_electricity_consumption_today') }} kWh"
+                secondary: "{{ (states('sensor.zonneplan_electricity_consumption_today') ~ ' kWh') if has_value('sensor.zonneplan_electricity_consumption_today') else '—' }}"
                 icon: mdi:flash
                 icon_color: blue
               - type: custom:mushroom-template-card
                 entity: sensor.zonneplan_gas_consumption_today
                 primary: Gas vandaag
-                secondary: "{{ states('sensor.zonneplan_gas_consumption_today') }} m³"
+                secondary: "{{ (states('sensor.zonneplan_gas_consumption_today') ~ ' m³') if has_value('sensor.zonneplan_gas_consumption_today') else '—' }}"
                 icon: mdi:fire
                 icon_color: orange
               - type: custom:mushroom-template-card
                 entity: sensor.total_costs_today_calculated
                 primary: Kosten vandaag
-                secondary: "€ {{ states('sensor.total_costs_today_calculated') }}"
+                secondary: "{{ ('€ ' ~ states('sensor.total_costs_today_calculated')) if has_value('sensor.total_costs_today_calculated') else '—' }}"
                 icon: mdi:currency-eur
                 icon_color: "{{ 'green' if states('sensor.total_costs_today_calculated')|float(0) < 0 else 'grey' }}"
               - type: custom:mushroom-template-card
                 entity: sensor.zonneplan_current_electricity_tariff
                 primary: Huidig tarief
-                secondary: "€ {{ states('sensor.zonneplan_current_electricity_tariff') }}"
+                secondary: "{{ ('€ ' ~ states('sensor.zonneplan_current_electricity_tariff')) if has_value('sensor.zonneplan_current_electricity_tariff') else '—' }}"
                 icon: mdi:cash-clock
                 icon_color: "{{ 'green' if is_state('sensor.zonneplan_current_tariff_group','low') else 'grey' }}"
               - type: custom:mushroom-template-card
                 entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
                 primary: Thuisbatterij
                 secondary: >-
-                  {{ states('sensor.lilygo_rs485_marstek_battery_state_of_charge') }}% · {{ states('sensor.lilygo_rs485_marstek_battery_power') }} W
+                  {{ (states('sensor.lilygo_rs485_marstek_battery_state_of_charge') ~ '%')
+                     if has_value('sensor.lilygo_rs485_marstek_battery_state_of_charge') else '—' }} ·
+                  {{ (states('sensor.lilygo_rs485_marstek_battery_power') ~ ' W')
+                     if has_value('sensor.lilygo_rs485_marstek_battery_power') else '—' }}
                 icon: mdi:home-battery
                 icon_color: green
               - type: custom:mushroom-template-card
                 entity: sensor.solar_power_generated_now
                 primary: Productie nu
-                secondary: "{{ states('sensor.solar_power_generated_now') }} W"
+                secondary: "{{ (states('sensor.solar_power_generated_now') ~ ' W') if has_value('sensor.solar_power_generated_now') else '—' }}"
                 icon: mdi:solar-power
                 icon_color: amber
       - type: custom:bubble-card
@@ -1782,25 +1872,30 @@ cards:
               - type: custom:mushroom-template-card
                 entity: sensor.hrh85f_batterij
                 primary: Batterij
-                secondary: "{{ states('sensor.hrh85f_batterij') }}%"
+                secondary: "{{ (states('sensor.hrh85f_batterij') ~ '%') if has_value('sensor.hrh85f_batterij') else '—' }}"
                 icon: mdi:battery-charging
                 icon_color: "{{ 'green' if states('sensor.hrh85f_batterij')|float(0) > 20 else 'amber' }}"
               - type: custom:mushroom-template-card
                 entity: sensor.hrh85f_battery_autonomy
                 primary: Bereik
-                secondary: "{{ states('sensor.hrh85f_battery_autonomy') }} km"
+                secondary: "{{ (states('sensor.hrh85f_battery_autonomy') ~ ' km') if has_value('sensor.hrh85f_battery_autonomy') else '—' }}"
                 icon: mdi:map-marker-distance
                 icon_color: blue
               - type: custom:mushroom-template-card
                 entity: sensor.hrh85f_kilometerstand
                 primary: Kilometerstand
-                secondary: "{{ states('sensor.hrh85f_kilometerstand') }} km"
+                secondary: "{{ (states('sensor.hrh85f_kilometerstand') ~ ' km') if has_value('sensor.hrh85f_kilometerstand') else '—' }}"
                 icon: mdi:counter
                 icon_color: grey
               - type: custom:mushroom-template-card
                 entity: sensor.hrh85f_charge_state
                 primary: Laadstatus
-                secondary: "{{ states('sensor.hrh85f_charge_state') }}"
+                secondary: >-
+                  {% set m = {'charge_in_progress': 'aan het laden', 'not_in_charge': 'niet aan lader',
+                              'waiting_for_a_planned_charge': 'gepland', 'waiting_for_current_charge': 'wacht',
+                              'charge_error': 'laadfout', 'energy_flap_opened': 'klep open', 'charge_ended': 'vol'} %}
+                  {{ m.get(states('sensor.hrh85f_charge_state'), states('sensor.hrh85f_charge_state'))
+                     if has_value('sensor.hrh85f_charge_state') else '—' }}
                 icon: mdi:ev-station
                 icon_color: "{{ 'green' if is_state('sensor.hrh85f_charge_state','charge_in_progress') else 'grey' }}"
           - type: horizontal-stack
@@ -1820,7 +1915,9 @@ cards:
                   {% set t = state_attr('weather.knmi_thuis','temperature') | float(18) %}
                   {{ 'Voorverwarmen' if t < 15 else ('Voorkoelen' if t > 22 else 'Klimaat starten') }}
                 secondary: >-
-                  {% if is_state('binary_sensor.hrh85f_hvac','on') %}actief{% else %}buiten {{ state_attr('weather.knmi_thuis','temperature') | round(0) }}°{% endif %}
+                  {% if is_state('binary_sensor.hrh85f_hvac','on') %}actief
+                  {%- else %}{% set t = state_attr('weather.knmi_thuis','temperature') %}
+                  {{- 'buiten ' ~ (t | round(0)) ~ '°' if t is not none else 'tik om te starten' }}{% endif %}
                 icon: >-
                   {% set t = state_attr('weather.knmi_thuis','temperature') | float(18) %}
                   {{ 'mdi:fire' if t < 15 else ('mdi:snowflake' if t > 22 else 'mdi:air-conditioner') }}
@@ -1854,37 +1951,37 @@ cards:
               - type: custom:mushroom-template-card
                 entity: sensor.afvalinfo_home_trash_type_today
                 primary: Vandaag
-                secondary: "{{ states('sensor.afvalinfo_home_trash_type_today') }}"
+                secondary: "{{ (states('sensor.afvalinfo_home_trash_type_today')) if has_value('sensor.afvalinfo_home_trash_type_today') else '—' }}"
                 icon: mdi:trash-can
                 icon_color: teal
               - type: custom:mushroom-template-card
                 entity: sensor.afvalinfo_home_trash_type_tomorrow
                 primary: Morgen
-                secondary: "{{ states('sensor.afvalinfo_home_trash_type_tomorrow') }}"
+                secondary: "{{ (states('sensor.afvalinfo_home_trash_type_tomorrow')) if has_value('sensor.afvalinfo_home_trash_type_tomorrow') else '—' }}"
                 icon: mdi:trash-can-outline
                 icon_color: teal
               - type: custom:mushroom-template-card
                 entity: sensor.afvalinfo_home_gft
                 primary: GFT
-                secondary: "{{ states('sensor.afvalinfo_home_gft') }}"
+                secondary: "{{ (states('sensor.afvalinfo_home_gft')) if has_value('sensor.afvalinfo_home_gft') else '—' }}"
                 icon: mdi:leaf
                 icon_color: green
               - type: custom:mushroom-template-card
                 entity: sensor.afvalinfo_home_papier
                 primary: Papier
-                secondary: "{{ states('sensor.afvalinfo_home_papier') }}"
+                secondary: "{{ (states('sensor.afvalinfo_home_papier')) if has_value('sensor.afvalinfo_home_papier') else '—' }}"
                 icon: mdi:newspaper
                 icon_color: blue
               - type: custom:mushroom-template-card
                 entity: sensor.afvalinfo_home_pbd
                 primary: PBD
-                secondary: "{{ states('sensor.afvalinfo_home_pbd') }}"
+                secondary: "{{ (states('sensor.afvalinfo_home_pbd')) if has_value('sensor.afvalinfo_home_pbd') else '—' }}"
                 icon: mdi:recycle
                 icon_color: orange
               - type: custom:mushroom-template-card
                 entity: sensor.afvalinfo_home_restafval
                 primary: Restafval
-                secondary: "{{ states('sensor.afvalinfo_home_restafval') }}"
+                secondary: "{{ (states('sensor.afvalinfo_home_restafval')) if has_value('sensor.afvalinfo_home_restafval') else '—' }}"
                 icon: mdi:delete
                 icon_color: grey
           - type: custom:mushroom-title-card
@@ -1947,7 +2044,7 @@ cards:
           - type: custom:mushroom-template-card
             entity: input_text.brandweer_laatste_melding
             primary: Laatste melding
-            secondary: "{{ states('input_text.brandweer_laatste_melding') }}"
+            secondary: "{{ (states('input_text.brandweer_laatste_melding')) if has_value('input_text.brandweer_laatste_melding') else '—' }}"
             icon: mdi:message-alert
             icon_color: red
             multiline_secondary: true
@@ -1958,19 +2055,19 @@ cards:
               - type: custom:mushroom-template-card
                 entity: input_select.brandweer_dienstdoende_ploeg
                 primary: Dienstdoend
-                secondary: "{{ states('input_select.brandweer_dienstdoende_ploeg') }}"
+                secondary: "{{ (states('input_select.brandweer_dienstdoende_ploeg')) if has_value('input_select.brandweer_dienstdoende_ploeg') else '—' }}"
                 icon: mdi:account-group
                 icon_color: blue
               - type: custom:mushroom-template-card
                 entity: input_select.brandweer_mijn_huidige_ploeg
                 primary: Mijn ploeg
-                secondary: "{{ states('input_select.brandweer_mijn_huidige_ploeg') }}"
+                secondary: "{{ (states('input_select.brandweer_mijn_huidige_ploeg')) if has_value('input_select.brandweer_mijn_huidige_ploeg') else '—' }}"
                 icon: mdi:account
                 icon_color: blue
               - type: custom:mushroom-template-card
                 entity: sensor.robin_reistijd_naar_brandweer_uden
                 primary: Reistijd kazerne
-                secondary: "{{ states('sensor.robin_reistijd_naar_brandweer_uden') }} min"
+                secondary: "{{ (states('sensor.robin_reistijd_naar_brandweer_uden') ~ ' min') if has_value('sensor.robin_reistijd_naar_brandweer_uden') else '—' }}"
                 icon: mdi:fire-station
                 icon_color: orange
               - type: custom:mushroom-template-card
@@ -1996,25 +2093,25 @@ cards:
               - type: custom:mushroom-template-card
                 entity: counter.brandweer_totaal_aantal_uitrukken
                 primary: Totaal
-                secondary: "{{ states('counter.brandweer_totaal_aantal_uitrukken') }}"
+                secondary: "{{ (states('counter.brandweer_totaal_aantal_uitrukken')) if has_value('counter.brandweer_totaal_aantal_uitrukken') else '—' }}"
                 icon: mdi:sigma
                 icon_color: grey
               - type: custom:mushroom-template-card
                 entity: counter.brandweer_uden_a_ploeg_uitrukken
                 primary: A
-                secondary: "{{ states('counter.brandweer_uden_a_ploeg_uitrukken') }}"
+                secondary: "{{ (states('counter.brandweer_uden_a_ploeg_uitrukken')) if has_value('counter.brandweer_uden_a_ploeg_uitrukken') else '—' }}"
                 icon: mdi:alpha-a-circle
                 icon_color: blue
               - type: custom:mushroom-template-card
                 entity: counter.brandweer_uden_b_ploeg_uitrukken
                 primary: B
-                secondary: "{{ states('counter.brandweer_uden_b_ploeg_uitrukken') }}"
+                secondary: "{{ (states('counter.brandweer_uden_b_ploeg_uitrukken')) if has_value('counter.brandweer_uden_b_ploeg_uitrukken') else '—' }}"
                 icon: mdi:alpha-b-circle
                 icon_color: blue
               - type: custom:mushroom-template-card
                 entity: counter.brandweer_uden_c_ploeg_uitrukken
                 primary: C
-                secondary: "{{ states('counter.brandweer_uden_c_ploeg_uitrukken') }}"
+                secondary: "{{ (states('counter.brandweer_uden_c_ploeg_uitrukken')) if has_value('counter.brandweer_uden_c_ploeg_uitrukken') else '—' }}"
                 icon: mdi:alpha-c-circle
                 icon_color: blue
           - type: logbook
