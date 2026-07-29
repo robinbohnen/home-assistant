@@ -398,6 +398,107 @@ cards:
                         var suf = temp === null ? '' : `<span style="font-size:12px;color:rgba(255,255,255,0.50)">${temp}°</span>`;
                         return `<span style="display:flex;align-items:baseline;gap:7px"><span style="font-size:14px;font-weight:600;color:white">${lbl}</span>${suf}</span>`;
                       ]]]
+        # Goedkoopste aaneengesloten laadvenster uit de prijsvoorspelling.
+        # Bloklengte wordt uit de data afgeleid, dus dit werkt met uur- én
+        # kwartierprijzen zonder aanpassing.
+        - type: custom:button-card
+          entity: sensor.zonneplan_current_electricity_tariff
+          show_icon: false
+          show_name: false
+          show_state: false
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-auto"
+          variables:
+            uren: 3
+            # Eén keer rekenen; de drie velden lezen het resultaat uit.
+            # button-card evalueert variabelen opnieuw bij elke render.
+            venster: |
+              [[[
+                var t = states['sensor.zonneplan_current_electricity_tariff'];
+                var raw = (t && t.attributes && t.attributes.forecast) || [];
+                var norm = function(x){ if(x === null || x === undefined || isNaN(Number(x))) return null; var n = Number(x); if(Math.abs(n) > 100) n = n / 10000000; return n; };
+                var punten = raw.map(function(e){
+                  var d = new Date(e.datetime || e.date || e.time || e.start);
+                  var p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
+                  return (isNaN(d.getTime()) || p === null) ? null : {t: d.getTime(), p: p};
+                }).filter(Boolean).sort(function(a,b){ return a.t - b.t; });
+                if(punten.length < 2) return null;
+                // Bloklengte uit de data zelf: 60 min nu, 15 min na de overgang.
+                var stap = punten[1].t - punten[0].t;
+                var nodig = Math.max(1, Math.round((variables.uren * 3600000) / stap));
+                var nu = Date.now();
+                var beste = null;
+                // Past het gevraagde venster niet meer in de horizon (bv. 's avonds
+                // voordat de prijzen van morgen er zijn), dan het langste dat wél past.
+                for(var lengte = nodig; lengte >= 1 && beste === null; lengte--){
+                  for(var i = 0; i + lengte <= punten.length; i++){
+                    if(punten[i].t + stap <= nu) continue;
+                    var som = 0, aaneen = true;
+                    for(var j = 0; j < lengte; j++){
+                      if(j > 0 && punten[i+j].t - punten[i+j-1].t !== stap) { aaneen = false; break; }
+                      som += punten[i+j].p;
+                    }
+                    if(!aaneen) continue;
+                    var gem = som / lengte;
+                    if(beste === null || gem < beste.gem) beste = {gem: gem, van: punten[i].t, tot: punten[i+lengte-1].t + stap};
+                  }
+                }
+                if(!beste) return null;
+                beste.uren = (beste.tot - beste.van) / 3600000;
+                var huidig = t && !isNaN(Number(t.state)) ? Number(t.state) : null;
+                beste.nu = beste.van <= nu + stap;
+                beste.winst = huidig === null ? null : huidig - beste.gem;
+                return beste;
+              ]]]
+          styles:
+            card:
+              - background: rgba(255,255,255,0.04)
+              - border: 1px solid rgba(255,255,255,0.07)
+              - border-radius: 12px
+              - box-shadow: none
+              - padding: 8px 12px
+              - margin-top: 10px
+            grid:
+              - grid-template-areas: '"ic t" "ic s"'
+              - grid-template-columns: 20px 1fr
+              - align-items: center
+              - column-gap: 10px
+            custom_fields:
+              ic:
+                - grid-area: ic
+              t:
+                - grid-area: t
+                - justify-self: start
+              s:
+                - grid-area: s
+                - justify-self: start
+          custom_fields:
+            ic: |
+              [[[
+                var v = variables.venster;
+                var kleur = !v ? 'rgba(255,255,255,0.35)' : (v.nu ? '#4ade80' : '#38bdf8');
+                return `<ha-icon icon="mdi:cash-clock" style="--mdc-icon-size:19px;color:${kleur}"></ha-icon>`;
+              ]]]
+            t: |
+              [[[
+                var v = variables.venster;
+                if(!v) return `<span style="font-size:14px;font-weight:600;color:rgba(255,255,255,0.5)">Laadvenster onbekend</span>`;
+                if(v.nu) return `<span style="font-size:14px;font-weight:600;color:#4ade80">Nu is het goedkoopste moment</span>`;
+                var klok = function(ms){ var d = new Date(ms); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); };
+                return `<span style="display:flex;align-items:baseline;gap:7px"><span style="font-size:14px;font-weight:600;color:white">Goedkoopst laden</span><span style="font-size:13px;color:#38bdf8;font-weight:600">${klok(v.van)}–${klok(v.tot)}</span></span>`;
+              ]]]
+            s: |
+              [[[
+                var v = variables.venster;
+                if(!v) return `<span style="font-size:12.5px;color:rgba(255,255,255,0.45)">geen prijsvoorspelling</span>`;
+                var eur = function(x){ return '€ ' + x.toFixed(3).replace('.',','); };
+                var uurTxt = v.uren >= 1 ? (Math.round(v.uren * 10) / 10).toString().replace('.',',') + ' uur'
+                                         : Math.round(v.uren * 60) + ' min';
+                var deel = `${uurTxt} · gem. ${eur(v.gem)}`;
+                if(v.winst !== null && v.winst > 0.001) deel += ` <span style="color:rgba(255,255,255,0.25)">·</span> <span style="color:#4ade80">${eur(v.winst)}/kWh goedkoper</span>`;
+                return `<span style="font-size:12.5px;color:rgba(255,255,255,0.55)">${deel}</span>`;
+              ]]]
   # MEDIA
   - type: custom:mod-card
     card_mod:
