@@ -8,6 +8,7 @@ ov_person:
   show_state: false
   variables:
     battery: sensor.none
+    travel: sensor.none
   tap_action:
     action: more-info
   styles:
@@ -44,7 +45,16 @@ ov_person:
         var fn = entity && entity.attributes.friendly_name ? entity.attributes.friendly_name.split(' ')[0] : '?';
         var home = entity && entity.state === 'home';
         var st = home ? 'thuis' : 'afwezig';
-        return `<span style="display:flex;align-items:baseline;gap:9px"><span style="font-size:15px;font-weight:600;color:white">${fn}</span><span style="font-size:13px;color:rgba(255,255,255,0.4)">${st}</span></span>`;
+        var kleur = 'rgba(255,255,255,0.52)';
+        if(!home) {
+          // Reistijd naar huis, als de routesensor een bruikbare waarde heeft.
+          var r = states[variables.travel];
+          if(r && !isNaN(Number(r.state)) && Number(r.state) > 0) {
+            st = 'onderweg · ' + Math.round(Number(r.state)) + ' min';
+            kleur = '#38bdf8';
+          }
+        }
+        return `<span style="display:flex;align-items:baseline;gap:9px"><span style="font-size:15px;font-weight:600;color:white">${fn}</span><span style="font-size:13px;color:${kleur}">${st}</span></span>`;
       ]]]
     bat: |
       [[[
@@ -61,6 +71,7 @@ ov_room:
   show_name: true
   variables:
     lights: []
+    temp: sensor.none
   styles:
     grid:
       - grid-template-areas: '"n sum dot"'
@@ -91,8 +102,16 @@ ov_room:
       [[[
         var ls = variables.lights || [];
         var on = ls.filter(e => states[e] && states[e].state === 'on').length;
-        if(on === 0) return `<span style="color:rgba(255,255,255,0.38)">alles uit</span>`;
-        return `<span style="color:rgba(255,255,255,0.62)">${on} ${on===1?'lamp':'lampen'} aan</span>`;
+        var lamp = on === 0
+          ? `<span style="color:rgba(255,255,255,0.60)">alles uit</span>`
+          : `<span style="color:rgba(255,255,255,0.72)">${on} ${on===1?'lamp':'lampen'} aan</span>`;
+        var t = states[variables.temp];
+        if(!t || isNaN(Number(t.state))) return lamp;
+        var g = Number(t.state);
+        // Alleen kleuren bij uitschieters; anders blijft het rustig.
+        var kleur = g < 17 ? '#38bdf8' : (g > 25 ? '#f59e0b' : 'rgba(255,255,255,0.85)');
+        var graden = `<span style="color:${kleur};font-weight:600">${g.toFixed(1).replace('.',',')}°</span>`;
+        return `<span style="display:inline-flex;align-items:baseline;gap:8px">${graden}<span style="color:rgba(255,255,255,0.2)">·</span>${lamp}</span>`;
       ]]]
     dot: |
       [[[
@@ -114,14 +133,14 @@ ov_bar:
   styles:
     grid:
       - grid-template-areas: '"n bar val"'
-      - grid-template-columns: 165px 1fr 78px
+      - grid-template-columns: 205px 1fr 72px
       - align-items: center
       - column-gap: 14px
     card:
       - background: none
       - border: none
       - box-shadow: none
-      - padding: 9px 2px
+      - padding: 7px 2px
     name:
       - grid-area: n
       - justify-self: start
@@ -198,7 +217,7 @@ ov_climate:
         - grid-area: sub
         - justify-self: start
         - font-size: 12.5px
-        - color: rgba(255,255,255,0.45)
+        - color: rgba(255,255,255,0.58)
         - padding-top: 2px
       badge:
         - grid-area: badge
@@ -252,6 +271,7 @@ ov_listrow:
   variables:
     title: ""
     mdi: mdi:information
+    kleur: rgba(255,255,255,0.6)
   styles:
     grid:
       - grid-template-areas: '"ic t" "ic s"'
@@ -276,11 +296,11 @@ ov_listrow:
         - grid-area: s
         - justify-self: start
         - font-size: 12.5px
-        - color: rgba(255,255,255,0.45)
+        - color: rgba(255,255,255,0.58)
   custom_fields:
     ic: |
       [[[
-        return `<ha-icon icon="${variables.mdi}" style="--mdc-icon-size:22px;color:rgba(255,255,255,0.6)"></ha-icon>`;
+        return `<ha-icon icon="${variables.mdi}" style="--mdc-icon-size:22px;color:${variables.kleur}"></ha-icon>`;
       ]]]
     t: |
       [[[ return variables.title; ]]]
@@ -311,7 +331,7 @@ ov_title:
         - font-size: 12px
         - font-weight: "700"
         - letter-spacing: 1.2px
-        - color: rgba(255,255,255,0.42)
+        - color: rgba(255,255,255,0.55)
       b:
         - grid-area: b
         - justify-self: end

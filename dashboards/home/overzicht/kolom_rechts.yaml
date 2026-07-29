@@ -1,0 +1,477 @@
+# Rechterkolom: vandaag, klimaat, brandweer.
+type: vertical-stack
+card_mod:
+  style: |
+    #root { gap: 16px !important; }
+cards:
+  # VANDAAG
+  - type: custom:mod-card
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--ov-panel-bg) !important;
+          border: var(--ov-panel-border) !important;
+          border-radius: var(--ov-panel-radius) !important;
+          box-shadow: none !important;
+          padding: var(--ov-panel-padding) !important;
+        }
+    card:
+      type: vertical-stack
+      card_mod:
+        style: |
+          #root > *:nth-child(n+2) { border-top: 1px solid rgba(255,255,255,0.06) !important; }
+      cards:
+        - type: custom:button-card
+          template: ov_title
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-vandaag"
+          variables:
+            title: VANDAAG
+        - type: custom:button-card
+          template: ov_listrow
+          entity: sensor.afvalinfo_home_trash_type_today
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-vandaag"
+          variables:
+            title: Afval vandaag
+            mdi: mdi:trash-can-outline
+            kleur: |
+              [[[
+                var e = states['sensor.afvalinfo_home_trash_type_today'];
+                var v = e && e.state && e.state !== 'Geen' ? e.state : '';
+                // PBD vóór papier: "Drinkkartons" bevat 'karton'
+                var soorten = [[/gft|groente|tuin/i,'#4ade80'], [/pbd|plastic|blik|drank/i,'#f59e0b'],
+                               [/papier/i,'#38bdf8'], [/rest/i,'rgba(255,255,255,0.6)']];
+                for(var i=0;i<soorten.length;i++) if(soorten[i][0].test(v)) return soorten[i][1];
+                return 'rgba(255,255,255,0.35)';
+              ]]]
+          custom_fields:
+            s: |
+              [[[
+                var e = states['sensor.afvalinfo_home_trash_type_today'];
+                var v = e && e.state && e.state !== 'Geen' ? e.state : null;
+                if(!v) return 'geen ophaal vandaag';
+                // Kleur per soort, zodat je in één oogopslag ziet wat er buiten moet
+                // PBD vóór papier: "Drinkkartons" bevat 'karton'
+                var soorten = [[/gft|groente|tuin/i,'#4ade80'], [/pbd|plastic|blik|drank/i,'#f59e0b'],
+                               [/papier/i,'#38bdf8'], [/rest/i,'rgba(255,255,255,0.7)']];
+                var kleur = 'rgba(255,255,255,0.7)';
+                for(var i=0;i<soorten.length;i++) if(soorten[i][0].test(v)) { kleur = soorten[i][1]; break; }
+                return `<span style="color:${kleur}">${v}</span>`;
+              ]]]
+        - type: custom:button-card
+          template: ov_listrow
+          entity: sensor.afvalinfo_home_trash_type_tomorrow
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-vandaag"
+          variables:
+            title: Afval morgen
+            mdi: mdi:recycle
+            kleur: |
+              [[[
+                var e = states['sensor.afvalinfo_home_trash_type_tomorrow'];
+                var v = e && e.state && e.state !== 'Geen' ? e.state : '';
+                // PBD vóór papier: "Drinkkartons" bevat 'karton'
+                var soorten = [[/gft|groente|tuin/i,'#4ade80'], [/pbd|plastic|blik|drank/i,'#f59e0b'],
+                               [/papier/i,'#38bdf8'], [/rest/i,'rgba(255,255,255,0.6)']];
+                for(var i=0;i<soorten.length;i++) if(soorten[i][0].test(v)) return soorten[i][1];
+                return 'rgba(255,255,255,0.35)';
+              ]]]
+          custom_fields:
+            s: |
+              [[[
+                var e = states['sensor.afvalinfo_home_trash_type_tomorrow'];
+                var v = e && e.state && e.state !== 'Geen' ? e.state : null;
+                if(!v) return 'geen ophaal morgen';
+                // Kleur per soort, zodat je in één oogopslag ziet wat er buiten moet
+                // PBD vóór papier: "Drinkkartons" bevat 'karton'
+                var soorten = [[/gft|groente|tuin/i,'#4ade80'], [/pbd|plastic|blik|drank/i,'#f59e0b'],
+                               [/papier/i,'#38bdf8'], [/rest/i,'rgba(255,255,255,0.7)']];
+                var kleur = 'rgba(255,255,255,0.7)';
+                for(var i=0;i<soorten.length;i++) if(soorten[i][0].test(v)) { kleur = soorten[i][1]; break; }
+                return `<span style="color:${kleur}">${v}</span>`;
+              ]]]
+        # Volgende afspraak over alle agenda's heen. Kalender-entiteiten
+        # exposen alleen hun eerstvolgende event als attribuut, dus we
+        # verzamelen er één per agenda en kiezen de vroegste.
+        - type: custom:button-card
+          template: ov_listrow
+          entity: calendar.r_bohnen_vrbn_nl_agenda
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-vandaag"
+          variables:
+            mdi: mdi:calendar
+            agendas:
+              - [calendar.r_bohnen_vrbn_nl_agenda, Werk]
+              - [calendar.robin_bohnen_nl_agenda, Privé]
+              - [calendar.robin_en_sam, Samen]
+              - [calendar.brandweer, Brandweer]
+              - [calendar.maxi, Logan]
+              - [calendar.mini, Emma]
+          custom_fields:
+            t: |
+              [[[
+                // Voorkeur: de get_events-sensor (telt en kent alle afspraken).
+                // Bestaat die nog niet, dan terugvallen op de kalender-attributen.
+                var sen = states['sensor.agenda_afspraken_vandaag'];
+                var v = sen && sen.attributes ? sen.attributes.volgende : null;
+                if(v && v.titel){
+                  var titel = String(v.titel);
+                  return titel.length > 30 ? titel.slice(0,29) + '…' : titel;
+                }
+                var now = new Date();
+                var lijst = [];
+                (variables.agendas || []).forEach(function(c){
+                  var e = states[c[0]];
+                  if(!e || !e.attributes || !e.attributes.start_time) return;
+                  var st = new Date(String(e.attributes.start_time).replace(' ','T'));
+                  if(isNaN(st.getTime())) return;
+                  var en = e.attributes.end_time ? new Date(String(e.attributes.end_time).replace(' ','T')) : null;
+                  if(en && !isNaN(en.getTime()) && en < now) return;
+                  lijst.push({msg: e.attributes.message || 'Afspraak', st: st, allday: !!e.attributes.all_day});
+                });
+                if(!lijst.length) return 'Agenda';
+                // afspraken met tijd gaan voor meerdaagse hele-dag-notities
+                lijst.sort(function(a,b){ return a.allday !== b.allday ? (a.allday ? 1 : -1) : a.st - b.st; });
+                var m = lijst[0].msg;
+                if(m.length > 30) m = m.slice(0,29) + '…';
+                return m;
+              ]]]
+            s: |
+              [[[
+                var sen = states['sensor.agenda_afspraken_vandaag'];
+                var v = sen && sen.attributes ? sen.attributes.volgende : null;
+                if(v && v.datum){
+                  var d = new Date(v.datum + 'T00:00:00');
+                  var mid = new Date(); mid.setHours(0,0,0,0);
+                  var dag = Math.round((d - mid) / 86400000);
+                  var dagTxt = dag === 0 ? 'vandaag' : (dag === 1 ? 'morgen' : d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
+                  var klok = new Date().toTimeString().slice(0,5);
+                  var tijd;
+                  if(v.hele_dag) tijd = 'hele dag';
+                  else if(dag === 0 && v.tijd <= klok && (!v.eind || v.eind >= klok)) tijd = 'nu bezig';
+                  else tijd = v.tijd || '';
+                  var n = Number(sen.state);
+                  var extra = (dag === 0 && !isNaN(n) && n > 1) ? ` · nog ${n - 1} vandaag` : '';
+                  return `${dagTxt} · ${tijd} · ${v.agenda}${extra}`;
+                }
+                var now = new Date();
+                var lijst = [];
+                (variables.agendas || []).forEach(function(c){
+                  var e = states[c[0]];
+                  if(!e || !e.attributes || !e.attributes.start_time) return;
+                  var st = new Date(String(e.attributes.start_time).replace(' ','T'));
+                  if(isNaN(st.getTime())) return;
+                  var en = e.attributes.end_time ? new Date(String(e.attributes.end_time).replace(' ','T')) : null;
+                  if(en && !isNaN(en.getTime()) && en < now) return;
+                  lijst.push({st: st, en: en, allday: !!e.attributes.all_day, bron: c[1]});
+                });
+                if(!lijst.length) return 'geen afspraken';
+                lijst.sort(function(a,b){ return a.allday !== b.allday ? (a.allday ? 1 : -1) : a.st - b.st; });
+                var it = lijst[0];
+                var mid = new Date(now); mid.setHours(0,0,0,0);
+                var dag = Math.round((new Date(it.st).setHours(0,0,0,0) - mid.getTime()) / 86400000);
+                var dagTxt = dag === 0 ? 'vandaag' : (dag === 1 ? 'morgen' : it.st.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
+                var tijd;
+                if(it.allday) tijd = 'hele dag';
+                else if(it.st <= now && it.en && it.en >= now) tijd = 'nu bezig';
+                else tijd = it.st.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+                return `${dagTxt} · ${tijd} · ${it.bron}`;
+              ]]]
+  # KLIMAAT
+  - type: custom:mod-card
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--ov-panel-bg) !important;
+          border: var(--ov-panel-border) !important;
+          border-radius: var(--ov-panel-radius) !important;
+          box-shadow: none !important;
+          padding: var(--ov-panel-padding) !important;
+        }
+    card:
+      type: vertical-stack
+      card_mod:
+        style: |
+          #root > *:nth-child(n+2) { border-top: 1px solid rgba(255,255,255,0.06) !important; }
+      cards:
+        - type: custom:button-card
+          template: ov_title
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-klimaat"
+          variables:
+            title: KLIMAAT
+        - type: custom:button-card
+          template: ov_climate
+          entity: climate.airco_woonkamer
+          name: Airco woonkamer
+        - type: custom:button-card
+          template: ov_climate
+          entity: climate.airco_zolder
+          name: Airco zolder
+        - type: custom:button-card
+          template: ov_climate
+          entity: climate.intex_purespa
+          name: Intex PureSpa
+        # Zonnescherm met knoppen
+        - type: horizontal-stack
+          card_mod:
+            style: |
+              #root {
+                display: grid !important;
+                grid-template-columns: 1fr auto auto !important;
+                align-items: center !important;
+                gap: 8px !important;
+              }
+          cards:
+            - type: custom:button-card
+              entity: cover.achtertuin_zonnescherm
+              show_icon: false
+              show_name: false
+              show_state: false
+              tap_action:
+                action: more-info
+              styles:
+                card:
+                  - background: none
+                  - border: none
+                  - box-shadow: none
+                  - padding: 11px 2px
+                grid:
+                  - grid-template-areas: '"n" "s"'
+                  - justify-items: start
+              custom_fields:
+                n: |
+                  [[[ return `<span style="font-size:14.5px;font-weight:600;color:white">Zonnescherm</span>`; ]]]
+                s: |
+                  [[[
+                    var c = states['cover.achtertuin_zonnescherm'];
+                    var m = {open:'omhoog', closed:'omlaag', opening:'gaat omhoog', closing:'gaat omlaag'};
+                    return `<span style="font-size:12.5px;color:rgba(255,255,255,0.58)">achtertuin · ${c ? (m[c.state] || c.state) : '?'}</span>`;
+                  ]]]
+            - type: custom:button-card
+              icon: mdi:chevron-up
+              tap_action:
+                action: perform-action
+                perform_action: cover.open_cover
+                target:
+                  entity_id: cover.achtertuin_zonnescherm
+              styles:
+                card:
+                  - background: rgba(255,255,255,0.05)
+                  - border: 1px solid rgba(255,255,255,0.08)
+                  - border-radius: 12px
+                  - padding: 8px
+                  - width: 42px
+                  - height: 42px
+                icon:
+                  - color: rgba(255,255,255,0.8)
+                  - width: 22px
+            - type: custom:button-card
+              icon: mdi:chevron-down
+              tap_action:
+                action: perform-action
+                perform_action: cover.close_cover
+                target:
+                  entity_id: cover.achtertuin_zonnescherm
+              styles:
+                card:
+                  - background: rgba(255,255,255,0.05)
+                  - border: 1px solid rgba(255,255,255,0.08)
+                  - border-radius: 12px
+                  - padding: 8px
+                  - width: 42px
+                  - height: 42px
+                icon:
+                  - color: rgba(255,255,255,0.8)
+                  - width: 22px
+  # BRANDWEER
+  - type: custom:mod-card
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--ov-panel-bg) !important;
+          border: var(--ov-panel-border) !important;
+          border-radius: var(--ov-panel-radius) !important;
+          box-shadow: none !important;
+          padding: var(--ov-panel-padding) !important;
+        }
+    card:
+      type: vertical-stack
+      cards:
+        - type: custom:button-card
+          template: ov_title
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-brandweer"
+          variables:
+            title: BRANDWEER
+          custom_fields:
+            b: |
+              [[[
+                var p = states['input_select.brandweer_dienstdoende_ploeg'];
+                var t = p ? p.state : '—';
+                return `<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:#38bdf8;background:rgba(56,189,248,0.15)">${t}</span>`;
+              ]]]
+        - type: custom:button-card
+          entity: input_text.brandweer_laatste_melding
+          show_icon: false
+          show_name: false
+          show_state: false
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-brandweer"
+          styles:
+            card:
+              - background: none
+              - border: none
+              - box-shadow: none
+              - padding: 8px 2px
+            grid:
+              - grid-template-areas: '"pri msg badge" "pri sub badge"'
+              - grid-template-columns: 44px 1fr auto
+              - align-items: center
+              - column-gap: 12px
+            custom_fields:
+              pri:
+                - grid-area: pri
+              msg:
+                - grid-area: msg
+                - justify-self: start
+              sub:
+                - grid-area: sub
+                - justify-self: start
+              badge:
+                - grid-area: badge
+                - justify-self: end
+          custom_fields:
+            pri: |
+              [[[
+                var e = states['input_text.brandweer_laatste_melding'];
+                var t = e && e.state ? e.state : '';
+                var m = t.match(/^\s*([A-Pa-p])\s*(\d)/);
+                if(m){
+                  var code = (m[1] + m[2]).toUpperCase();
+                  return `<div style="min-width:34px;height:34px;padding:0 8px;box-sizing:border-box;border-radius:9px;background:rgba(245,158,11,0.16);color:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">${code}</div>`;
+                }
+                return `<div style="width:38px;height:38px;border-radius:10px;background:rgba(245,158,11,0.16);color:#f59e0b;display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:fire-truck" style="--mdc-icon-size:20px"></ha-icon></div>`;
+              ]]]
+            msg: |
+              [[[
+                var e = states['input_text.brandweer_laatste_melding'];
+                var t = e && e.state ? e.state : 'Geen recente melding';
+                t = t.replace(/^\s*[A-Pa-p]\s*\d\s*/, '');
+                if(t.length > 46) t = t.slice(0,45) + '…';
+                return `<span style="font-size:14px;font-weight:600;color:white">${t}</span>`;
+              ]]]
+            sub: |
+              [[[
+                var d = states['input_datetime.brandweer_laatste_melding'];
+                if(!d || !d.state) return `<span style="font-size:12px;color:rgba(255,255,255,0.55)">—</span>`;
+                var dt = new Date(d.state.replace(' ','T'));
+                var s = dt.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}) + ' ' + dt.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+                return `<span style="font-size:12px;color:rgba(255,255,255,0.55)">${s}</span>`;
+              ]]]
+            badge: |
+              [[[
+                var out = states['binary_sensor.brandweer_uitgerukt_op_laatste_melding'];
+                var secs = states['input_number.brandweer_uitruktijd_secondes'];
+                if(!out || out.state !== 'on') return '';
+                var s = secs && !isNaN(Number(secs.state)) ? Math.round(Number(secs.state)) + ' s' : '';
+                return `<span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;color:#4ade80;background:rgba(52,168,120,0.15)">uitgerukt · ${s}</span>`;
+              ]]]
+        # Bezetting van alle drie de ploegen; de dienstdoende licht op.
+        - type: custom:button-card
+          entity: input_select.brandweer_dienstdoende_ploeg
+          show_icon: false
+          show_name: false
+          show_state: false
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-brandweer"
+          styles:
+            card:
+              - background: none
+              - border: none
+              - box-shadow: none
+              - padding: 11px 2px 4px 2px
+              - border-top: 1px solid rgba(255,255,255,0.06)
+            grid:
+              - grid-template-areas: '"cap" "ploegen"'
+              - row-gap: 7px
+            custom_fields:
+              cap:
+                - grid-area: cap
+                - justify-self: start
+              ploegen:
+                - grid-area: ploegen
+          custom_fields:
+            cap: |
+              [[[
+                var ds = states['input_select.brandweer_dienstdoende_ploeg'];
+                var p = ds && ds.state ? ds.state.charAt(0).toUpperCase() : null;
+                var staart = p && 'ABC'.indexOf(p) !== -1
+                  ? `<span style="color:#38bdf8;font-weight:600">${p}-ploeg heeft dienst</span>`
+                  : `<span style="color:rgba(255,255,255,0.4)">dienstdoende ploeg onbekend</span>`;
+                return `<span style="font-size:12.5px;color:rgba(255,255,255,0.55)">Bezetting · ${staart}</span>`;
+              ]]]
+            ploegen: |
+              [[[
+                var ds = states['input_select.brandweer_dienstdoende_ploeg'];
+                var dienst = ds && ds.state ? ds.state.charAt(0).toUpperCase() : '';
+                var cellen = ['A','B','C'].map(function(letter){
+                  var s = states['sensor.bezetting_ploeg_' + letter.toLowerCase()];
+                  var n = s && !isNaN(Number(s.state)) ? Number(s.state) : null;
+                  var col = n === null ? 'rgba(255,255,255,0.35)'
+                          : (n < 4 ? '#ef4444' : (n < 6 ? '#f59e0b' : '#4ade80'));
+                  var aan = letter === dienst;
+                  var bg = aan ? 'rgba(56,189,248,0.12)' : 'rgba(255,255,255,0.04)';
+                  var rand = aan ? '1px solid rgba(56,189,248,0.35)' : '1px solid rgba(255,255,255,0.06)';
+                  // Vaste onderregel, ook als hij leeg is, zodat de drie cellen even hoog blijven.
+                  var onder = aan
+                    ? `<span style="font-size:9.5px;font-weight:700;letter-spacing:0.6px;color:#38bdf8">DIENST</span>`
+                    : `<span style="font-size:9.5px">&nbsp;</span>`;
+                  return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 0 5px 0;border-radius:11px;background:${bg};border:${rand}"><span style="font-size:11px;font-weight:700;letter-spacing:0.8px;color:${aan ? '#38bdf8' : 'rgba(255,255,255,0.5)'}">${letter}</span><span style="font-size:19px;font-weight:700;line-height:1.1;color:${col}">${n === null ? '—' : n}</span>${onder}</div>`;
+                });
+                return `<div style="display:flex;gap:8px">${cellen.join('')}</div>`;
+              ]]]
+        - type: custom:button-card
+          tap_action:
+            action: none
+          styles:
+            card:
+              - background: none
+              - border: none
+              - box-shadow: none
+              - padding: 10px 2px 2px 2px
+              - border-top: 1px solid rgba(255,255,255,0.06)
+            grid:
+              - grid-template-areas: '"tot a b c"'
+              - grid-template-columns: 1.4fr 1fr 1fr 1fr
+              - align-items: center
+          custom_fields:
+            tot: |
+              [[[
+                var e = states['counter.brandweer_totaal_aantal_uitrukken'];
+                return `<span><span style="font-size:16px;font-weight:700;color:white">${e ? e.state : '—'}</span> <span style="font-size:12px;color:rgba(255,255,255,0.55)">totaal</span></span>`;
+              ]]]
+            a: |
+              [[[
+                var e = states['counter.brandweer_uden_a_ploeg_uitrukken'];
+                return `<span><span style="font-size:15px;font-weight:600;color:rgba(255,255,255,0.85)">${e ? e.state : '—'}</span> <span style="font-size:12px;color:rgba(255,255,255,0.55)">A</span></span>`;
+              ]]]
+            b: |
+              [[[
+                var e = states['counter.brandweer_uden_b_ploeg_uitrukken'];
+                return `<span><span style="font-size:15px;font-weight:600;color:rgba(255,255,255,0.85)">${e ? e.state : '—'}</span> <span style="font-size:12px;color:rgba(255,255,255,0.55)">B</span></span>`;
+              ]]]
+            c: |
+              [[[
+                var e = states['counter.brandweer_uden_c_ploeg_uitrukken'];
+                return `<span><span style="font-size:15px;font-weight:600;color:rgba(255,255,255,0.85)">${e ? e.state : '—'}</span> <span style="font-size:12px;color:rgba(255,255,255,0.55)">C</span></span>`;
+              ]]]

@@ -1,0 +1,587 @@
+# Middenkolom: energie nu, stroomprijs, veelgebruikers.
+type: vertical-stack
+card_mod:
+  style: |
+    #root { gap: 16px !important; }
+cards:
+  # ENERGIE NU
+  - type: custom:mod-card
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--ov-panel-bg) !important;
+          border: var(--ov-panel-border) !important;
+          border-radius: var(--ov-panel-radius) !important;
+          box-shadow: none !important;
+          padding: var(--ov-panel-padding) !important;
+        }
+    card:
+      type: vertical-stack
+      cards:
+        - type: custom:button-card
+          template: ov_title
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-energie"
+          variables:
+            title: ENERGIE · NU
+          custom_fields:
+            b: |
+              [[[
+                var g = states['sensor.zonneplan_current_tariff_group'];
+                var solar = states['sensor.solar_power_generated_now'];
+                var cheap = g && g.state === 'low';
+                var green = solar && Number(solar.state) > 0.1;
+                var txt = (green && cheap) ? 'stroom is groen en goedkoop' : (cheap ? 'stroom is goedkoop' : (green ? 'stroom is groen' : 'normaal tarief'));
+                var col = (green || cheap) ? '#4ade80' : 'rgba(255,255,255,0.6)';
+                return `<span style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:${col}"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span>${txt}</span>`;
+              ]]]
+        # stats row
+        - type: custom:button-card
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-energie"
+          card_mod:
+            style: |
+              @media (max-width: 800px) {
+                #container {
+                  grid-template-columns: 1fr 1fr !important;
+                  grid-template-areas: "net prod" "cons batt" !important;
+                  row-gap: 18px !important;
+                }
+              }
+          styles:
+            card:
+              - background: none
+              - border: none
+              - box-shadow: none
+              - padding: 6px 2px 10px 2px
+            grid:
+              - grid-template-areas: '"net prod cons batt"'
+              - grid-template-columns: 1.5fr 1fr 1fr 1.1fr
+              - align-items: end
+              - column-gap: 10px
+              - row-gap: 16px
+            custom_fields:
+              net:
+                - justify-self: start
+              prod:
+                - justify-self: start
+              cons:
+                - justify-self: start
+              batt:
+                - justify-self: start
+          custom_fields:
+            net: |
+              [[[
+                var e = states['sensor.live_energieverbruik_totaal'];
+                var raw = e && !isNaN(Number(e.state)) ? Number(e.state) : null;
+                if(raw !== null && Math.abs(raw) < 0.005) raw = 0;
+                var v = raw !== null ? raw.toFixed(2).replace('.',',') : '—';
+                var u = e ? (e.attributes.unit_of_measurement || 'kW') : 'kW';
+                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:38px;font-weight:700;color:white;line-height:1">${v}</span> <span style="font-size:15px;color:rgba(255,255,255,0.60)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">netto verbruik</div></div>`;
+              ]]]
+            prod: |
+              [[[
+                var e = states['sensor.solar_power_generated_now'];
+                var v = '—';
+                if(e && !isNaN(Number(e.state))) {
+                  var raw = Number(e.state);
+                  var u = e.attributes.unit_of_measurement || '';
+                  var kw = (u === 'W') ? raw / 1000 : raw;
+                  v = kw.toFixed(2).replace('.',',');
+                }
+                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:#4ade80;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.60)">kW</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">productie</div></div>`;
+              ]]]
+            cons: |
+              [[[
+                var e = states['sensor.electricity_meter_energieverbruik'];
+                var v = e && !isNaN(Number(e.state)) ? Number(e.state).toFixed(2).replace('.',',') : '—';
+                var u = e ? (e.attributes.unit_of_measurement || 'kW') : 'kW';
+                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:white;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.60)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">verbruik</div></div>`;
+              ]]]
+            batt: |
+              [[[
+                var p = states['sensor.lilygo_rs485_marstek_battery_power'];
+                var soc = states['sensor.lilygo_rs485_marstek_battery_state_of_charge'];
+                var pv = p && !isNaN(Number(p.state)) ? Math.round(Number(p.state)) : null;
+                var socv = soc && !isNaN(Number(soc.state)) ? Math.round(Number(soc.state)) : null;
+                var mode = pv === null ? '' : (pv < 0 ? 'ontlaadt' : (pv > 0 ? 'laadt' : 'idle'));
+                var disp = pv === null ? '—' : pv + ' W';
+                var socStr = socv === null ? '' : ` <span style="font-size:13px;color:rgba(255,255,255,0.60)">· ${socv}%</span>`;
+                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:white;line-height:1">${disp}</span>${socStr}</div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">batterij${mode ? ' · ' + mode : ''}</div></div>`;
+              ]]]
+        # live chart
+        - type: custom:apexcharts-card
+          # Twee uur productie tegen verbruik: bij tien minuten netto
+          # verbruik zag je vooral ruis rond nul. Nu zie je de vorm van
+          # de ochtend: wanneer de zon aankwam, wanneer de batterij laadt.
+          graph_span: 2h
+          update_interval: 60s
+          card_mod:
+            style: |
+              ha-card { background: none !important; box-shadow: none !important; border: none !important; }
+          header:
+            show: false
+          apex_config:
+            chart:
+              height: 195
+              toolbar:
+                show: false
+            grid:
+              show: false
+              padding:
+                left: 14
+                right: 4
+                top: -8
+                bottom: 0
+            legend:
+              show: false
+            yaxis:
+              show: true
+              tickAmount: 3
+              labels:
+                style:
+                  colors: "rgba(255,255,255,0.5)"
+                  fontSize: "10px"
+                formatter: |
+                  EVAL:function(v) { return (v === null || v === undefined) ? '' : Number(v).toFixed(1).replace('.', ',') + ' kW'; }
+            xaxis:
+              axisBorder:
+                show: false
+              axisTicks:
+                show: false
+              tooltip:
+                enabled: false
+              labels:
+                show: true
+                style:
+                  colors: "rgba(255,255,255,0.5)"
+                  fontSize: "10px"
+                datetimeFormatter:
+                  hour: "HH:mm"
+                  minute: "HH:mm"
+            tooltip:
+              enabled: true
+              shared: true
+              x:
+                format: "HH:mm"
+          series:
+            - entity: sensor.solar_power_generated_now
+              name: productie
+              type: area
+              color: "#4ade80"
+              curve: smooth
+              stroke_width: 2
+              opacity: 0.22
+              float_precision: 2
+              # Deze sensor staat in W, verbruik in kW; hier gelijktrekken.
+              # Het history-item heeft niet altijd attributen, dus via hass.states.
+              transform: >-
+                return hass.states['sensor.solar_power_generated_now']
+                  .attributes.unit_of_measurement === 'W' ? x / 1000 : x;
+              group_by:
+                duration: 2m
+                func: avg
+            - entity: sensor.electricity_meter_energieverbruik
+              name: verbruik
+              type: line
+              color: "#3b82f6"
+              curve: smooth
+              stroke_width: 2
+              opacity: 1
+              float_precision: 2
+              transform: >-
+                return hass.states['sensor.electricity_meter_energieverbruik']
+                  .attributes.unit_of_measurement === 'W' ? x / 1000 : x;
+              group_by:
+                duration: 2m
+                func: avg
+        # chips row
+        - type: horizontal-stack
+          card_mod:
+            style: |
+              #root { gap: 10px !important; flex-wrap: wrap !important; }
+              #root > * { flex: 0 0 auto !important; white-space: nowrap !important; }
+          cards:
+            - type: custom:button-card
+              template: ov_pill
+              entity: sensor.solar_power_generated_today
+              tap_action:
+                action: more-info
+              custom_fields:
+                c: |
+                  [[[
+                    var g = states['sensor.solar_power_generated_today'];
+                    return `<span style="color:rgba(255,255,255,0.8)">vandaag opgewekt · ${g && !isNaN(Number(g.state)) ? Number(g.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
+                  ]]]
+            - type: custom:button-card
+              template: ov_pill
+              entity: sensor.forecast_solar_production_today
+              tap_action:
+                action: more-info
+              custom_fields:
+                c: |
+                  [[[
+                    var f = states['sensor.forecast_solar_production_today'];
+                    return `<span style="color:rgba(255,255,255,0.8)">verwacht · ${f && !isNaN(Number(f.state)) ? Number(f.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
+                  ]]]
+            - type: custom:button-card
+              template: ov_pill
+              entity: sensor.zonneplan_gas_consumption_today
+              tap_action:
+                action: more-info
+              custom_fields:
+                c: |
+                  [[[
+                    var g = states['sensor.zonneplan_gas_consumption_today'];
+                    return `<span style="color:rgba(255,255,255,0.8)">gas · ${g && !isNaN(Number(g.state)) ? Number(g.state).toFixed(2).replace('.',',') : '—'} m³</span>`;
+                  ]]]
+            - type: custom:button-card
+              template: ov_pill
+              entity: sensor.total_costs_today_calculated
+              tap_action:
+                action: more-info
+              custom_fields:
+                c: |
+                  [[[
+                    var k = states['sensor.total_costs_today_calculated'];
+                    var v = k && !isNaN(Number(k.state)) ? Number(k.state) : 0;
+                    var col = v < 0 ? '#4ade80' : 'rgba(255,255,255,0.85)';
+                    return `<span style="color:${col};font-weight:600">kosten vandaag · € ${v.toFixed(2).replace('.',',')}</span>`;
+                  ]]]
+  # STROOMPRIJS (vandaag + morgen)
+  - type: custom:mod-card
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--ov-panel-bg) !important;
+          border: var(--ov-panel-border) !important;
+          border-radius: var(--ov-panel-radius) !important;
+          box-shadow: none !important;
+          padding: var(--ov-panel-padding) !important;
+        }
+    card:
+      type: vertical-stack
+      cards:
+        - type: custom:button-card
+          template: ov_title
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-energie"
+          variables:
+            title: STROOMPRIJS
+          custom_fields:
+            b: |
+              [[[
+                var t = states['sensor.zonneplan_current_electricity_tariff'];
+                var g = states['sensor.zonneplan_current_tariff_group'];
+                var nu = t && !isNaN(Number(t.state)) ? Number(t.state) : null;
+                var col = {low:'#4ade80', normal:'#f59e0b', high:'#ef4444'}[g ? g.state : ''] || 'rgba(255,255,255,0.6)';
+                // goedkoopste resterende uur van vandaag uit de forecast halen
+                var raw = (t && t.attributes && t.attributes.forecast) || [];
+                var norm = function(v){ if(v === null || v === undefined || isNaN(Number(v))) return null; var n = Number(v); if(Math.abs(n) > 100) n = n / 10000000; return n; };
+                var now = new Date();
+                var best = null;
+                raw.forEach(function(e){
+                  var d = new Date(e.datetime || e.date || e.time || e.start);
+                  if(isNaN(d.getTime()) || d.toDateString() !== now.toDateString() || d < now) return;
+                  var p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
+                  if(p === null) return;
+                  if(best === null || p < best.p) best = {p: p, d: d};
+                });
+                var nuTxt = nu !== null ? '€ ' + nu.toFixed(3).replace('.',',') : '—';
+                var tip = best ? ` · laagste ${('0'+best.d.getHours()).slice(-2)}:00` : '';
+                return `<span style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:rgba(255,255,255,0.65)"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span><span style="color:white;font-weight:600">nu ${nuTxt}</span>${tip}</span>`;
+              ]]]
+        - type: custom:apexcharts-card
+          # Meeschuivend venster: 3 uur terug tot 27 uur vooruit. Een vast
+          # etmaalvenster stond tot ~15:00 half leeg, omdat de prijzen van
+          # morgen dan nog niet gepubliceerd zijn.
+          graph_span: 30h
+          stacked: true
+          span:
+            start: hour
+            offset: "-3h"
+          # Alleen de stippellijn: een `label` rendert een ongestyled
+          # wit annotatieblok bovenin de grafiek.
+          now:
+            show: true
+            color: rgba(255,255,255,0.75)
+          card_mod:
+            style: |
+              ha-card { background: none !important; box-shadow: none !important; border: none !important; }
+          header:
+            show: false
+          apex_config:
+            chart:
+              height: 185
+              toolbar:
+                show: false
+            grid:
+              show: false
+              padding:
+                left: 14
+                right: 4
+                top: -8
+                bottom: 0
+            legend:
+              show: false
+            yaxis:
+              show: true
+              tickAmount: 3
+              labels:
+                style:
+                  colors: "rgba(255,255,255,0.5)"
+                  fontSize: "10px"
+                formatter: |
+                  EVAL:function(v) { return (v === null || v === undefined) ? '' : '€ ' + Number(v).toFixed(2).replace('.', ','); }
+            xaxis:
+              axisBorder:
+                show: false
+              axisTicks:
+                show: false
+              # los van de gewone tooltip rendert ApexCharts standaard nog een
+              # label onder de x-as; die gaf het dubbele "wo. 08:00"
+              tooltip:
+                enabled: false
+              labels:
+                show: true
+                style:
+                  colors: "rgba(255,255,255,0.5)"
+                  fontSize: "10px"
+                datetimeFormatter:
+                  hour: "HH:mm"
+                  day: "dd/MM"
+            tooltip:
+              enabled: true
+              shared: false
+              intersect: true
+              x:
+                format: "ddd HH:mm"
+            plotOptions:
+              bar:
+                columnWidth: 82%
+          series:
+            # Drie series over dezelfde uren: per uur vult er precies één,
+            # de andere twee zijn null. Gestapeld levert dat één balk per uur
+            # in de kleur van de prijsklasse (t.o.v. de rest van díe dag).
+            - entity: sensor.zonneplan_current_electricity_tariff
+              name: goedkoop
+              type: column
+              color: "#4ade80"
+              opacity: 1
+              stroke_width: 1
+              float_precision: 3
+              data_generator: |
+                const BAND = 0;
+                const raw = (entity.attributes && entity.attributes.forecast) || [];
+                const norm = (v) => {
+                  if (v === null || v === undefined || isNaN(Number(v))) return null;
+                  let n = Number(v);
+                  if (Math.abs(n) > 100) n = n / 10000000; // integer-eenheden -> euro
+                  return n;
+                };
+                const pts = raw.map((e) => {
+                  const ts = new Date(e.datetime || e.date || e.time || e.start).getTime();
+                  const p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
+                  return [ts, p];
+                }).filter((x) => !isNaN(x[0]));
+                const dayKey = (ts) => new Date(ts).toDateString();
+                const stats = {};
+                pts.forEach(([ts, p]) => {
+                  if (p === null) return;
+                  const k = dayKey(ts);
+                  if (!stats[k]) stats[k] = { min: p, max: p };
+                  else { stats[k].min = Math.min(stats[k].min, p); stats[k].max = Math.max(stats[k].max, p); }
+                });
+                return pts.map(([ts, p]) => {
+                  if (p === null) return [ts, null];
+                  const s = stats[dayKey(ts)];
+                  const spread = s.max - s.min;
+                  // vlakke dag (< 2 ct verschil): niets is echt goedkoop of duur
+                  const r = (spread < 0.02) ? 0.5 : (p - s.min) / spread;
+                  const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
+                  return [ts, band === BAND ? p : null];
+                });
+            - entity: sensor.zonneplan_current_electricity_tariff
+              name: gemiddeld
+              type: column
+              color: "#f59e0b"
+              opacity: 1
+              stroke_width: 1
+              float_precision: 3
+              data_generator: |
+                const BAND = 1;
+                const raw = (entity.attributes && entity.attributes.forecast) || [];
+                const norm = (v) => {
+                  if (v === null || v === undefined || isNaN(Number(v))) return null;
+                  let n = Number(v);
+                  if (Math.abs(n) > 100) n = n / 10000000;
+                  return n;
+                };
+                const pts = raw.map((e) => {
+                  const ts = new Date(e.datetime || e.date || e.time || e.start).getTime();
+                  const p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
+                  return [ts, p];
+                }).filter((x) => !isNaN(x[0]));
+                const dayKey = (ts) => new Date(ts).toDateString();
+                const stats = {};
+                pts.forEach(([ts, p]) => {
+                  if (p === null) return;
+                  const k = dayKey(ts);
+                  if (!stats[k]) stats[k] = { min: p, max: p };
+                  else { stats[k].min = Math.min(stats[k].min, p); stats[k].max = Math.max(stats[k].max, p); }
+                });
+                return pts.map(([ts, p]) => {
+                  if (p === null) return [ts, null];
+                  const s = stats[dayKey(ts)];
+                  const spread = s.max - s.min;
+                  // vlakke dag (< 2 ct verschil): niets is echt goedkoop of duur
+                  const r = (spread < 0.02) ? 0.5 : (p - s.min) / spread;
+                  const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
+                  return [ts, band === BAND ? p : null];
+                });
+            - entity: sensor.zonneplan_current_electricity_tariff
+              name: duur
+              type: column
+              color: "#ef4444"
+              opacity: 1
+              stroke_width: 1
+              float_precision: 3
+              data_generator: |
+                const BAND = 2;
+                const raw = (entity.attributes && entity.attributes.forecast) || [];
+                const norm = (v) => {
+                  if (v === null || v === undefined || isNaN(Number(v))) return null;
+                  let n = Number(v);
+                  if (Math.abs(n) > 100) n = n / 10000000;
+                  return n;
+                };
+                const pts = raw.map((e) => {
+                  const ts = new Date(e.datetime || e.date || e.time || e.start).getTime();
+                  const p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
+                  return [ts, p];
+                }).filter((x) => !isNaN(x[0]));
+                const dayKey = (ts) => new Date(ts).toDateString();
+                const stats = {};
+                pts.forEach(([ts, p]) => {
+                  if (p === null) return;
+                  const k = dayKey(ts);
+                  if (!stats[k]) stats[k] = { min: p, max: p };
+                  else { stats[k].min = Math.min(stats[k].min, p); stats[k].max = Math.max(stats[k].max, p); }
+                });
+                return pts.map(([ts, p]) => {
+                  if (p === null) return [ts, null];
+                  const s = stats[dayKey(ts)];
+                  const spread = s.max - s.min;
+                  // vlakke dag (< 2 ct verschil): niets is echt goedkoop of duur
+                  const r = (spread < 0.02) ? 0.5 : (p - s.min) / spread;
+                  const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
+                  return [ts, band === BAND ? p : null];
+                });
+        # samenvatting laagste / hoogste per dag + kleurlegenda (één regel)
+        - type: custom:button-card
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-energie"
+          styles:
+            card:
+              - background: none
+              - border: none
+              - box-shadow: none
+              - padding: 6px 2px 0 2px
+            grid:
+              - grid-template-areas: '"dagen key"'
+              - grid-template-columns: 1fr auto
+              - align-items: center
+              - column-gap: 12px
+            custom_fields:
+              dagen:
+                - justify-self: start
+              key:
+                - justify-self: end
+          custom_fields:
+            dagen: |
+              [[[
+                var t = states['sensor.zonneplan_current_electricity_tariff'];
+                var raw = (t && t.attributes && t.attributes.forecast) || [];
+                var norm = function(v){ if(v === null || v === undefined || isNaN(Number(v))) return null; var n = Number(v); if(Math.abs(n) > 100) n = n / 10000000; return n; };
+                var extremen = function(offset){
+                  var ref = new Date(); ref.setDate(ref.getDate() + offset);
+                  var key = ref.toDateString();
+                  var lo = null, hi = null;
+                  raw.forEach(function(e){
+                    var d = new Date(e.datetime || e.date || e.time || e.start);
+                    if(isNaN(d.getTime()) || d.toDateString() !== key) return;
+                    var p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
+                    if(p === null) return;
+                    if(lo === null || p < lo.p) lo = {p: p, d: d};
+                    if(hi === null || p > hi.p) hi = {p: p, d: d};
+                  });
+                  return lo === null ? null : {lo: lo, hi: hi};
+                };
+                var f = function(x, col){ return `<span style="color:${col}">€ ${x.p.toFixed(3).replace('.',',')}</span><span style="color:rgba(255,255,255,0.35)"> ${('0'+x.d.getHours()).slice(-2)}:00</span>`; };
+                var deel = function(lbl, x){
+                  if(!x) return `<span style="color:rgba(255,255,255,0.55)">${lbl}</span> <span style="color:rgba(255,255,255,0.3)">nog niet bekend</span>`;
+                  return `<span style="color:rgba(255,255,255,0.55)">${lbl}</span> ${f(x.lo,'#4ade80')} <span style="color:rgba(255,255,255,0.2)">·</span> ${f(x.hi,'#ef4444')}`;
+                };
+                return `<span style="display:flex;align-items:center;gap:14px;font-size:12px;white-space:nowrap">${deel('vandaag', extremen(0))}${deel('morgen', extremen(1))}</span>`;
+              ]]]
+            key: |
+              [[[
+                var dot = function(c, lbl){ return `<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${lbl}</span>`; };
+                return `<span style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:rgba(255,255,255,0.52)">${dot('#4ade80','goedkoop')}${dot('#f59e0b','gemiddeld')}${dot('#ef4444','duur')}</span>`;
+              ]]]
+  # VEELGEBRUIKERS
+  - type: custom:mod-card
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--ov-panel-bg) !important;
+          border: var(--ov-panel-border) !important;
+          border-radius: var(--ov-panel-radius) !important;
+          box-shadow: none !important;
+          padding: var(--ov-panel-padding) !important;
+        }
+    card:
+      type: vertical-stack
+      cards:
+        - type: custom:button-card
+          template: ov_title
+          variables:
+            title: VEELGEBRUIKERS
+        - type: custom:auto-entities
+          show_empty: false
+          card:
+            type: vertical-stack
+          card_param: cards
+          filter:
+            include:
+              - domain: sensor
+                name: "*Vermogen*"
+                options:
+                  type: custom:button-card
+                  template: ov_bar
+                  variables:
+                    scale: auto
+                  name: "[[[ return entity.attributes.friendly_name.replace(/ ?vermogen/i, '').replace(/ ?stopcontact/i, '').replace(/\\s+/g, ' ').trim(); ]]]"
+                  tap_action:
+                    action: more-info
+            exclude:
+              - name: Inverter*
+              - name: "*Zonnepanel*"
+              - name: "*zonneplan*"
+              - name: "*SlimHuys*"
+              - name: "*GoodWe*"
+              - name: "*mvormer*"
+              - state: "off"
+              - state: unavailable
+              - state: unknown
+              - state: "0"
+              - hidden_by: user
+          sort:
+            method: state
+            numeric: true
+            reverse: true
+            count: 7

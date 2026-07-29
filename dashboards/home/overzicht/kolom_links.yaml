@@ -1,0 +1,553 @@
+# Linkerkolom: personen, ruimtes, auto, media.
+type: vertical-stack
+card_mod:
+  style: |
+    #root { gap: 16px !important; }
+cards:
+  # PERSONEN
+  - type: custom:mod-card
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--ov-panel-bg) !important;
+          border: var(--ov-panel-border) !important;
+          border-radius: var(--ov-panel-radius) !important;
+          box-shadow: none !important;
+          padding: var(--ov-panel-padding) !important;
+        }
+    card:
+      type: vertical-stack
+      cards:
+        - type: custom:button-card
+          template: ov_title
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-personen"
+          variables:
+            title: PERSONEN
+          custom_fields:
+            b: |
+              [[[
+                var ppl = ['person.robin_bohnen','person.samantha_henkelman','person.emma_bohnen','person.logan_veen'];
+                var n = ppl.filter(e => states[e] && states[e].state === 'home').length;
+                return `<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:#4ade80;background:rgba(52,168,120,0.15)">${n} thuis</span>`;
+              ]]]
+        - type: custom:button-card
+          template: ov_person
+          entity: person.robin_bohnen
+          variables:
+            travel: sensor.robin_reistijd_naar_huis
+            battery: sensor.iphone_van_robin_battery_level
+        - type: custom:button-card
+          template: ov_person
+          entity: person.samantha_henkelman
+          variables:
+            travel: sensor.samantha_reistijd_naar_huis
+            battery: sensor.iphone_van_samantha_battery_level
+        - type: custom:button-card
+          template: ov_person
+          entity: person.emma_bohnen
+          variables:
+            travel: sensor.emma_reistijd_naar_huis
+            battery: sensor.iphone_van_emma_battery_level
+        - type: custom:button-card
+          template: ov_person
+          entity: person.logan_veen
+          variables:
+            travel: sensor.logan_reistijd_naar_huis
+            battery: sensor.iphone_battery_level
+  # RUIMTES
+  - type: custom:mod-card
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--ov-panel-bg) !important;
+          border: var(--ov-panel-border) !important;
+          border-radius: var(--ov-panel-radius) !important;
+          box-shadow: none !important;
+          padding: var(--ov-panel-padding) !important;
+        }
+    card:
+      type: vertical-stack
+      cards:
+        - type: custom:button-card
+          template: ov_title
+          variables:
+            title: RUIMTES
+        - type: custom:button-card
+          template: ov_room
+          name: Begane grond
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-groundfloor"
+          variables:
+            lights:
+              - light.woonkamer_lampen
+              - light.keuken_lampen
+              - light.eettafel_lampen
+              - light.entree_lampen
+              - light.trapkast_lampen
+            temp: sensor.woonkamer_temperatuur
+        - type: custom:button-card
+          template: ov_room
+          name: Eerste verdieping
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-firstfloor"
+          variables:
+            lights:
+              - light.badkamer_lampen
+              - light.slaapkamer_lampen
+              - light.slaapkamer_maxi_lampen
+              - light.kantoor_lampen
+              - light.overloop_lampen
+            temp: sensor.slaapkamer_temperatuur_temperature
+        - type: custom:button-card
+          template: ov_room
+          name: Tweede verdieping
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-secondfloor"
+          variables:
+            lights:
+              - light.overloop_zolder_lampen
+              - light.slaapkamer_mini_lampen
+            temp: sensor.slaapkamer_mini_temperatuur_temperature
+        - type: custom:button-card
+          template: ov_room
+          name: Garage / speelkamer
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-garage"
+          variables:
+            lights:
+              - light.garage_lampen
+              - light.speelkamer_lampen
+            temp: sensor.speelkamer_temperatuur_temperature
+        - type: custom:button-card
+          template: ov_room
+          name: Buiten
+          entity: cover.achtertuin_zonnescherm
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-outside"
+          custom_fields:
+            sum: |
+              [[[
+                var t = states['sensor.knmi_temperatuur'];
+                var w = states['weather.knmi_thuis'];
+                var g = t && !isNaN(Number(t.state)) ? Number(t.state)
+                      : (w && w.attributes.temperature != null ? Number(w.attributes.temperature) : null);
+                var c = states['cover.achtertuin_zonnescherm'];
+                var pos = c && c.attributes && c.attributes.current_position != null ? Number(c.attributes.current_position) : null;
+                var m = {open:'omhoog', closed:'omlaag', opening:'gaat omhoog', closing:'gaat omlaag'};
+                var scherm = c ? (m[c.state] || c.state) : '?';
+                // Positie alleen tonen als hij ergens halverwege hangt.
+                if(pos !== null && pos > 0 && pos < 100) scherm = pos + '%';
+                var graden = g === null ? ''
+                  : `<span style="color:${g < 5 ? '#38bdf8' : (g > 25 ? '#f59e0b' : 'rgba(255,255,255,0.85)')};font-weight:600">${g.toFixed(1).replace('.',',')}°</span><span style="color:rgba(255,255,255,0.2)">·</span>`;
+                return `<span style="display:inline-flex;align-items:baseline;gap:8px">${graden}<span style="color:rgba(255,255,255,0.72)">scherm ${scherm}</span></span>`;
+              ]]]
+            dot: |
+              [[[
+                var c = states['cover.achtertuin_zonnescherm'];
+                var act = c && c.state !== 'closed';
+                return `<div style="width:9px;height:9px;border-radius:50%;background:${act ? '#3b82f6' : 'rgba(255,255,255,0.14)'}"></div>`;
+              ]]]
+        # Deuren & ramen: één blik of het huis dicht is
+        - type: custom:button-card
+          entity: binary_sensor.all_doors
+          tap_action:
+            action: more-info
+          show_icon: false
+          show_name: false
+          show_state: false
+          styles:
+            card:
+              - background: none
+              - border: none
+              - box-shadow: none
+              - padding: 11px 2px 2px 2px
+              - border-top: 1px solid rgba(255,255,255,0.06)
+            grid:
+              - grid-template-areas: '"n sum dot"'
+              - grid-template-columns: auto 1fr auto
+              - align-items: center
+              - column-gap: 10px
+            custom_fields:
+              n:
+                - justify-self: start
+              sum:
+                - justify-self: end
+                - font-size: 13px
+              dot:
+                - justify-self: end
+          custom_fields:
+            n: |
+              [[[ return `<span style="font-size:14.5px;font-weight:500;color:white">Deuren & ramen</span>`; ]]]
+            sum: |
+              [[[
+                var d = states['binary_sensor.all_doors'];
+                var r = states['binary_sensor.all_windows'];
+                var open = [];
+                if(d && d.state === 'on') open.push('deur');
+                if(r && r.state === 'on') open.push('raam');
+                if(!d && !r) return `<span style="color:rgba(255,255,255,0.60)">onbekend</span>`;
+                if(!open.length) return `<span style="color:rgba(255,255,255,0.60)">alles dicht</span>`;
+                return `<span style="color:#f59e0b;font-weight:600">${open.join(' &amp; ')} open</span>`;
+              ]]]
+            dot: |
+              [[[
+                var d = states['binary_sensor.all_doors'];
+                var r = states['binary_sensor.all_windows'];
+                var iets = (d && d.state === 'on') || (r && r.state === 'on');
+                return `<div style="width:9px;height:9px;border-radius:50%;background:${iets ? '#f59e0b' : 'rgba(255,255,255,0.14)'}"></div>`;
+              ]]]
+  # AUTO
+  - type: custom:mod-card
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--ov-panel-bg) !important;
+          border: var(--ov-panel-border) !important;
+          border-radius: var(--ov-panel-radius) !important;
+          box-shadow: none !important;
+          padding: var(--ov-panel-padding) !important;
+        }
+    card:
+      type: vertical-stack
+      cards:
+        - type: custom:button-card
+          template: ov_title
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-auto"
+          variables:
+            title: AUTO
+          custom_fields:
+            b: |
+              [[[
+                var b = states['sensor.hrh85f_batterij'];
+                var r = states['sensor.hrh85f_battery_autonomy'];
+                var cs = states['sensor.hrh85f_charge_state'];
+                var rest = states['sensor.hrh85f_charging_remaining_time'];
+                var bs = b && !isNaN(Number(b.state)) ? Math.round(Number(b.state)) : null;
+                var rs = r && !isNaN(Number(r.state)) ? Math.round(Number(r.state)) : null;
+                var laag = bs !== null && bs <= 20;
+                var m = {charge_in_progress:['laadt','#4ade80','rgba(52,168,120,0.15)','mdi:flash'],
+                         charge_ended:['vol','#4ade80','rgba(52,168,120,0.15)','mdi:battery-check'],
+                         not_in_charge:['niet aan lader','rgba(255,255,255,0.5)','rgba(255,255,255,0.06)','mdi:power-plug-off'],
+                         waiting_for_a_planned_charge:['gepland','#38bdf8','rgba(56,189,248,0.15)','mdi:clock-outline'],
+                         waiting_for_current_charge:['wacht','#38bdf8','rgba(56,189,248,0.15)','mdi:clock-outline'],
+                         charge_error:['laadfout','#ef4444','rgba(239,68,68,0.15)','mdi:alert-circle'],
+                         energy_flap_opened:['klep open','#f59e0b','rgba(245,158,11,0.15)','mdi:ev-plug-type2']};
+                var c = m[cs && cs.state] || ['onbekend','rgba(255,255,255,0.4)','rgba(255,255,255,0.06)','mdi:help-circle-outline'];
+                var lbl = c[0];
+                if(cs && cs.state === 'charge_in_progress' && rest && !isNaN(Number(rest.state))) {
+                  var min = Math.round(Number(rest.state));
+                  lbl += min >= 60 ? ` · ${Math.floor(min/60)}u${('0'+(min%60)).slice(-2)}` : ` · ${min}m`;
+                }
+                var pill = function(txt, fg, bg, icon){
+                  var ic = icon ? `<ha-icon icon="${icon}" style="--mdc-icon-size:13px"></ha-icon>` : '';
+                  return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:20px;color:${fg};background:${bg}">${ic}${txt}</span>`;
+                };
+                var accu = pill((bs === null ? '—' : bs + '%') + (rs === null ? '' : ' · ' + rs + ' km'),
+                                laag ? '#f59e0b' : '#4ade80',
+                                laag ? 'rgba(245,158,11,0.15)' : 'rgba(52,168,120,0.15)', null);
+                return `<span style="display:flex;align-items:center;gap:7px">${pill(lbl, c[1], c[2], c[3])}${accu}</span>`;
+              ]]]
+        # Auto-illustratie (Megane E-Tech, matgrijs) + kilometerstand + klimaatknop
+        - type: horizontal-stack
+          card_mod:
+            style: |
+              #root {
+                display: grid !important;
+                grid-template-columns: 112px 1fr !important;
+                align-items: center !important;
+                gap: 14px !important;
+              }
+          cards:
+            - type: custom:button-card
+              show_icon: false
+              show_name: false
+              show_state: false
+              tap_action:
+                action: navigate
+                navigation_path: "#ov-auto"
+              styles:
+                card:
+                  - background: none
+                  - border: none
+                  - box-shadow: none
+                  - padding: 4px 0
+                grid:
+                  - grid-template-areas: '"car"'
+              custom_fields:
+                car: |
+                  [[[
+                    var cs = states['sensor.hrh85f_charge_state'];
+                    var laadt = cs && cs.state === 'charge_in_progress';
+                    var kop = laadt ? '#4ade80' : '#dfe6f0';
+                    var bout = laadt ? '<path d="M104,44 l-9,15 h7 l-4,12 12,-16 h-7 z" fill="#4ade80"/>' : '';
+                    return `<svg viewBox="0 0 200 96" width="112" height="54" xmlns="http://www.w3.org/2000/svg" style="display:block">
+                      <path d="M6,62 C6,52 10,47 20,45 L40,42 C46,41 50,39 54,35 L66,24 C71,19 78,16 86,16 L126,16 C136,16 145,19 151,25 L166,39 C172,44 180,46 187,49 C193,51 196,55 196,61 L196,70 C196,74 193,76 189,76 L12,76 C8,76 6,74 6,70 Z" fill="#7b828d"/>
+                      <path d="M70,27 C74,22 79,20 86,20 L103,20 L103,41 L61,41 Z" fill="#1b1f27"/>
+                      <path d="M109,20 L124,20 C132,20 138,22 143,27 L155,41 L109,41 Z" fill="#1b1f27"/>
+                      <rect x="12" y="63" width="176" height="13" rx="6.5" fill="#161920"/>
+                      <circle cx="53" cy="70" r="21" fill="#161920"/>
+                      <circle cx="150" cy="70" r="21" fill="#161920"/>
+                      <circle cx="53" cy="70" r="16" fill="#0e1015"/>
+                      <circle cx="150" cy="70" r="16" fill="#0e1015"/>
+                      <circle cx="53" cy="70" r="7" fill="#4d535d"/>
+                      <circle cx="150" cy="70" r="7" fill="#4d535d"/>
+                      <rect x="5" y="51" width="11" height="5" rx="2.5" fill="${kop}" opacity="0.9"/>
+                      <rect x="185" y="51" width="11" height="5" rx="2.5" fill="#ef4444" opacity="0.8"/>
+                      ${bout}
+                    </svg>`;
+                  ]]]
+            - type: vertical-stack
+              card_mod:
+                style: |
+                  #root { gap: 8px !important; }
+              cards:
+                - type: custom:button-card
+                  entity: sensor.hrh85f_kilometerstand
+                  show_icon: false
+                  show_name: false
+                  show_state: false
+                  tap_action:
+                    action: navigate
+                    navigation_path: "#ov-auto"
+                  styles:
+                    card:
+                      - background: none
+                      - border: none
+                      - box-shadow: none
+                      - padding: 0 2px
+                    grid:
+                      - grid-template-areas: '"km"'
+                      - justify-items: start
+                  custom_fields:
+                    km: |
+                      [[[
+                        var e = states['sensor.hrh85f_kilometerstand'];
+                        var v = e && !isNaN(Number(e.state)) ? Number(e.state).toLocaleString('nl-NL') : '—';
+                        return `<span style="display:flex;align-items:baseline;gap:6px"><span style="font-size:21px;font-weight:700;color:white;line-height:1">${v}</span><span style="font-size:12px;color:rgba(255,255,255,0.55)">km totaal</span></span>`;
+                      ]]]
+                # Voorverwarmen / voorkoelen (Renault pre-conditioning)
+                - type: custom:button-card
+                  entity: binary_sensor.hrh85f_hvac
+                  show_icon: false
+                  show_name: false
+                  show_state: false
+                  tap_action:
+                    action: perform-action
+                    perform_action: button.press
+                    target:
+                      entity_id: button.hrh85f_start_air_conditioner
+                    confirmation:
+                      text: Klimaatregeling van de auto starten?
+                  styles:
+                    card:
+                      - background: >
+                          [[[ var h = states['binary_sensor.hrh85f_hvac']; return (h && h.state === 'on') ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
+                      - border: >
+                          [[[ var h = states['binary_sensor.hrh85f_hvac']; return (h && h.state === 'on') ? '1px solid rgba(52,168,120,0.28)' : '1px solid rgba(255,255,255,0.08)'; ]]]
+                      - border-radius: 12px
+                      - box-shadow: none
+                      - padding: 8px 12px
+                    grid:
+                      - grid-template-areas: '"ic t"'
+                      - grid-template-columns: 20px 1fr
+                      - align-items: center
+                      - column-gap: 10px
+                    custom_fields:
+                      ic:
+                        - grid-area: ic
+                      t:
+                        - grid-area: t
+                        - justify-self: start
+                  custom_fields:
+                    ic: |
+                      [[[
+                        var w = states['weather.knmi_thuis'];
+                        var temp = w && w.attributes.temperature != null ? Number(w.attributes.temperature) : null;
+                        var h = states['binary_sensor.hrh85f_hvac'];
+                        var mode = temp === null ? 'auto' : (temp < 15 ? 'heat' : (temp > 22 ? 'cool' : 'auto'));
+                        var ico = {heat:'mdi:fire', cool:'mdi:snowflake', auto:'mdi:air-conditioner'}[mode];
+                        var col = (h && h.state === 'on') ? '#4ade80' : {heat:'#f59e0b', cool:'#38bdf8', auto:'rgba(255,255,255,0.7)'}[mode];
+                        return `<ha-icon icon="${ico}" style="--mdc-icon-size:19px;color:${col}"></ha-icon>`;
+                      ]]]
+                    t: |
+                      [[[
+                        var h = states['binary_sensor.hrh85f_hvac'];
+                        var w = states['weather.knmi_thuis'];
+                        var temp = w && w.attributes.temperature != null ? Math.round(Number(w.attributes.temperature)) : null;
+                        if(h && h.state === 'on') return `<span style="display:flex;align-items:baseline;gap:6px"><span style="font-size:14px;font-weight:600;color:#4ade80">Klimaat actief</span></span>`;
+                        var lbl = temp === null ? 'Klimaat starten' : (temp < 15 ? 'Voorverwarmen' : (temp > 22 ? 'Voorkoelen' : 'Klimaat starten'));
+                        var suf = temp === null ? '' : `<span style="font-size:12px;color:rgba(255,255,255,0.50)">${temp}°</span>`;
+                        return `<span style="display:flex;align-items:baseline;gap:7px"><span style="font-size:14px;font-weight:600;color:white">${lbl}</span>${suf}</span>`;
+                      ]]]
+  # MEDIA
+  - type: custom:mod-card
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--ov-panel-bg) !important;
+          border: var(--ov-panel-border) !important;
+          border-radius: var(--ov-panel-radius) !important;
+          box-shadow: none !important;
+          padding: var(--ov-panel-padding) !important;
+        }
+    card:
+      type: vertical-stack
+      cards:
+        - type: custom:button-card
+          template: ov_title
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-media"
+          variables:
+            title: MEDIA
+        - type: horizontal-stack
+          card_mod:
+            style: |
+              #root {
+                display: grid !important;
+                grid-template-columns: 1fr auto auto !important;
+                align-items: center !important;
+                gap: 8px !important;
+              }
+          cards:
+            # Nu speelt (tik = multiroom-popup)
+            - type: custom:button-card
+              template: ov_sonos
+              show_icon: false
+              show_name: false
+              show_state: false
+              tap_action:
+                action: navigate
+                navigation_path: "#ov-media"
+              styles:
+                card:
+                  - background: none
+                  - border: none
+                  - box-shadow: none
+                  - padding: 6px 2px 2px 2px
+                grid:
+                  - grid-template-areas: '"art info"'
+                  - grid-template-columns: 52px 1fr
+                  - align-items: center
+                  - column-gap: 14px
+                custom_fields:
+                  art:
+                    - grid-area: art
+                  info:
+                    - grid-area: info
+                    - justify-self: start
+                    - overflow: hidden
+              custom_fields:
+                art: |
+                  [[[
+                    var sp = variables.speakers || [];
+                    var act = sp.find(function(e){ return states[e] && states[e].state === 'playing'; })
+                           || sp.find(function(e){ return states[e] && states[e].state === 'paused'; });
+                    var s = act ? states[act] : null;
+                    var pic = s && s.attributes.entity_picture ? s.attributes.entity_picture : null;
+                    if(pic) return `<div style="width:52px;height:52px;border-radius:10px;background-image:url('${pic}');background-size:cover;background-position:center"></div>`;
+                    return `<div style="width:52px;height:52px;border-radius:10px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:music" style="--mdc-icon-size:24px;color:rgba(255,255,255,0.60)"></ha-icon></div>`;
+                  ]]]
+                info: |
+                  [[[
+                    var sp = variables.speakers || [];
+                    var act = sp.find(function(e){ return states[e] && states[e].state === 'playing'; });
+                    var pauze = !act;
+                    if(pauze) act = sp.find(function(e){ return states[e] && states[e].state === 'paused'; });
+                    if(!act) return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px;font-weight:600;color:white">Niets speelt</span><span style="font-size:12.5px;color:rgba(255,255,255,0.55)">tik voor multiroom</span></div>`;
+                    var s = states[act];
+                    var titel = s.attributes.media_title || 'Speelt';
+                    var naam = s.attributes.friendly_name ? s.attributes.friendly_name.replace(/ ?Sonos/i,'').trim() : '';
+                    var grp = s.attributes.group_members ? s.attributes.group_members.length : 1;
+                    var extra = grp > 1 ? `<span style="color:#3b82f6;font-weight:600"> +${grp-1}</span>` : '';
+                    var artiest = s.attributes.media_artist || s.attributes.media_album_name || '';
+                    var kleur = pauze ? 'rgba(255,255,255,0.4)' : '#4ade80';
+                    var staat = pauze ? '<span style="color:rgba(255,255,255,0.52)">gepauzeerd</span> <span style="color:rgba(255,255,255,0.25)">·</span> ' : '';
+                    var sub = staat + `<ha-icon icon="mdi:speaker" style="--mdc-icon-size:13px;color:${kleur};vertical-align:-2px"></ha-icon> ${naam}${extra}` + (artiest ? ` <span style="color:rgba(255,255,255,0.25)">·</span> ${artiest}` : '');
+                    return `<div style="display:flex;flex-direction:column;gap:2px;overflow:hidden"><span style="font-size:14.5px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${titel}</span><span style="font-size:12.5px;color:rgba(255,255,255,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</span></div>`;
+                  ]]]
+            # Afspelen / pauzeren van de actieve speaker (Sonos pauzeert de hele groep)
+            - type: custom:button-card
+              template: ov_sonos
+              show_icon: false
+              show_name: false
+              show_state: false
+              tap_action:
+                action: perform-action
+                perform_action: media_player.media_play_pause
+                target:
+                  entity_id: |
+                    [[[
+                      var sp = variables.speakers || [];
+                      return sp.find(function(e){ return states[e] && states[e].state === 'playing'; })
+                          || sp.find(function(e){ return states[e] && states[e].state === 'paused'; })
+                          || sp[0];
+                    ]]]
+              styles:
+                card:
+                  - background: rgba(255,255,255,0.05)
+                  - border: 1px solid rgba(255,255,255,0.08)
+                  - border-radius: 12px
+                  - box-shadow: none
+                  - padding: 0
+                  - width: 38px
+                  - height: 38px
+                grid:
+                  - grid-template-areas: '"i"'
+                  - align-items: center
+                  - justify-items: center
+              custom_fields:
+                i: |
+                  [[[
+                    var sp = variables.speakers || [];
+                    var speelt = sp.some(function(e){ return states[e] && states[e].state === 'playing'; });
+                    var actief = speelt || sp.some(function(e){ return states[e] && states[e].state === 'paused'; });
+                    var col = actief ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.25)';
+                    return `<ha-icon icon="${speelt ? 'mdi:pause' : 'mdi:play'}" style="--mdc-icon-size:20px;color:${col}"></ha-icon>`;
+                  ]]]
+            # Volgende nummer
+            - type: custom:button-card
+              template: ov_sonos
+              show_icon: false
+              show_name: false
+              show_state: false
+              tap_action:
+                action: perform-action
+                perform_action: media_player.media_next_track
+                target:
+                  entity_id: |
+                    [[[
+                      var sp = variables.speakers || [];
+                      return sp.find(function(e){ return states[e] && states[e].state === 'playing'; })
+                          || sp.find(function(e){ return states[e] && states[e].state === 'paused'; })
+                          || sp[0];
+                    ]]]
+              styles:
+                card:
+                  - background: rgba(255,255,255,0.05)
+                  - border: 1px solid rgba(255,255,255,0.08)
+                  - border-radius: 12px
+                  - box-shadow: none
+                  - padding: 0
+                  - width: 38px
+                  - height: 38px
+                grid:
+                  - grid-template-areas: '"i"'
+                  - align-items: center
+                  - justify-items: center
+              custom_fields:
+                i: |
+                  [[[
+                    var sp = variables.speakers || [];
+                    var actief = sp.some(function(e){ return states[e] && ['playing','paused'].indexOf(states[e].state) !== -1; });
+                    return `<ha-icon icon="mdi:skip-next" style="--mdc-icon-size:20px;color:${actief ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.25)'}"></ha-icon>`;
+                  ]]]
