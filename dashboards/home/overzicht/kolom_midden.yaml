@@ -278,7 +278,9 @@ cards:
                 var g = states['sensor.zonneplan_current_tariff_group'];
                 var nu = t && !isNaN(Number(t.state)) ? Number(t.state) : null;
                 var col = {low:'#4ade80', normal:'#f59e0b', high:'#ef4444'}[g ? g.state : ''] || 'rgba(255,255,255,0.6)';
-                // goedkoopste resterende uur van vandaag uit de forecast halen
+                // goedkoopste resterende prijsblok van vandaag uit de forecast halen.
+                // Zonneplan levert vanaf augustus 2026 kwartieren i.p.v. uren; de
+                // lengte van een blok maakt hier niet uit, alleen de tijdstempel.
                 var raw = (t && t.attributes && t.attributes.forecast) || [];
                 var norm = function(v){ if(v === null || v === undefined || isNaN(Number(v))) return null; var n = Number(v); if(Math.abs(n) > 100) n = n / 10000000; return n; };
                 var now = new Date();
@@ -291,7 +293,8 @@ cards:
                   if(best === null || p < best.p) best = {p: p, d: d};
                 });
                 var nuTxt = nu !== null ? '€ ' + nu.toFixed(3).replace('.',',') : '—';
-                var tip = best ? ` · laagste ${('0'+best.d.getHours()).slice(-2)}:00` : '';
+                var klok = function(d){ return ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2); };
+                var tip = best ? ` · laagste ${klok(best.d)}` : '';
                 return `<span style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:rgba(255,255,255,0.65)"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span><span style="color:white;font-weight:600">nu ${nuTxt}</span>${tip}</span>`;
               ]]]
         - type: custom:apexcharts-card
@@ -351,6 +354,7 @@ cards:
                   colors: "rgba(255,255,255,0.5)"
                   fontSize: "10px"
                 datetimeFormatter:
+                  minute: "HH:mm"
                   hour: "HH:mm"
                   day: "dd/MM"
             tooltip:
@@ -363,8 +367,8 @@ cards:
               bar:
                 columnWidth: 82%
           series:
-            # Drie series over dezelfde uren: per uur vult er precies één,
-            # de andere twee zijn null. Gestapeld levert dat één balk per uur
+            # Drie series over dezelfde tijdstippen: per prijsblok vult er precies één,
+            # de andere twee zijn null. Gestapeld levert dat één balk per blok
             # in de kleur van de prijsklasse (t.o.v. de rest van díe dag).
             - entity: sensor.zonneplan_current_electricity_tariff
               name: goedkoop
@@ -521,7 +525,8 @@ cards:
                   });
                   return lo === null ? null : {lo: lo, hi: hi};
                 };
-                var f = function(x, col){ return `<span style="color:${col}">€ ${x.p.toFixed(3).replace('.',',')}</span><span style="color:rgba(255,255,255,0.35)"> ${('0'+x.d.getHours()).slice(-2)}:00</span>`; };
+                var klok = function(d){ return ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2); };
+                var f = function(x, col){ return `<span style="color:${col}">€ ${x.p.toFixed(3).replace('.',',')}</span><span style="color:rgba(255,255,255,0.35)"> ${klok(x.d)}</span>`; };
                 var deel = function(lbl, x){
                   if(!x) return `<span style="color:rgba(255,255,255,0.55)">${lbl}</span> <span style="color:rgba(255,255,255,0.3)">nog niet bekend</span>`;
                   return `<span style="color:rgba(255,255,255,0.55)">${lbl}</span> ${f(x.lo,'#4ade80')} <span style="color:rgba(255,255,255,0.2)">·</span> ${f(x.hi,'#ef4444')}`;
