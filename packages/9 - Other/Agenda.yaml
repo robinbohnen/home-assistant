@@ -1,0 +1,93 @@
+agenda_package:
+  ##############################################################################
+  ## Kalender-entiteiten publiceren als attribuut alleen hun eerstvolgende
+  ## afspraak. Om te kunnen tellen ("3 afspraken vandaag") is een echte
+  ## uitvraag nodig; dat kan alleen via de actie calendar.get_events, en die
+  ## kan alleen vanuit een trigger-based template sensor worden aangeroepen.
+  ##
+  ## Meerdaagse hele-dag-items worden als notitie beschouwd en niet meegeteld
+  ## (anders kaapt bv. "Uiterlijk 9-9-2026 Dustin opzeggen" elke dagteller).
+  ##############################################################################
+  template:
+    - triggers:
+        - trigger: homeassistant
+          event: start
+        - trigger: time_pattern
+          minutes: "/15"
+        - trigger: time
+          at: "00:00:10"
+      actions:
+        - action: calendar.get_events
+          target:
+            entity_id:
+              - calendar.r_bohnen_vrbn_nl_agenda
+              - calendar.robin_bohnen_nl_agenda
+              - calendar.robin_en_sam
+              - calendar.brandweer
+              - calendar.maxi
+              - calendar.mini
+          data:
+            start_date_time: "{{ today_at('00:00') }}"
+            duration:
+              hours: 48
+          response_variable: opgehaald
+        - variables:
+            namen:
+              calendar.r_bohnen_vrbn_nl_agenda: Werk
+              calendar.robin_bohnen_nl_agenda: Privé
+              calendar.robin_en_sam: Samen
+              calendar.brandweer: Brandweer
+              calendar.maxi: Logan
+              calendar.mini: Emma
+            afspraken: >
+              {% set ns = namespace(items=[]) %}
+              {% for kalender, data in opgehaald.items() %}
+                {% for e in data.events %}
+                  {# hele-dag-events leveren 'YYYY-MM-DD', afspraken met tijd een volledige datetime #}
+                  {% set hele_dag = (e.start | string | length) == 10 %}
+                  {% set duur = ((as_datetime(e.end ~ 'T00:00:00') - as_datetime(e.start ~ 'T00:00:00')).days)
+                                if hele_dag else 0 %}
+                  {% set datum = e.start if hele_dag
+                                 else (e.start | as_datetime | as_local).strftime('%Y-%m-%d') %}
+                  {% set tijd = '' if hele_dag
+                                else (e.start | as_datetime | as_local).strftime('%H:%M') %}
+                  {% set eind = '' if hele_dag
+                                else (e.end | as_datetime | as_local).strftime('%H:%M') %}
+                  {% set ns.items = ns.items + [{
+                       'titel': e.summary,
+                       'agenda': namen.get(kalender, kalender),
+                       'datum': datum,
+                       'tijd': tijd,
+                       'eind': eind,
+                       'hele_dag': hele_dag,
+                       'notitie': hele_dag and duur > 1,
+                       'locatie': e.get('location', ''),
+                       'sorteer': datum ~ ' ' ~ (tijd if tijd else '00:00'),
+                       'sorteer_eind': datum ~ ' ' ~ (eind if eind else '23:59')
+                     }] %}
+                {% endfor %}
+              {% endfor %}
+              {{ ns.items | rejectattr('notitie') | sort(attribute='sorteer') | list }}
+      sensor:
+        - name: Agenda afspraken vandaag
+          unique_id: agenda_afspraken_vandaag
+          icon: mdi:calendar-account
+          state: >
+            {{ afspraken | selectattr('datum', 'eq', now().strftime('%Y-%m-%d')) | list | count }}
+          state_class: measurement
+          attributes:
+            vandaag: >
+              {{ afspraken | selectattr('datum', 'eq', now().strftime('%Y-%m-%d')) | list }}
+            morgen: >
+              {{ afspraken | selectattr('datum', 'eq',
+                 (now() + timedelta(days=1)).strftime('%Y-%m-%d')) | list }}
+            aantal_morgen: >
+              {{ afspraken | selectattr('datum', 'eq',
+                 (now() + timedelta(days=1)).strftime('%Y-%m-%d')) | list | count }}
+            volgende: >
+              {# op eindtijd filteren, zodat een lopende afspraak niet wegvalt #}
+              {% set nu = now().strftime('%Y-%m-%d %H:%M') %}
+              {% set komend = afspraken | selectattr('sorteer_eind', 'ge', nu)
+                              | sort(attribute='sorteer') | list %}
+              {{ komend | first if komend | count > 0 else none }}
+            bijgewerkt: "{{ now().isoformat() }}"

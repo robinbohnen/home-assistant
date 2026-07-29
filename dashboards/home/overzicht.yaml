@@ -92,7 +92,7 @@ cards:
                       var lbl = {low:'laag', normal:'gemiddeld', high:'hoog'};
                       var col = {low:'#4ade80', normal:'#f59e0b', high:'#ef4444'};
                       var gs = g ? g.state : 'normal';
-                      var price = p ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '';
+                      var price = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '';
                       var txt = gs === 'low' ? '#4ade80' : 'rgba(255,255,255,0.85)';
                       return `<span style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:${col[gs]||'#888'}"></span><span style="color:${txt}">tarief ${lbl[gs]||gs} · ${price}</span></span>`;
                     ]]]
@@ -730,7 +730,7 @@ cards:
                         cons: |
                           [[[
                             var e = states['sensor.electricity_meter_energieverbruik'];
-                            var v = e ? Number(e.state).toFixed(2).replace('.',',') : '—';
+                            var v = e && !isNaN(Number(e.state)) ? Number(e.state).toFixed(2).replace('.',',') : '—';
                             var u = e ? (e.attributes.unit_of_measurement || 'kW') : 'kW';
                             return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:white;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.5)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.42)">verbruik</div></div>`;
                           ]]]
@@ -821,7 +821,7 @@ cards:
                             c: |
                               [[[
                                 var g = states['sensor.solar_power_generated_today'];
-                                return `<span style="color:rgba(255,255,255,0.8)">vandaag opgewekt · ${g ? Number(g.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
+                                return `<span style="color:rgba(255,255,255,0.8)">vandaag opgewekt · ${g && !isNaN(Number(g.state)) ? Number(g.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
                               ]]]
                         - type: custom:button-card
                           template: ov_pill
@@ -832,7 +832,7 @@ cards:
                             c: |
                               [[[
                                 var f = states['sensor.forecast_solar_production_today'];
-                                return `<span style="color:rgba(255,255,255,0.8)">verwacht · ${f ? Number(f.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
+                                return `<span style="color:rgba(255,255,255,0.8)">verwacht · ${f && !isNaN(Number(f.state)) ? Number(f.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
                               ]]]
                         - type: custom:button-card
                           template: ov_pill
@@ -843,7 +843,7 @@ cards:
                             c: |
                               [[[
                                 var g = states['sensor.zonneplan_gas_consumption_today'];
-                                return `<span style="color:rgba(255,255,255,0.8)">gas · ${g ? Number(g.state).toFixed(2).replace('.',',') : '—'} m³</span>`;
+                                return `<span style="color:rgba(255,255,255,0.8)">gas · ${g && !isNaN(Number(g.state)) ? Number(g.state).toFixed(2).replace('.',',') : '—'} m³</span>`;
                               ]]]
                         - type: custom:button-card
                           template: ov_pill
@@ -1154,8 +1154,8 @@ cards:
                               type: custom:button-card
                               template: ov_bar
                               variables:
-                                max: 2500
-                              name: "[[[ return entity.attributes.friendly_name.replace(/ ?vermogen/i, '').trim(); ]]]"
+                                scale: auto
+                              name: "[[[ return entity.attributes.friendly_name.replace(/ ?vermogen/i, '').replace(/ ?stopcontact/i, '').replace(/\\s+/g, ' ').trim(); ]]]"
                               tap_action:
                                 action: more-info
                         exclude:
@@ -1250,6 +1250,14 @@ cards:
                       custom_fields:
                         t: |
                           [[[
+                            // Voorkeur: de get_events-sensor (telt en kent alle afspraken).
+                            // Bestaat die nog niet, dan terugvallen op de kalender-attributen.
+                            var sen = states['sensor.agenda_afspraken_vandaag'];
+                            var v = sen && sen.attributes ? sen.attributes.volgende : null;
+                            if(v && v.titel){
+                              var titel = String(v.titel);
+                              return titel.length > 30 ? titel.slice(0,29) + '…' : titel;
+                            }
                             var now = new Date();
                             var lijst = [];
                             (variables.agendas || []).forEach(function(c){
@@ -1270,6 +1278,22 @@ cards:
                           ]]]
                         s: |
                           [[[
+                            var sen = states['sensor.agenda_afspraken_vandaag'];
+                            var v = sen && sen.attributes ? sen.attributes.volgende : null;
+                            if(v && v.datum){
+                              var d = new Date(v.datum + 'T00:00:00');
+                              var mid = new Date(); mid.setHours(0,0,0,0);
+                              var dag = Math.round((d - mid) / 86400000);
+                              var dagTxt = dag === 0 ? 'vandaag' : (dag === 1 ? 'morgen' : d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
+                              var klok = new Date().toTimeString().slice(0,5);
+                              var tijd;
+                              if(v.hele_dag) tijd = 'hele dag';
+                              else if(dag === 0 && v.tijd <= klok && (!v.eind || v.eind >= klok)) tijd = 'nu bezig';
+                              else tijd = v.tijd || '';
+                              var n = Number(sen.state);
+                              var extra = (dag === 0 && !isNaN(n) && n > 1) ? ` · nog ${n - 1} vandaag` : '';
+                              return `${dagTxt} · ${tijd} · ${v.agenda}${extra}`;
+                            }
                             var now = new Date();
                             var lijst = [];
                             (variables.agendas || []).forEach(function(c){
@@ -1479,7 +1503,7 @@ cards:
                             var out = states['binary_sensor.brandweer_uitgerukt_op_laatste_melding'];
                             var secs = states['input_number.brandweer_uitruktijd_secondes'];
                             if(!out || out.state !== 'on') return '';
-                            var s = secs ? Math.round(Number(secs.state)) + ' s' : '';
+                            var s = secs && !isNaN(Number(secs.state)) ? Math.round(Number(secs.state)) + ' s' : '';
                             return `<span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;color:#4ade80;background:rgba(52,168,120,0.15)">uitgerukt · ${s}</span>`;
                           ]]]
                     - type: custom:button-card

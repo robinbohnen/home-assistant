@@ -140,7 +140,26 @@ ov_bar:
     bar: |
       [[[
         var v = entity && !isNaN(Number(entity.state)) ? Number(entity.state) : 0;
-        var m = variables.max || 1000;
+        var m;
+        if(variables.scale === 'auto') {
+          // Schaal op de zwaarste verbruiker van dit moment, anders zijn alle
+          // balkjes even kort zodra er niets groots aan staat. Dezelfde
+          // uitsluitingen als de auto-entities-filter, zodat zon/omvormer
+          // de schaal niet kapen.
+          var skip = /inverter|zonnepanel|zonneplan|slimhuys|goodwe|mvormer|solar/i;
+          m = 0;
+          Object.keys(states).forEach(function(k){
+            if(k.lastIndexOf('sensor.', 0) !== 0) return;
+            var s = states[k];
+            var fn = s && s.attributes ? s.attributes.friendly_name : null;
+            if(!fn || !/vermogen/i.test(fn) || skip.test(fn)) return;
+            var n = Number(s.state);
+            if(!isNaN(n) && n > m) m = n;
+          });
+          m = Math.max(m, 10);
+        } else {
+          m = variables.max || 1000;
+        }
         var pct = Math.max(2, Math.min(100, v / m * 100));
         return `<div style="width:100%;height:6px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:#3b82f6;border-radius:3px"></div></div>`;
       ]]]
@@ -199,12 +218,30 @@ ov_climate:
       ]]]
     badge: |
       [[[
-        var a = entity.attributes.hvac_action || entity.state;
-        var map = {cooling:['koelen','#38bdf8','rgba(56,189,248,0.15)'],
-                   heating:['verwarmt','#f59e0b','rgba(245,158,11,0.15)'],
-                   idle:['idle','rgba(255,255,255,0.6)','rgba(255,255,255,0.08)'],
-                   off:['uit','rgba(255,255,255,0.5)','rgba(255,255,255,0.06)']};
-        var m = map[a] || map[entity.state] || [a,'rgba(255,255,255,0.6)','rgba(255,255,255,0.08)'];
+        // Geen badge als de airco offline is; de subregel meldt dat al.
+        if(!entity || entity.state === 'unavailable' || entity.state === 'unknown') return '';
+        var blauw = ['#38bdf8','rgba(56,189,248,0.15)'];
+        var oranje = ['#f59e0b','rgba(245,158,11,0.15)'];
+        var grijs = ['rgba(255,255,255,0.6)','rgba(255,255,255,0.08)'];
+        var uit = ['rgba(255,255,255,0.5)','rgba(255,255,255,0.06)'];
+        // hvac_action = wat hij nu doet, state = de ingestelde stand.
+        // Niet elke airco levert hvac_action, dus beide moeten vertaald worden.
+        var map = {cooling:['koelen'].concat(blauw),
+                   heating:['verwarmt'].concat(oranje),
+                   drying:['ontvochtigt'].concat(blauw),
+                   fan:['ventileert'].concat(grijs),
+                   preheating:['voorverwarmt'].concat(oranje),
+                   defrosting:['ontdooit'].concat(oranje),
+                   idle:['idle'].concat(grijs),
+                   off:['uit'].concat(uit),
+                   cool:['koelen'].concat(blauw),
+                   heat:['verwarmen'].concat(oranje),
+                   dry:['ontvochtigen'].concat(blauw),
+                   fan_only:['ventileren'].concat(grijs),
+                   heat_cool:['automatisch'].concat(grijs),
+                   auto:['automatisch'].concat(grijs)};
+        var m = map[entity.attributes.hvac_action] || map[entity.state];
+        if(!m) m = [String(entity.state).replace(/_/g,' ')].concat(grijs);
         return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:${m[1]};background:${m[2]}">${m[0]}</span>`;
       ]]]
 
