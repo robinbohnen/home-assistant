@@ -512,7 +512,7 @@ cards:
                             var buiten = temp === null ? '' : ` · buiten ${temp}°`;
                             return `<span style="font-size:12.5px;color:rgba(255,255,255,0.45)">tik om te starten${buiten}</span>`;
                           ]]]
-              # VEELGEBRUIKERS
+              # MEDIA
               - type: custom:mod-card
                 card_mod:
                   style: *panel
@@ -521,51 +521,72 @@ cards:
                   cards:
                     - type: custom:button-card
                       template: ov_title
+                      tap_action:
+                        action: navigate
+                        navigation_path: "#ov-media"
                       variables:
-                        title: VEELGEBRUIKERS
-                    - type: custom:auto-entities
-                      show_empty: false
-                      card:
-                        type: vertical-stack
-                      card_param: cards
-                      filter:
-                        include:
-                          - domain: sensor
-                            name: "*Vermogen*"
-                            options:
-                              type: custom:button-card
-                              template: ov_bar
-                              variables:
-                                max: 2500
-                              name: "[[[ return entity.attributes.friendly_name.replace(/ ?vermogen/i, '').trim(); ]]]"
-                              tap_action:
-                                action: more-info
-                              # smallere kolom: naam/waarde krimpen zodat de balk ruimte houdt
-                              styles:
-                                grid:
-                                  - grid-template-columns: 112px 1fr 62px
-                                  - column-gap: 10px
-                                card:
-                                  - padding: 7px 2px
-                                name:
-                                  - font-size: 13px
-                        exclude:
-                          - name: Inverter*
-                          - name: "*Zonnepanel*"
-                          - name: "*zonneplan*"
-                          - name: "*SlimHuys*"
-                          - name: "*GoodWe*"
-                          - name: "*mvormer*"
-                          - state: "off"
-                          - state: unavailable
-                          - state: unknown
-                          - state: "0"
-                          - hidden_by: user
-                      sort:
-                        method: state
-                        numeric: true
-                        reverse: true
-                        count: 4
+                        title: MEDIA
+                    - type: custom:button-card
+                      show_icon: false
+                      show_name: false
+                      show_state: false
+                      tap_action:
+                        action: navigate
+                        navigation_path: "#ov-media"
+                      styles:
+                        card:
+                          - background: none
+                          - border: none
+                          - box-shadow: none
+                          - padding: 6px 2px 2px 2px
+                        grid:
+                          - grid-template-areas: '"art info ctl"'
+                          - grid-template-columns: 52px 1fr auto
+                          - align-items: center
+                          - column-gap: 14px
+                        custom_fields:
+                          art:
+                            - grid-area: art
+                          info:
+                            - grid-area: info
+                            - justify-self: start
+                            - overflow: hidden
+                          ctl:
+                            - grid-area: ctl
+                            - justify-self: end
+                      custom_fields:
+                        art: |
+                          [[[
+                            var sonos = ['media_player.woonkamer_sonos','media_player.keuken_sonos','media_player.overkapping_sonos','media_player.speelkamer_sonos','media_player.kantoor_sonos','media_player.badkamer_sonos','media_player.entree_sonos','media_player.toilet_sonos','media_player.garage_sonos','media_player.slaapkamer_maxi_sonos','media_player.slaapkamer_mini_sonos'];
+                            var active = sonos.find(e => states[e] && states[e].state === 'playing');
+                            var s = active ? states[active] : null;
+                            var pic = s && s.attributes.entity_picture ? s.attributes.entity_picture : null;
+                            if(pic) return `<div style="width:52px;height:52px;border-radius:10px;background-image:url('${pic}');background-size:cover;background-position:center"></div>`;
+                            return `<div style="width:52px;height:52px;border-radius:10px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:music" style="--mdc-icon-size:24px;color:rgba(255,255,255,0.5)"></ha-icon></div>`;
+                          ]]]
+                        info: |
+                          [[[
+                            var sonos = ['media_player.woonkamer_sonos','media_player.keuken_sonos','media_player.overkapping_sonos','media_player.speelkamer_sonos','media_player.kantoor_sonos','media_player.badkamer_sonos','media_player.entree_sonos','media_player.toilet_sonos','media_player.garage_sonos','media_player.slaapkamer_maxi_sonos','media_player.slaapkamer_mini_sonos'];
+                            var active = sonos.find(e => states[e] && states[e].state === 'playing');
+                            if(!active) return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px;font-weight:600;color:white">Niets speelt</span><span style="font-size:12.5px;color:rgba(255,255,255,0.42)">tik voor multiroom</span></div>`;
+                            var s = states[active];
+                            var title = s.attributes.media_title || 'Speelt';
+                            var artist = s.attributes.media_artist || s.attributes.media_album_name || '';
+                            if(title.length > 34) title = title.slice(0,33) + '…';
+                            if(artist.length > 38) artist = artist.slice(0,37) + '…';
+                            return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</span><span style="font-size:12.5px;color:rgba(255,255,255,0.42);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${artist}</span></div>`;
+                          ]]]
+                        ctl: |
+                          [[[
+                            var sonos = ['media_player.woonkamer_sonos','media_player.keuken_sonos','media_player.overkapping_sonos','media_player.speelkamer_sonos','media_player.kantoor_sonos','media_player.badkamer_sonos','media_player.entree_sonos','media_player.toilet_sonos','media_player.garage_sonos','media_player.slaapkamer_maxi_sonos','media_player.slaapkamer_mini_sonos'];
+                            var active = sonos.find(e => states[e] && states[e].state === 'playing');
+                            if(!active) return `<ha-icon icon="mdi:speaker-off" style="--mdc-icon-size:20px;color:rgba(255,255,255,0.25)"></ha-icon>`;
+                            var s = states[active];
+                            var name = s.attributes.friendly_name ? s.attributes.friendly_name.replace(/ ?Sonos/i,'').trim() : '';
+                            var grp = s.attributes.group_members ? s.attributes.group_members.length : 1;
+                            var badge = grp > 1 ? ` <span style="color:#3b82f6;font-weight:600">+${grp-1}</span>` : '';
+                            return `<span style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:rgba(255,255,255,0.6)"><ha-icon icon="mdi:speaker" style="--mdc-icon-size:16px;color:#4ade80"></ha-icon>${name}${badge}</span>`;
+                          ]]]
 
           # ----------- CENTER COLUMN -----------
           - type: vertical-stack
@@ -846,8 +867,8 @@ cards:
                         grid:
                           show: false
                           padding:
-                            left: 0
-                            right: 0
+                            left: 14
+                            right: 4
                             top: -8
                             bottom: 0
                         legend:
@@ -860,12 +881,16 @@ cards:
                               colors: "rgba(255,255,255,0.3)"
                               fontSize: "10px"
                             formatter: |
-                              EVAL:function(v) { return (v === null || v === undefined) ? '' : '€ ' + Number(v).toFixed(2); }
+                              EVAL:function(v) { return (v === null || v === undefined) ? '' : '€ ' + Number(v).toFixed(2).replace('.', ','); }
                         xaxis:
                           axisBorder:
                             show: false
                           axisTicks:
                             show: false
+                          # los van de gewone tooltip rendert ApexCharts standaard nog een
+                          # label onder de x-as; die gaf het dubbele "wo. 08:00"
+                          tooltip:
+                            enabled: false
                           labels:
                             show: true
                             style:
@@ -1054,7 +1079,7 @@ cards:
                             var dot = function(c, lbl){ return `<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${lbl}</span>`; };
                             return `<span style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:rgba(255,255,255,0.4)">${dot('#4ade80','goedkoop')}${dot('#f59e0b','gemiddeld')}${dot('#ef4444','duur')}</span>`;
                           ]]]
-              # MEDIA
+              # VEELGEBRUIKERS
               - type: custom:mod-card
                 card_mod:
                   style: *panel
@@ -1063,72 +1088,42 @@ cards:
                   cards:
                     - type: custom:button-card
                       template: ov_title
-                      tap_action:
-                        action: navigate
-                        navigation_path: "#ov-media"
                       variables:
-                        title: MEDIA
-                    - type: custom:button-card
-                      show_icon: false
-                      show_name: false
-                      show_state: false
-                      tap_action:
-                        action: navigate
-                        navigation_path: "#ov-media"
-                      styles:
-                        card:
-                          - background: none
-                          - border: none
-                          - box-shadow: none
-                          - padding: 6px 2px 2px 2px
-                        grid:
-                          - grid-template-areas: '"art info ctl"'
-                          - grid-template-columns: 52px 1fr auto
-                          - align-items: center
-                          - column-gap: 14px
-                        custom_fields:
-                          art:
-                            - grid-area: art
-                          info:
-                            - grid-area: info
-                            - justify-self: start
-                            - overflow: hidden
-                          ctl:
-                            - grid-area: ctl
-                            - justify-self: end
-                      custom_fields:
-                        art: |
-                          [[[
-                            var sonos = ['media_player.woonkamer_sonos','media_player.keuken_sonos','media_player.overkapping_sonos','media_player.speelkamer_sonos','media_player.kantoor_sonos','media_player.badkamer_sonos','media_player.entree_sonos','media_player.toilet_sonos','media_player.garage_sonos','media_player.slaapkamer_maxi_sonos','media_player.slaapkamer_mini_sonos'];
-                            var active = sonos.find(e => states[e] && states[e].state === 'playing');
-                            var s = active ? states[active] : null;
-                            var pic = s && s.attributes.entity_picture ? s.attributes.entity_picture : null;
-                            if(pic) return `<div style="width:52px;height:52px;border-radius:10px;background-image:url('${pic}');background-size:cover;background-position:center"></div>`;
-                            return `<div style="width:52px;height:52px;border-radius:10px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:music" style="--mdc-icon-size:24px;color:rgba(255,255,255,0.5)"></ha-icon></div>`;
-                          ]]]
-                        info: |
-                          [[[
-                            var sonos = ['media_player.woonkamer_sonos','media_player.keuken_sonos','media_player.overkapping_sonos','media_player.speelkamer_sonos','media_player.kantoor_sonos','media_player.badkamer_sonos','media_player.entree_sonos','media_player.toilet_sonos','media_player.garage_sonos','media_player.slaapkamer_maxi_sonos','media_player.slaapkamer_mini_sonos'];
-                            var active = sonos.find(e => states[e] && states[e].state === 'playing');
-                            if(!active) return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px;font-weight:600;color:white">Niets speelt</span><span style="font-size:12.5px;color:rgba(255,255,255,0.42)">tik voor multiroom</span></div>`;
-                            var s = states[active];
-                            var title = s.attributes.media_title || 'Speelt';
-                            var artist = s.attributes.media_artist || s.attributes.media_album_name || '';
-                            if(title.length > 34) title = title.slice(0,33) + '…';
-                            if(artist.length > 38) artist = artist.slice(0,37) + '…';
-                            return `<div style="display:flex;flex-direction:column;gap:2px"><span style="font-size:14.5px;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</span><span style="font-size:12.5px;color:rgba(255,255,255,0.42);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${artist}</span></div>`;
-                          ]]]
-                        ctl: |
-                          [[[
-                            var sonos = ['media_player.woonkamer_sonos','media_player.keuken_sonos','media_player.overkapping_sonos','media_player.speelkamer_sonos','media_player.kantoor_sonos','media_player.badkamer_sonos','media_player.entree_sonos','media_player.toilet_sonos','media_player.garage_sonos','media_player.slaapkamer_maxi_sonos','media_player.slaapkamer_mini_sonos'];
-                            var active = sonos.find(e => states[e] && states[e].state === 'playing');
-                            if(!active) return `<ha-icon icon="mdi:speaker-off" style="--mdc-icon-size:20px;color:rgba(255,255,255,0.25)"></ha-icon>`;
-                            var s = states[active];
-                            var name = s.attributes.friendly_name ? s.attributes.friendly_name.replace(/ ?Sonos/i,'').trim() : '';
-                            var grp = s.attributes.group_members ? s.attributes.group_members.length : 1;
-                            var badge = grp > 1 ? ` <span style="color:#3b82f6;font-weight:600">+${grp-1}</span>` : '';
-                            return `<span style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:rgba(255,255,255,0.6)"><ha-icon icon="mdi:speaker" style="--mdc-icon-size:16px;color:#4ade80"></ha-icon>${name}${badge}</span>`;
-                          ]]]
+                        title: VEELGEBRUIKERS
+                    - type: custom:auto-entities
+                      show_empty: false
+                      card:
+                        type: vertical-stack
+                      card_param: cards
+                      filter:
+                        include:
+                          - domain: sensor
+                            name: "*Vermogen*"
+                            options:
+                              type: custom:button-card
+                              template: ov_bar
+                              variables:
+                                max: 2500
+                              name: "[[[ return entity.attributes.friendly_name.replace(/ ?vermogen/i, '').trim(); ]]]"
+                              tap_action:
+                                action: more-info
+                        exclude:
+                          - name: Inverter*
+                          - name: "*Zonnepanel*"
+                          - name: "*zonneplan*"
+                          - name: "*SlimHuys*"
+                          - name: "*GoodWe*"
+                          - name: "*mvormer*"
+                          - state: "off"
+                          - state: unavailable
+                          - state: unknown
+                          - state: "0"
+                          - hidden_by: user
+                      sort:
+                        method: state
+                        numeric: true
+                        reverse: true
+                        count: 5
 
           # ----------- RIGHT COLUMN -----------
           - type: vertical-stack
