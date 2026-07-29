@@ -1,617 +1,552 @@
-type: sections
-max_columns: 4
+# Mini dashboard voor de Nest Hub (cast-doel media_player.woonkamer).
+#
+# Zelfde vormtaal als het Overzicht-dashboard, maar op kijkafstand: één scherm
+# zonder scrollen, vier kwadranten, en typografie in vh zodat hij zowel een
+# Nest Hub (1024x600) als een Hub Max (1280x800) precies vult.
 title: Mini Dashboard
 path: mini-dashboard
 icon: mdi:monitor
-sections:
-  - type: grid
+panel: true
+cards:
+  - type: vertical-stack
+    card_mod:
+      style: |
+        :host { height: 100% !important; }
+        #root {
+          --ov-panel-bg: rgba(22,24,31,0.72);
+          --ov-panel-border: 1px solid rgba(255,255,255,0.06);
+          --ov-panel-radius: 18px;
+          display: grid !important;
+          grid-template-rows: auto 1fr 1fr !important;
+          gap: 12px !important;
+          height: 100vh !important;
+          margin: 0 !important;
+          padding: 14px !important;
+          background: #0b0d12 !important;
+          box-sizing: border-box !important;
+          overflow: hidden !important;
+        }
     cards:
-      - type: custom:bubble-card
-        card_type: separator
-        name: Brandweer
-        icon: mdi:fire-circle
-        sub_button:
-          - entity: input_select.brandweer_dienstdoende_ploeg
-            show_name: true
-            show_state: true
-            show_background: false
-            show_attribute: false
-            attribute: friendly_name
-            show_arrow: false
-            show_icon: true
-            name: "Huidige ploeg:"
-        card_layout: normal
-        modules:
-          - default
-        rows: "1"
-      - type: custom:bubble-card
-        card_type: separator
-        name: Bezetting
-        icon: mdi:alert-box
-        styles: |
-          @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-          }
-          .bubble-separator {
-            ${hass.states['input_select.brandweer_bezetting_status'].state === 'onderbezet'
-              ? 'animation: blink 1s ease-in-out infinite; background-color: rgba(207, 34, 46, 0.3); border-radius: 16px;'
-              : hass.states['input_select.brandweer_bezetting_status'].state === 'krap'
-              ? 'animation: blink 1.5s ease-in-out infinite; background-color: rgba(191, 135, 0, 0.3); border-radius: 16px;'
-              : ''}
-          }
-        sub_button:
-          main:
-            - entity: sensor.bezetting_ploeg_a
-              show_state: true
-              icon: mdi:alpha-a
-              state_background: false
-            - entity: sensor.bezetting_ploeg_b
-              show_state: true
-              icon: mdi:alpha-b
-              state_background: false
-            - entity: sensor.bezetting_ploeg_c
-              show_state: true
-              icon: mdi:alpha-c
-              state_background: false
-          bottom: []
-        rows: "0.5"
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        name: Laatste melding
-        icon: mdi:fire-alert
-        show_name: true
-        entity: input_text.brandweer_laatste_melding
-        scrolling_effect: false
-        show_last_changed: false
-        show_attribute: true
-        sub_button:
-          - entity: input_datetime.brandweer_laatste_melding
-            show_attribute: false
-            show_name: false
-            show_state: true
-            show_icon: false
-            show_background: true
-            attribute: timestamp
-            tap_action:
-              action: none
-            name: Datum & Tijd
-          - entity: input_boolean.brandweer_uitgerukt_op_laatste_melding
-            show_state: false
-            show_name: true
-            name: Uitgerukt
-            show_last_changed: false
-            show_attribute: false
-            show_icon: false
-            show_background: true
-            tap_action:
-              action: none
-          - entity: input_number.brandweer_uitruktijd_secondes
-            show_state: true
-            show_icon: false
-            state_background: false
-            visibility:
-              - condition: state
-                entity: binary_sensor.brandweer_uitgerukt_op_laatste_melding
-                state: "on"
-            name: Uitruktijd
-            show_attribute: false
-        styles: |-
-          .bubble-sub-button-2 {
-            background-color: ${hass.states['binary_sensor.brandweer_uitgerukt_op_laatste_melding'].state === 'on' ? 'var(--bubble-default-color)' : 'var(--card-background-color)'} !important;
-          }
-        tap_action:
-          action: more-info
-        double_tap_action:
-          action: none
-        hold_action:
-          action: none
-        button_action:
-          tap_action:
-            action: more-info
-          double_tap_action:
-            action: none
-          hold_action:
-            action: none
-        card_layout: large-2-rows
-        modules:
-          - default
+      # =================== KOPBALK ===================
       - type: horizontal-stack
+        card_mod:
+          style: |
+            #root {
+              display: grid !important;
+              grid-template-columns: 1fr auto !important;
+              align-items: center !important;
+              gap: 12px !important;
+              padding: 0 4px !important;
+            }
         cards:
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: counter.brandweer_totaal_aantal_uitrukken
-            show_icon: true
-            show_name: true
-            name: Totaal
-            icon: mdi:fire-extinguisher
-            scrolling_effect: false
+          - type: custom:button-card
             tap_action:
               action: none
-            double_tap_action:
-              action: none
-            hold_action:
-              action: none
-            button_action:
-              tap_action:
-                action: more-info
-              double_tap_action:
-                action: none
-              hold_action:
-                action: none
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: counter.brandweer_uden_a_ploeg_uitrukken
-            name: A
-            scrolling_effect: false
-            show_state: true
-            show_name: false
-            tap_action:
-              action: navigate
-              navigation_path: "#brandweer"
-            double_tap_action:
-              action: none
-            hold_action:
-              action: more-info
-            button_action:
-              tap_action:
-                action: navigate
-                navigation_path: "#brandweer"
-              double_tap_action:
-                action: none
-              hold_action:
-                action: none
-            styles: |-
-              .bubble-icon {
-                color: ${hass.states['input_select.brandweer_mijn_huidige_ploeg'].state === 'A Ploeg' ? 'var(--bubble-default-color)' : ''} !important;
-              }
-            icon: mdi:alpha-a-circle-outline
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: counter.brandweer_uden_b_ploeg_uitrukken
-            name: B
-            scrolling_effect: false
-            show_name: false
-            show_state: true
-            show_icon: true
-            tap_action:
-              action: navigate
-              navigation_path: "#brandweer"
-            double_tap_action:
-              action: none
-            hold_action:
-              action: more-info
-            button_action:
-              tap_action:
-                action: navigate
-                navigation_path: "#brandweer"
-              double_tap_action:
-                action: none
-              hold_action:
-                action: none
-            styles: |-
-              .bubble-icon {
-                color: ${hass.states['input_select.brandweer_mijn_huidige_ploeg'].state === 'B Ploeg' ? 'var(--bubble-default-color)' : ''} !important;
-              }
-            icon: mdi:alpha-b-circle-outline
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: counter.brandweer_uden_c_ploeg_uitrukken
-            name: C
-            scrolling_effect: false
-            force_icon: false
-            show_name: false
-            double_tap_action:
-              action: none
-            hold_action:
-              action: more-info
-            tap_action:
-              action: navigate
-              navigation_path: "#brandweer"
-            button_action:
-              tap_action:
-                action: navigate
-                navigation_path: "#brandweer"
-              double_tap_action:
-                action: none
-              hold_action:
-                action: none
-            styles: |-
-              .bubble-icon {
-                color: ${hass.states['input_select.brandweer_mijn_huidige_ploeg'].state === 'C Ploeg' ? 'var(--bubble-default-color)' : ''} !important;
-              }
-            icon: mdi:alpha-c-circle-outline
-            modules:
-              - default
-      - type: custom:bubble-card
-        card_type: separator
-        name: Thuis
-        icon: mdi:home-account
-        sub_button:
-          - entity: sensor.crypto_current_value
-            show_state: true
-            state_background: false
-            show_background: true
-        card_layout: normal
-      - type: horizontal-stack
-        cards:
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: person.robin_bohnen
-            name: Robin
-            sub_button:
-              - entity: sensor.iphone_van_robin_battery_level
-                show_state: true
-                show_background: false
-                name: Battery
-                icon: phu:apple-iphone
-              - entity: sensor.robin_reistijd_naar_huis
-                show_icon: true
-                show_state: true
-                state_background: false
-                show_background: true
+            update_timer: 30s
+            styles:
+              card:
+                - background: none
+                - border: none
+                - box-shadow: none
+                - padding: 0
+              grid:
+                - grid-template-areas: '"k"'
+                - justify-items: start
+            custom_fields:
+              k: |
+                [[[
+                  var d = new Date();
+                  var dagen = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
+                  var mnd = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+                  var t = ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+                  return `<span style="display:flex;align-items:baseline;gap:2.2vh">
+                    <span style="font-size:5vh;font-weight:700;color:white;line-height:1">${t}</span>
+                    <span style="font-size:2.4vh;color:rgba(255,255,255,0.55)">${dagen[d.getDay()]} ${d.getDate()} ${mnd[d.getMonth()]}</span>
+                  </span>`;
+                ]]]
+          - type: horizontal-stack
+            card_mod:
+              style: |
+                #root { gap: 10px !important; }
+                #root > * { flex: 0 0 auto !important; }
+            cards:
+              - type: custom:button-card
+                entity: sensor.zonneplan_current_electricity_tariff
+                show_icon: false
                 show_name: false
-                name: Huis
-                visibility:
-                  - condition: numeric_state
-                    entity: sensor.robin_reistijd_naar_huis
-                    above: 5
-                  - condition: state
-                    entity: person.robin_bohnen
-                    state_not: home
-                icon: mdi:home
-              - entity: sensor.robin_reistijd_naar_werk
-                show_state: true
+                show_state: false
+                tap_action:
+                  action: none
+                styles:
+                  card:
+                    - background: >
+                        [[[ var g = states['sensor.zonneplan_current_tariff_group']; return (g && g.state === 'low') ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
+                    - border: 1px solid rgba(255,255,255,0.07)
+                    - border-radius: 999px
+                    - box-shadow: none
+                    - padding: 1vh 1.8vh
+                  grid:
+                    - grid-template-areas: '"c"'
+                custom_fields:
+                  c: |
+                    [[[
+                      var g = states['sensor.zonneplan_current_tariff_group'];
+                      var p = states['sensor.zonneplan_current_electricity_tariff'];
+                      var lbl = {low:'laag', normal:'gemiddeld', high:'hoog'};
+                      var col = {low:'#4ade80', normal:'#f59e0b', high:'#ef4444'};
+                      var gs = g ? g.state : 'normal';
+                      var prijs = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '—';
+                      return `<span style="display:flex;align-items:center;gap:1vh;white-space:nowrap;font-size:2.1vh;font-weight:500;color:${gs === 'low' ? '#4ade80' : 'rgba(255,255,255,0.85)'}">
+                        <span style="width:1.1vh;height:1.1vh;border-radius:50%;background:${col[gs]||'#888'}"></span>tarief ${lbl[gs]||gs} · ${prijs}</span>`;
+                    ]]]
+              - type: custom:button-card
+                entity: weather.knmi_thuis
+                show_icon: false
                 show_name: false
-                icon: mdi:office-building-marker
-                name: Kantoor
-                state_background: false
-                visibility:
-                  - condition: state
-                    entity: binary_sensor.werkdag_sensor
-                    state: "on"
-                  - condition: state
-                    entity: binary_sensor.work_maybe_travel_to_work_time
-                    state: "on"
-                  - condition: numeric_state
-                    entity: sensor.robin_reistijd_naar_werk
-                    above: 0
-              - entity: sensor.robin_reistijd_naar_brandweer_uden
-                show_name: false
-                show_state: true
-                icon: mdi:fire-station
-                state_background: false
-                show_background: true
-                visibility:
-                  - condition: numeric_state
-                    entity: sensor.robin_reistijd_naar_brandweer_uden
-                    below: 10
-                  - condition: numeric_state
-                    entity: sensor.robin_reistijd_naar_brandweer_uden
-                    above: 3
-                name: Brandweer
-            card_layout: large-2-rows
-            modules:
-              - default
-            styles: |-
-              .bubble-sub-button-4 {
-                background-color: ${hass.states['sensor.robin_reistijd_naar_brandweer_uden'].state > 6 ? '#FFADB0' : ''} !important;
-              }
+                show_state: false
+                tap_action:
+                  action: none
+                styles:
+                  card:
+                    - background: rgba(255,255,255,0.05)
+                    - border: 1px solid rgba(255,255,255,0.07)
+                    - border-radius: 999px
+                    - box-shadow: none
+                    - padding: 1vh 1.8vh
+                  grid:
+                    - grid-template-areas: '"c"'
+                custom_fields:
+                  c: |
+                    [[[
+                      var w = states['weather.knmi_thuis'];
+                      if(!w) return '';
+                      var map = {sunny:'zonnig','clear-night':'helder',cloudy:'bewolkt',partlycloudy:'half bewolkt',rainy:'regen',pouring:'zware regen',snowy:'sneeuw','snowy-rainy':'natte sneeuw',fog:'mist',windy:'winderig','windy-variant':'winderig',hail:'hagel',lightning:'onweer','lightning-rainy':'onweer',exceptional:'extreem'};
+                      var ico = {sunny:'mdi:weather-sunny','clear-night':'mdi:weather-night',cloudy:'mdi:weather-cloudy',partlycloudy:'mdi:weather-partly-cloudy',rainy:'mdi:weather-rainy',pouring:'mdi:weather-pouring',snowy:'mdi:weather-snowy','snowy-rainy':'mdi:weather-snowy-rainy',fog:'mdi:weather-fog',windy:'mdi:weather-windy','windy-variant':'mdi:weather-windy-variant',hail:'mdi:weather-hail',lightning:'mdi:weather-lightning','lightning-rainy':'mdi:weather-lightning-rainy',exceptional:'mdi:weather-cloudy-alert'};
+                      var t = w.attributes.temperature;
+                      return `<span style="display:flex;align-items:center;gap:1vh;white-space:nowrap;font-size:2.1vh;color:rgba(255,255,255,0.8)">
+                        <ha-icon icon="${ico[w.state]||'mdi:weather-cloudy'}" style="--mdc-icon-size:2.4vh;color:rgba(255,255,255,0.6)"></ha-icon>
+                        ${map[w.state]||w.state} · ${t != null ? Math.round(t) : '—'}°</span>`;
+                    ]]]
 
-              @media (prefers-color-scheme: dark) {
-                  .bubble-sub-button-4 {
-                      color: ${hass.states['sensor.robin_reistijd_naar_brandweer_uden'].state > 6 ? 'black' : 'white'} !important;
-                  }
-              }
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: person.samantha_henkelman
-            name: Samantha
-            sub_button:
-              - entity: sensor.iphone_van_samantha_battery_level
-                show_state: true
-                show_background: false
-                name: Battery
-                icon: phu:apple-iphone
-              - entity: sensor.samantha_reistijd_naar_huis
-                show_state: true
-                show_icon: true
-                state_background: false
-                show_background: true
-                show_name: false
-                name: Huis
-                visibility:
-                  - condition: numeric_state
-                    entity: sensor.samantha_reistijd_naar_huis
-                    above: 5
-                  - condition: state
-                    entity: person.samantha_henkelman
-                    state_not: home
-                icon: mdi:home
-            card_layout: large-2-rows
-            modules:
-              - default
+      # =================== BOVENSTE RIJ ===================
       - type: horizontal-stack
+        card_mod:
+          style: &rij |
+            #root {
+              display: grid !important;
+              grid-template-columns: 1fr 1.25fr !important;
+              gap: 12px !important;
+              height: 100% !important;
+              align-items: stretch !important;
+            }
+            #root > * { height: 100% !important; }
         cards:
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: person.emma_bohnen
-            name: Emma
-            sub_button:
-              - entity: sensor.iphone_van_emma_battery_level
-                show_state: true
-                show_background: false
-                name: Battery
-                icon: phu:apple-iphone
-              - entity: sensor.emma_reistijd_naar_huis
-                show_state: true
-                state_background: false
-                show_background: true
-                icon: mdi:home
-                visibility:
-                  - condition: numeric_state
-                    entity: sensor.emma_reistijd_naar_huis
-                    above: 5
-                name: Reistijd
-            card_layout: large-2-rows
-            modules:
-              - default
-          - type: custom:bubble-card
-            card_type: button
-            button_type: state
-            entity: person.logan_veen
-            name: Logan
-            sub_button:
-              - entity: sensor.iphone_battery_level
-                show_state: true
-                show_background: false
-                name: Battery
-                icon: phu:apple-iphone
-              - entity: sensor.logan_reistijd_naar_huis
-                name: Reistijd
-                icon: mdi:home
-                show_icon: true
-                show_state: true
-                state_background: false
-                visibility:
-                  - condition: numeric_state
-                    entity: sensor.logan_reistijd_naar_huis
-                    above: 5
-            card_layout: large-2-rows
-            modules:
-              - default
-      - type: custom:bubble-card
-        card_type: calendar
-        modules:
-          - default
-        entities:
-          - entity: calendar.agenda
-            color: "#2944BC"
-          - entity: calendar.r_bohnen_vrbn_nl_agenda
-            color: "#EBDED6"
-          - entity: calendar.robin_bohnen_nl_agenda
-            color: "#B79500"
-          - entity: calendar.mini
-            color: pink
-          - entity: calendar.maxi
-            color: "#4D9C35"
-          - entity: calendar.robin_en_sam
-            color: "#8CA02E"
-        show_end: true
-        show_progress: true
-        event_action:
-          tap_action:
-            action: more-info
-          double_tap_action:
-            action: none
-          hold_action:
-            action: none
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: sensor.lilygo_rs485_marstek_inverter_state
-        sub_button:
-          - entity: sensor.lilygo_rs485_marstek_battery_remaining_capacity
-            show_name: false
-            show_icon: false
-            show_state: true
-            show_background: true
-            state_background: false
-          - entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
-            show_name: false
-            show_icon: false
-            show_state: true
-            state_background: false
-            show_background: true
-          - entity: sensor.lilygo_rs485_marstek_battery_power
-            show_last_changed: false
-            show_state: true
-            state_background: false
-            show_icon: false
-            visibility:
-              - condition: state
-                entity: sensor.lilygo_rs485_marstek_inverter_state
-                state_not: Standby
-        name: Batterij
-        card_layout: large-2-rows
-        modules:
-          - default
-        tap_action:
-          action: navigate
-          navigation_path: "#battery"
-        double_tap_action:
-          action: navigate
-          navigation_path: "#battery"
-        hold_action:
-          action: navigate
-          navigation_path: "#battery"
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#battery"
-          double_tap_action:
-            action: navigate
-            navigation_path: "#battery"
-          hold_action:
-            action: navigate
-            navigation_path: "#battery"
-        show_attribute: false
-        icon: phu:solar-battery-15
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        modules:
-          - default
-        entity: sensor.afvalinfo_home_trash_type_today
-        visibility:
-          - condition: state
-            entity: sensor.afvalinfo_home_trash_type_today
-            state_not: geen
-        name: Afval vandaag
-        show_last_changed: false
-        show_attribute: false
-        card_layout: large
-        tap_action:
-          action: navigate
-          navigation_path: "#afval"
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#afval"
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        modules:
-          - default
-        entity: sensor.afvalinfo_home_trash_type_tomorrow
-        visibility:
-          - condition: state
-            entity: sensor.afvalinfo_home_trash_type_tomorrow
-            state_not: geen
-        name: Afval morgen
-        show_last_changed: false
-        show_attribute: false
-        card_layout: large
-        tap_action:
-          action: navigate
-          navigation_path: "#afval"
-        button_action:
-          tap_action:
-            action: navigate
-            navigation_path: "#afval"
-  - type: grid
-    cards:
-      - type: custom:bubble-card
-        card_type: separator
-        name: Stroomverbruik
-        icon: mdi:power
-        sub_button:
-          - entity: sensor.total_costs_today_calculated
-            show_state: true
-            state_background: false
-        card_layout: normal
-      - type: custom:bubble-card
-        card_type: button
-        button_type: state
-        entity: sensor.zonneplan_current_tariff_group
-        name: Huidig energie tarief
-        icon: phu:clock-euro
-        show_last_changed: false
-        show_attribute: false
-        show_last_updated: false
-        sub_button:
-          - entity: sensor.zonneplan_current_electricity_tariff
-            show_state: true
-            show_icon: true
-            state_background: false
-            show_name: false
-            icon: mdi:currency-eur
-          - entity: sensor.live_energieverbruik_totaal
-            state_background: false
-            show_icon: true
-            show_state: true
-            icon: mdi:transmission-tower
-        styles: |-
-          ha-card {
-              ${hass.states['sensor.zonneplan_current_tariff_group'].state === 'low' ? '--bubble-icon-background-color: #AFE1AF !important' : ''}
-              ${hass.states['sensor.zonneplan_current_tariff_group'].state === 'high' ? '--bubble-icon-background-color: #FFCCCB !important' : ''}
-          }
-          @media (prefers-color-scheme: dark) {
-               .bubble-icon, .bubble-sub-button-1, .bubble-sub-button-2 {
-                    ${hass.states['sensor.zonneplan_current_tariff_group'].state === 'low' ? 'color: black !important' : ''}
-                    ${hass.states['sensor.zonneplan_current_tariff_group'].state === 'high' ? 'color: black !important' : ''}
-              }
-          }
-      - type: custom:apexcharts-card
-        graph_span: 10m
-        header:
-          show: true
-          title: Live Stroomgebruik
-        series:
-          - entity: sensor.live_energieverbruik_totaal
-            name: Stroomverbruik live
-            type: column
-            stroke_width: 1
-            color: var(--bubble-default-color)
-            group_by:
-              duration: 5s
-              func: avg
-            opacity: 1
-            float_precision: 2
-            color_threshold:
-              - value: -1
-                color: green
-              - value: 0
-                color: "#grey"
-              - value: 1
-                color: orange
-              - value: 2
-                color: red
-      - type: custom:auto-entities
-        show_empty: false
-        filter:
-          include:
-            - options:
-                type: custom:bubble-card
-                card_type: button
-                button_type: state
-                icon: phu:socket-eu
-              domain: sensor
-              name: "*Vermogen*"
-          exclude:
-            - options: {}
-              state: "off"
-            - options: {}
-              state: unavailable
-            - options: {}
-              hidden_by: user
-            - options: {}
-              name: Inverter*
-            - options: {}
-              state: "0"
-        sort:
-          method: state
-          reverse: true
-          numeric: true
-          count: 2
-        card:
-          type: grid
-          columns: 1
-          square: false
-        card_param: cards
-badges: []
-cards: []
+          # ---------- BRANDWEER ----------
+          - type: custom:mod-card
+            card_mod:
+              style: &paneel |
+                ha-card {
+                  background: var(--ov-panel-bg) !important;
+                  border: var(--ov-panel-border) !important;
+                  border-radius: var(--ov-panel-radius) !important;
+                  box-shadow: none !important;
+                  padding: 1.6vh 2vh !important;
+                  height: 100% !important;
+                  box-sizing: border-box !important;
+                }
+            card:
+              type: custom:button-card
+              entity: input_select.brandweer_dienstdoende_ploeg
+              show_icon: false
+              show_name: false
+              show_state: false
+              tap_action:
+                action: none
+              styles:
+                card:
+                  - background: none
+                  - border: none
+                  - box-shadow: none
+                  - padding: 0
+                  - height: 100%
+                grid:
+                  - grid-template-areas: '"t" "ploegen" "melding"'
+                  - grid-template-rows: auto auto 1fr
+                  - row-gap: 1.4vh
+                  - height: 100%
+                custom_fields:
+                  t:
+                    - justify-self: stretch
+                  ploegen:
+                    - justify-self: stretch
+                  melding:
+                    - justify-self: stretch
+                    - align-self: end
+              custom_fields:
+                t: |
+                  [[[
+                    var ds = states['input_select.brandweer_dienstdoende_ploeg'];
+                    var p = ds && ds.state ? ds.state.charAt(0).toUpperCase() : null;
+                    var staart = (p && 'ABC'.indexOf(p) !== -1)
+                      ? `<span style="color:#38bdf8;font-weight:600">${p}-ploeg heeft dienst</span>`
+                      : `<span style="color:rgba(255,255,255,0.4)">dienst onbekend</span>`;
+                    var r = states['sensor.robin_reistijd_naar_brandweer_uden'];
+                    var kazerne = (r && !isNaN(Number(r.state)))
+                      ? `<span style="font-size:1.7vh;color:rgba(255,255,255,0.45);margin-left:auto;white-space:nowrap">kazerne ${Math.round(Number(r.state))} min</span>` : '';
+                    return `<span style="display:flex;align-items:baseline;gap:1.2vh;width:100%">
+                      <span style="font-size:1.9vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.45)">BRANDWEER</span>
+                      <span style="font-size:1.9vh">${staart}</span>${kazerne}</span>`;
+                  ]]]
+                ploegen: |
+                  [[[
+                    var ds = states['input_select.brandweer_dienstdoende_ploeg'];
+                    var dienst = ds && ds.state ? ds.state.charAt(0).toUpperCase() : '';
+                    var cellen = ['A','B','C'].map(function(letter){
+                      var s = states['sensor.bezetting_ploeg_' + letter.toLowerCase()];
+                      var n = s && !isNaN(Number(s.state)) ? Number(s.state) : null;
+                      var col = n === null ? 'rgba(255,255,255,0.35)' : (n < 4 ? '#ef4444' : (n < 6 ? '#f59e0b' : '#4ade80'));
+                      var aan = letter === dienst;
+                      var onder = aan
+                        ? `<span style="font-size:1.3vh;font-weight:700;letter-spacing:0.08vh;color:#38bdf8">DIENST</span>`
+                        : `<span style="font-size:1.3vh">&nbsp;</span>`;
+                      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.2vh;padding:1vh 0 0.8vh 0;border-radius:1.4vh;background:${aan ? 'rgba(56,189,248,0.12)' : 'rgba(255,255,255,0.04)'};border:1px solid ${aan ? 'rgba(56,189,248,0.35)' : 'rgba(255,255,255,0.06)'}">
+                        <span style="font-size:1.6vh;font-weight:700;letter-spacing:0.1vh;color:${aan ? '#38bdf8' : 'rgba(255,255,255,0.5)'}">${letter}</span>
+                        <span style="font-size:3.6vh;font-weight:700;line-height:1.05;color:${col}">${n === null ? '—' : n}</span>${onder}</div>`;
+                    });
+                    return `<div style="display:flex;gap:1.2vh">${cellen.join('')}</div>`;
+                  ]]]
+                melding: |
+                  [[[
+                    var e = states['input_text.brandweer_laatste_melding'];
+                    var tekst = e && e.state ? e.state : '';
+                    if(!tekst) return `<span style="font-size:1.9vh;color:rgba(255,255,255,0.4)">geen recente melding</span>`;
+                    var m = tekst.match(/^\s*([A-Pa-p])\s*(\d)/);
+                    var code = m ? (m[1] + m[2]).toUpperCase() : null;
+                    var kort = tekst.replace(/^\s*[A-Pa-p]\s*\d\s*/, '');
+                    if(kort.length > 58) kort = kort.slice(0,57) + '…';
+                    var d = states['input_datetime.brandweer_laatste_melding'];
+                    var wanneer = '';
+                    if(d && d.state){
+                      var dt = new Date(String(d.state).replace(' ','T'));
+                      if(!isNaN(dt.getTime())) wanneer = dt.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}) + ' ' + ('0'+dt.getHours()).slice(-2)+':'+('0'+dt.getMinutes()).slice(-2);
+                    }
+                    var badge = code
+                      ? `<div style="min-width:4.4vh;padding:0.4vh 1vh;border-radius:1vh;background:rgba(245,158,11,0.16);color:#f59e0b;font-size:1.9vh;font-weight:700;text-align:center">${code}</div>`
+                      : `<ha-icon icon="mdi:fire-truck" style="--mdc-icon-size:2.6vh;color:#f59e0b"></ha-icon>`;
+                    return `<div style="display:flex;align-items:center;gap:1.4vh;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">${badge}
+                      <div style="display:flex;flex-direction:column;gap:0.3vh;overflow:hidden">
+                        <span style="font-size:1.9vh;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${kort}</span>
+                        <span style="font-size:1.6vh;color:rgba(255,255,255,0.45)">${wanneer}</span></div></div>`;
+                  ]]]
+
+          # ---------- ENERGIE ----------
+          - type: custom:mod-card
+            card_mod:
+              style: *paneel
+            card:
+              type: custom:button-card
+              entity: sensor.live_energieverbruik_totaal
+              show_icon: false
+              show_name: false
+              show_state: false
+              update_timer: 60s
+              tap_action:
+                action: none
+              styles:
+                card:
+                  - background: none
+                  - border: none
+                  - box-shadow: none
+                  - padding: 0
+                  - height: 100%
+                grid:
+                  - grid-template-areas: '"t" "cijfers" "strook"'
+                  - grid-template-rows: auto auto 1fr
+                  - row-gap: 1.2vh
+                  - height: 100%
+                custom_fields:
+                  t:
+                    - justify-self: stretch
+                  cijfers:
+                    - justify-self: stretch
+                  strook:
+                    - justify-self: stretch
+                    - align-self: end
+              custom_fields:
+                t: |
+                  [[[
+                    var g = states['sensor.zonneplan_current_tariff_group'];
+                    var s = states['sensor.solar_power_generated_now'];
+                    var goedkoop = g && g.state === 'low';
+                    var groen = s && !isNaN(Number(s.state)) && Number(s.state) > 0.1;
+                    var txt = (groen && goedkoop) ? 'groen en goedkoop' : (goedkoop ? 'goedkoop' : (groen ? 'groen' : 'normaal tarief'));
+                    var col = (groen || goedkoop) ? '#4ade80' : 'rgba(255,255,255,0.6)';
+                    var k = states['sensor.total_costs_today_calculated'];
+                    var kosten = '';
+                    if(k && !isNaN(Number(k.state))){
+                      var kv = Number(k.state);
+                      kosten = `<span style="font-size:1.7vh;margin-left:auto;white-space:nowrap;color:${kv < 0 ? '#4ade80' : 'rgba(255,255,255,0.55)'}">€ ${kv.toFixed(2).replace('.',',')} vandaag</span>`;
+                    }
+                    return `<span style="display:flex;align-items:baseline;gap:1.2vh;width:100%">
+                      <span style="font-size:1.9vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.45)">ENERGIE · NU</span>
+                      <span style="font-size:1.9vh;color:${col}">stroom is ${txt}</span>${kosten}</span>`;
+                  ]]]
+                cijfers: |
+                  [[[
+                    var lees = function(id, alsW){
+                      var e = states[id];
+                      if(!e || isNaN(Number(e.state))) return null;
+                      var v = Number(e.state);
+                      var u = e.attributes.unit_of_measurement || '';
+                      return (alsW && u === 'W') ? v / 1000 : v;
+                    };
+                    var netto = lees('sensor.live_energieverbruik_totaal');
+                    if(netto !== null && Math.abs(netto) < 0.005) netto = 0;
+                    var prod = lees('sensor.solar_power_generated_now', true);
+                    var verbr = lees('sensor.electricity_meter_energieverbruik');
+                    var soc = states['sensor.lilygo_rs485_marstek_battery_state_of_charge'];
+                    var bp = states['sensor.lilygo_rs485_marstek_battery_power'];
+                    var socv = soc && !isNaN(Number(soc.state)) ? Math.round(Number(soc.state)) : null;
+                    var bpv = bp && !isNaN(Number(bp.state)) ? Math.round(Number(bp.state)) : null;
+                    var fmt = function(v){ return v === null ? '—' : v.toFixed(2).replace('.',','); };
+                    var klein = function(waarde, label, kleur){
+                      return `<div style="display:flex;flex-direction:column;gap:0.3vh">
+                        <span style="font-size:3.2vh;font-weight:700;line-height:1;color:${kleur}">${waarde}</span>
+                        <span style="font-size:1.6vh;color:rgba(255,255,255,0.5)">${label}</span></div>`;
+                    };
+                    var nettoKleur = (netto !== null && netto < 0) ? '#4ade80' : 'white';
+                    return `<div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1.1fr;align-items:end;column-gap:1.2vh">
+                      <div style="display:flex;flex-direction:column;gap:0.3vh">
+                        <span><span style="font-size:5.4vh;font-weight:700;line-height:1;color:${nettoKleur}">${fmt(netto)}</span>
+                        <span style="font-size:2vh;color:rgba(255,255,255,0.55)">kW</span></span>
+                        <span style="font-size:1.6vh;color:rgba(255,255,255,0.5)">netto verbruik</span></div>
+                      ${klein(fmt(prod), 'productie', '#4ade80')}
+                      ${klein(fmt(verbr), 'verbruik', '#3b82f6')}
+                      ${klein(socv === null ? '—' : socv + '%', 'batterij' + (bpv === null ? '' : (bpv > 0 ? ' · laadt' : (bpv < 0 ? ' · ontlaadt' : ' · idle'))), 'white')}
+                    </div>`;
+                  ]]]
+                strook: |
+                  [[[
+                    // Compacte prijsstrook voor de komende 12 uur: dezelfde
+                    // bandindeling per kalenderdag als op het grote dashboard.
+                    var nu = Date.now();
+                    var start = nu - 3600000, eind = nu + 11 * 3600000;
+                    var pct = function(t){ return (t - start) / (eind - start) * 100; };
+                    var klem = function(v){ return Math.max(0, Math.min(100, v)); };
+                    var t = states['sensor.zonneplan_current_electricity_tariff'];
+                    var raw = (t && t.attributes && t.attributes.forecast) || [];
+                    var norm = function(x){ if(x === null || x === undefined || isNaN(Number(x))) return null; var n = Number(x); if(Math.abs(n) > 100) n = n / 10000000; return n; };
+                    var slots = raw.map(function(e){
+                      var d = new Date(e.datetime || e.date || e.time || e.start);
+                      var p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
+                      return (isNaN(d.getTime()) || p === null) ? null : {t: d.getTime(), p: p};
+                    }).filter(Boolean).sort(function(a,b){ return a.t - b.t; });
+                    if(slots.length < 2) return `<span style="font-size:1.6vh;color:rgba(255,255,255,0.35)">geen prijsvoorspelling</span>`;
+                    var stap = slots[1].t - slots[0].t;
+                    var perDag = {};
+                    slots.forEach(function(s){
+                      var k = new Date(s.t).toDateString();
+                      if(!perDag[k]) perDag[k] = {min: s.p, max: s.p};
+                      else { perDag[k].min = Math.min(perDag[k].min, s.p); perDag[k].max = Math.max(perDag[k].max, s.p); }
+                    });
+                    var blokken = [];
+                    slots.forEach(function(s){
+                      if(s.t + stap < start || s.t > eind) return;
+                      var d = perDag[new Date(s.t).toDateString()];
+                      var spreiding = d.max - d.min;
+                      var r = spreiding < 0.02 ? 0.5 : (s.p - d.min) / spreiding;
+                      var kleur = r <= 0.33 ? '#4ade80' : (r >= 0.66 ? '#ef4444' : '#f59e0b');
+                      var a = klem(pct(s.t)), b = klem(pct(s.t + stap));
+                      if(b - a > 0.05) blokken.push(`<div style="position:absolute;left:${a}%;width:${b-a}%;top:0;bottom:0;background:${kleur};opacity:0.85"></div>`);
+                    });
+                    var assen = [];
+                    var u = new Date(start); u.setMinutes(0,0,0);
+                    u.setHours(u.getHours() + (3 - (u.getHours() % 3)));
+                    for(var x = u.getTime(); x < eind; x += 10800000){
+                      var px = pct(x);
+                      if(px < 3 || px > 97) continue;
+                      assen.push(`<div style="position:absolute;left:${px}%;transform:translateX(-50%);top:2.4vh;font-size:1.4vh;color:rgba(255,255,255,0.45)">${('0'+new Date(x).getHours()).slice(-2)}:00</div>`);
+                    }
+                    return `<div style="position:relative;width:100%;height:4.4vh">
+                      <div style="position:absolute;left:0;right:0;top:0;height:1.8vh;border-radius:0.5vh;overflow:hidden;background:rgba(255,255,255,0.05)">${blokken.join('')}</div>
+                      <div style="position:absolute;left:${klem(pct(nu))}%;top:0;height:1.8vh;border-left:2px dashed rgba(255,255,255,0.85)"></div>
+                      ${assen.join('')}</div>`;
+                  ]]]
+
+      # =================== ONDERSTE RIJ ===================
+      - type: horizontal-stack
+        card_mod:
+          style: *rij
+        cards:
+          # ---------- VANDAAG ----------
+          - type: custom:mod-card
+            card_mod:
+              style: *paneel
+            card:
+              type: custom:button-card
+              entity: sensor.afvalinfo_home_trash_type_today
+              show_icon: false
+              show_name: false
+              show_state: false
+              tap_action:
+                action: none
+              styles:
+                card:
+                  - background: none
+                  - border: none
+                  - box-shadow: none
+                  - padding: 0
+                  - height: 100%
+                grid:
+                  - grid-template-areas: '"t" "afval" "agenda"'
+                  - grid-template-rows: auto auto 1fr
+                  - row-gap: 1.2vh
+                  - height: 100%
+                custom_fields:
+                  t:
+                    - justify-self: start
+                  afval:
+                    - justify-self: stretch
+                  agenda:
+                    - justify-self: stretch
+                    - align-self: end
+              custom_fields:
+                t: |
+                  [[[ return `<span style="font-size:1.9vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.45)">VANDAAG</span>`; ]]]
+                afval: |
+                  [[[
+                    // PBD vóór papier: "Drinkkartons" bevat 'karton'
+                    var soorten = [[/gft|groente|tuin/i,'#4ade80'], [/pbd|plastic|blik|drank/i,'#f59e0b'], [/papier/i,'#38bdf8'], [/rest/i,'rgba(255,255,255,0.7)']];
+                    var kleurVan = function(v){ for(var i=0;i<soorten.length;i++) if(soorten[i][0].test(v)) return soorten[i][1]; return 'rgba(255,255,255,0.35)'; };
+                    var regel = function(id, label){
+                      var e = states[id];
+                      var v = e && e.state && e.state !== 'Geen' ? e.state : null;
+                      var kl = v ? kleurVan(v) : 'rgba(255,255,255,0.3)';
+                      if(v && v.length > 30) v = v.slice(0,29) + '…';
+                      return `<div style="display:flex;align-items:center;gap:1.2vh">
+                        <ha-icon icon="mdi:trash-can-outline" style="--mdc-icon-size:2.4vh;color:${kl}"></ha-icon>
+                        <span style="font-size:1.7vh;color:rgba(255,255,255,0.5);min-width:6vh">${label}</span>
+                        <span style="font-size:2vh;font-weight:600;color:${v ? kl : 'rgba(255,255,255,0.35)'}">${v || 'geen ophaal'}</span></div>`;
+                    };
+                    return `<div style="display:flex;flex-direction:column;gap:0.9vh">
+                      ${regel('sensor.afvalinfo_home_trash_type_today','vandaag')}
+                      ${regel('sensor.afvalinfo_home_trash_type_tomorrow','morgen')}</div>`;
+                  ]]]
+                agenda: |
+                  [[[
+                    var sen = states['sensor.agenda_afspraken_vandaag'];
+                    var v = sen && sen.attributes ? sen.attributes.volgende : null;
+                    var titel = null, sub = '';
+                    if(v && v.titel){
+                      titel = String(v.titel);
+                      var d = new Date(v.datum + 'T00:00:00');
+                      var mid = new Date(); mid.setHours(0,0,0,0);
+                      var dag = Math.round((d - mid) / 86400000);
+                      var dagTxt = dag === 0 ? 'vandaag' : (dag === 1 ? 'morgen' : d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
+                      sub = `${dagTxt} · ${v.hele_dag ? 'hele dag' : (v.tijd || '')} · ${v.agenda}`;
+                    } else {
+                      // terugval zolang de get_events-sensor er niet is
+                      var nu = new Date(), lijst = [];
+                      [['calendar.r_bohnen_vrbn_nl_agenda','Werk'],['calendar.robin_bohnen_nl_agenda','Privé'],
+                       ['calendar.robin_en_sam','Samen'],['calendar.brandweer','Brandweer'],
+                       ['calendar.maxi','Logan'],['calendar.mini','Emma']].forEach(function(c){
+                        var e = states[c[0]];
+                        if(!e || !e.attributes || !e.attributes.start_time) return;
+                        var st = new Date(String(e.attributes.start_time).replace(' ','T'));
+                        if(isNaN(st.getTime())) return;
+                        var en = e.attributes.end_time ? new Date(String(e.attributes.end_time).replace(' ','T')) : null;
+                        if(en && !isNaN(en.getTime()) && en < nu) return;
+                        lijst.push({msg: e.attributes.message || 'Afspraak', st: st, allday: !!e.attributes.all_day, bron: c[1]});
+                      });
+                      lijst.sort(function(a,b){ return a.allday !== b.allday ? (a.allday ? 1 : -1) : a.st - b.st; });
+                      if(lijst.length){
+                        var it = lijst[0];
+                        titel = it.msg;
+                        var mid2 = new Date(); mid2.setHours(0,0,0,0);
+                        var dag2 = Math.round((new Date(it.st).setHours(0,0,0,0) - mid2.getTime()) / 86400000);
+                        var dt2 = dag2 === 0 ? 'vandaag' : (dag2 === 1 ? 'morgen' : it.st.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
+                        sub = `${dt2} · ${it.allday ? 'hele dag' : it.st.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})} · ${it.bron}`;
+                      }
+                    }
+                    if(!titel) return `<div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh"><span style="font-size:1.9vh;color:rgba(255,255,255,0.4)">geen afspraken</span></div>`;
+                    if(titel.length > 34) titel = titel.slice(0,33) + '…';
+                    return `<div style="display:flex;align-items:center;gap:1.4vh;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">
+                      <ha-icon icon="mdi:calendar" style="--mdc-icon-size:2.6vh;color:#38bdf8"></ha-icon>
+                      <div style="display:flex;flex-direction:column;gap:0.3vh;overflow:hidden">
+                        <span style="font-size:2vh;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${titel}</span>
+                        <span style="font-size:1.6vh;color:rgba(255,255,255,0.5)">${sub}</span></div></div>`;
+                  ]]]
+
+          # ---------- PERSONEN ----------
+          - type: custom:mod-card
+            card_mod:
+              style: *paneel
+            card:
+              type: custom:button-card
+              entity: person.robin_bohnen
+              show_icon: false
+              show_name: false
+              show_state: false
+              tap_action:
+                action: none
+              styles:
+                card:
+                  - background: none
+                  - border: none
+                  - box-shadow: none
+                  - padding: 0
+                  - height: 100%
+                grid:
+                  - grid-template-areas: '"t" "mensen"'
+                  - grid-template-rows: auto 1fr
+                  - row-gap: 1.2vh
+                  - height: 100%
+                custom_fields:
+                  t:
+                    - justify-self: start
+                  mensen:
+                    - justify-self: stretch
+                    - align-self: center
+              custom_fields:
+                t: |
+                  [[[
+                    var ppl = ['person.robin_bohnen','person.samantha_henkelman','person.emma_bohnen','person.logan_veen'];
+                    var n = ppl.filter(function(e){ return states[e] && states[e].state === 'home'; }).length;
+                    return `<span style="display:flex;align-items:baseline;gap:1.2vh">
+                      <span style="font-size:1.9vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.45)">PERSONEN</span>
+                      <span style="font-size:1.7vh;font-weight:600;padding:0.3vh 1.2vh;border-radius:999px;color:#4ade80;background:rgba(52,168,120,0.15)">${n} thuis</span></span>`;
+                  ]]]
+                mensen: |
+                  [[[
+                    var mensen = [
+                      ['person.robin_bohnen','sensor.iphone_van_robin_battery_level','sensor.robin_reistijd_naar_huis'],
+                      ['person.samantha_henkelman','sensor.iphone_van_samantha_battery_level','sensor.samantha_reistijd_naar_huis'],
+                      ['person.emma_bohnen','sensor.iphone_van_emma_battery_level','sensor.emma_reistijd_naar_huis'],
+                      ['person.logan_veen','sensor.iphone_battery_level','sensor.logan_reistijd_naar_huis']
+                    ];
+                    var cellen = mensen.map(function(m){
+                      var p = states[m[0]];
+                      if(!p) return '';
+                      var naam = p.attributes.friendly_name ? p.attributes.friendly_name.split(' ')[0] : '?';
+                      var thuis = p.state === 'home';
+                      var st = thuis ? 'thuis' : 'afwezig';
+                      var stKleur = 'rgba(255,255,255,0.5)';
+                      if(!thuis){
+                        var r = states[m[2]];
+                        if(r && !isNaN(Number(r.state)) && Number(r.state) > 0){
+                          st = Math.round(Number(r.state)) + ' min';
+                          stKleur = '#38bdf8';
+                        }
+                      }
+                      var b = states[m[1]];
+                      var acc = b && !isNaN(Number(b.state)) ? Math.round(Number(b.state)) : null;
+                      var accKleur = acc === null ? 'rgba(255,255,255,0.3)' : (acc <= 10 ? '#ef4444' : (acc <= 20 ? '#f59e0b' : 'rgba(255,255,255,0.75)'));
+                      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5vh">
+                        <div style="width:5.2vh;height:5.2vh;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2.4vh;font-weight:600;
+                             background:${thuis ? 'rgba(52,168,120,0.16)' : 'rgba(255,255,255,0.06)'};color:${thuis ? '#4ade80' : 'rgba(255,255,255,0.55)'}">${naam.charAt(0)}</div>
+                        <span style="font-size:1.9vh;font-weight:600;color:white">${naam}</span>
+                        <span style="font-size:1.6vh;color:${stKleur}">${st}</span>
+                        <span style="font-size:1.6vh;font-weight:600;color:${accKleur}">${acc === null ? '—' : acc + '%'}</span></div>`;
+                    });
+                    return `<div style="display:flex;gap:1vh">${cellen.join('')}</div>`;
+                  ]]]
