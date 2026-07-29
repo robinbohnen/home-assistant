@@ -82,7 +82,8 @@ cards:
                   var kleur = n === 0 ? '#4ade80' : (n > 10 ? '#ef4444' : '#f59e0b');
                   return `<span style="display:flex;align-items:baseline;gap:12px;width:100%">
                     <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:rgba(255,255,255,0.55)">ONBESCHIKBAAR</span>
-                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:rgba(255,255,255,0.06)">${n}</span></span>`;
+                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:rgba(255,255,255,0.06)">${n}</span>
+                    <span style="margin-left:auto;font-size:11.5px;color:rgba(255,255,255,0.4)">uitgeklapt: ${(variables.focus || []).join(' · ') || 'alles'}</span></span>`;
                 ]]]
               lijst: |
                 [[[
@@ -130,7 +131,9 @@ cards:
                   namen.forEach(function(g){ groepen[g].sort(function(a,b){ return (b.duur||0) - (a.duur||0); }); });
                   namen.sort(function(a,b){ return (groepen[b][0].duur||0) - (groepen[a][0].duur||0); });
                   var blokken = namen.map(function(g){
-                    var rijen = groepen[g].map(function(x){
+                    var limiet = variables.max_per_groep || 25;
+                    var teveel = Math.max(0, groepen[g].length - limiet);
+                    var rijen = groepen[g].slice(0, limiet).map(function(x){
                       var plek = x.gebied ? `<span style="color:rgba(255,255,255,0.35)"> · ${x.gebied}</span>` : '';
                       var vlag = x.onbekend ? `<span style="font-size:10px;color:rgba(255,255,255,0.35)"> unknown</span>` : '';
                       return `<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.04)">
@@ -141,10 +144,24 @@ cards:
                       <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:2px">
                         <span style="font-size:12.5px;font-weight:700;color:#38bdf8">${g}</span>
                         <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${groepen[g].length}</span></div>
-                      ${rijen}</div>`;
+                      ${rijen}
+                      ${teveel ? `<div style="padding:5px 0;font-size:12px;color:rgba(255,255,255,0.45)">+ ${teveel} meer in deze integratie</div>` : ''}</div>`;
                   }).join('');
+                  // De overige integraties niet weglaten, wel samenvatten
+                  var overig = '';
+                  if(rest.length){
+                    var totaal = rest.reduce(function(a, g){ return a + groepen[g].length; }, 0);
+                    var stukjes = rest.map(function(g){
+                      return `<span style="white-space:nowrap"><span style="color:rgba(255,255,255,0.7)">${g}</span> <span style="color:rgba(255,255,255,0.45)">${groepen[g].length}</span></span>`;
+                    }).join('<span style="color:rgba(255,255,255,0.2)"> · </span>');
+                    overig = `<div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;margin-top:4px">
+                      <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:4px">
+                        <span style="font-size:12.5px;font-weight:700;color:rgba(255,255,255,0.55)">overige integraties</span>
+                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${totaal}</span></div>
+                      <div style="font-size:12.5px;line-height:1.7">${stukjes}</div></div>`;
+                  }
                   var waarschuwing = reg ? '' : `<div style="font-size:11.5px;color:#f59e0b;padding-bottom:8px">Entiteitenregister niet beschikbaar — gegroepeerd op domein in plaats van integratie.</div>`;
-                  return `<div style="max-height:calc(100vh - 190px);overflow-y:auto">${waarschuwing}${blokken}</div>`;
+                  return `<div style="max-height:calc(100vh - 190px);overflow-y:auto">${waarschuwing}${blokken}${overig}</div>`;
                 ]]]
 
           # =============== BIJNA LEGE BATTERIJEN ===============
