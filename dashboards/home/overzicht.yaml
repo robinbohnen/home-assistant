@@ -404,114 +404,165 @@ cards:
                           [[[
                             var b = states['sensor.hrh85f_batterij'];
                             var r = states['sensor.hrh85f_battery_autonomy'];
-                            var bs = b ? Math.round(Number(b.state)) : '?';
-                            var rs = r ? Math.round(Number(r.state)) : '?';
-                            var col = (typeof bs === 'number' && bs <= 20) ? '#f59e0b' : '#4ade80';
-                            var bg = (typeof bs === 'number' && bs <= 20) ? 'rgba(245,158,11,0.15)' : 'rgba(52,168,120,0.15)';
-                            return `<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${col};background:${bg}">${bs}% · ${rs} km</span>`;
+                            var cs = states['sensor.hrh85f_charge_state'];
+                            var rest = states['sensor.hrh85f_charging_remaining_time'];
+                            var bs = b && !isNaN(Number(b.state)) ? Math.round(Number(b.state)) : null;
+                            var rs = r && !isNaN(Number(r.state)) ? Math.round(Number(r.state)) : null;
+                            var laag = bs !== null && bs <= 20;
+                            var m = {charge_in_progress:['laadt','#4ade80','rgba(52,168,120,0.15)','mdi:flash'],
+                                     charge_ended:['vol','#4ade80','rgba(52,168,120,0.15)','mdi:battery-check'],
+                                     not_in_charge:['niet aan lader','rgba(255,255,255,0.5)','rgba(255,255,255,0.06)','mdi:power-plug-off'],
+                                     waiting_for_a_planned_charge:['gepland','#38bdf8','rgba(56,189,248,0.15)','mdi:clock-outline'],
+                                     waiting_for_current_charge:['wacht','#38bdf8','rgba(56,189,248,0.15)','mdi:clock-outline'],
+                                     charge_error:['laadfout','#ef4444','rgba(239,68,68,0.15)','mdi:alert-circle'],
+                                     energy_flap_opened:['klep open','#f59e0b','rgba(245,158,11,0.15)','mdi:ev-plug-type2']};
+                            var c = m[cs && cs.state] || ['onbekend','rgba(255,255,255,0.4)','rgba(255,255,255,0.06)','mdi:help-circle-outline'];
+                            var lbl = c[0];
+                            if(cs && cs.state === 'charge_in_progress' && rest && !isNaN(Number(rest.state))) {
+                              var min = Math.round(Number(rest.state));
+                              lbl += min >= 60 ? ` · ${Math.floor(min/60)}u${('0'+(min%60)).slice(-2)}` : ` · ${min}m`;
+                            }
+                            var pill = function(txt, fg, bg, icon){
+                              var ic = icon ? `<ha-icon icon="${icon}" style="--mdc-icon-size:13px"></ha-icon>` : '';
+                              return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:20px;color:${fg};background:${bg}">${ic}${txt}</span>`;
+                            };
+                            var accu = pill((bs === null ? '—' : bs + '%') + (rs === null ? '' : ' · ' + rs + ' km'),
+                                            laag ? '#f59e0b' : '#4ade80',
+                                            laag ? 'rgba(245,158,11,0.15)' : 'rgba(52,168,120,0.15)', null);
+                            return `<span style="display:flex;align-items:center;gap:7px">${pill(lbl, c[1], c[2], c[3])}${accu}</span>`;
                           ]]]
-                    - type: custom:button-card
-                      entity: sensor.hrh85f_kilometerstand
-                      show_icon: false
-                      show_name: false
-                      show_state: false
-                      tap_action:
-                        action: navigate
-                        navigation_path: "#ov-auto"
-                      styles:
-                        card:
-                          - background: none
-                          - border: none
-                          - box-shadow: none
-                          - padding: 6px 2px 2px 2px
-                        grid:
-                          - grid-template-areas: '"a b"'
-                          - grid-template-columns: 1fr 1fr
-                          - column-gap: 12px
-                        custom_fields:
-                          a:
-                            - justify-self: start
-                          b:
-                            - justify-self: start
-                      custom_fields:
-                        a: |
-                          [[[
-                            var e = states['sensor.hrh85f_kilometerstand'];
-                            var v = e ? Number(e.state).toLocaleString('nl-NL') : '—';
-                            return `<div style="display:flex;flex-direction:column"><span style="font-size:20px;font-weight:700;color:white">${v}</span><span style="font-size:12px;color:rgba(255,255,255,0.42)">km totaal</span></div>`;
-                          ]]]
-                        b: |
-                          [[[
-                            var e = states['sensor.hrh85f_charge_state'];
-                            var m = {charge_in_progress:'aan het laden', not_in_charge:'niet aan lader', waiting_for_a_planned_charge:'gepland', waiting_for_current_charge:'wacht', charge_error:'laadfout', energy_flap_opened:'klep open', charge_ended:'vol'};
-                            var v = e && e.state && e.state !== 'unavailable' ? (m[e.state] || e.state) : '—';
-                            return `<div style="display:flex;flex-direction:column"><span style="font-size:18px;font-weight:700;color:white">${v}</span><span style="font-size:12px;color:rgba(255,255,255,0.42)">laadstatus</span></div>`;
-                          ]]]
-                    # Voorverwarmen / voorkoelen (Renault pre-conditioning)
-                    - type: custom:button-card
-                      entity: binary_sensor.hrh85f_hvac
-                      show_icon: false
-                      show_name: false
-                      show_state: false
-                      tap_action:
-                        action: perform-action
-                        perform_action: button.press
-                        target:
-                          entity_id: button.hrh85f_start_air_conditioner
-                        confirmation:
-                          text: Klimaatregeling van de auto starten?
-                      styles:
-                        card:
-                          - background: >
-                              [[[ var h = states['binary_sensor.hrh85f_hvac']; return (h && h.state === 'on') ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
-                          - border: >
-                              [[[ var h = states['binary_sensor.hrh85f_hvac']; return (h && h.state === 'on') ? '1px solid rgba(52,168,120,0.28)' : '1px solid rgba(255,255,255,0.08)'; ]]]
-                          - border-radius: 14px
-                          - box-shadow: none
-                          - padding: 11px 14px
-                          - margin-top: 10px
-                        grid:
-                          - grid-template-areas: '"ic t" "ic s"'
-                          - grid-template-columns: 34px 1fr
-                          - align-items: center
-                          - column-gap: 12px
-                        custom_fields:
-                          ic:
-                            - grid-area: ic
-                          t:
-                            - grid-area: t
-                            - justify-self: start
-                          s:
-                            - grid-area: s
-                            - justify-self: start
-                      custom_fields:
-                        ic: |
-                          [[[
-                            var w = states['weather.knmi_thuis'];
-                            var temp = w && w.attributes.temperature != null ? Number(w.attributes.temperature) : null;
-                            var h = states['binary_sensor.hrh85f_hvac'];
-                            var actief = h && h.state === 'on';
-                            var mode = temp === null ? 'auto' : (temp < 15 ? 'heat' : (temp > 22 ? 'cool' : 'auto'));
-                            var ico = {heat:'mdi:fire', cool:'mdi:snowflake', auto:'mdi:air-conditioner'}[mode];
-                            var col = actief ? '#4ade80' : {heat:'#f59e0b', cool:'#38bdf8', auto:'rgba(255,255,255,0.7)'}[mode];
-                            return `<ha-icon icon="${ico}" style="--mdc-icon-size:24px;color:${col}"></ha-icon>`;
-                          ]]]
-                        t: |
-                          [[[
-                            var w = states['weather.knmi_thuis'];
-                            var temp = w && w.attributes.temperature != null ? Number(w.attributes.temperature) : null;
-                            var lbl = temp === null ? 'Auto klimaat starten' : (temp < 15 ? 'Auto voorverwarmen' : (temp > 22 ? 'Auto voorkoelen' : 'Auto klimaat starten'));
-                            return `<span style="font-size:14.5px;font-weight:600;color:white">${lbl}</span>`;
-                          ]]]
-                        s: |
-                          [[[
-                            var h = states['binary_sensor.hrh85f_hvac'];
-                            if(h && h.state === 'on') return `<span style="font-size:12.5px;color:#4ade80">klimaatregeling actief</span>`;
-                            var w = states['weather.knmi_thuis'];
-                            var temp = w && w.attributes.temperature != null ? Math.round(Number(w.attributes.temperature)) : null;
-                            var buiten = temp === null ? '' : ` · buiten ${temp}°`;
-                            return `<span style="font-size:12.5px;color:rgba(255,255,255,0.45)">tik om te starten${buiten}</span>`;
-                          ]]]
+                    # Auto-illustratie (Megane E-Tech, matgrijs) + kilometerstand + klimaatknop
+                    - type: horizontal-stack
+                      card_mod:
+                        style: |
+                          #root {
+                            display: grid !important;
+                            grid-template-columns: 112px 1fr !important;
+                            align-items: center !important;
+                            gap: 14px !important;
+                          }
+                      cards:
+                        - type: custom:button-card
+                          show_icon: false
+                          show_name: false
+                          show_state: false
+                          tap_action:
+                            action: navigate
+                            navigation_path: "#ov-auto"
+                          styles:
+                            card:
+                              - background: none
+                              - border: none
+                              - box-shadow: none
+                              - padding: 4px 0
+                            grid:
+                              - grid-template-areas: '"car"'
+                          custom_fields:
+                            car: |
+                              [[[
+                                var cs = states['sensor.hrh85f_charge_state'];
+                                var laadt = cs && cs.state === 'charge_in_progress';
+                                var kop = laadt ? '#4ade80' : '#dfe6f0';
+                                var bout = laadt ? '<path d="M104,44 l-9,15 h7 l-4,12 12,-16 h-7 z" fill="#4ade80"/>' : '';
+                                return `<svg viewBox="0 0 200 96" width="112" height="54" xmlns="http://www.w3.org/2000/svg" style="display:block">
+                                  <path d="M6,62 C6,52 10,47 20,45 L40,42 C46,41 50,39 54,35 L66,24 C71,19 78,16 86,16 L126,16 C136,16 145,19 151,25 L166,39 C172,44 180,46 187,49 C193,51 196,55 196,61 L196,70 C196,74 193,76 189,76 L12,76 C8,76 6,74 6,70 Z" fill="#7b828d"/>
+                                  <path d="M70,27 C74,22 79,20 86,20 L103,20 L103,41 L61,41 Z" fill="#1b1f27"/>
+                                  <path d="M109,20 L124,20 C132,20 138,22 143,27 L155,41 L109,41 Z" fill="#1b1f27"/>
+                                  <rect x="12" y="63" width="176" height="13" rx="6.5" fill="#161920"/>
+                                  <circle cx="53" cy="70" r="21" fill="#161920"/>
+                                  <circle cx="150" cy="70" r="21" fill="#161920"/>
+                                  <circle cx="53" cy="70" r="16" fill="#0e1015"/>
+                                  <circle cx="150" cy="70" r="16" fill="#0e1015"/>
+                                  <circle cx="53" cy="70" r="7" fill="#4d535d"/>
+                                  <circle cx="150" cy="70" r="7" fill="#4d535d"/>
+                                  <rect x="5" y="51" width="11" height="5" rx="2.5" fill="${kop}" opacity="0.9"/>
+                                  <rect x="185" y="51" width="11" height="5" rx="2.5" fill="#ef4444" opacity="0.8"/>
+                                  ${bout}
+                                </svg>`;
+                              ]]]
+                        - type: vertical-stack
+                          card_mod:
+                            style: |
+                              #root { gap: 8px !important; }
+                          cards:
+                            - type: custom:button-card
+                              entity: sensor.hrh85f_kilometerstand
+                              show_icon: false
+                              show_name: false
+                              show_state: false
+                              tap_action:
+                                action: navigate
+                                navigation_path: "#ov-auto"
+                              styles:
+                                card:
+                                  - background: none
+                                  - border: none
+                                  - box-shadow: none
+                                  - padding: 0 2px
+                                grid:
+                                  - grid-template-areas: '"km"'
+                                  - justify-items: start
+                              custom_fields:
+                                km: |
+                                  [[[
+                                    var e = states['sensor.hrh85f_kilometerstand'];
+                                    var v = e && !isNaN(Number(e.state)) ? Number(e.state).toLocaleString('nl-NL') : '—';
+                                    return `<span style="display:flex;align-items:baseline;gap:6px"><span style="font-size:21px;font-weight:700;color:white;line-height:1">${v}</span><span style="font-size:12px;color:rgba(255,255,255,0.42)">km totaal</span></span>`;
+                                  ]]]
+                            # Voorverwarmen / voorkoelen (Renault pre-conditioning)
+                            - type: custom:button-card
+                              entity: binary_sensor.hrh85f_hvac
+                              show_icon: false
+                              show_name: false
+                              show_state: false
+                              tap_action:
+                                action: perform-action
+                                perform_action: button.press
+                                target:
+                                  entity_id: button.hrh85f_start_air_conditioner
+                                confirmation:
+                                  text: Klimaatregeling van de auto starten?
+                              styles:
+                                card:
+                                  - background: >
+                                      [[[ var h = states['binary_sensor.hrh85f_hvac']; return (h && h.state === 'on') ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
+                                  - border: >
+                                      [[[ var h = states['binary_sensor.hrh85f_hvac']; return (h && h.state === 'on') ? '1px solid rgba(52,168,120,0.28)' : '1px solid rgba(255,255,255,0.08)'; ]]]
+                                  - border-radius: 12px
+                                  - box-shadow: none
+                                  - padding: 8px 12px
+                                grid:
+                                  - grid-template-areas: '"ic t"'
+                                  - grid-template-columns: 20px 1fr
+                                  - align-items: center
+                                  - column-gap: 10px
+                                custom_fields:
+                                  ic:
+                                    - grid-area: ic
+                                  t:
+                                    - grid-area: t
+                                    - justify-self: start
+                              custom_fields:
+                                ic: |
+                                  [[[
+                                    var w = states['weather.knmi_thuis'];
+                                    var temp = w && w.attributes.temperature != null ? Number(w.attributes.temperature) : null;
+                                    var h = states['binary_sensor.hrh85f_hvac'];
+                                    var mode = temp === null ? 'auto' : (temp < 15 ? 'heat' : (temp > 22 ? 'cool' : 'auto'));
+                                    var ico = {heat:'mdi:fire', cool:'mdi:snowflake', auto:'mdi:air-conditioner'}[mode];
+                                    var col = (h && h.state === 'on') ? '#4ade80' : {heat:'#f59e0b', cool:'#38bdf8', auto:'rgba(255,255,255,0.7)'}[mode];
+                                    return `<ha-icon icon="${ico}" style="--mdc-icon-size:19px;color:${col}"></ha-icon>`;
+                                  ]]]
+                                t: |
+                                  [[[
+                                    var h = states['binary_sensor.hrh85f_hvac'];
+                                    var w = states['weather.knmi_thuis'];
+                                    var temp = w && w.attributes.temperature != null ? Math.round(Number(w.attributes.temperature)) : null;
+                                    if(h && h.state === 'on') return `<span style="display:flex;align-items:baseline;gap:6px"><span style="font-size:14px;font-weight:600;color:#4ade80">Klimaat actief</span></span>`;
+                                    var lbl = temp === null ? 'Klimaat starten' : (temp < 15 ? 'Voorverwarmen' : (temp > 22 ? 'Voorkoelen' : 'Klimaat starten'));
+                                    var suf = temp === null ? '' : `<span style="font-size:12px;color:rgba(255,255,255,0.38)">${temp}°</span>`;
+                                    return `<span style="display:flex;align-items:baseline;gap:7px"><span style="font-size:14px;font-weight:600;color:white">${lbl}</span>${suf}</span>`;
+                                  ]]]
               # MEDIA
               - type: custom:mod-card
                 card_mod:
@@ -1178,28 +1229,69 @@ cards:
                             var e = states['sensor.afvalinfo_home_trash_type_tomorrow'];
                             return e && e.state && e.state !== 'Geen' ? e.state : 'geen ophaal morgen';
                           ]]]
+                    # Volgende afspraak over alle agenda's heen. Kalender-entiteiten
+                    # exposen alleen hun eerstvolgende event als attribuut, dus we
+                    # verzamelen er één per agenda en kiezen de vroegste.
                     - type: custom:button-card
                       template: ov_listrow
-                      entity: calendar.agenda
+                      entity: calendar.r_bohnen_vrbn_nl_agenda
                       tap_action:
                         action: navigate
                         navigation_path: "#ov-vandaag"
                       variables:
                         mdi: mdi:calendar
+                        agendas:
+                          - [calendar.r_bohnen_vrbn_nl_agenda, Werk]
+                          - [calendar.robin_bohnen_nl_agenda, Privé]
+                          - [calendar.robin_en_sam, Samen]
+                          - [calendar.brandweer, Brandweer]
+                          - [calendar.maxi, Logan]
+                          - [calendar.mini, Emma]
                       custom_fields:
                         t: |
                           [[[
-                            var c = states['calendar.agenda'];
-                            return c && c.attributes.message ? c.attributes.message : 'Agenda';
+                            var now = new Date();
+                            var lijst = [];
+                            (variables.agendas || []).forEach(function(c){
+                              var e = states[c[0]];
+                              if(!e || !e.attributes || !e.attributes.start_time) return;
+                              var st = new Date(String(e.attributes.start_time).replace(' ','T'));
+                              if(isNaN(st.getTime())) return;
+                              var en = e.attributes.end_time ? new Date(String(e.attributes.end_time).replace(' ','T')) : null;
+                              if(en && !isNaN(en.getTime()) && en < now) return;
+                              lijst.push({msg: e.attributes.message || 'Afspraak', st: st, allday: !!e.attributes.all_day});
+                            });
+                            if(!lijst.length) return 'Agenda';
+                            // afspraken met tijd gaan voor meerdaagse hele-dag-notities
+                            lijst.sort(function(a,b){ return a.allday !== b.allday ? (a.allday ? 1 : -1) : a.st - b.st; });
+                            var m = lijst[0].msg;
+                            if(m.length > 30) m = m.slice(0,29) + '…';
+                            return m;
                           ]]]
                         s: |
                           [[[
-                            var c = states['calendar.agenda'];
-                            if(!c || !c.attributes.start_time) return 'geen afspraken';
-                            var dt = new Date(c.attributes.start_time.replace(' ','T'));
-                            var day = dt.toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
-                            if(c.attributes.all_day) return day + ' · hele dag';
-                            return day + ' · ' + dt.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+                            var now = new Date();
+                            var lijst = [];
+                            (variables.agendas || []).forEach(function(c){
+                              var e = states[c[0]];
+                              if(!e || !e.attributes || !e.attributes.start_time) return;
+                              var st = new Date(String(e.attributes.start_time).replace(' ','T'));
+                              if(isNaN(st.getTime())) return;
+                              var en = e.attributes.end_time ? new Date(String(e.attributes.end_time).replace(' ','T')) : null;
+                              if(en && !isNaN(en.getTime()) && en < now) return;
+                              lijst.push({st: st, en: en, allday: !!e.attributes.all_day, bron: c[1]});
+                            });
+                            if(!lijst.length) return 'geen afspraken';
+                            lijst.sort(function(a,b){ return a.allday !== b.allday ? (a.allday ? 1 : -1) : a.st - b.st; });
+                            var it = lijst[0];
+                            var mid = new Date(now); mid.setHours(0,0,0,0);
+                            var dag = Math.round((new Date(it.st).setHours(0,0,0,0) - mid.getTime()) / 86400000);
+                            var dagTxt = dag === 0 ? 'vandaag' : (dag === 1 ? 'morgen' : it.st.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
+                            var tijd;
+                            if(it.allday) tijd = 'hele dag';
+                            else if(it.st <= now && it.en && it.en >= now) tijd = 'nu bezig';
+                            else tijd = it.st.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+                            return `${dagTxt} · ${tijd} · ${it.bron}`;
                           ]]]
               # KLIMAAT
               - type: custom:mod-card
@@ -1776,8 +1868,12 @@ cards:
           - type: calendar
             initial_view: listWeek
             entities:
-              - calendar.agenda
+              - calendar.r_bohnen_vrbn_nl_agenda
+              - calendar.robin_bohnen_nl_agenda
               - calendar.robin_en_sam
+              - calendar.brandweer
+              - calendar.maxi
+              - calendar.mini
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-klimaat"
