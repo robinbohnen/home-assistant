@@ -417,9 +417,9 @@ cards:
                     // niet nog eens hier.
                     var dur = null;
                     slots.forEach(function(s){ if(s.t >= nu && s.t <= eind && (dur === null || s.p > dur.p)) dur = s; });
-                    regel = `<div style="position:absolute;left:0;right:0;top:7vh;font-size:1.9vh;color:rgba(255,255,255,0.7);white-space:nowrap;text-align:left">
-                      <span style="display:inline-block;width:1.1vh;height:1.1vh;border-radius:50%;background:#38bdf8;vertical-align:0.1vh"></span>
-                      goedkoopst laden <span style="color:white;font-weight:600">${klok(beste.van)}–${klok(beste.tot)}</span> · gem. € ${euro(beste.gem)}${dur === null ? '' : ` · duurst ${klok(dur.t)} € ${euro(dur.p)}`}</div>`;
+                    regel = `<div style="position:absolute;left:0;right:0;top:7vh;display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:0.8vh;text-align:left">
+                      <span style="width:1.1vh;height:1.1vh;border-radius:50%;background:#38bdf8"></span>
+                      <span style="font-size:1.9vh;color:rgba(255,255,255,0.7);white-space:nowrap;text-align:left">goedkoopst laden <span style="color:white;font-weight:600">${klok(beste.van)}–${klok(beste.tot)}</span> · gem. € ${euro(beste.gem)}${dur === null ? '' : ` · duurst ${klok(dur.t)} € ${euro(dur.p)}`}</span></div>`;
                   }
 
                   var assen = [];
@@ -569,10 +569,12 @@ cards:
                 [[[
                   var pad = function(n){ return ('0'+n).slice(-2); };
                   var klok = function(d){ return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
-                  // Icoon in de tekstflow (geen flexbox): blijft altijd tegen zijn
-                  // tekst aan staan, wat de kaart er ook mee probeert te doen.
+                  // inline-grid: krimpt om zijn inhoud (dus niets om uit te spreiden)
+                  // en lijnt icoon en tekst verticaal op het midden uit.
                   var blok = function(icon, kleur, tekst){
-                    return `<span style="white-space:nowrap;font-size:2.1vh;color:rgba(255,255,255,0.7)"><ha-icon icon="${icon}" style="--mdc-icon-size:2.6vh;color:${kleur};vertical-align:-0.7vh"></ha-icon> ${tekst}</span>`;
+                    return `<span style="display:inline-grid;grid-template-columns:auto auto;align-items:center;column-gap:0.8vh;white-space:nowrap">
+                      <ha-icon icon="${icon}" style="--mdc-icon-size:2.6vh;color:${kleur}"></ha-icon>
+                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.7)">${tekst}</span></span>`;
                   };
                   var delen = [];
                   var z = states['sun.sun'];
@@ -696,11 +698,14 @@ cards:
                     var l = g.attributes && g.attributes.entity_id;
                     return Array.isArray(l) ? telOpen(l) : (g.state === 'on' ? 1 : 0);
                   };
-                  // icoon+label links, waarde rechts; de 1fr-kolom vult de rij
-                  // precies, dus de kaart kan de cel niet uitspreiden.
+                  // icoon | label | waarde rechts. Het icoon is een eigen
+                  // gridkolom met align-items:center in plaats van een inline
+                  // vertical-align-offset: dat laatste is gokken op de
+                  // regelhoogte en stond er net naast.
                   var cel = function(icon, label, waarde, kleur){
-                    return `<div style="display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:1vh;min-width:0;text-align:left">
-                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.62);white-space:nowrap;text-align:left"><ha-icon icon="${icon}" style="--mdc-icon-size:2.8vh;color:${kleur};vertical-align:-0.9vh"></ha-icon> ${label}</span>
+                    return `<div style="display:grid;grid-template-columns:auto auto 1fr;align-items:center;column-gap:1vh;min-width:0;text-align:left">
+                      <ha-icon icon="${icon}" style="--mdc-icon-size:2.8vh;color:${kleur}"></ha-icon>
+                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.62);white-space:nowrap;text-align:left">${label}</span>
                       <span style="font-size:2.2vh;font-weight:600;color:${kleur};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right">${waarde}</span></div>`;
                   };
                   var cellen = [];
