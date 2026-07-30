@@ -1,0 +1,81 @@
+virtual_buttons_package:
+  # Een fysieke knopdruk komt binnen als device-trigger (MQTT/zigbee2mqtt).
+  # Die kun je niet nabootsen zonder op de knop te drukken, en
+  # `automation.trigger` slaat de triggers over: `trigger.id` is dan
+  # undefined, waardoor elke `choose` op trigger-id in de default belandt.
+  #
+  # Daarom één generiek event als tweede ingang. Elke knop-automation krijgt
+  # naast z'n device-triggers dezelfde triggers als event, mét hetzelfde
+  # trigger-id. De actie-logica hoeft dus niet aangepast te worden en merkt
+  # geen verschil tussen fysiek en virtueel.
+  #
+  # Zo voeg je een knop toe:
+  #   1. Kies een `button`-key voor de knop (of de knoppen-groep die
+  #      hetzelfde doet), snake_case, bijv. `bedroom_buttons`.
+  #   2. Zet die key hieronder bij de opties van het `button`-veld.
+  #   3. Voeg in de automation per subtype een event-trigger toe:
+  #        - trigger: event
+  #          event_type: virtual_button
+  #          event_data:
+  #            button: bedroom_buttons
+  #            action: single
+  #          id: single
+  #      Het id moet gelijk zijn aan het id van de bijbehorende
+  #      device-trigger, anders valt de logica er alsnog naast.
+  #
+  # Reageren meerdere automations op dezelfde knop? Geef ze allemaal dezelfde
+  # `button`-key: één virtuele druk fant dan net zo breed uit als een echte.
+  script:
+    virtual_button_press:
+      alias: Virtual button - Press
+      description: >-
+        Bootst een druk op een fysieke knop na, zodat alle automations die op
+        die knop reageren uitvoeren alsof er echt op gedrukt is.
+      icon: mdi:gesture-tap-button
+      mode: parallel
+      fields:
+        button:
+          name: Knop
+          description: Key van de knop (of knoppen-groep) die je wil nabootsen
+          required: true
+          example: bedroom_buttons
+          selector:
+            select:
+              custom_value: true
+              options:
+                # Onderstaande knoppen ondersteunen alleen `single`, behalve
+                # waar anders vermeld.
+                - label: Slaapkamer - knoppen naast het bed (single/double/hold)
+                  value: bedroom_buttons
+                - label: Slaapkamer Maxi - knop (single/double/hold)
+                  value: bedroom_maxi_button
+                - label: Slaapkamer Mini - knop (single/double/hold)
+                  value: bedroom_mini_button
+                - label: Speelkamer - knop (single/double/hold)
+                  value: playroom_button
+                - label: Aquarium - knop (on_press)
+                  value: aquarium_button
+        action:
+          name: Actie
+          description: Welk soort druk
+          required: false
+          example: single
+          default: single
+          selector:
+            select:
+              options:
+                - label: Kort indrukken
+                  value: single
+                - label: Dubbel indrukken
+                  value: double
+                - label: Vasthouden
+                  value: hold
+                - label: Aan-knop (alleen aquarium)
+                  value: on_press
+      sequence:
+        # `default` vangt het geval dat het veld niet meegegeven wordt bij een
+        # aanroep vanuit YAML; de `default:` bij het veld werkt alleen in de UI.
+        - event: virtual_button
+          event_data:
+            button: "{{ button }}"
+            action: "{{ action | default('single', true) }}"
