@@ -197,6 +197,48 @@ kitchen_clock_display_package:
                 retain: true
                 topic: clock_1/custom/power_generated
               action: mqtt.publish
+        - alias: Display home battery
+          # Eén frame op 32x8: batterijsymbool met vulniveau (links), percentage
+          # rechts uitgelijnd, en op de onderste rij een vermogensbalk die vanuit
+          # het midden naar rechts loopt bij laden en naar links bij ontladen.
+          if:
+            - condition: template
+              value_template: >-
+                {{ has_value('sensor.lilygo_rs485_marstek_battery_state_of_charge') }}
+          then:
+            - alias: Draw battery overview
+              data:
+                qos: 0
+                retain: true
+                topic: clock_1/custom/battery
+                payload: >-
+                  {%- set soc = [[states('sensor.lilygo_rs485_marstek_battery_state_of_charge') | float(0) | round(0) | int, 0] | max, 100] | min -%}
+                  {%- set pw = states('sensor.lilygo_rs485_marstek_battery_power') | float(0) -%}
+                  {%- set inv = states('sensor.lilygo_rs485_marstek_inverter_state') -%}
+                  {%- set laadt = inv == 'Charge' or (inv not in ['Charge', 'Discharge'] and pw > 20) -%}
+                  {%- set ontlaadt = inv == 'Discharge' or (inv not in ['Charge', 'Discharge'] and pw < -20) -%}
+                  {%- set vul = [(soc * 11 / 100) | round(0) | int, 1] | max -%}
+                  {%- set vulkleur = '#FF3B30' if soc <= 20 else ('#FF9F0A' if soc <= 50 else '#32D74B') -%}
+                  {%- set randkleur = '#32D74B' if laadt else ('#FF9F0A' if ontlaadt else '#5A5A5A') -%}
+                  {%- set label = soc | string ~ '%' -%}
+                  {%- set tx = 32 - (label | length * 4) -%}
+                  {%- set lengte = [[((pw | abs) * 15 / 2500) | round(0) | int, 15] | min, 1] | max -%}
+                  {"draw": [
+                  {"df": [0, 7, 32, 1, "#1C1C1C"]},
+                  {"dp": [16, 7, "#48484A"]},
+                  {"dr": [0, 0, 13, 6, "{{ randkleur }}"]},
+                  {"df": [13, 2, 1, 2, "{{ randkleur }}"]},
+                  {"df": [1, 1, {{ vul }}, 4, "{{ vulkleur }}"]},
+                  {"dt": [{{ tx }}, 6, "{{ label }}", "#FFFFFF"]}
+                  {%- if laadt %}, {"df": [16, 7, {{ lengte }}, 1, "#32D74B"]}{% elif ontlaadt %}, {"df": [{{ 16 - lengte }}, 7, {{ lengte }}, 1, "#FF9F0A"]}{% endif %}
+                  ], "duration": 8, "lifetime": 300, "lifetimeMode": 0}
+              action: mqtt.publish
+          else:
+            - data:
+                qos: 0
+                retain: true
+                topic: clock_1/custom/battery
+              action: mqtt.publish
         - data:
             qos: 0
             retain: true
