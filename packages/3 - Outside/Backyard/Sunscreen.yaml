@@ -106,9 +106,21 @@ backyard_sunscreen_package:
                                 entity_id: cover.achtertuin_zonnescherm
 
     - id: backyard_sunscreen_close
-      alias: Backyard - Sunscreen close for rain
-      description: "Notify adults when rain is expected and sunscreen is still open to close it"
+      alias: Zonwering - Binnenhalen bij regen
+      description: >-
+        Notify adults when rain is expected and the backyard sunscreen and/or the
+        kitchen screens are still out, so they can be taken in with one tap
       mode: single
+      # Let op de omgekeerde betekenis: het zonnescherm is uitgerold als het
+      # 'open' is (close_cover haalt het in), de keukenscreens hangen omlaag als
+      # ze 'closed' zijn (open_cover haalt ze op). Zie ook
+      # packages/9 - Other/Covers.yaml -> covers_sun_protection.
+      variables:
+        sunscreen_out: "{{ is_state('cover.achtertuin_zonnescherm', 'open') }}"
+        kitchen_screens_down: >-
+          {{ expand('cover.keuken_screen_links', 'cover.keuken_screen_rechts')
+             | selectattr('state', 'in', ['closed', 'closing'])
+             | map(attribute='entity_id') | list }}
       triggers:
         - trigger: numeric_state
           entity_id:
@@ -121,19 +133,23 @@ backyard_sunscreen_package:
           # decimalen af, dus droog is exact 0. Te gretig? Zet hem op 0.1.
           above: 0
       conditions:
-        - condition: state
-          entity_id: cover.achtertuin_zonnescherm
-          state: open
+        - alias: Staat er nog iets uit?
+          condition: template
+          value_template: "{{ sunscreen_out or kitchen_screens_down | count > 0 }}"
       actions:
         - variables:
             action_sunscreen_close: "{{ 'CLOSE_' ~ context.id }}"
+            zonwering: >-
+              {% if sunscreen_out and kitchen_screens_down %}het zonnescherm en de keukenscreens staan
+              {%- elif sunscreen_out %}het zonnescherm staat
+              {%- else %}de keukenscreens staan{%- endif %}
         - action: notify.mobile_devices_adults
           metadata: {}
           data:
-            title: Zonnescherm open; het gaat regenen
+            title: Zonwering uit; het gaat regenen
             message: >-
-              Het gaat regenen in de komende 30 minuten en het zonnescherm is open,
-              wil je deze sluiten?
+              Het gaat regenen in de komende 30 minuten en {{ zonwering }} nog uit,
+              wil je deze binnenhalen?
             data:
               actions:
                 - action: "{{ action_sunscreen_close }}"
@@ -154,8 +170,23 @@ backyard_sunscreen_package:
                 - condition: template
                   value_template: "{{ wait.trigger.event.data.action == action_sunscreen_close }}"
               sequence:
-                - action: cover.close_cover
-                  metadata: {}
-                  data: {}
-                  target:
-                    entity_id: cover.achtertuin_zonnescherm
+                - if:
+                    - condition: template
+                      value_template: "{{ sunscreen_out }}"
+                  then:
+                    - action: cover.close_cover
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: cover.achtertuin_zonnescherm
+                  alias: Zonnescherm inrollen
+                - if:
+                    - condition: template
+                      value_template: "{{ kitchen_screens_down | count > 0 }}"
+                  then:
+                    - action: cover.open_cover
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: "{{ kitchen_screens_down }}"
+                  alias: Keukenscreens omhoog
