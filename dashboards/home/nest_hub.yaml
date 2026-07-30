@@ -3,65 +3,50 @@
 # Zelfde vormtaal als het Overzicht-dashboard, maar op kijkafstand: één scherm
 # zonder scrollen, vier kwadranten, en typografie in vh zodat hij zowel een
 # Nest Hub (1024x600) als een Hub Max (1280x800) precies vult.
+#
+# ============================ LET OP: GEEN CARD-MOD ==========================
+# In een Cast-sessie draait card-mod NIET. Gemeten op de Nest Hub met een
+# afwijkende achtergrondkleur in een card_mod-blok: die kleur kwam niet door,
+# en `grid-template-columns: 1fr 1.25fr` op de rijen ook niet (de kolommen zijn
+# gewoon gelijk breed). Resources laden wél — button-card rendert immers — maar
+# card-mod haakt zich niet in op de frontend die de receiver van
+# cast.home-assistant.io serveert.
+#
+# Gevolg voor dit bestand: gebruik voor layout ALLEEN wat de kaart zelf kan,
+# dus button-card's eigen `styles:` (card/grid/custom_fields). Zet hier geen
+# card_mod-blokken in — die doen niets op de Hub en geven een vals gevoel van
+# controle. Concreet gemist en geaccepteerd: gelijke kolombreedtes i.p.v.
+# 1fr/1.25fr.
+#
+# De hoogtes zijn daardoor met de hand begroot; zie HOOGTEBEGROTING onderaan
+# deze kop. `100vh` is op de Hub wel degelijk het volledige scherm (gemeten:
+# de view-achtergrond loopt tot de onderrand).
+#
+# HOOGTEBEGROTING (1vh = 6px op een 1024x600 Hub), samen exact 100vh:
+#   0,67vh  panel-view padding boven (HA-default 4px, onderaan 0)
+#   1,70vh  margin-top kopbalk       -> zichtbare marge boven = 2,37vh = 14px
+#   7,00vh  kopbalk (klok, vaste hoogte)
+#   1,67vh  gat kopbalk -> rij 1     (HA-default tussen stack-kinderen, ~10px)
+#  42,50vh  rij 1
+#   1,67vh  gat rij 1 -> rij 2
+#  42,50vh  rij 2
+#   2,33vh  margin-bottom rij 2      -> zichtbare marge onder = 2,33vh = 14px
+# Links/rechts: 0,67vh panel-padding + 1,70vh kaartmarge = 14px, gelijk aan
+# boven en onder. Blijft er onderin toch een streepje over of valt de onderste
+# regel weg, dan is dat de enige onzekere post (die ~1,67vh HA-default): stel
+# de twee rijhoogtes gelijk bij, verder niets.
 title: Mini Dashboard
 path: mini-dashboard
 icon: mdi:monitor
 panel: true
-# Kern-eigenschap van de view: werkt ook als card-mod niet laadt (Cast-sessie
-# gebruikt niet jouw thema en laadt resources onbetrouwbaar).
-# TIJDELIJK groen i.p.v. #0b0d12 — meetronde, zie de kleurnoot bij #root.
-background: "#14321f"
+# Kern-eigenschap van de view: dit is een gewone view-property en werkt dus
+# ook zonder card-mod/thema in de Cast-sessie.
+background: "#0b0d12"
 cards:
   - type: vertical-stack
-    card_mod:
-      style: |
-        :host { height: 100% !important; }
-        #root {
-          --ov-panel-bg: rgba(22,24,31,0.72);
-          --ov-panel-border: 1px solid rgba(255,255,255,0.06);
-          --ov-panel-radius: 18px;
-          /* #root van een vertical-stack is al flex-column; met flex-grow op de
-             kaartrijen hangt de verdeling niet af van een display-override die
-             er misschien niet doorkomt (een grid-template-rows die niet pakt
-             levert stilzwijgend gewoon inhoudshoogtes op). */
-          display: flex !important;
-          flex-direction: column !important;
-          gap: 1.8vh !important;
-          height: 100vh !important;
-          margin: 0 !important;
-          /* Gelijke marge rondom: vh voor alle vier de zijden, dus ook links en
-             rechts evenveel pixels als boven en onder. */
-          padding: 3.4vh !important;
-          /* TIJDELIJK paars i.p.v. #0b0d12 — meetronde. Drie kleuren maken in
-             één foto zichtbaar waar de band onderin vandaan komt:
-               paars tot onderaan  -> container is wél schermhoog, de rijen
-                                      vullen hem niet (op te lossen in CSS)
-               groen onder paars   -> 100vh is korter dan het paneel, maar de
-                                      view-laag komt er wel -> hoogte omzetten
-               zwart onder paars   -> Cast letterboxt buiten de viewport, daar
-                                      valt met CSS niets te vullen
-             Daarna gaan beide kleuren terug naar #0b0d12. */
-          background: #2a1a3a !important;
-          box-sizing: border-box !important;
-          overflow: hidden !important;
-        }
-        /* Kopbalk houdt zijn eigen hoogte, de twee kaartrijen delen de rest.
-           min-height:0 zodat een rij ook kleiner mag worden dan zijn inhoud
-           i.p.v. de rest weg te drukken. */
-        #root > *:first-child { flex: 0 0 auto !important; }
-        #root > *:not(:first-child) { flex: 1 1 0 !important; min-height: 0 !important; }
     cards:
       # =================== KOPBALK ===================
       - type: horizontal-stack
-        card_mod:
-          style: |
-            #root {
-              display: grid !important;
-              grid-template-columns: 1fr auto !important;
-              align-items: center !important;
-              gap: 12px !important;
-              padding: 0 4px !important;
-            }
         cards:
           - type: custom:button-card
             tap_action:
@@ -73,6 +58,12 @@ cards:
                 - border: none
                 - box-shadow: none
                 - padding: 0
+                # Vaste kopbalkhoogte: de rijhoogtes eronder zijn hierop
+                # begroot, dus deze niet aan de inhoud laten hangen.
+                - height: 7vh
+                # Boven + links de zichtbare buitenmarge (bovenop de 4px
+                # panel-padding van HA komt dit uit op 14px).
+                - margin: 1.7vh 0 0 1.7vh
               grid:
                 - grid-template-areas: '"k"'
                 - justify-items: start
@@ -89,10 +80,6 @@ cards:
                   </span>`;
                 ]]]
           - type: horizontal-stack
-            card_mod:
-              style: |
-                #root { gap: 10px !important; }
-                #root > * { flex: 0 0 auto !important; }
             cards:
               - type: custom:button-card
                 entity: sensor.zonneplan_current_electricity_tariff
@@ -111,6 +98,9 @@ cards:
                     - padding: 1vh 1.8vh
                     - width: max-content
                     - overflow: visible
+                    # Pil is lager dan de 7vh kopbalk; deze marge zet hem
+                    # optisch op de hoogte van de klok.
+                    - margin: 2.5vh 0 0 0
                   grid:
                     - grid-template-areas: '"c"'
                 custom_fields:
@@ -141,6 +131,9 @@ cards:
                     - padding: 1vh 1.8vh
                     - width: max-content
                     - overflow: visible
+                    # Pil is lager dan de 7vh kopbalk; deze marge zet hem
+                    # optisch op de hoogte van de klok.
+                    - margin: 2.5vh 0 0 0
                   grid:
                     - grid-template-areas: '"c"'
                 custom_fields:
@@ -160,28 +153,10 @@ cards:
       - type: grid
         columns: 2
         square: false
-        card_mod:
-          style: &rij |
-            /* Elk niveau moet zijn eigen hoogte doorgeven: de kaart zit in een
-               hui-card-wrapper met eigen shadow root, dus zonder :host valt
-               height:100% hieronder terug op auto en krimpen de blokken naar
-               hun inhoud (gaten tussen de blokken). */
-            :host { height: 100% !important; }
-            #root {
-              display: grid !important;
-              grid-template-columns: 1fr 1.25fr !important;
-              gap: 1.8vh !important;
-              height: 100% !important;
-              align-items: stretch !important;
-            }
-            #root > * { height: 100% !important; min-height: 0 !important; }
         cards:
           # ---------- BRANDWEER ----------
           - type: custom:button-card
             entity: input_select.brandweer_dienstdoende_ploeg
-            card_mod:
-              style: &vul |
-                :host { height: 100% !important; }
             show_icon: false
             show_name: false
             show_state: false
@@ -194,8 +169,13 @@ cards:
                   - border-radius: 18px
                   - box-shadow: none
                   - padding: 1.6vh 2vh
-                  - height: 100%
+                  # Vaste rijhoogte uit de HOOGTEBEGROTING bovenaan dit bestand.
+                  # Geen 100%: zonder card-mod krijgt de hui-card-wrapper geen
+                  # hoogte doorgegeven en valt een percentage terug op auto.
+                  - height: 42.5vh
                   - box-sizing: border-box
+                  # Linkerkolom, bovenste rij: alleen links buitenmarge.
+                  - margin: 0 0 0 1.7vh
               grid:
                 - grid-template-areas: '"t" "ploegen" "uitrukken" "melding"'
                 - grid-template-rows: auto auto auto auto
@@ -286,8 +266,6 @@ cards:
         # ---------- ENERGIE ----------
           - type: custom:button-card
             entity: sensor.live_energieverbruik_totaal
-            card_mod:
-              style: *vul
             show_icon: false
             show_name: false
             show_state: false
@@ -303,8 +281,10 @@ cards:
                   - border-radius: 18px
                   - box-shadow: none
                   - padding: 1.6vh 2vh
-                  - height: 100%
+                  - height: 42.5vh
                   - box-sizing: border-box
+                  # Rechterkolom, bovenste rij: alleen rechts buitenmarge.
+                  - margin: 0 1.7vh 0 0
               grid:
                 - grid-template-areas: '"t" "cijfers" "strook"'
                 - grid-template-rows: auto auto auto
@@ -473,14 +453,10 @@ cards:
       - type: grid
         columns: 2
         square: false
-        card_mod:
-          style: *rij
         cards:
           # ---------- VANDAAG ----------
           - type: custom:button-card
             entity: sensor.afvalinfo_home_trash_type_today
-            card_mod:
-              style: *vul
             show_icon: false
             show_name: false
             show_state: false
@@ -493,8 +469,11 @@ cards:
                   - border-radius: 18px
                   - box-shadow: none
                   - padding: 1.6vh 2vh
-                  - height: 100%
+                  - height: 42.5vh
                   - box-sizing: border-box
+                  # Onderste rij: hier zit de zichtbare marge onderaan het
+                  # scherm in, want de panel-view heeft onder geen padding.
+                  - margin: 0 0 2.33vh 1.7vh
               grid:
                 - grid-template-areas: '"t" "afval" "agenda" "voet"'
                 - grid-template-rows: auto auto auto auto
@@ -637,8 +616,6 @@ cards:
         # ---------- PERSONEN ----------
           - type: custom:button-card
             entity: person.robin_bohnen
-            card_mod:
-              style: *vul
             show_icon: false
             show_name: false
             show_state: false
@@ -651,8 +628,9 @@ cards:
                   - border-radius: 18px
                   - box-shadow: none
                   - padding: 1.6vh 2vh
-                  - height: 100%
+                  - height: 42.5vh
                   - box-sizing: border-box
+                  - margin: 0 1.7vh 2.33vh 0
               grid:
                 - grid-template-areas: '"t" "mensen" "huis"'
                 - grid-template-rows: auto auto auto
