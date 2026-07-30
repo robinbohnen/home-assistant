@@ -19,22 +19,32 @@ cards:
           --ov-panel-bg: rgba(22,24,31,0.72);
           --ov-panel-border: 1px solid rgba(255,255,255,0.06);
           --ov-panel-radius: 18px;
-          display: grid !important;
-          /* 1fr-rijen i.p.v. auto: de twee kaartrijen verdelen samen exact de
-             restruimte, dus er blijft onderaan niets over. De marge boven en
-             onder wordt alleen nog door de padding hieronder bepaald. */
-          grid-template-rows: auto 1fr 1fr !important;
+          /* #root van een vertical-stack is al flex-column; met flex-grow op de
+             kaartrijen hangt de verdeling niet af van een display-override die
+             er misschien niet doorkomt (een grid-template-rows die niet pakt
+             levert stilzwijgend gewoon inhoudshoogtes op). */
+          display: flex !important;
+          flex-direction: column !important;
           gap: 1.8vh !important;
           height: 100vh !important;
           margin: 0 !important;
-          padding: 3.2vh 2.2vh 1.6vh !important;
+          /* Gelijke marge rondom: vh voor alle vier de zijden, dus ook links en
+             rechts evenveel pixels als boven en onder. */
+          padding: 3.4vh !important;
           background: #0b0d12 !important;
           box-sizing: border-box !important;
           overflow: hidden !important;
+          /* TIJDELIJK — meetlijn. Toont waar deze container eindigt, zodat op
+             een foto te zien is of 100vh wél tot de onderkant van het scherm
+             reikt. Zodra dat vaststaat: deze regel weg. */
+          outline: 2px solid #38bdf8 !important;
+          outline-offset: -2px !important;
         }
-        /* min-height:0 zodat een 1fr-rij ook écht kleiner mag worden dan zijn
-           inhoud i.p.v. de rest weg te drukken. */
-        #root > * { min-height: 0 !important; }
+        /* Kopbalk houdt zijn eigen hoogte, de twee kaartrijen delen de rest.
+           min-height:0 zodat een rij ook kleiner mag worden dan zijn inhoud
+           i.p.v. de rest weg te drukken. */
+        #root > *:first-child { flex: 0 0 auto !important; }
+        #root > *:not(:first-child) { flex: 1 1 0 !important; min-height: 0 !important; }
     cards:
       # =================== KOPBALK ===================
       - type: horizontal-stack
