@@ -43,7 +43,12 @@ card:
       show_name: false
       show_state: false
       update_timer: 60s
+      # Tik = agenda/afval (daar staat de volledige lijst, ook wat achter "+N meer"
+      # zit); lang indrukken = de prijsdetails. Hover bestaat niet op het wandpaneel.
       tap_action:
+        action: navigate
+        navigation_path: "#ov-vandaag"
+      hold_action:
         action: navigate
         navigation_path: "#ov-energie"
       variables:
@@ -153,20 +158,12 @@ card:
               if(!perDag[k]) perDag[k] = {min: s.p, max: s.p};
               else { perDag[k].min = Math.min(perDag[k].min, s.p); perDag[k].max = Math.max(perDag[k].max, s.p); }
             });
-            slots.forEach(function(s){
-              if(s.t + stap < start || s.t > eind) return;
-              var d = perDag[new Date(s.t).toDateString()];
-              var spreiding = d.max - d.min;
-              var r = spreiding < 0.02 ? 0.5 : (s.p - d.min) / spreiding;
-              var kleur = r <= 0.33 ? '#4ade80' : (r >= 0.66 ? '#ef4444' : '#f59e0b');
-              var a = klem(pct(s.t)), b = klem(pct(s.t + stap));
-              if(b - a > 0.05) lagen.push(`<div title="${klok(s.t)} · € ${s.p.toFixed(3)}" style="position:absolute;left:${a}%;width:${b-a}%;top:${top.prijs}px;height:${H.prijs}px;background:${kleur};opacity:0.85"></div>`);
-            });
-
-            // ---------- goedkoopste laadvenster als beugel ----------
+            // ---------- goedkoopste laadvenster bepalen ----------
+            // Vóór het tekenen van de blokken, want binnen de beugel laten we het
+            // prijsje weg (daar staat "LADEN" al, en 12px hoog past niet twee keer).
+            var beste = null;
             if(slots.length > 1){
               var nodig = Math.max(1, Math.round(variables.laadvenster_uren * 3600000 / stap));
-              var beste = null;
               for(var len = nodig; len >= 1 && beste === null; len--){
                 for(var i = 0; i + len <= slots.length; i++){
                   if(slots[i].t + stap <= nu) continue;
@@ -180,11 +177,37 @@ card:
                   if(beste === null || gem < beste.gem) beste = {gem: gem, van: slots[i].t, tot: slots[i+len-1].t + stap};
                 }
               }
-              if(beste && beste.van < eind){
-                var a = klem(pct(beste.van)), b = klem(pct(beste.tot));
-                var etiket = (b - a) > 7 ? `<span style="font-size:8.5px;font-weight:700;color:#38bdf8;letter-spacing:0.4px">LADEN</span>` : '';
-                if(b - a > 1) lagen.push(`<div title="goedkoopst laden" style="position:absolute;left:${a}%;width:${b-a}%;top:${top.prijs - 2}px;height:${H.prijs + 4}px;border:1.5px solid #38bdf8;border-radius:4px;box-sizing:border-box;display:flex;align-items:center;justify-content:center">${etiket}</div>`);
+            }
+
+            // Prijs als tekst in het blok: op een touchscreen is een title=-tooltip
+            // onbereikbaar, dus het getal moet gewoon zichtbaar zijn.
+            var euro = function(p){ return p.toFixed(2).replace('.', ','); };
+            slots.forEach(function(s){
+              if(s.t + stap < start || s.t > eind) return;
+              var d = perDag[new Date(s.t).toDateString()];
+              var spreiding = d.max - d.min;
+              var r = spreiding < 0.02 ? 0.5 : (s.p - d.min) / spreiding;
+              var kleur = r <= 0.33 ? '#4ade80' : (r >= 0.66 ? '#ef4444' : '#f59e0b');
+              var a = klem(pct(s.t)), b = klem(pct(s.t + stap));
+              if(b - a <= 0.05) return;
+              var inVenster = beste && s.t < beste.tot && s.t + stap > beste.van;
+              var etiket = '';
+              if(!inVenster && (b - a) >= 3.5){
+                etiket = `<span style="font-size:8px;font-weight:700;color:rgba(0,0,0,0.72);letter-spacing:-0.2px">${(b - a) >= 6 ? '€' : ''}${euro(s.p)}</span>`;
               }
+              lagen.push(`<div title="${klok(s.t)} · € ${s.p.toFixed(3)}" style="position:absolute;left:${a}%;width:${b-a}%;top:${top.prijs}px;height:${H.prijs}px;background:${kleur};opacity:0.85;display:flex;align-items:center;justify-content:center;overflow:hidden">${etiket}</div>`);
+            });
+
+            // ---------- laadvenster als beugel over de blokken ----------
+            if(beste && beste.van < eind){
+              var a = klem(pct(beste.van)), b = klem(pct(beste.tot));
+              // Volledig etiket alleen als de beugel breed genoeg is; anders klapt
+              // hij terug naar "LADEN" en daaronder naar alleen de beugel.
+              var tekst = (b - a) > 16 ? `LADEN ${klok(beste.van)}–${klok(beste.tot)} · € ${euro(beste.gem)}` : ((b - a) > 7 ? 'LADEN' : '');
+              var etiket = tekst
+                ? `<span style="font-size:8.5px;font-weight:700;color:#38bdf8;letter-spacing:0.4px">${tekst}</span>`
+                : '';
+              if(b - a > 1) lagen.push(`<div title="goedkoopst laden" style="position:absolute;left:${a}%;width:${b-a}%;top:${top.prijs - 2}px;height:${H.prijs + 4}px;border:1.5px solid #38bdf8;border-radius:4px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap">${etiket}</div>`);
             }
 
             // ---------- laag 4: markers ----------
@@ -224,23 +247,48 @@ card:
 
             markers = markers.filter(function(m){ return m.t >= start && m.t <= eind; })
                              .sort(function(a,b){ return a.t - b.t; });
-            var rijLaatste = [-99, -99];
             var verborgen = Math.max(0, markers.length - 8);
+            // Eerst plaatsen, dan renderen: pas als de rijindeling vaststaat weten
+            // we hoeveel ruimte er tot de volgende marker in dezelfde rij is, en
+            // dus of het label erbij past. Op een touchscreen bestaat hover niet,
+            // dus de tekst moet zichtbaar zijn en niet in een title= zitten.
+            var rijen = [[], []];
+            var rijLaatste = [-99, -99];
             markers.slice(0, 8).forEach(function(m){
               var x = pct(m.t);
               // botsing: te dicht op de vorige in rij 0? dan naar rij 1
               var rij = (x - rijLaatste[0] > 7) ? 0 : ((x - rijLaatste[1] > 7) ? 1 : -1);
               if(rij === -1) { verborgen++; return; }   // nooit stil weglaten
               rijLaatste[rij] = x;
-              var y = top.markers + rij * 9;
-              lagen.push(`<div title="${klok(m.t)} · ${m.tekst}" style="position:absolute;left:${klem(x)}%;transform:translateX(-50%);top:${y}px;display:flex;align-items:center;gap:3px;white-space:nowrap">
-                <ha-icon icon="${m.icon}" style="--mdc-icon-size:11px;color:${m.kleur}"></ha-icon>
-                <span style="font-size:9.5px;color:rgba(255,255,255,0.6)">${klok(m.t)}</span>
-              </div>`);
+              rijen[rij].push({m: m, x: klem(x)});
+            });
+            var esc = function(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+            rijen.forEach(function(rij, ri){
+              rij.forEach(function(p, i){
+                var y = top.markers + ri * 9;
+                var ruimte = ((i + 1 < rij.length) ? rij[i+1].x : 100) - p.x - 1;
+                var tekst = esc(p.m.tekst);
+                var tip = `${klok(p.m.t)} · ${tekst}`;
+                if(ruimte < 6 || !tekst){
+                  // te weinig ruimte voor tekst: alleen icoon + tijd, gecentreerd
+                  lagen.push(`<div title="${tip}" style="position:absolute;left:${p.x}%;transform:translateX(-50%);top:${y}px;display:flex;align-items:center;gap:3px;white-space:nowrap">
+                    <ha-icon icon="${p.m.icon}" style="--mdc-icon-size:11px;color:${p.m.kleur}"></ha-icon>
+                    <span style="font-size:9.5px;color:rgba(255,255,255,0.6)">${klok(p.m.t)}</span>
+                  </div>`);
+                  return;
+                }
+                // links uitgelijnd zodat de tekst de vrije ruimte naar rechts in
+                // loopt; -7px trekt het icoon terug op het echte tijdstip.
+                lagen.push(`<div title="${tip}" style="position:absolute;left:${p.x}%;width:${ruimte}%;min-width:46px;margin-left:-7px;top:${y}px;display:flex;align-items:center;gap:3px;white-space:nowrap;overflow:hidden">
+                  <ha-icon icon="${p.m.icon}" style="--mdc-icon-size:11px;color:${p.m.kleur};flex:none"></ha-icon>
+                  <span style="font-size:9.5px;color:rgba(255,255,255,0.6);flex:none">${klok(p.m.t)}</span>
+                  <span style="font-size:9.5px;color:rgba(255,255,255,0.45);overflow:hidden;text-overflow:ellipsis">${tekst}</span>
+                </div>`);
+              });
             });
 
             if(verborgen > 0){
-              lagen.push(`<div title="${verborgen} extra afspraak/afspraken passen niet naast elkaar" style="position:absolute;right:0;top:${top.markers}px;font-size:9.5px;color:rgba(255,255,255,0.45)">+${verborgen}</div>`);
+              lagen.push(`<div title="${verborgen} extra afspraak/afspraken passen niet naast elkaar" style="position:absolute;right:0;top:${top.markers}px;font-size:9.5px;color:rgba(255,255,255,0.45)">+${verborgen} meer</div>`);
             }
 
             // ---------- laag 5: nu ----------
