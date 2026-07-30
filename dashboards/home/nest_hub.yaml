@@ -32,6 +32,9 @@ cards:
           box-sizing: border-box !important;
           overflow: hidden !important;
         }
+        /* min-height:0 zodat een 1fr-rij ook écht kleiner mag worden dan zijn
+           inhoud i.p.v. de rest weg te drukken. */
+        #root > * { min-height: 0 !important; }
     cards:
       # =================== KOPBALK ===================
       - type: horizontal-stack
@@ -144,18 +147,26 @@ cards:
         square: false
         card_mod:
           style: &rij |
+            /* Elk niveau moet zijn eigen hoogte doorgeven: de kaart zit in een
+               hui-card-wrapper met eigen shadow root, dus zonder :host valt
+               height:100% hieronder terug op auto en krimpen de blokken naar
+               hun inhoud (gaten tussen de blokken). */
+            :host { height: 100% !important; }
             #root {
               display: grid !important;
               grid-template-columns: 1fr 1.25fr !important;
-              gap: 12px !important;
+              gap: 1.8vh !important;
               height: 100% !important;
               align-items: stretch !important;
             }
-            #root > * { height: 100% !important; }
+            #root > * { height: 100% !important; min-height: 0 !important; }
         cards:
           # ---------- BRANDWEER ----------
           - type: custom:button-card
             entity: input_select.brandweer_dienstdoende_ploeg
+            card_mod:
+              style: &vul |
+                :host { height: 100% !important; }
             show_icon: false
             show_name: false
             show_state: false
@@ -260,6 +271,8 @@ cards:
         # ---------- ENERGIE ----------
           - type: custom:button-card
             entity: sensor.live_energieverbruik_totaal
+            card_mod:
+              style: *vul
             show_icon: false
             show_name: false
             show_state: false
@@ -451,6 +464,8 @@ cards:
           # ---------- VANDAAG ----------
           - type: custom:button-card
             entity: sensor.afvalinfo_home_trash_type_today
+            card_mod:
+              style: *vul
             show_icon: false
             show_name: false
             show_state: false
@@ -607,6 +622,8 @@ cards:
         # ---------- PERSONEN ----------
           - type: custom:button-card
             entity: person.robin_bohnen
+            card_mod:
+              style: *vul
             show_icon: false
             show_name: false
             show_state: false
