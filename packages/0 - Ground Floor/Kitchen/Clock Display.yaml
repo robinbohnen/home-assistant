@@ -207,9 +207,11 @@ kitchen_clock_display_package:
         - alias: Display home battery
           # Eén frame op 32x8: batterijsymbool met vulniveau (links, kleur = laden /
           # ontladen / idle), percentage rechts uitgelijnd, en op de onderste rij een
-          # vermogensbalk die vanuit het midden naar rechts loopt bij laden en naar
-          # links bij ontladen. Let op: bij "dt" is y de bovenkant van de tekst, niet
-          # de baseline - daarom y=0, anders valt de tekst buiten het scherm.
+          # vermogensbalk vanaf links: lengte = vermogen (volle breedte = 2500 W),
+          # kleur = richting. Eerder liep die balk vanuit het midden, maar zonder
+          # zichtbaar nulpunt was niet af te lezen waar hij begon.
+          # Let op: bij "dt" is y de bovenkant van de tekst, niet de baseline -
+          # daarom y=0, anders valt de tekst buiten het scherm.
           if:
             - condition: template
               value_template: >-
@@ -230,15 +232,14 @@ kitchen_clock_display_package:
                   {%- set vulkleur = '#FF3B30' if soc <= 10 else ('#32D74B' if laadt else ('#FF9F0A' if ontlaadt else '#0A84FF')) -%}
                   {%- set label = soc | string ~ '%' -%}
                   {%- set tx = 32 - (label | length * 4) -%}
-                  {%- set lengte = [[((pw | abs) * 15 / 2500) | round(0) | int, 15] | min, 1] | max -%}
+                  {%- set lengte = [[((pw | abs) * 32 / 2500) | round(0) | int, 32] | min, 1] | max -%}
                   {"draw": [
-                  {"df": [0, 7, 32, 1, "#2E2E2E"]},
-                  {"dp": [16, 7, "#8E8E93"]},
+                  {"df": [0, 7, 32, 1, "#222222"]},
                   {"dr": [0, 0, 11, 6, "#3A3A3A"]},
                   {"df": [11, 2, 1, 2, "#3A3A3A"]},
                   {"df": [1, 1, {{ vul }}, 4, "{{ vulkleur }}"]},
                   {"dt": [{{ tx }}, 0, "{{ label }}", "#FFFFFF"]}
-                  {%- if laadt %}, {"df": [16, 7, {{ lengte }}, 1, "#32D74B"]}{% elif ontlaadt %}, {"df": [{{ 16 - lengte }}, 7, {{ lengte }}, 1, "#FF9F0A"]}{% endif %}
+                  {%- if laadt or ontlaadt %}, {"df": [0, 7, {{ lengte }}, 1, "{{ '#32D74B' if laadt else '#FF9F0A' }}"]}{% endif %}
                   ], "duration": 8, "lifetime": 300, "lifetimeMode": 0}
               action: mqtt.publish
           else:
