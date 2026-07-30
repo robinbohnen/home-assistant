@@ -164,16 +164,21 @@ kitchen_clock_display_package:
             topic: clock_1/custom/temperature_living
             payload: >-
               {"icon": 7112,"color":"FFFFFF","repeat": 2,"text": "{{
-              states('sensor.woonkamer_temperatuur') | float(0) | round(1) }}"}
+              states('sensor.woonkamer_temperatuur') | float(0) | round(1)
+              if has_value('sensor.woonkamer_temperatuur') else '--' }}"}
           action: mqtt.publish
           alias: Display temperature
         - data:
             qos: 0
             retain: true
             topic: clock_1/custom/power_usage
+            # Groen bij negatief verbruik: dan leveren we terug aan het net.
             payload: >-
-              {"icon": 54077,"color":"FFFFFF","repeat": 2,"text": "{{
-              states('sensor.live_energieverbruik_totaal') | float(0) | round(2) }}"}
+              {"icon": 54077,"color":"{{ '32D74B' if
+              states('sensor.live_energieverbruik_totaal') | float(0) < 0
+              else 'FFFFFF' }}","repeat": 2,"text": "{{
+              states('sensor.live_energieverbruik_totaal') | float(0) | round(2)
+              if has_value('sensor.live_energieverbruik_totaal') else '--' }}"}
           action: mqtt.publish
           alias: Display power usage
         - alias: Display solar power generated now
@@ -182,14 +187,16 @@ kitchen_clock_display_package:
               entity_id: sensor.solar_power_generated_now
               above: 0
           then:
-            - alias: Display power usage
+            - alias: Display solar power
               data:
                 qos: 0
                 retain: true
                 topic: clock_1/custom/power_generated
+                # Hele watts: met round(2) werd dit "1834.56 W" en dat past niet
+                # naast het icoon (24 px = 6 tekens), dus ging het scrollen.
                 payload: >-
-                  {"icon": 27283,"color":"FFFFFF","repeat": 2,"text": "{{
-                  states('sensor.solar_power_generated_now') | float(0) | round(2) }} W"}
+                  {"icon": 27283,"color":"32D74B","repeat": 2,"text": "{{
+                  states('sensor.solar_power_generated_now') | float(0) | round(0) | int }} W"}
               action: mqtt.publish
           else:
             - data:
@@ -244,13 +251,14 @@ kitchen_clock_display_package:
             qos: 0
             retain: true
             topic: clock_1/custom/today costs
+            # sensor.total_costs_today_calculated (packages/9 - Other/Electricity.yaml)
+            # rekent exact dezelfde som al uit, inclusief availability-guard.
             payload: >-
-              {"icon": 2147,"color":"FFFFFF","repeat": 2,"text": "€ {{
-              '{:.2f}'.format(((states('sensor.zonneplan_electricity_delivery_costs_today')
-              | float(0) -
-              states('sensor.zonneplan_electricity_production_costs_today')
-              | float(0)) + states('sensor.zonneplan_gas_delivery_costs_today')
-              | float(0)) | round(2)) }}"}
+              {"icon": 2147,"color":"{{ '32D74B' if
+              states('sensor.total_costs_today_calculated') | float(0) < 0
+              else 'FFFFFF' }}","repeat": 2,"text": "€ {{
+              '{:.2f}'.format(states('sensor.total_costs_today_calculated') | float(0))
+              if has_value('sensor.total_costs_today_calculated') else '--' }}"}
           action: mqtt.publish
           alias: Display total costs today
         - alias: Display spa temperature
@@ -267,7 +275,8 @@ kitchen_clock_display_package:
                 payload: >-
                   {"icon": 7097,"color":"FFFFFF","repeat": 2,"text": "{{
                   state_attr('climate.intex_purespa','current_temperature') | float(0) | round(1)
-                  }}"}
+                  if state_attr('climate.intex_purespa','current_temperature') is not none
+                  else '--' }}"}
               action: mqtt.publish
           else:
             - data:
@@ -292,11 +301,14 @@ kitchen_clock_display_package:
                 qos: 0
                 retain: true
                 topic: clock_1/custom/music
+                # to_json quote en escape de titel: nummers met een " of \ erin
+                # maakten anders ongeldige JSON, waarna de app stil bleef hangen.
                 payload: >-
+                  {%- set titel = state_attr('media_player.woonkamer_sonos','media_title') -%}
+                  {%- set artiest = state_attr('media_player.woonkamer_sonos','media_artist') -%}
+                  {%- set tekst = (titel or 'Muziek') ~ (' - ' ~ artiest if artiest else '') -%}
                   {"icon": 29944,"color":"FFFFFF","repeat": 2, "scrollSpeed": 50,
-                  "text": "{{ state_attr('media_player.woonkamer_sonos','media_title')
-                  }} - {{ state_attr('media_player.woonkamer_sonos','media_artist') }}
-                  "}
+                  "text": {{ tekst | to_json }}}
               action: mqtt.publish
           else:
             - data:
@@ -306,11 +318,12 @@ kitchen_clock_display_package:
               action: mqtt.publish
           alias: Display current song
         - if:
-            - condition: not
-              conditions:
-                - condition: state
-                  entity_id: sensor.afvalinfo_home_trash_type_today
-                  state: geen
+            # has_value erbij: anders is "unavailable" ook ongelijk aan "geen"
+            # en stond er letterlijk "unavailable" op de klok.
+            - condition: template
+              value_template: >-
+                {{ has_value('sensor.afvalinfo_home_trash_type_today')
+                   and states('sensor.afvalinfo_home_trash_type_today') != 'geen' }}
           then:
             - data:
                 qos: 0
@@ -318,14 +331,14 @@ kitchen_clock_display_package:
                 topic: clock_1/custom/afval
                 payload: >-
                   { "icon": 9399,"color":"FFFFFF", "repeat": 2, "scrollSpeed": 50,
-                  "text": "{{ states('sensor.afvalinfo_home_trash_type_today') }}" }
+                  "text": {{ states('sensor.afvalinfo_home_trash_type_today') | to_json }} }
               action: mqtt.publish
           else:
+            # Lege payload verwijdert de app; "{}" liet een lege app staan.
             - data:
                 qos: 0
                 retain: false
                 topic: clock_1/custom/afval
-                payload: "{}"
               action: mqtt.publish
           alias: Display todays trash
         - if:
@@ -339,12 +352,21 @@ kitchen_clock_display_package:
                 qos: 0
                 retain: false
                 topic: clock_1/custom/robin
+                # Zonder guard werd dit "R: None in None" zodra de geo-sensor geen
+                # straat of plaats had; nu vallen we terug op wat wel bekend is.
                 payload: >-
+                  {%- set straat = state_attr('sensor.robin_bohnen_geo','street') -%}
+                  {%- set plaats = state_attr('sensor.robin_bohnen_geo','city') -%}
+                  {%- set toestand = states('person.robin_bohnen') -%}
+                  {%- if toestand not in ['not_home', 'unavailable', 'unknown'] -%}
+                  {%- set waar = toestand -%}
+                  {%- elif straat and plaats -%}
+                  {%- set waar = straat ~ ' in ' ~ plaats -%}
+                  {%- else -%}
+                  {%- set waar = plaats or straat or 'onderweg' -%}
+                  {%- endif -%}
                   { "icon": 27335,"color":"FFFFFF", "repeat": 2, "scrollSpeed": 50,
-                  "text": "R: {% if states('person.robin_bohnen') == 'not_home'
-                  %}{{state_attr('sensor.robin_bohnen_geo','street')}} in
-                  {{state_attr('sensor.robin_bohnen_geo','city')}}{% else %} {{
-                  states('person.robin_bohnen') }} {% endif %}" }
+                  "text": {{ ('R: ' ~ waar) | to_json }} }
               action: mqtt.publish
           else:
             - data:
@@ -365,11 +387,18 @@ kitchen_clock_display_package:
                 retain: false
                 topic: clock_1/custom/samantha
                 payload: >-
+                  {%- set straat = state_attr('sensor.samantha_henkelman_geo','street') -%}
+                  {%- set plaats = state_attr('sensor.samantha_henkelman_geo','city') -%}
+                  {%- set toestand = states('person.samantha_henkelman') -%}
+                  {%- if toestand not in ['not_home', 'unavailable', 'unknown'] -%}
+                  {%- set waar = toestand -%}
+                  {%- elif straat and plaats -%}
+                  {%- set waar = straat ~ ' in ' ~ plaats -%}
+                  {%- else -%}
+                  {%- set waar = plaats or straat or 'onderweg' -%}
+                  {%- endif -%}
                   { "icon": 27335,"color":"FFFFFF", "repeat": 2, "scrollSpeed": 50,
-                  "text": "S: {% if states('person.samantha_henkelman') == 'not_home'
-                  %}{{state_attr('sensor.samantha_henkelman_geo','street')}} in
-                  {{state_attr('sensor.samantha_henkelman_geo','city')}}{% else %} {{
-                  states('person.samantha_henkelman') }} {% endif %}" }
+                  "text": {{ ('S: ' ~ waar) | to_json }} }
               action: mqtt.publish
           else:
             - data:
@@ -378,27 +407,52 @@ kitchen_clock_display_package:
                 topic: clock_1/custom/samantha
               action: mqtt.publish
           alias: Display location Partner
-        - data:
-            qos: 0
-            retain: true
-            topic: clock_1/custom/next_cal_event
-            payload: >-
-              {"icon": 10498,"color":"FFFFFF","repeat": 2, "scrollSpeed": 50, "text":
-              "{{ state_attr('calendar.robin_en_sam', 'message') }} - {{
-              as_timestamp(state_attr('calendar.robin_en_sam', 'start_time')) |
-              timestamp_custom('%d-%m-%Y om %H:%M') }} "}
-          action: mqtt.publish
-          alias: Display next calendar event
+        - alias: Display next calendar event
+          # Zonder deze guard viel as_timestamp(None) om zodra er geen volgende
+          # afspraak was, waardoor de automation afbrak en de BRW-app hieronder
+          # niet meer werd bijgewerkt.
+          if:
+            - condition: template
+              value_template: >-
+                {{ state_attr('calendar.robin_en_sam', 'start_time') is not none }}
+          then:
+            - alias: Show next event
+              data:
+                qos: 0
+                retain: true
+                topic: clock_1/custom/next_cal_event
+                payload: >-
+                  {%- set titel = state_attr('calendar.robin_en_sam', 'message') or 'Afspraak' -%}
+                  {%- set start = state_attr('calendar.robin_en_sam', 'start_time') | as_datetime | as_local -%}
+                  {%- if start.date() == now().date() -%}
+                  {%- set dag = 'vandaag' -%}
+                  {%- elif start.date() == (now() + timedelta(days=1)).date() -%}
+                  {%- set dag = 'morgen' -%}
+                  {%- else -%}
+                  {%- set dag = start.strftime('%d-%m') -%}
+                  {%- endif -%}
+                  {%- set tijd = '' if state_attr('calendar.robin_en_sam', 'all_day')
+                                 else ' om ' ~ start.strftime('%H:%M') -%}
+                  {"icon": 10498,"color":"FFFFFF","repeat": 2, "scrollSpeed": 50,
+                  "text": {{ (titel ~ ' - ' ~ dag ~ tijd) | to_json }}}
+              action: mqtt.publish
+          else:
+            - data:
+                qos: 0
+                retain: true
+                topic: clock_1/custom/next_cal_event
+              action: mqtt.publish
         - alias: Display BRW occupation
           data:
             qos: 0
             retain: true
             topic: clock_1/custom/brw_occupation
             payload: >-
-              {"icon": 8050,"color":"FFFFFF","repeat": 3, "scrollSpeed": 50, "text":
-              "A Ploeg: {{ states('sensor.bezetting_ploeg_a') }}, B Ploeg: {{
-              states('sensor.bezetting_ploeg_b') }}, C Ploeg: {{
-              states('sensor.bezetting_ploeg_c') }} "}
+              {%- macro ploeg(id) -%}{{ states(id) if has_value(id) else '?' }}{%- endmacro -%}
+              {"icon": 8050,"color":"FFFFFF","repeat": 3, "scrollSpeed": 50,
+              "text": {{ ('A Ploeg: ' ~ ploeg('sensor.bezetting_ploeg_a') ~
+              ', B Ploeg: ' ~ ploeg('sensor.bezetting_ploeg_b') ~
+              ', C Ploeg: ' ~ ploeg('sensor.bezetting_ploeg_c')) | to_json }}}
           action: mqtt.publish
       mode: single
 
