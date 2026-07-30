@@ -113,7 +113,13 @@ backyard_sunscreen_package:
         - trigger: numeric_state
           entity_id:
             - sensor.neerslag_komende_30_minuten
-          above: 1
+          # Sinds sensor.neerslag_komende_30_minuten echte millimeters geeft
+          # (was de opgetelde 0-255 intensiteitscode, ~550 bij motregen) hoort
+          # hier geen 1 meer: 1 mm in een half uur is een flinke bui en dan
+          # kwam deze melding vrijwel nooit meer. 0 houdt het gedrag zoals het
+          # was — elke voorspelde neerslag — want de sensor rondt op 2
+          # decimalen af, dus droog is exact 0. Te gretig? Zet hem op 0.1.
+          above: 0
       conditions:
         - condition: state
           entity_id: cover.achtertuin_zonnescherm

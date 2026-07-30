@@ -2,9 +2,34 @@ weather_package:
 
   template:
     - sensor:
+      # Buienalarm levert in data.precip GEEN millimeters maar de 0-255
+      # intensiteitscode van Buienradar: mm/uur = 10 ^ ((code - 109) / 32).
+      # Die schaal is logaritmisch, dus de codes optellen levert een getal op
+      # dat niets betekent (stond hier eerder als "mm" en gaf ~550 bij
+      # motregen). Per slot dus eerst terug naar mm/uur, en dan pas keer de
+      # slotduur om er millimeters van te maken.
+      #
+      # data.delta is de slotlengte in seconden (300 = 5 min); daaruit volgt
+      # hoeveel sloten er in een half uur passen. Niet hardcoden, want als
+      # Buienalarm de resolutie ooit wijzigt klopt het bereik dan nog.
+      # Code 0 = droog en wordt overgeslagen: de formule geeft daar een
+      # verwaarloosbaar restje dat anders over zes sloten zou opsommen.
       - name: "Neerslag komende 30 minuten"
         unique_id: neerslag_komende_30_min
-        state: "{{ state_attr('sensor.neerslag_buienalarm_regen_data','data').precip[:6] | sum() }}"
+        availability: >
+          {{ state_attr('sensor.neerslag_buienalarm_regen_data','data') is mapping
+             and state_attr('sensor.neerslag_buienalarm_regen_data','data').precip is iterable }}
+        state: >
+          {% set d = state_attr('sensor.neerslag_buienalarm_regen_data','data') %}
+          {% set delta = d.delta | int(300) %}
+          {% set sloten = (1800 / delta) | round(0) | int %}
+          {% set ns = namespace(mm=0) %}
+          {% for code in d.precip[:sloten] %}
+            {% if code | float(0) > 0 %}
+              {% set ns.mm = ns.mm + (10 ** ((code | float - 109) / 32)) * (delta / 3600) %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.mm | round(2) }}
         unit_of_measurement: "mm"
         device_class: PRECIPITATION
 
