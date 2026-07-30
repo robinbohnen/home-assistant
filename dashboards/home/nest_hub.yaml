@@ -411,8 +411,8 @@ cards:
                   - height: 43vh
                   - box-sizing: border-box
               grid:
-                - grid-template-areas: '"t" "afval" "agenda"'
-                - grid-template-rows: auto auto auto
+                - grid-template-areas: '"t" "afval" "agenda" "voet"'
+                - grid-template-rows: auto auto auto auto
                 - align-content: space-evenly
                 - row-gap: 1.2vh
                 - height: 100%
@@ -422,6 +422,8 @@ cards:
                 afval:
                   - justify-self: stretch
                 agenda:
+                  - justify-self: stretch
+                voet:
                   - justify-self: stretch
             custom_fields:
               t: |
@@ -445,21 +447,34 @@ cards:
                     ${regel('sensor.afvalinfo_home_trash_type_today','vandaag')}
                     ${regel('sensor.afvalinfo_home_trash_type_tomorrow','morgen')}</div>`;
                 ]]]
+              # Niet één "volgende afspraak" maar de hele lijst tot en met morgen:
+              # er bleef veel ruimte over en dit is wat je van een wandpaneel wil
+              # weten. Wat al voorbij is valt weg op sorteer_eind.
               agenda: |
                 [[[
+                  var pad = function(n){ return ('0'+n).slice(-2); };
+                  var dagStr = function(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); };
+                  var esc = function(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+                  var nu = new Date();
+                  var nuStr = dagStr(nu) + ' ' + pad(nu.getHours()) + ':' + pad(nu.getMinutes());
+                  var vandaag = dagStr(nu);
                   var sen = states['sensor.agenda_afspraken_vandaag'];
-                  var v = sen && sen.attributes ? sen.attributes.volgende : null;
-                  var titel = null, sub = '';
-                  if(v && v.titel){
-                    titel = String(v.titel);
-                    var d = new Date(v.datum + 'T00:00:00');
-                    var mid = new Date(); mid.setHours(0,0,0,0);
-                    var dag = Math.round((d - mid) / 86400000);
-                    var dagTxt = dag === 0 ? 'vandaag' : (dag === 1 ? 'morgen' : d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
-                    sub = `${dagTxt} · ${v.hele_dag ? 'hele dag' : (v.tijd || '')} · ${v.agenda}`;
+                  var items = [];
+                  if(sen && sen.attributes && Array.isArray(sen.attributes.vandaag)){
+                    ['vandaag','morgen'].forEach(function(k){
+                      var l = sen.attributes[k];
+                      if(!Array.isArray(l)) return;
+                      l.forEach(function(a){
+                        items.push({titel: a.titel, agenda: a.agenda, datum: a.datum, tijd: a.tijd,
+                                    hele_dag: a.hele_dag,
+                                    eind: a.sorteer_eind || (a.datum + ' 23:59'),
+                                    sorteer: a.sorteer || (a.datum + ' ' + (a.tijd || '00:00'))});
+                      });
+                    });
+                    items = items.filter(function(a){ return String(a.eind) >= nuStr; });
                   } else {
-                    // terugval zolang de get_events-sensor er niet is
-                    var nu = new Date(), lijst = [];
+                    // terugval zolang de get_events-sensor er niet is: per agenda
+                    // alleen de eerstvolgende afspraak
                     [['calendar.r_bohnen_vrbn_nl_agenda','Werk'],['calendar.robin_bohnen_nl_agenda','Privé'],
                      ['calendar.robin_en_sam','Samen'],['calendar.brandweer','Brandweer'],
                      ['calendar.maxi','Logan'],['calendar.mini','Emma']].forEach(function(c){
@@ -469,25 +484,59 @@ cards:
                       if(isNaN(st.getTime())) return;
                       var en = e.attributes.end_time ? new Date(String(e.attributes.end_time).replace(' ','T')) : null;
                       if(en && !isNaN(en.getTime()) && en < nu) return;
-                      lijst.push({msg: e.attributes.message || 'Afspraak', st: st, allday: !!e.attributes.all_day, bron: c[1]});
+                      items.push({titel: e.attributes.message || 'Afspraak', agenda: c[1], datum: dagStr(st),
+                                  tijd: pad(st.getHours()) + ':' + pad(st.getMinutes()),
+                                  hele_dag: !!e.attributes.all_day, eind: '9999',
+                                  sorteer: dagStr(st) + ' ' + pad(st.getHours()) + ':' + pad(st.getMinutes())});
                     });
-                    lijst.sort(function(a,b){ return a.allday !== b.allday ? (a.allday ? 1 : -1) : a.st - b.st; });
-                    if(lijst.length){
-                      var it = lijst[0];
-                      titel = it.msg;
-                      var mid2 = new Date(); mid2.setHours(0,0,0,0);
-                      var dag2 = Math.round((new Date(it.st).setHours(0,0,0,0) - mid2.getTime()) / 86400000);
-                      var dt2 = dag2 === 0 ? 'vandaag' : (dag2 === 1 ? 'morgen' : it.st.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}));
-                      sub = `${dt2} · ${it.allday ? 'hele dag' : it.st.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})} · ${it.bron}`;
+                  }
+                  items.sort(function(a,b){ return String(a.sorteer) < String(b.sorteer) ? -1 : (String(a.sorteer) > String(b.sorteer) ? 1 : 0); });
+                  // Vier regels is wat er in 43vh past naast afval en de voetregel.
+                  var maxRijen = 4;
+                  var omhullend = function(inhoud){
+                    return `<div style="display:flex;flex-direction:column;gap:0.7vh;width:100%;box-sizing:border-box;border-top:1px solid rgba(255,255,255,0.07);padding-top:1vh">${inhoud}</div>`;
+                  };
+                  if(!items.length) return omhullend(`<span style="font-size:2.4vh;color:rgba(255,255,255,0.55)">niets meer vandaag of morgen</span>`);
+                  var rijen = items.slice(0, maxRijen).map(function(a){
+                    var morgen = a.datum !== vandaag;
+                    var tijd = a.hele_dag ? 'dag' : (a.tijd || '');
+                    return `<div style="display:flex;align-items:baseline;gap:1.2vh;width:100%">
+                      <span style="font-size:2.2vh;font-weight:700;white-space:nowrap;min-width:9vh;color:${morgen ? 'rgba(255,255,255,0.45)' : '#38bdf8'}">${morgen ? 'mo ' : ''}${tijd}</span>
+                      <span style="font-size:2.4vh;color:${morgen ? 'rgba(255,255,255,0.72)' : 'white'};flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.titel)}</span>
+                      <span style="font-size:1.9vh;color:rgba(255,255,255,0.45);white-space:nowrap">${esc(a.agenda)}</span></div>`;
+                  });
+                  if(items.length > maxRijen) rijen.push(`<span style="font-size:1.9vh;color:rgba(255,255,255,0.42)">+${items.length - maxRijen} meer</span>`);
+                  return omhullend(rijen.join(''));
+                ]]]
+              voet: |
+                [[[
+                  var pad = function(n){ return ('0'+n).slice(-2); };
+                  var klok = function(d){ return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+                  var blok = function(icon, kleur, tekst){
+                    return `<span style="display:flex;align-items:center;gap:0.9vh;white-space:nowrap">
+                      <ha-icon icon="${icon}" style="--mdc-icon-size:2.6vh;color:${kleur}"></ha-icon>
+                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.7)">${tekst}</span></span>`;
+                  };
+                  var delen = [];
+                  var z = states['sun.sun'];
+                  if(z && z.attributes){
+                    var boven = z.state === 'above_horizon';
+                    var t = boven ? z.attributes.next_setting : z.attributes.next_rising;
+                    if(t){
+                      var d = new Date(t);
+                      if(!isNaN(d.getTime())) delen.push(blok(boven ? 'mdi:weather-sunset-down' : 'mdi:weather-sunset-up', '#f59e0b', (boven ? 'zon onder ' : 'zon op ') + klok(d)));
                     }
                   }
-                  if(!titel) return `<div style="width:100%;box-sizing:border-box;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh"><span style="font-size:2.5vh;color:rgba(255,255,255,0.62)">geen afspraken</span></div>`;
-                  if(titel.length > 34) titel = titel.slice(0,33) + '…';
-                  return `<div style="display:flex;align-items:center;justify-content:flex-start;width:100%;box-sizing:border-box;gap:1.4vh;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">
-                    <ha-icon icon="mdi:calendar" style="--mdc-icon-size:3.4vh;color:#38bdf8"></ha-icon>
-                    <div style="display:flex;flex-direction:column;gap:0.3vh;overflow:hidden">
-                      <span style="font-size:2.6vh;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${titel}</span>
-                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.7)">${sub}</span></div></div>`;
+                  var n = states['sensor.neerslag_komende_30_minuten'];
+                  if(n && !isNaN(Number(n.state))){
+                    var mm = Number(n.state);
+                    var eenheid = (n.attributes && n.attributes.unit_of_measurement) || '';
+                    delen.push(mm > 0
+                      ? blok('mdi:weather-pouring', '#38bdf8', `regen komend halfuur · ${mm.toFixed(1).replace('.',',')} ${eenheid}`.trim())
+                      : blok('mdi:weather-partly-cloudy', 'rgba(255,255,255,0.5)', 'droog komend halfuur'));
+                  }
+                  if(!delen.length) return '';
+                  return `<div style="display:flex;align-items:center;gap:2.4vh;width:100%;box-sizing:border-box;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">${delen.join('')}</div>`;
                 ]]]
 
         # ---------- PERSONEN ----------
@@ -508,8 +557,8 @@ cards:
                   - height: 43vh
                   - box-sizing: border-box
               grid:
-                - grid-template-areas: '"t" "mensen"'
-                - grid-template-rows: auto auto
+                - grid-template-areas: '"t" "mensen" "huis"'
+                - grid-template-rows: auto auto auto
                 - align-content: space-evenly
                 - row-gap: 1.2vh
                 - height: 100%
@@ -517,6 +566,8 @@ cards:
                 t:
                   - justify-self: start
                 mensen:
+                  - justify-self: stretch
+                huis:
                   - justify-self: stretch
             custom_fields:
               t: |
@@ -560,4 +611,85 @@ cards:
                       <span style="font-size:2.1vh;font-weight:600;color:${accKleur}">${acc === null ? '—' : acc + '%'}</span></div>`;
                   });
                   return `<div style="display:flex;gap:1vh">${cellen.join('')}</div>`;
+                ]]]
+              # Huisstatus onder de personen: het paneel had ruimte over en dit is
+              # wat je bij de deur wil zien. Buitendeuren staan los van
+              # binary_sensor.all_doors, want daar zitten ook binnendeuren in
+              # (badkamer/toilet/slaapkamers) en die staan normaal gewoon open.
+              huis: |
+                [[[
+                  var buitendeuren = ['binary_sensor.entree_voordeur_contact','binary_sensor.woonkamer_achterdeur_buiten_contact',
+                                      'binary_sensor.woonkamer_openslaande_deuren_contact','binary_sensor.speelkamer_openslaande_deuren_contact',
+                                      'binary_sensor.garage_achterdeur_contact'];
+                  var telOpen = function(lijst){
+                    var n = 0, bekend = 0;
+                    lijst.forEach(function(id){
+                      var e = states[id];
+                      if(!e || e.state === 'unavailable' || e.state === 'unknown') return;
+                      bekend++;
+                      if(e.state === 'on') n++;
+                    });
+                    return bekend ? n : null;
+                  };
+                  var leden = function(id){
+                    var g = states[id];
+                    if(!g) return null;
+                    var l = g.attributes && g.attributes.entity_id;
+                    return Array.isArray(l) ? telOpen(l) : (g.state === 'on' ? 1 : 0);
+                  };
+                  var cel = function(icon, label, waarde, kleur){
+                    return `<div style="display:flex;align-items:center;gap:1vh;min-width:0">
+                      <ha-icon icon="${icon}" style="--mdc-icon-size:2.8vh;color:${kleur};flex:none"></ha-icon>
+                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.62);flex:none">${label}</span>
+                      <span style="font-size:2.2vh;font-weight:600;color:${kleur};margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${waarde}</span></div>`;
+                  };
+                  var cellen = [];
+
+                  var dOpen = telOpen(buitendeuren);
+                  cellen.push(dOpen === null
+                    ? cel('mdi:door-closed', 'buitendeuren', 'onbekend', 'rgba(255,255,255,0.35)')
+                    : cel(dOpen ? 'mdi:door-open' : 'mdi:door-closed', 'buitendeuren',
+                          dOpen ? dOpen + ' open' : 'dicht', dOpen ? '#f59e0b' : 'rgba(255,255,255,0.7)'));
+
+                  var rOpen = leden('binary_sensor.all_windows');
+                  cellen.push(rOpen === null
+                    ? cel('mdi:window-closed-variant', 'ramen', 'onbekend', 'rgba(255,255,255,0.35)')
+                    : cel(rOpen ? 'mdi:window-open-variant' : 'mdi:window-closed-variant', 'ramen',
+                          rOpen ? rOpen + ' open' : 'dicht', rOpen ? '#f59e0b' : 'rgba(255,255,255,0.7)'));
+
+                  // Alle kamergroepen volgen de *_lampen-conventie, dus nieuwe
+                  // ruimtes tellen automatisch mee.
+                  var aan = Object.keys(states).filter(function(id){
+                    return /^light\..*_lampen$/.test(id) && states[id].state === 'on';
+                  }).length;
+                  cellen.push(cel(aan ? 'mdi:lightbulb-on' : 'mdi:lightbulb-off-outline', 'lampen',
+                                  aan ? aan + ' aan' : 'alles uit', aan ? '#f59e0b' : 'rgba(255,255,255,0.7)'));
+
+                  var c = states['cover.achtertuin_zonnescherm'];
+                  var m = {open:'uit', closed:'ingetrokken', opening:'gaat uit', closing:'gaat in'};
+                  var pos = c && c.attributes && c.attributes.current_position != null ? Number(c.attributes.current_position) : null;
+                  var schermTxt = c ? (m[c.state] || c.state) : 'onbekend';
+                  if(pos !== null && pos > 0 && pos < 100) schermTxt = pos + '%';
+                  cellen.push(cel('mdi:blinds-horizontal', 'zonnescherm', schermTxt,
+                                  c && c.state !== 'closed' ? '#4ade80' : 'rgba(255,255,255,0.7)'));
+
+                  var graden = function(id){
+                    var e = states[id];
+                    return (e && !isNaN(Number(e.state))) ? Number(e.state) : null;
+                  };
+                  var binnen = graden('sensor.woonkamer_temperatuur');
+                  var buiten = graden('sensor.knmi_temperatuur');
+                  var fmt = function(v){ return v === null ? '—' : v.toFixed(1).replace('.',',') + '°'; };
+                  cellen.push(cel('mdi:home-thermometer', 'binnen', `${fmt(binnen)} · buiten ${fmt(buiten)}`, 'rgba(255,255,255,0.8)'));
+
+                  var accu = graden('sensor.hrh85f_batterij');
+                  var km = graden('sensor.hrh85f_battery_autonomy');
+                  var cs = states['sensor.hrh85f_charge_state'];
+                  var laadt = cs && cs.state === 'charge_in_progress';
+                  var autoTxt = accu === null ? 'onbekend'
+                    : Math.round(accu) + '%' + (km === null ? '' : ' · ' + Math.round(km) + ' km') + (laadt ? ' · laadt' : '');
+                  cellen.push(cel(laadt ? 'mdi:ev-station' : 'mdi:car-electric', 'auto', autoTxt,
+                                  accu !== null && accu <= 20 ? '#f59e0b' : (laadt ? '#4ade80' : 'rgba(255,255,255,0.8)')));
+
+                  return `<div style="display:grid;grid-template-columns:1fr 1fr;column-gap:2.4vh;row-gap:0.9vh;width:100%;box-sizing:border-box;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">${cellen.join('')}</div>`;
                 ]]]
