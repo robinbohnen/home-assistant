@@ -263,6 +263,8 @@ cards:
             update_timer: 60s
             tap_action:
               action: none
+            variables:
+              laadvenster_uren: 3
             styles:
               card:
                   - background: rgba(255,255,255,0.06)
@@ -362,6 +364,27 @@ cards:
                     if(!perDag[k]) perDag[k] = {min: s.p, max: s.p};
                     else { perDag[k].min = Math.min(perDag[k].min, s.p); perDag[k].max = Math.max(perDag[k].max, s.p); }
                   });
+                  var klok = function(x){ var d = new Date(x); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); };
+                  var euro = function(p){ return p.toFixed(2).replace('.', ','); };
+
+                  // Goedkoopste aaneengesloten laadvenster, vóór de blokken zodat
+                  // het prijsje binnen dat venster kan worden weggelaten.
+                  var beste = null;
+                  var nodig = Math.max(1, Math.round((variables.laadvenster_uren || 3) * 3600000 / stap));
+                  for(var len = nodig; len >= 1 && beste === null; len--){
+                    for(var i = 0; i + len <= slots.length; i++){
+                      if(slots[i].t + stap <= nu) continue;
+                      var som = 0, aaneen = true;
+                      for(var j = 0; j < len; j++){
+                        if(j > 0 && slots[i+j].t - slots[i+j-1].t !== stap){ aaneen = false; break; }
+                        som += slots[i+j].p;
+                      }
+                      if(!aaneen) continue;
+                      var gem = som / len;
+                      if(beste === null || gem < beste.gem) beste = {gem: gem, van: slots[i].t, tot: slots[i+len-1].t + stap};
+                    }
+                  }
+
                   var blokken = [];
                   slots.forEach(function(s){
                     if(s.t + stap < start || s.t > eind) return;
@@ -370,20 +393,49 @@ cards:
                     var r = spreiding < 0.02 ? 0.5 : (s.p - d.min) / spreiding;
                     var kleur = r <= 0.33 ? '#4ade80' : (r >= 0.66 ? '#ef4444' : '#f59e0b');
                     var a = klem(pct(s.t)), b = klem(pct(s.t + stap));
-                    if(b - a > 0.05) blokken.push(`<div style="position:absolute;left:${a}%;width:${b-a}%;top:0;bottom:0;background:${kleur};opacity:0.85"></div>`);
+                    if(b - a <= 0.05) return;
+                    // Prijs in het blok: op een wandpaneel is er geen hover, dus
+                    // het getal moet zichtbaar zijn.
+                    var inVenster = beste && s.t < beste.tot && s.t + stap > beste.van;
+                    var etiket = (!inVenster && (b - a) >= 5)
+                      ? `<span style="font-size:1.6vh;font-weight:700;color:rgba(0,0,0,0.72)">${(b - a) >= 7 ? '€' : ''}${euro(s.p)}</span>` : '';
+                    blokken.push(`<div style="position:absolute;left:${a}%;width:${b-a}%;top:0;bottom:0;background:${kleur};opacity:0.85;display:flex;align-items:center;justify-content:center;overflow:hidden">${etiket}</div>`);
                   });
+
+                  // De beugel markeert het venster; de tijden en de prijs staan als
+                  // aparte regel onder de as. In deze smalle strook past een etiket
+                  // met tijden er niet in — dat werd afgekapt.
+                  var beugel = '', regel = '';
+                  if(beste && beste.van < eind){
+                    var ba = klem(pct(beste.van)), bb = klem(pct(beste.tot));
+                    // Cyaan op groen is onleesbaar: donkere chip eronder.
+                    var chip = (bb - ba) > 12
+                      ? `<span style="font-size:1.7vh;font-weight:700;color:#e0f2fe;letter-spacing:0.05vh;background:rgba(8,25,45,0.92);padding:0 0.7vh;border-radius:0.4vh;line-height:1.25;white-space:nowrap">LADEN</span>`
+                      : '';
+                    if(bb - ba > 1) beugel = `<div style="position:absolute;left:${ba}%;width:${bb-ba}%;top:-0.3vh;height:3.8vh;border:0.25vh solid #38bdf8;border-radius:0.6vh;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden">${chip}</div>`;
+                    // De huidige prijs staat al in de pil in de kopbalk, dus die
+                    // niet nog eens hier.
+                    var dur = null;
+                    slots.forEach(function(s){ if(s.t >= nu && s.t <= eind && (dur === null || s.p > dur.p)) dur = s; });
+                    regel = `<div style="position:absolute;left:0;right:0;top:7vh;font-size:1.9vh;color:rgba(255,255,255,0.7);white-space:nowrap;text-align:left">
+                      <span style="display:inline-block;width:1.1vh;height:1.1vh;border-radius:50%;background:#38bdf8;vertical-align:0.1vh"></span>
+                      goedkoopst laden <span style="color:white;font-weight:600">${klok(beste.van)}–${klok(beste.tot)}</span> · gem. € ${euro(beste.gem)}${dur === null ? '' : ` · duurst ${klok(dur.t)} € ${euro(dur.p)}`}</div>`;
+                  }
+
                   var assen = [];
                   var u = new Date(start); u.setMinutes(0,0,0);
                   u.setHours(u.getHours() + (3 - (u.getHours() % 3)));
                   for(var x = u.getTime(); x < eind; x += 10800000){
                     var px = pct(x);
                     if(px < 3 || px > 97) continue;
-                    assen.push(`<div style="position:absolute;left:${px}%;transform:translateX(-50%);top:3.1vh;font-size:1.8vh;color:rgba(255,255,255,0.68)">${('0'+new Date(x).getHours()).slice(-2)}:00</div>`);
+                    assen.push(`<div style="position:absolute;left:${px}%;transform:translateX(-50%);top:4.2vh;font-size:1.8vh;color:rgba(255,255,255,0.68)">${('0'+new Date(x).getHours()).slice(-2)}:00</div>`);
                   }
-                  return `<div style="position:relative;width:100%;height:5.7vh">
-                    <div style="position:absolute;left:0;right:0;top:0;height:2.3vh;border-radius:0.5vh;overflow:hidden;background:rgba(255,255,255,0.05)">${blokken.join('')}</div>
-                    <div style="position:absolute;left:${klem(pct(nu))}%;top:0;height:2.3vh;border-left:2px dashed rgba(255,255,255,0.85)"></div>
-                    ${assen.join('')}</div>`;
+                  return `<div style="position:relative;width:100%;height:${regel ? '9.6vh' : '6.8vh'}">
+                    <div style="position:absolute;left:0;right:0;top:0;height:3.2vh;border-radius:0.5vh;overflow:hidden;background:rgba(255,255,255,0.05)">${blokken.join('')}</div>
+                    <div style="position:absolute;left:${klem(pct(nu))}%;top:0;height:3.2vh;border-left:2px dashed rgba(255,255,255,0.85)"></div>
+                    ${beugel}
+                    ${assen.join('')}
+                    ${regel}</div>`;
                 ]]]
 
     # =================== ONDERSTE RIJ ===================
@@ -438,12 +490,15 @@ cards:
                     var v = e && e.state && e.state !== 'Geen' ? e.state : null;
                     var kl = v ? kleurVan(v) : 'rgba(255,255,255,0.3)';
                     if(v && v.length > 30) v = v.slice(0,29) + '…';
-                    return `<div style="display:flex;align-items:center;justify-content:flex-start;gap:1.2vh;width:100%">
+                    // Grid met vaste kolommen + expliciete text-align: flexbox in
+                    // een button-card custom field wordt door de kaart zelf
+                    // gecentreerd/uitgespreid, een grid dat 100% vult niet.
+                    return `<div style="display:grid;grid-template-columns:auto 9vh 1fr;align-items:center;column-gap:1.2vh;width:100%;text-align:left">
                       <ha-icon icon="mdi:trash-can-outline" style="--mdc-icon-size:3.1vh;color:${kl}"></ha-icon>
-                      <span style="font-size:2.2vh;color:rgba(255,255,255,0.7);min-width:7.8vh">${label}</span>
-                      <span style="font-size:2.6vh;font-weight:600;color:${v ? kl : 'rgba(255,255,255,0.35)'}">${v || 'geen ophaal'}</span></div>`;
+                      <span style="font-size:2.2vh;color:rgba(255,255,255,0.7);text-align:left">${label}</span>
+                      <span style="font-size:2.6vh;font-weight:600;text-align:left;color:${v ? kl : 'rgba(255,255,255,0.35)'}">${v || 'geen ophaal'}</span></div>`;
                   };
-                  return `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:0.9vh;width:100%">
+                  return `<div style="display:grid;row-gap:0.9vh;width:100%;text-align:left">
                     ${regel('sensor.afvalinfo_home_trash_type_today','vandaag')}
                     ${regel('sensor.afvalinfo_home_trash_type_tomorrow','morgen')}</div>`;
                 ]]]
@@ -494,28 +549,30 @@ cards:
                   // Vier regels is wat er in 43vh past naast afval en de voetregel.
                   var maxRijen = 4;
                   var omhullend = function(inhoud){
-                    return `<div style="display:flex;flex-direction:column;gap:0.7vh;width:100%;box-sizing:border-box;border-top:1px solid rgba(255,255,255,0.07);padding-top:1vh">${inhoud}</div>`;
+                    return `<div style="display:grid;row-gap:0.7vh;width:100%;box-sizing:border-box;text-align:left;border-top:1px solid rgba(255,255,255,0.07);padding-top:1vh">${inhoud}</div>`;
                   };
-                  if(!items.length) return omhullend(`<span style="font-size:2.4vh;color:rgba(255,255,255,0.55)">niets meer vandaag of morgen</span>`);
+                  if(!items.length) return omhullend(`<span style="font-size:2.4vh;color:rgba(255,255,255,0.55);text-align:left">niets meer vandaag of morgen</span>`);
                   var rijen = items.slice(0, maxRijen).map(function(a){
                     var morgen = a.datum !== vandaag;
                     var tijd = a.hele_dag ? 'dag' : (a.tijd || '');
-                    return `<div style="display:flex;align-items:baseline;gap:1.2vh;width:100%">
-                      <span style="font-size:2.2vh;font-weight:700;white-space:nowrap;min-width:9vh;color:${morgen ? 'rgba(255,255,255,0.45)' : '#38bdf8'}">${morgen ? 'mo ' : ''}${tijd}</span>
-                      <span style="font-size:2.4vh;color:${morgen ? 'rgba(255,255,255,0.72)' : 'white'};flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.titel)}</span>
-                      <span style="font-size:1.9vh;color:rgba(255,255,255,0.45);white-space:nowrap">${esc(a.agenda)}</span></div>`;
+                    // tijd | titel (rekt op) | agenda: kolommen vullen exact 100%,
+                    // dus de kaart kan er niets meer aan uitspreiden.
+                    return `<div style="display:grid;grid-template-columns:9vh 1fr auto;align-items:baseline;column-gap:1.2vh;width:100%;text-align:left">
+                      <span style="font-size:2.2vh;font-weight:700;white-space:nowrap;text-align:left;color:${morgen ? 'rgba(255,255,255,0.45)' : '#38bdf8'}">${morgen ? 'mo ' : ''}${tijd}</span>
+                      <span style="font-size:2.4vh;text-align:left;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${morgen ? 'rgba(255,255,255,0.72)' : 'white'}">${esc(a.titel)}</span>
+                      <span style="font-size:1.9vh;color:rgba(255,255,255,0.45);white-space:nowrap;text-align:right">${esc(a.agenda)}</span></div>`;
                   });
-                  if(items.length > maxRijen) rijen.push(`<span style="font-size:1.9vh;color:rgba(255,255,255,0.42)">+${items.length - maxRijen} meer</span>`);
+                  if(items.length > maxRijen) rijen.push(`<span style="font-size:1.9vh;color:rgba(255,255,255,0.42);text-align:left">+${items.length - maxRijen} meer</span>`);
                   return omhullend(rijen.join(''));
                 ]]]
               voet: |
                 [[[
                   var pad = function(n){ return ('0'+n).slice(-2); };
                   var klok = function(d){ return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+                  // Icoon in de tekstflow (geen flexbox): blijft altijd tegen zijn
+                  // tekst aan staan, wat de kaart er ook mee probeert te doen.
                   var blok = function(icon, kleur, tekst){
-                    return `<span style="display:flex;align-items:center;gap:0.9vh;white-space:nowrap">
-                      <ha-icon icon="${icon}" style="--mdc-icon-size:2.6vh;color:${kleur}"></ha-icon>
-                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.7)">${tekst}</span></span>`;
+                    return `<span style="white-space:nowrap;font-size:2.1vh;color:rgba(255,255,255,0.7)"><ha-icon icon="${icon}" style="--mdc-icon-size:2.6vh;color:${kleur};vertical-align:-0.7vh"></ha-icon> ${tekst}</span>`;
                   };
                   var delen = [];
                   var z = states['sun.sun'];
@@ -536,7 +593,9 @@ cards:
                       : blok('mdi:weather-partly-cloudy', 'rgba(255,255,255,0.5)', 'droog komend halfuur'));
                   }
                   if(!delen.length) return '';
-                  return `<div style="display:flex;align-items:center;gap:2.4vh;width:100%;box-sizing:border-box;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">${delen.join('')}</div>`;
+                  // Laatste kolom is een lege 1fr die de restruimte opslokt, zodat
+                  // de blokken links blijven staan.
+                  return `<div style="display:grid;grid-template-columns:${delen.map(function(){ return 'auto'; }).join(' ')} 1fr;align-items:center;column-gap:2.4vh;width:100%;box-sizing:border-box;text-align:left;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">${delen.join('')}<span></span></div>`;
                 ]]]
 
         # ---------- PERSONEN ----------
@@ -637,11 +696,12 @@ cards:
                     var l = g.attributes && g.attributes.entity_id;
                     return Array.isArray(l) ? telOpen(l) : (g.state === 'on' ? 1 : 0);
                   };
+                  // icoon+label links, waarde rechts; de 1fr-kolom vult de rij
+                  // precies, dus de kaart kan de cel niet uitspreiden.
                   var cel = function(icon, label, waarde, kleur){
-                    return `<div style="display:flex;align-items:center;gap:1vh;min-width:0">
-                      <ha-icon icon="${icon}" style="--mdc-icon-size:2.8vh;color:${kleur};flex:none"></ha-icon>
-                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.62);flex:none">${label}</span>
-                      <span style="font-size:2.2vh;font-weight:600;color:${kleur};margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${waarde}</span></div>`;
+                    return `<div style="display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:1vh;min-width:0;text-align:left">
+                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.62);white-space:nowrap;text-align:left"><ha-icon icon="${icon}" style="--mdc-icon-size:2.8vh;color:${kleur};vertical-align:-0.9vh"></ha-icon> ${label}</span>
+                      <span style="font-size:2.2vh;font-weight:600;color:${kleur};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right">${waarde}</span></div>`;
                   };
                   var cellen = [];
 
@@ -691,5 +751,5 @@ cards:
                   cellen.push(cel(laadt ? 'mdi:ev-station' : 'mdi:car-electric', 'auto', autoTxt,
                                   accu !== null && accu <= 20 ? '#f59e0b' : (laadt ? '#4ade80' : 'rgba(255,255,255,0.8)')));
 
-                  return `<div style="display:grid;grid-template-columns:1fr 1fr;column-gap:2.4vh;row-gap:0.9vh;width:100%;box-sizing:border-box;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">${cellen.join('')}</div>`;
+                  return `<div style="display:grid;grid-template-columns:1fr 1fr;column-gap:2.4vh;row-gap:0.9vh;width:100%;box-sizing:border-box;text-align:left;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">${cellen.join('')}</div>`;
                 ]]]
