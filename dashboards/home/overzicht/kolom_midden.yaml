@@ -365,7 +365,19 @@ cards:
               shared: false
               intersect: true
               x:
-                format: "ddd HH:mm"
+                # De balken staan op het midden van hun prijsblok (zie
+                # data_generator). Zonder terugrekenen zou hier "10:30" staan voor
+                # het blok van 10:00; nu toont de tooltip het hele interval.
+                formatter: |
+                  EVAL:function(val, opts) {
+                    var xs = (opts && opts.w && opts.w.globals.seriesX[0]) || [];
+                    var step = Infinity;
+                    for (var i = 1; i < xs.length; i++) { var d = xs[i] - xs[i - 1]; if (d > 0 && d < step) { step = d; } }
+                    if (!isFinite(step)) { step = 3600000; }
+                    var s = new Date(val - step / 2), e = new Date(val + step / 2);
+                    var klok = function(d) { return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); };
+                    return s.toLocaleDateString('nl-NL', { weekday: 'short' }) + ' ' + klok(s) + '–' + klok(e);
+                  }
             plotOptions:
               bar:
                 columnWidth: 82%
@@ -394,6 +406,16 @@ cards:
                   const p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
                   return [ts, p];
                 }).filter((x) => !isNaN(x[0]));
+                // ApexCharts centreert een kolom op zijn timestamp, maar een
+                // prijsblok is het interval [t, t+blok). Ongecorrigeerd loopt de
+                // balk van 10:00 dus van 09:30 tot 10:30 en staat de nu-lijn er om
+                // 09:55 al middenin. Daarom plotten we op het midden van het blok:
+                // de balk dekt dan exact zijn eigen uur (of kwartier, vanaf 2026).
+                // Kleinste positieve stap, zodat een gat in de forecast of een
+                // DST-sprong de blokbreedte niet oprekt.
+                const stepMs = pts.map(([ts]) => ts).sort((a, b) => a - b)
+                  .reduce((acc, ts, i, arr) => (i && ts - arr[i - 1] > 0) ? Math.min(acc, ts - arr[i - 1]) : acc, Infinity);
+                const shift = (isFinite(stepMs) ? stepMs : 3600000) / 2;
                 const dayKey = (ts) => new Date(ts).toDateString();
                 const stats = {};
                 pts.forEach(([ts, p]) => {
@@ -402,14 +424,16 @@ cards:
                   if (!stats[k]) stats[k] = { min: p, max: p };
                   else { stats[k].min = Math.min(stats[k].min, p); stats[k].max = Math.max(stats[k].max, p); }
                 });
+                // Ook de null-punten schuiven mee: bij een gestapelde grafiek
+                // moeten alle series exact dezelfde x-waarden hebben.
                 return pts.map(([ts, p]) => {
-                  if (p === null) return [ts, null];
+                  if (p === null) return [ts + shift, null];
                   const s = stats[dayKey(ts)];
                   const spread = s.max - s.min;
                   // vlakke dag (< 2 ct verschil): niets is echt goedkoop of duur
                   const r = (spread < 0.02) ? 0.5 : (p - s.min) / spread;
                   const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
-                  return [ts, band === BAND ? p : null];
+                  return [ts + shift, band === BAND ? p : null];
                 });
             - entity: sensor.zonneplan_current_electricity_tariff
               name: gemiddeld
@@ -432,6 +456,16 @@ cards:
                   const p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
                   return [ts, p];
                 }).filter((x) => !isNaN(x[0]));
+                // ApexCharts centreert een kolom op zijn timestamp, maar een
+                // prijsblok is het interval [t, t+blok). Ongecorrigeerd loopt de
+                // balk van 10:00 dus van 09:30 tot 10:30 en staat de nu-lijn er om
+                // 09:55 al middenin. Daarom plotten we op het midden van het blok:
+                // de balk dekt dan exact zijn eigen uur (of kwartier, vanaf 2026).
+                // Kleinste positieve stap, zodat een gat in de forecast of een
+                // DST-sprong de blokbreedte niet oprekt.
+                const stepMs = pts.map(([ts]) => ts).sort((a, b) => a - b)
+                  .reduce((acc, ts, i, arr) => (i && ts - arr[i - 1] > 0) ? Math.min(acc, ts - arr[i - 1]) : acc, Infinity);
+                const shift = (isFinite(stepMs) ? stepMs : 3600000) / 2;
                 const dayKey = (ts) => new Date(ts).toDateString();
                 const stats = {};
                 pts.forEach(([ts, p]) => {
@@ -440,14 +474,16 @@ cards:
                   if (!stats[k]) stats[k] = { min: p, max: p };
                   else { stats[k].min = Math.min(stats[k].min, p); stats[k].max = Math.max(stats[k].max, p); }
                 });
+                // Ook de null-punten schuiven mee: bij een gestapelde grafiek
+                // moeten alle series exact dezelfde x-waarden hebben.
                 return pts.map(([ts, p]) => {
-                  if (p === null) return [ts, null];
+                  if (p === null) return [ts + shift, null];
                   const s = stats[dayKey(ts)];
                   const spread = s.max - s.min;
                   // vlakke dag (< 2 ct verschil): niets is echt goedkoop of duur
                   const r = (spread < 0.02) ? 0.5 : (p - s.min) / spread;
                   const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
-                  return [ts, band === BAND ? p : null];
+                  return [ts + shift, band === BAND ? p : null];
                 });
             - entity: sensor.zonneplan_current_electricity_tariff
               name: duur
@@ -470,6 +506,16 @@ cards:
                   const p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
                   return [ts, p];
                 }).filter((x) => !isNaN(x[0]));
+                // ApexCharts centreert een kolom op zijn timestamp, maar een
+                // prijsblok is het interval [t, t+blok). Ongecorrigeerd loopt de
+                // balk van 10:00 dus van 09:30 tot 10:30 en staat de nu-lijn er om
+                // 09:55 al middenin. Daarom plotten we op het midden van het blok:
+                // de balk dekt dan exact zijn eigen uur (of kwartier, vanaf 2026).
+                // Kleinste positieve stap, zodat een gat in de forecast of een
+                // DST-sprong de blokbreedte niet oprekt.
+                const stepMs = pts.map(([ts]) => ts).sort((a, b) => a - b)
+                  .reduce((acc, ts, i, arr) => (i && ts - arr[i - 1] > 0) ? Math.min(acc, ts - arr[i - 1]) : acc, Infinity);
+                const shift = (isFinite(stepMs) ? stepMs : 3600000) / 2;
                 const dayKey = (ts) => new Date(ts).toDateString();
                 const stats = {};
                 pts.forEach(([ts, p]) => {
@@ -478,14 +524,16 @@ cards:
                   if (!stats[k]) stats[k] = { min: p, max: p };
                   else { stats[k].min = Math.min(stats[k].min, p); stats[k].max = Math.max(stats[k].max, p); }
                 });
+                // Ook de null-punten schuiven mee: bij een gestapelde grafiek
+                // moeten alle series exact dezelfde x-waarden hebben.
                 return pts.map(([ts, p]) => {
-                  if (p === null) return [ts, null];
+                  if (p === null) return [ts + shift, null];
                   const s = stats[dayKey(ts)];
                   const spread = s.max - s.min;
                   // vlakke dag (< 2 ct verschil): niets is echt goedkoop of duur
                   const r = (spread < 0.02) ? 0.5 : (p - s.min) / spread;
                   const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
-                  return [ts, band === BAND ? p : null];
+                  return [ts + shift, band === BAND ? p : null];
                 });
         # samenvatting laagste / hoogste per dag + kleurlegenda (één regel)
         - type: custom:button-card
