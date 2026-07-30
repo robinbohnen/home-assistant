@@ -735,6 +735,36 @@ cards:
               - heat
             show_temperature_control: true
             collapsible_controls: true
+          # Bootst een druk op de fysieke slaapkamerknoppen na, zie
+          # packages/9 - Other/Virtual Buttons.yaml. Alle 11 automations die op
+          # die knop reageren gaan mee, dus ook slot, rolluiken en alarm.
+          # Tik/dubbeltik/vasthouden = precies wat de knop zelf ook doet;
+          # secondary zegt daarom welke routine een tik nú start.
+          - type: custom:mushroom-template-card
+            primary: Slaapkamer knop
+            secondary: >-
+              {{ 'Tik: opstaan-routine' if 6 <= now().hour < 17 else 'Tik:
+              naar bed-routine' }}
+            icon: mdi:gesture-tap-button
+            icon_color: purple
+            tap_action:
+              action: perform-action
+              perform_action: script.virtual_button_press
+              data:
+                button: bedroom_buttons
+                action: single
+            double_tap_action:
+              action: perform-action
+              perform_action: script.virtual_button_press
+              data:
+                button: bedroom_buttons
+                action: double
+            hold_action:
+              action: perform-action
+              perform_action: script.virtual_button_press
+              data:
+                button: bedroom_buttons
+                action: hold
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-secondfloor"
