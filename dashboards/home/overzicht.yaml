@@ -626,6 +626,17 @@ cards:
                 name: Trapkast
                 show_brightness_control: true
                 use_light_color: true
+          - type: custom:mushroom-climate-card
+            entity: climate.airco_woonkamer
+            name: Airco woonkamer
+            hvac_modes:
+              - "off"
+              - cool
+              - heat
+              - dry
+              - fan_only
+            show_temperature_control: true
+            collapsible_controls: true
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-firstfloor"
@@ -715,6 +726,15 @@ cards:
                 name: Overloop
                 show_brightness_control: true
                 use_light_color: true
+          # Alleen verwarmen/uit; deze thermostaat kent geen cool/dry/fan_only.
+          - type: custom:mushroom-climate-card
+            entity: climate.kantoor_verwarming
+            name: Verwarming kantoor
+            hvac_modes:
+              - "off"
+              - heat
+            show_temperature_control: true
+            collapsible_controls: true
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-secondfloor"
@@ -820,6 +840,19 @@ cards:
                 name: Speelkamer
                 show_brightness_control: true
                 use_light_color: true
+          # Plafond-verwarmingsplaat speelkamer; verbruik alleen tonen als hij aan staat.
+          - type: custom:mushroom-template-card
+            entity: switch.speelkamer_stopcontact_verwarming
+            primary: Verwarmingsplaat
+            secondary: >-
+              {% if is_state('switch.speelkamer_stopcontact_verwarming','on') %}Aan{{
+              (' · ' ~ states('sensor.speelkamer_stopcontact_verwarming_power') ~ ' W')
+              if has_value('sensor.speelkamer_stopcontact_verwarming_power') else '' }}{%
+              else %}Uit{% endif %}
+            icon: mdi:heat-wave
+            icon_color: "{{ 'orange' if is_state('switch.speelkamer_stopcontact_verwarming','on') else 'grey' }}"
+            tap_action:
+              action: toggle
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-outside"
