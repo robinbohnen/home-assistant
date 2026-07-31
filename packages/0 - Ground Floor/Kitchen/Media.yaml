@@ -1,0 +1,37 @@
+kitchen_media_package:
+  automation:
+    - id: media_join_kitchen
+      alias: Kitchen - Media
+      description: "Join the kitchen by default whenever the livingroom Sonos starts playing music"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: media_player.woonkamer_sonos
+          to: playing
+          for:
+            hours: 0
+            minutes: 0
+            seconds: 3
+      conditions:
+        - condition: state
+          entity_id: media_player.woonkamer_77_oled
+          state: "off"
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: media_player.woonkamer_appletv
+              state: playing
+      actions:
+        - if:
+            - condition: state
+              entity_id: media_player.keuken_sonos
+              state: idle
+          then:
+            - action: media_player.join
+              metadata: {}
+              data:
+                group_members:
+                  - media_player.keuken_sonos
+                  - media_player.keuken_sonos_2
+              target:
+                entity_id: media_player.woonkamer_sonos

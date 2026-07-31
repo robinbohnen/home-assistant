@@ -40,3 +40,62 @@ playroom_media_package:
                       - media_player.speelkamer_sonos
                   target:
                     entity_id: media_player.woonkamer_sonos
+
+    - id: media_movement_playroom
+      alias: Playroom - Media Movement
+      description: "Turn on the media in the playroom if there is movement detected"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.pir_group_playroom
+          to: "on"
+          id: beweging
+        - trigger: state
+          entity_id: binary_sensor.pir_group_playroom
+          to: "off"
+          for:
+            hours: 0
+            minutes: 5
+            seconds: 0
+          id: geenbeweging
+      conditions:
+        - condition: state
+          entity_id: input_boolean.enable_pir_playroom
+          state: "on"
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - beweging
+              sequence:
+                - if:
+                    - condition: state
+                      entity_id: media_player.speelkamer_tv
+                      state: "off"
+                    - condition: state
+                      entity_id: media_player.speelkamer_sonos
+                      state: idle
+                  then:
+                    - action: media_player.join
+                      metadata: {}
+                      data:
+                        group_members:
+                          - media_player.speelkamer_sonos
+                      target:
+                        entity_id: media_player.woonkamer_sonos
+            - conditions:
+                - condition: trigger
+                  id:
+                    - geenbeweging
+              sequence:
+                - if:
+                    - condition: state
+                      entity_id: media_player.speelkamer_tv
+                      state: "off"
+                  then:
+                    - action: media_player.unjoin
+                      metadata: {}
+                      data: {}
+                      target:
+                        entity_id: media_player.speelkamer_sonos
