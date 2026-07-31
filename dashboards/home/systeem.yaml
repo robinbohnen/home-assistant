@@ -158,12 +158,15 @@ cards:
                   };
                   // Rij klikbaar maken; zie de toelichting bij de Matter-kaart.
                   var klik = function(devId, entId, inner){
-                    var wrap = 'style="display:block;color:inherit;text-decoration:none;cursor:pointer"';
-                    if(devId){
-                      var url = '/config/devices/device/' + devId;
-                      return `<a href="${url}" ${wrap} onclick="event.preventDefault();history.pushState(null,'','${url}');window.dispatchEvent(new CustomEvent('location-changed'));">${inner}</a>`;
-                    }
-                    return `<a href="/history?entity_id=${entId}" ${wrap} onclick="event.preventDefault();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${entId}'},bubbles:true,composed:true}));">${inner}</a>`;
+                    var doel = devId ? ('/config/devices/device/' + devId) : null;
+                    var actie = doel
+                      ? `history.pushState(null,'','${doel}');window.dispatchEvent(new CustomEvent('location-changed'));`
+                      : `this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${entId}'},bubbles:true,composed:true}));`;
+                    return `<a href="${doel || ('/history?entity_id=' + entId)}"
+                      style="display:block;color:inherit;text-decoration:none;cursor:pointer;pointer-events:auto"
+                      onpointerdown="event.stopPropagation()"
+                      onpointerup="event.stopPropagation();${actie}"
+                      onclick="event.preventDefault();event.stopPropagation()">${inner}</a>`;
                   };
                   var limiet = variables.max_per_groep || 25;
                   var blokken = uitgeklapt.map(function(g){
@@ -305,12 +308,15 @@ cards:
                   namen.sort(function(a,b){ return sleutelVan(lijstVan[a][0]) - sleutelVan(lijstVan[b][0]); });
                   // Rij klikbaar maken; zie de toelichting bij de Matter-kaart.
                   var klik = function(devId, entId, inner){
-                    var wrap = 'style="display:block;color:inherit;text-decoration:none;cursor:pointer"';
-                    if(devId){
-                      var url = '/config/devices/device/' + devId;
-                      return `<a href="${url}" ${wrap} onclick="event.preventDefault();history.pushState(null,'','${url}');window.dispatchEvent(new CustomEvent('location-changed'));">${inner}</a>`;
-                    }
-                    return `<a href="/history?entity_id=${entId}" ${wrap} onclick="event.preventDefault();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${entId}'},bubbles:true,composed:true}));">${inner}</a>`;
+                    var doel = devId ? ('/config/devices/device/' + devId) : null;
+                    var actie = doel
+                      ? `history.pushState(null,'','${doel}');window.dispatchEvent(new CustomEvent('location-changed'));`
+                      : `this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${entId}'},bubbles:true,composed:true}));`;
+                    return `<a href="${doel || ('/history?entity_id=' + entId)}"
+                      style="display:block;color:inherit;text-decoration:none;cursor:pointer;pointer-events:auto"
+                      onpointerdown="event.stopPropagation()"
+                      onpointerup="event.stopPropagation();${actie}"
+                      onclick="event.preventDefault();event.stopPropagation()">${inner}</a>`;
                   };
                   var blokken = namen.map(function(g){
                     var rijen = lijstVan[g].map(function(x){
@@ -438,19 +444,30 @@ cards:
                     if(ms > oud) return '#f59e0b';
                     return 'rgba(255,255,255,0.6)';
                   };
-                  // Rij klikbaar maken. Een gewone <a href> zou de hele frontend
-                  // opnieuw laden, dus de onclick doet de navigatie zelf via
-                  // history + 'location-changed' (waar de HA-router op luistert).
-                  // Wordt inline JS geblokkeerd, dan valt hij terug op de href.
+                  // Rij klikbaar maken. Drie dingen zitten een gewone link hier
+                  // in de weg, dus alle drie afgevangen:
+                  //  - button-card vangt de tik zelf af op de kaart, daarom
+                  //    stopPropagation op pointerdown/-up en navigeren we op
+                  //    pointerup in plaats van op click;
+                  //  - een ouder-element met pointer-events:none, daarom
+                  //    expliciet pointer-events:auto op de link zelf;
+                  //  - een <a href> zou de hele frontend herladen, daarom
+                  //    history.pushState + 'location-changed' (de HA-router
+                  //    luistert daarop) en een preventDefault op de click.
+                  // Draait inline JS niet, dan doet die preventDefault het ook
+                  // niet en navigeert de href alsnog — trager, maar het werkt.
                   // Losse entiteiten hebben geen apparaatpagina; die openen hun
                   // more-info-dialoog via een event dat uit de kaart omhoog bubbelt.
                   var klik = function(devId, entId, inner){
-                    var wrap = 'style="display:block;color:inherit;text-decoration:none;cursor:pointer"';
-                    if(devId){
-                      var url = '/config/devices/device/' + devId;
-                      return `<a href="${url}" ${wrap} onclick="event.preventDefault();history.pushState(null,'','${url}');window.dispatchEvent(new CustomEvent('location-changed'));">${inner}</a>`;
-                    }
-                    return `<a href="/history?entity_id=${entId}" ${wrap} onclick="event.preventDefault();this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${entId}'},bubbles:true,composed:true}));">${inner}</a>`;
+                    var doel = devId ? ('/config/devices/device/' + devId) : null;
+                    var actie = doel
+                      ? `history.pushState(null,'','${doel}');window.dispatchEvent(new CustomEvent('location-changed'));`
+                      : `this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${entId}'},bubbles:true,composed:true}));`;
+                    return `<a href="${doel || ('/history?entity_id=' + entId)}"
+                      style="display:block;color:inherit;text-decoration:none;cursor:pointer;pointer-events:auto"
+                      onpointerdown="event.stopPropagation()"
+                      onpointerup="event.stopPropagation();${actie}"
+                      onclick="event.preventDefault();event.stopPropagation()">${inner}</a>`;
                   };
                   var rijen = lijst.map(function(x){
                     var sinds = x.laatst === null ? null : nu - x.laatst;
