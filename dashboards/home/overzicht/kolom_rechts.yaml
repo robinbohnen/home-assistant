@@ -218,6 +218,94 @@ cards:
           template: ov_climate
           entity: climate.intex_purespa
           name: Intex PureSpa
+        # Lucht woonkamer (multisensor): CO2, fijnstof en vocht op één regel,
+        # met de luchtkwaliteitsklasse als badge. Zelfde grid als ov_climate,
+        # maar de subregel bouwt zijn eigen waarden op dus geen template.
+        - type: custom:button-card
+          entity: sensor.woonkamer_woonkamer_multisensor_luchtkwaliteit
+          show_icon: false
+          show_name: false
+          show_state: false
+          tap_action:
+            action: more-info
+          styles:
+            grid:
+              - grid-template-areas: '"n badge" "sub badge"'
+              - grid-template-columns: 1fr auto
+              - align-items: center
+              - column-gap: 10px
+            card:
+              - background: none
+              - border: none
+              - box-shadow: none
+              - padding: 11px 2px
+            custom_fields:
+              n:
+                - grid-area: n
+                - justify-self: start
+              sub:
+                - grid-area: sub
+                - justify-self: start
+                - font-size: 12.5px
+                - padding-top: 2px
+              badge:
+                - grid-area: badge
+                - justify-self: end
+          custom_fields:
+            n: |
+              [[[ return `<span style="font-size:14.5px;font-weight:600;color:white">Lucht woonkamer</span>`; ]]]
+            sub: |
+              [[[
+                var grijs = 'rgba(255,255,255,0.58)';
+                // getal ophalen; null als de sensor er niet is of niets zinnigs geeft
+                var num = function(id){
+                  var e = states[id];
+                  if(!e || isNaN(Number(e.state))) return null;
+                  return Number(e.state);
+                };
+                // tekst() krijgt de waarde binnen, zodat een ontbrekende sensor
+                // hier stopt in plaats van in de opmaak van een null.
+                var deel = function(waarde, tekst, drempel, alarm){
+                  if(waarde === null) return null;
+                  var kleur = waarde >= alarm ? '#ef4444' : (waarde >= drempel ? '#f59e0b' : grijs);
+                  return `<span style="color:${kleur};font-weight:${waarde >= drempel ? 600 : 400}">${tekst(waarde)}</span>`;
+                };
+                var co2 = num('sensor.woonkamer_woonkamer_multisensor_kooldioxide');
+                var pm = num('sensor.woonkamer_woonkamer_multisensor_pm2_5');
+                var rv = num('sensor.woonkamer_woonkamer_multisensor_luchtvochtigheid');
+                var d = [];
+                // CO2: boven ~800 ppm wordt het benauwd, boven 1200 echt ventileren
+                var c = deel(co2, v => `${Math.round(v)} ppm`, 800, 1200);
+                if(c) d.push(c);
+                // PM2.5: WHO-daggemiddelde ligt op 15 µg/m³
+                var p = deel(pm, v => `PM2.5 ${v.toFixed(1).replace('.',',')}`, 15, 35);
+                if(p) d.push(p);
+                if(rv !== null) {
+                  // Vocht knijpt aan twee kanten: te droog én te vochtig is mis
+                  var kleur = (rv < 30 || rv > 70) ? '#f59e0b' : grijs;
+                  d.push(`<span style="color:${kleur}">${Math.round(rv)}% rv</span>`);
+                }
+                if(!d.length) return `<span style="color:${grijs}">geen meting</span>`;
+                return d.join(`<span style="color:rgba(255,255,255,0.2)"> · </span>`);
+              ]]]
+            badge: |
+              [[[
+                if(!entity || entity.state === 'unavailable' || entity.state === 'unknown') return '';
+                var groen = ['#4ade80','rgba(74,222,128,0.15)'];
+                var grijs = ['rgba(255,255,255,0.6)','rgba(255,255,255,0.08)'];
+                var oranje = ['#f59e0b','rgba(245,158,11,0.15)'];
+                var rood = ['#ef4444','rgba(239,68,68,0.15)'];
+                var map = {excellent:['uitstekend'].concat(groen),
+                           good:['goed'].concat(groen),
+                           fair:['redelijk'].concat(grijs),
+                           moderate:['matig'].concat(oranje),
+                           poor:['slecht'].concat(oranje),
+                           very_poor:['zeer slecht'].concat(rood),
+                           extremely_poor:['extreem slecht'].concat(rood)};
+                var m = map[entity.state];
+                if(!m) m = [String(entity.state).replace(/_/g,' ')].concat(grijs);
+                return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:${m[1]};background:${m[2]}">${m[0]}</span>`;
+              ]]]
         # Zonnescherm met knoppen
         - type: horizontal-stack
           card_mod:
