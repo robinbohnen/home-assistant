@@ -1,0 +1,42 @@
+meterkast_lights_package:
+
+  #############################################################################
+  ## Ledstrip meterkast
+  ##
+  ## Deur open -> ledstrip 5 minuten aan, daarna weer uit.
+  ## mode: restart zodat de 5 minuten opnieuw beginnen als de deur binnen die
+  ## tijd nogmaals opengaat (anders gaat het licht uit terwijl je nog bezig bent).
+  ##
+  ## Gebruikte entiteiten:
+  ##   binary_sensor.meterkast_meterkast_deur_deur        (deurcontact, on = open)
+  ##   switch.meterkast_meterkast_stopcontact_ledstrip    (ledstrip)
+  #############################################################################
+
+  automation:
+    - id: lights_door_meterkast
+      alias: Meterkast - Ledstrip bij deur open
+      description: "Zet de ledstrip in de meterkast 5 minuten aan als de deur opengaat"
+      mode: restart
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.meterkast_meterkast_deur_deur
+          to: "on"
+          id: deuropen
+      conditions: []
+      actions:
+        - action: switch.turn_on
+          metadata: {}
+          data: {}
+          target:
+            entity_id: switch.meterkast_meterkast_stopcontact_ledstrip
+        - delay:
+            hours: 0
+            minutes: 5
+            seconds: 0
+            milliseconds: 0
+        - action: switch.turn_off
+          metadata: {}
+          data: {}
+          target:
+            entity_id: switch.meterkast_meterkast_stopcontact_ledstrip
