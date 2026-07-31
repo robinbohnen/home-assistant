@@ -33,9 +33,12 @@ cards:
           style: |
             #root {
               display: grid !important;
-              grid-template-columns: 1fr 1fr !important;
+              grid-template-columns: 1fr 1fr 1fr !important;
               gap: 16px !important;
               align-items: start !important;
+            }
+            @media (max-width: 1500px) {
+              #root { grid-template-columns: 1fr 1fr !important; }
             }
             @media (max-width: 1000px) {
               #root { grid-template-columns: 1fr !important; }
@@ -309,4 +312,125 @@ cards:
                       ${rijen}</div>`;
                   }).join('');
                   return `<div style="max-height:calc(100vh - 190px);overflow-y:auto">${blokken}</div>`;
+                ]]]
+
+          # =============== MATTER APPARATEN ===============
+          # Matter kent in de frontend geen 'laatst gezien'-veld; het dichtste
+          # dat we hebben is last_updated van de entiteiten (elke rapportage van
+          # het apparaat schrijft die bij). Per apparaat telt de nieuwste, dus
+          # bovenaan staat het apparaat dat het langst niets heeft gestuurd.
+          # Let op: een sensor die alleen bij verandering meldt (deurcontact)
+          # kan legitiem uren stil zijn — oud betekent hier 'niets gehoord',
+          # niet per se 'stuk'. Onbereikbare apparaten krijgen wel een label.
+          - type: custom:button-card
+            show_icon: false
+            show_name: false
+            show_state: false
+            update_timer: 30s
+            tap_action:
+              action: none
+            variables:
+              # Vanaf hier vindt de kaart het de moeite waard om te kleuren
+              oud_uren: 6
+              stil_uren: 24
+            styles:
+              card:
+                - background: var(--ov-panel-bg)
+                - border: var(--ov-panel-border)
+                - border-radius: 20px
+                - box-shadow: none
+                - padding: 16px 18px
+              grid:
+                - grid-template-areas: '"t" "lijst"'
+                - row-gap: 12px
+              custom_fields:
+                t:
+                  - justify-self: stretch
+                lijst:
+                  - justify-self: stretch
+            custom_fields:
+              t: |
+                [[[
+                  var reg = (hass && hass.entities) ? hass.entities : null;
+                  var devs = {};
+                  if(reg) Object.keys(states).forEach(function(id){
+                    var e = reg[id];
+                    if(!e || e.platform !== 'matter') return;
+                    if(e.hidden || e.hidden_by) return;
+                    devs[e.device_id || ('los:' + id)] = true;
+                  });
+                  var n = Object.keys(devs).length;
+                  return `<span style="display:flex;align-items:baseline;gap:12px;width:100%">
+                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:rgba(255,255,255,0.55)">MATTER</span>
+                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:rgba(255,255,255,0.7);background:rgba(255,255,255,0.06)">${n}</span>
+                    <span style="margin-left:auto;font-size:11.5px;color:rgba(255,255,255,0.4)">oudste eerst</span></span>`;
+                ]]]
+              lijst: |
+                [[[
+                  var nu = Date.now();
+                  var reg = (hass && hass.entities) ? hass.entities : null;
+                  var apparaten = (hass && hass.devices) ? hass.devices : null;
+                  var gebieden = (hass && hass.areas) ? hass.areas : null;
+                  if(!reg) return `<span style="font-size:12.5px;color:#f59e0b">Entiteitenregister niet beschikbaar — Matter-apparaten zijn niet te herkennen.</span>`;
+                  var groepen = {};
+                  Object.keys(states).forEach(function(id){
+                    var s = states[id];
+                    var e = reg[id];
+                    if(!s || !e || e.platform !== 'matter') return;
+                    if(e.hidden || e.hidden_by) return;
+                    var devId = e.device_id || null;
+                    var dev = (devId && apparaten) ? apparaten[devId] : null;
+                    var sleutel = devId || ('los:' + id);
+                    var gebiedId = e.area_id || (dev && dev.area_id) || null;
+                    var gebied = (gebiedId && gebieden && gebieden[gebiedId]) ? gebieden[gebiedId].name : null;
+                    var naam = dev ? (dev.name_by_user || dev.name || devId)
+                                   : ((s.attributes && s.attributes.friendly_name) || id);
+                    var tijd = s.last_updated ? new Date(s.last_updated).getTime() : null;
+                    if(!groepen[sleutel]) groepen[sleutel] = {naam: naam, gebied: gebied, aantal: 0, laatst: null, weg: 0};
+                    var g = groepen[sleutel];
+                    g.aantal++;
+                    if(s.state === 'unavailable' || s.state === 'unknown') g.weg++;
+                    // nieuwste rapportage van dit apparaat telt
+                    if(tijd !== null && (g.laatst === null || tijd > g.laatst)) g.laatst = tijd;
+                  });
+                  var lijst = Object.keys(groepen).map(function(k){ return groepen[k]; });
+                  if(!lijst.length) return `<span style="font-size:14px;color:rgba(255,255,255,0.6)">Geen Matter-apparaten gevonden.</span>`;
+                  // Oudste eerst; apparaten zonder tijdstempel helemaal bovenaan
+                  lijst.sort(function(a,b){
+                    if(a.laatst === b.laatst) return a.naam.localeCompare(b.naam);
+                    if(a.laatst === null) return -1;
+                    if(b.laatst === null) return 1;
+                    return a.laatst - b.laatst;
+                  });
+                  var duurTxt = function(ms){
+                    if(ms === null) return 'onbekend';
+                    var m = Math.floor(ms / 60000);
+                    if(m < 1) return 'net';
+                    if(m < 60) return m + ' min';
+                    var u = Math.floor(m / 60);
+                    if(u < 48) return u + ' uur';
+                    var d = Math.floor(u / 24);
+                    return d + ' ' + (d === 1 ? 'dag' : 'dagen');
+                  };
+                  var oud = (variables.oud_uren || 6) * 3600000;
+                  var stil = (variables.stil_uren || 24) * 3600000;
+                  var kleurVan = function(ms){
+                    if(ms === null) return '#ef4444';
+                    if(ms > stil) return '#ef4444';
+                    if(ms > oud) return '#f59e0b';
+                    return 'rgba(255,255,255,0.6)';
+                  };
+                  var rijen = lijst.map(function(x){
+                    var sinds = x.laatst === null ? null : nu - x.laatst;
+                    var plek = x.gebied ? `<span style="color:rgba(255,255,255,0.35)"> · ${x.gebied}</span>` : '';
+                    var status = x.weg === x.aantal
+                      ? `<span style="font-size:11.5px;font-weight:600;color:#ef4444;white-space:nowrap">offline</span>`
+                      : (x.weg ? `<span style="font-size:11.5px;color:#f59e0b;white-space:nowrap">${x.weg}/${x.aantal} weg</span>`
+                               : `<span style="font-size:11.5px;color:rgba(255,255,255,0.45);white-space:nowrap">${x.aantal} ${x.aantal === 1 ? 'entiteit' : 'entiteiten'}</span>`);
+                    return `<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.04)">
+                      <span style="flex:1;text-align:left;font-size:13.5px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
+                      ${status}
+                      <span style="font-size:13px;font-weight:600;white-space:nowrap;color:${kleurVan(sinds)}">${duurTxt(sinds)}</span></div>`;
+                  }).join('');
+                  return `<div style="max-height:calc(100vh - 190px);overflow-y:auto">${rijen}</div>`;
                 ]]]
