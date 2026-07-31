@@ -22,19 +22,22 @@
 # deze kop. `100vh` is op de Hub wel degelijk het volledige scherm (gemeten:
 # de view-achtergrond loopt tot de onderrand).
 #
-# HOOGTEBEGROTING (1vh = 6px op een 1024x600 Hub), samen exact 100vh:
+# HOOGTEBEGROTING (1vh = 6px op een 1024x600 Hub), samen ~99,6vh:
 #   0,67vh  panel-view padding boven (HA-default 4px, onderaan 0)
 #   1,70vh  margin-top kopbalk       -> zichtbare marge boven = 2,37vh = 14px
 #   7,00vh  kopbalk (klok, vaste hoogte)
-#   1,67vh  gat kopbalk -> rij 1     (HA-default tussen stack-kinderen, ~10px)
+#   1,20vh  gat kopbalk -> rij 1     (margin-top rij-1-kaarten)
 #  42,50vh  rij 1
-#   1,67vh  gat rij 1 -> rij 2
+#   1,70vh  gat rij 1 -> rij 2       (0,85vh onder rij 1 + 0,85vh boven rij 2)
 #  42,50vh  rij 2
 #   2,33vh  margin-bottom rij 2      -> zichtbare marge onder = 2,33vh = 14px
-# Links/rechts: 0,67vh panel-padding + 1,70vh kaartmarge = 14px, gelijk aan
-# boven en onder. Blijft er onderin toch een streepje over of valt de onderste
-# regel weg, dan is dat de enige onzekere post (die ~1,67vh HA-default): stel
-# de twee rijhoogtes gelijk bij, verder niets.
+# LET OP: de Cast-frontend zet GEEN gap tussen stack-kinderen of gridcellen
+# (gemeten op de Hub: de vier kaarten stonden strak tegen elkaar). Alle gaten
+# staan daarom expliciet als kaartmarges: verticaal zoals hierboven, en tussen
+# de twee kolommen 0,85vh rechtermarge (linkerkaart) + 0,85vh linkermarge
+# (rechterkaart) = 1,7vh.
+# Links/rechts buitenrand: 0,67vh panel-padding + 1,70vh kaartmarge = 14px,
+# gelijk aan boven en onder.
 title: Mini Dashboard
 path: mini-dashboard
 icon: mdi:monitor
@@ -174,8 +177,10 @@ cards:
                   # hoogte doorgegeven en valt een percentage terug op auto.
                   - height: 42.5vh
                   - box-sizing: border-box
-                  # Linkerkolom, bovenste rij: alleen links buitenmarge.
-                  - margin: 0 0 0 1.7vh
+                  # Linkerkolom, bovenste rij: links buitenmarge, rechts en
+                  # onder een halve tussenmarge (de andere helft zit op de
+                  # buurkaarten — de Cast-frontend heeft zelf geen grid-gap).
+                  - margin: 1.2vh 0.85vh 0.85vh 1.7vh
               grid:
                 - grid-template-areas: '"t" "ploegen" "uitrukken" "melding"'
                 - grid-template-rows: auto auto auto auto
@@ -283,8 +288,9 @@ cards:
                   - padding: 1.6vh 2vh
                   - height: 42.5vh
                   - box-sizing: border-box
-                  # Rechterkolom, bovenste rij: alleen rechts buitenmarge.
-                  - margin: 0 1.7vh 0 0
+                  # Rechterkolom, bovenste rij: rechts buitenmarge, links en
+                  # onder een halve tussenmarge.
+                  - margin: 1.2vh 1.7vh 0.85vh 0.85vh
               grid:
                 - grid-template-areas: '"t" "cijfers" "strook"'
                 - grid-template-rows: auto auto auto
@@ -303,10 +309,29 @@ cards:
                 [[[
                   var g = states['sensor.zonneplan_current_tariff_group'];
                   var s = states['sensor.solar_power_generated_now'];
-                  var goedkoop = g && g.state === 'low';
-                  var groen = s && !isNaN(Number(s.state)) && Number(s.state) > 0.1;
-                  var txt = (groen && goedkoop) ? 'groen en goedkoop' : (goedkoop ? 'goedkoop' : (groen ? 'groen' : 'normaal tarief'));
-                  var col = (groen || goedkoop) ? '#4ade80' : 'rgba(255,255,255,0.6)';
+                  // 'groen' zegt alleen dat de eigen panelen leveren (> 100 W,
+                  // met dezelfde W/kW-normalisatie als de cijfers hieronder);
+                  // het Zonneplan-tarief bepaalt goedkoop/duur en wint qua
+                  // kleur, zodat er nooit "groen" staat terwijl stroom duur is
+                  // zonder dat je dat ziet.
+                  var prod = null;
+                  if(s && !isNaN(Number(s.state))){
+                    prod = Number(s.state);
+                    if((s.attributes.unit_of_measurement || '') === 'W') prod = prod / 1000;
+                  }
+                  var groen = prod !== null && prod > 0.1;
+                  var gs = g ? g.state : null;
+                  var txt, col;
+                  if(gs === 'low'){
+                    txt = groen ? 'groen en goedkoop' : 'goedkoop';
+                    col = '#4ade80';
+                  } else if(gs === 'high'){
+                    txt = groen ? 'groen maar duur' : 'duur';
+                    col = groen ? '#f59e0b' : '#ef4444';
+                  } else {
+                    txt = groen ? 'groen · normaal tarief' : 'normaal tarief';
+                    col = groen ? '#4ade80' : 'rgba(255,255,255,0.6)';
+                  }
                   var k = states['sensor.total_costs_today_calculated'];
                   var kosten = '';
                   if(k && !isNaN(Number(k.state))){
@@ -471,9 +496,10 @@ cards:
                   - padding: 1.6vh 2vh
                   - height: 42.5vh
                   - box-sizing: border-box
-                  # Onderste rij: hier zit de zichtbare marge onderaan het
-                  # scherm in, want de panel-view heeft onder geen padding.
-                  - margin: 0 0 2.33vh 1.7vh
+                  # Onderste rij: boven en rechts een halve tussenmarge; de
+                  # zichtbare marge onderaan het scherm zit hier, want de
+                  # panel-view heeft onder geen padding.
+                  - margin: 0.85vh 0.85vh 2.33vh 1.7vh
               grid:
                 - grid-template-areas: '"t" "afval" "agenda" "voet"'
                 - grid-template-rows: auto auto auto auto
@@ -630,7 +656,7 @@ cards:
                   - padding: 1.6vh 2vh
                   - height: 42.5vh
                   - box-sizing: border-box
-                  - margin: 0 1.7vh 2.33vh 0
+                  - margin: 0.85vh 1.7vh 2.33vh 0.85vh
               grid:
                 - grid-template-areas: '"t" "mensen" "huis"'
                 - grid-template-rows: auto auto auto
