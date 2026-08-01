@@ -126,16 +126,18 @@ De beslistabel, van hoog naar laag:
      Anders open voor het daglicht.
    - *Neutraal*: open, tenzij zon én een warme kamer.
 5. **Airco koelt** in die zone → geen open rolluik; anders koel je de straat.
-6. **Screens**: kennen geen kier, gaan 's nachts omhoog, en gaan altijd in bij
-   een KNMI-waarschuwing of vorst (< 4 °C). Die veiligheidsregel staat als
-   laatste en overschrijft al het bovenstaande.
+6. **Screens**: kennen geen kier, gaan 's nachts omhoog, en gaan in bij harde
+   wind of vorst (< 4 °C). Die veiligheidsregel staat als laatste en
+   overschrijft al het bovenstaande.
 
-> **`binary_sensor.knmi_waarschuwing` is niet te vertrouwen op zijn staat.**
-> Hij staat regelmatig op `on` ("Onveilig") terwijl er niets aan de hand is.
-> Daarom telt alleen het `description`-attribuut: staat daar "geen
-> waarschuwingen van kracht", dan is er geen waarschuwing. De bestaande
-> automatisering `knmi_weeralarm` doet hetzelfde. Zou je op de staat afgaan,
-> dan gaan de keukenscreens nooit meer naar beneden.
+> **Wanneer moet een screen in?** Bij wind, niet bij hitte. Twee bronnen:
+> `wind_speed` uit `weather.knmi_thuis` (boven `klimaat_screen_max_wind`,
+> standaard 45 km/u) en de KNMI-waarschuwing. Die laatste is dubbel
+> onbetrouwbaar: hij staat ook op `on` ("Onveilig") als er niets aan de hand
+> is, én hij gaat net zo goed af voor een hitteplan of gladheid. Daarom telt
+> hij alleen mee als de tekst in het `description`-attribuut over wind, storm,
+> onweer of hagel gaat. Zou je op de staat afgaan, dan gaan de keukenscreens
+> nooit meer omlaag — precies op de dagen dat je ze nodig hebt.
 
 ### Laag 4 — Uitvoeren
 
@@ -216,6 +218,7 @@ Terugdraaien is altijd één schakelaar, op elk moment.
 | `klimaat_voorgevel_richting` | 80 ° | kompasrichting van de voorgevel (oost) |
 | `klimaat_zijgevel_richting` | 170 ° | kompasrichting van de zijgevel (zuid) |
 | `klimaat_gevel_breedte` | 85 ° | hoe schuin de zon nog op een gevel telt |
+| `klimaat_screen_max_wind` | 45 km/u | hierboven gaan de screens in |
 | `klimaat_zon_lux_drempel` | 20.000 lx | wanneer de zon "op de gevel staat" |
 | `klimaat_zon_min_elevatie` | 8 ° | lager dan dit telt de zon niet mee |
 | `klimaat_nachtspui` | uit | mag er 's nachts een kier open voor koelte |
@@ -224,16 +227,18 @@ Beide schakelaars (`klimaatregie_actief` en `klimaat_nachtspui`) staan na de
 eerste start uit; die zet je zelf aan. De zeven
 `input_boolean.zonwering_handmatig_<slug>` staan dan óók uit, en dat betekent
 hier "doet mee" — bewust omgekeerd, want een verse helper staat altijd uit en
-dat mag geen zone stilzwijgend blokkeren. De drempels hierboven worden één keer ingevuld door
-`automation.klimaat_standaardwaarden` en daarna nooit meer aangeraakt, dus
-jouw aanpassingen overleven een herstart. Dat "één keer" wordt bijgehouden met
-`input_boolean.klimaat_standaardwaarden_gezet`; zet die uit en herstart om
-alles terug te zetten naar de fabriekswaarden.
+dat mag geen zone stilzwijgend blokkeren. De drempels hierboven worden ingevuld door
+`automation.klimaat_standaardwaarden`, maar alleen als ze nog exact op hun
+minimum staan — dat is de waarde die Home Assistant zelf invult als er niets
+is opgeslagen. Een `input_number` zonder opgeslagen waarde start namelijk
+**niet** op `unknown` maar op zijn `min:`. Alles wat jij hebt bijgesteld blijft
+dus staan, ook na een herstart.
 
-Let op bij het toevoegen van een nieuwe drempel: een `input_number` zonder
-opgeslagen waarde start niet op `unknown` maar op zijn **minimum**. Kies de
-`min:` dus zo dat een vergeten waarde geen ramp is, en voeg de standaardwaarde
-toe aan de lijst in die automatisering.
+Voeg je later een drempel toe, zet hem dan in de lijst in die automatisering
+én verhoog `config_versie` daar met één. Zonder die verhoging draait de
+automatisering niet meer en blijft de nieuwe drempel op zijn minimum hangen.
+`input_number.klimaat_config_versie` op 0 zetten en herstarten geeft alle
+onaangeraakte drempels hun standaardwaarde terug.
 
 ## De beslistabel wijzigen
 

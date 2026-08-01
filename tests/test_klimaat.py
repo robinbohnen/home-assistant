@@ -76,6 +76,8 @@ def scenario(naam, tijd, **kw):
         "input_boolean.klimaat_nachtspui": "on",
         "input_boolean.klimaatregie_actief": "on",
         "sensor.knmi_temperatuur": "18",
+        "weather.knmi_thuis.wind_speed": 12.0,
+        "input_number.klimaat_screen_max_wind": "45",
         "group.all_adults": "home",
         "binary_sensor.knmi_waarschuwing": "off",
         "binary_sensor.knmi_waarschuwing.description":
@@ -243,6 +245,30 @@ scenario("sensor staat aan, maar er is geen waarschuwing", "14:00",
             "binary_sensor.zon_op_voorgevel": "on",
             "binary_sensor.zon_richting_voorgevel": "on"})
 check("loze waarschuwing blokkeert de screens niet", "keuken_screens", "dicht")
+
+# Een hitteplan is geen reden om screens in te trekken - juist andersom.
+scenario("hitteplan actief", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "29",
+            "binary_sensor.knmi_waarschuwing": "on",
+            "binary_sensor.knmi_waarschuwing.description":
+                "Het Nationaal Hitteplan van het RIVM is actief voor het "
+                "zuidoosten van het land. Vandaag is het tijdelijk minder warm.",
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on"})
+check("hitteplan: screens juist omlaag", "keuken_screens", "dicht")
+
+# Harde wind uit de verwachting telt ook zonder KNMI-waarschuwing.
+scenario("harde wind zonder waarschuwing", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "28",
+            "weather.knmi_thuis.wind_speed": 52.0,
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on"})
+check("wind boven de grens: screen in", "keuken_screens", "open")
+check("rolluiken hebben geen last van wind", "kantoor_links", "dicht")
 
 # --- blokkades -------------------------------------------------------------
 scenario("handbediening actief", "14:00",

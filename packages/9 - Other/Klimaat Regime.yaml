@@ -31,11 +31,6 @@ klimaat_regime_package:
     klimaat_regime_handmatig:
       name: "Klimaat - Regime handmatig vastzetten"
       icon: mdi:hand-back-right
-    # Markeert dat de drempels hieronder één keer op hun standaardwaarde zijn
-    # gezet. Zet hem uit en herstart om alles terug te zetten naar de fabriek.
-    klimaat_standaardwaarden_gezet:
-      name: "Klimaat - Standaardwaarden ingevuld"
-      icon: mdi:factory
 
   input_number:
     # --- Regimegrenzen (verwachte maximumtemperatuur van vandaag) ---
@@ -63,6 +58,18 @@ klimaat_regime_package:
       step: 0.5
       unit_of_measurement: "°C"
       mode: box
+    # Houdt bij welke set standaardwaarden al is ingevuld. Komen er nieuwe
+    # instellingen bij, dan gaat het versienummer in de automatisering omhoog
+    # en worden alleen de drempels gevuld die jij nog nooit hebt aangeraakt.
+    # Op 0 zetten en herstarten = terug naar de fabriekswaarden.
+    klimaat_config_versie:
+      name: "Klimaat - Configuratieversie"
+      icon: mdi:counter
+      min: 0
+      max: 99
+      step: 1
+      mode: box
+
     # Gezet door de automatisering hieronder, staat hier zodat het zichtbaar
     # en corrigeerbaar is.
     klimaat_verwachte_max:
@@ -242,21 +249,26 @@ klimaat_regime_package:
     ##
     ## Kijken of een waarde "nog leeg" is werkt hier niet: een input_number
     ## zonder opgeslagen waarde start niet op `unknown` maar op zijn MINIMUM.
-    ## Daarom een expliciete markering - deze automatisering draait precies
-    ## één keer, en laat daarna alles wat jij instelt met rust. Terug naar de
-    ## fabriekswaarden? Zet de markering uit en herstart.
+    ## Daarom twee slagen om de arm: alleen drempels die nog exact op hun
+    ## minimum staan (dus nooit door jou gezet) worden gevuld, en dat gebeurt
+    ## alleen als het versienummer omhoog is gegaan. Komt er later een nieuwe
+    ## instelling bij, verhoog dan `config_versie` hieronder; alles wat jij al
+    ## had bijgesteld blijft dan staan.
     ###########################################################################
     - id: klimaat_standaardwaarden
       alias: Klimaat - Standaardwaarden invullen
-      description: Zet de drempels eenmalig op hun standaardwaarde
+      description: Vult nieuwe drempels die nog nooit zijn ingesteld
       mode: single
+      variables:
+        # 1 = eerste set, 2 = screens-windgrens erbij
+        config_versie: 2
       triggers:
         - trigger: homeassistant
           event: start
       conditions:
-        - condition: state
-          entity_id: input_boolean.klimaat_standaardwaarden_gezet
-          state: "off"
+        - condition: template
+          value_template: >-
+            {{ states('input_number.klimaat_config_versie') | int(0) < config_versie }}
       actions:
         - variables:
             standaard:
@@ -273,23 +285,36 @@ klimaat_regime_package:
               input_number.klimaat_spui_delta: 1
               input_number.klimaat_kier_positie: 15
               input_number.klimaat_override_uren: 4
+              input_number.klimaat_screen_max_wind: 45
         - repeat:
             for_each: "{{ standaard.keys() | list }}"
             sequence:
-              - action: input_number.set_value
-                target:
-                  entity_id: "{{ repeat.item }}"
-                data:
-                  value: "{{ standaard[repeat.item] }}"
-                continue_on_error: true
-        - action: input_boolean.turn_on
+              # Alleen aanraken wat nog op de ondergrens van zijn schuifbereik
+              # staat; dat is de waarde die Home Assistant zelf invult als er
+              # niets is opgeslagen.
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {% set nu = states(repeat.item) %}
+                      {{ nu in ['unknown', 'unavailable', 'none', '']
+                         or (nu | float(-9999)) == (state_attr(repeat.item, 'min') | float(-9998)) }}
+                then:
+                  - action: input_number.set_value
+                    target:
+                      entity_id: "{{ repeat.item }}"
+                    data:
+                      value: "{{ standaard[repeat.item] }}"
+                    continue_on_error: true
+        - action: input_number.set_value
           target:
-            entity_id: input_boolean.klimaat_standaardwaarden_gezet
+            entity_id: input_number.klimaat_config_versie
+          data:
+            value: "{{ config_versie }}"
         - action: logbook.log
           data:
             name: Klimaatregie
             message: >-
-              Standaardwaarden ingevuld ({{ standaard | count }} drempels).
+              Standaardwaarden bijgewerkt naar versie {{ config_versie }}.
 
     ###########################################################################
     ## Regime van de dag bepalen uit de weersverwachting
