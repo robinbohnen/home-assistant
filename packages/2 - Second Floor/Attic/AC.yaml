@@ -100,3 +100,43 @@ attic_ac_package:
                     entity_id: climate.airco_zolder
                   action: climate.set_fan_mode
       mode: single
+
+    script_attic_ac_off:
+      alias: Airco zolder uit (met herhaalpogingen)
+      description: >-
+        Zet de airco op zolder uit en blijft het proberen zolang hij
+        onbereikbaar is. Eerst een paar snelle pogingen, daarna rustiger.
+      mode: restart
+      sequence:
+        - repeat:
+            sequence:
+              # continue_on_error: bij een onbereikbare airco faalt de service
+              # call, dat mag de herhaallus niet afbreken.
+              - action: climate.turn_off
+                target:
+                  entity_id: climate.airco_zolder
+                data: {}
+                continue_on_error: true
+              # Wacht op bevestiging, maar ga direct verder zodra hij uit is.
+              # Eerste 6 pogingen snel achter elkaar, daarna elke 30 seconden.
+              - wait_template: "{{ is_state('climate.airco_zolder', 'off') }}"
+                timeout: "{{ 5 if repeat.index <= 6 else 30 }}"
+                continue_on_timeout: true
+            until:
+              # Stoppen zodra hij uit is, of na ~5,5 minuut proberen.
+              - condition: template
+                value_template: >-
+                  {{ is_state('climate.airco_zolder', 'off') or repeat.index >= 16 }}
+        - if:
+            - condition: not
+              conditions:
+                - condition: state
+                  entity_id: climate.airco_zolder
+                  state: "off"
+          then:
+            - action: notify.mobile_devices_adults
+              data:
+                title: Airco zolder
+                message: >-
+                  De airco op zolder kon niet worden uitgezet, hij blijft
+                  onbereikbaar.
