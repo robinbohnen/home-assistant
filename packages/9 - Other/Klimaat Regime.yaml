@@ -31,6 +31,11 @@ klimaat_regime_package:
     klimaat_regime_handmatig:
       name: "Klimaat - Regime handmatig vastzetten"
       icon: mdi:hand-back-right
+    # Markeert dat de drempels hieronder één keer op hun standaardwaarde zijn
+    # gezet. Zet hem uit en herstart om alles terug te zetten naar de fabriek.
+    klimaat_standaardwaarden_gezet:
+      name: "Klimaat - Standaardwaarden ingevuld"
+      icon: mdi:factory
 
   input_number:
     # --- Regimegrenzen (verwachte maximumtemperatuur van vandaag) ---
@@ -233,18 +238,25 @@ klimaat_regime_package:
     ## Standaardwaarden invullen
     ##
     ## Bewust geen `initial:` op de helpers hierboven: dat zet je eigen
-    ## instellingen bij élke herstart terug. Deze automatisering vult alleen
-    ## waarden die nog nooit gezet zijn, dus na de eerste start doet hij niets
-    ## meer.
+    ## instellingen bij élke herstart terug.
+    ##
+    ## Kijken of een waarde "nog leeg" is werkt hier niet: een input_number
+    ## zonder opgeslagen waarde start niet op `unknown` maar op zijn MINIMUM.
+    ## Daarom een expliciete markering - deze automatisering draait precies
+    ## één keer, en laat daarna alles wat jij instelt met rust. Terug naar de
+    ## fabriekswaarden? Zet de markering uit en herstart.
     ###########################################################################
     - id: klimaat_standaardwaarden
       alias: Klimaat - Standaardwaarden invullen
-      description: Vult instelbare drempels die nog leeg zijn
+      description: Zet de drempels eenmalig op hun standaardwaarde
       mode: single
       triggers:
         - trigger: homeassistant
           event: start
-      conditions: []
+      conditions:
+        - condition: state
+          entity_id: input_boolean.klimaat_standaardwaarden_gezet
+          state: "off"
       actions:
         - variables:
             standaard:
@@ -264,16 +276,20 @@ klimaat_regime_package:
         - repeat:
             for_each: "{{ standaard.keys() | list }}"
             sequence:
-              - if:
-                  - condition: template
-                    value_template: >-
-                      {{ states(repeat.item) in ['unknown', 'unavailable', 'none', ''] }}
-                then:
-                  - action: input_number.set_value
-                    target:
-                      entity_id: "{{ repeat.item }}"
-                    data:
-                      value: "{{ standaard[repeat.item] }}"
+              - action: input_number.set_value
+                target:
+                  entity_id: "{{ repeat.item }}"
+                data:
+                  value: "{{ standaard[repeat.item] }}"
+                continue_on_error: true
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.klimaat_standaardwaarden_gezet
+        - action: logbook.log
+          data:
+            name: Klimaatregie
+            message: >-
+              Standaardwaarden ingevuld ({{ standaard | count }} drempels).
 
     ###########################################################################
     ## Regime van de dag bepalen uit de weersverwachting

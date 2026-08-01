@@ -217,9 +217,16 @@ Beide schakelaars (`klimaatregie_actief` en `klimaat_nachtspui`) staan na de
 eerste start uit; die zet je zelf aan. De zeven
 `input_boolean.zonwering_handmatig_<slug>` staan dan óók uit, en dat betekent
 hier "doet mee" — bewust omgekeerd, want een verse helper staat altijd uit en
-dat mag geen zone stilzwijgend blokkeren. De drempels hierboven worden bij de
-eerste start ingevuld door `automation.klimaat_standaardwaarden` en daarna
-nooit meer aangeraakt, dus jouw aanpassingen overleven een herstart.
+dat mag geen zone stilzwijgend blokkeren. De drempels hierboven worden één keer ingevuld door
+`automation.klimaat_standaardwaarden` en daarna nooit meer aangeraakt, dus
+jouw aanpassingen overleven een herstart. Dat "één keer" wordt bijgehouden met
+`input_boolean.klimaat_standaardwaarden_gezet`; zet die uit en herstart om
+alles terug te zetten naar de fabriekswaarden.
+
+Let op bij het toevoegen van een nieuwe drempel: een `input_number` zonder
+opgeslagen waarde start niet op `unknown` maar op zijn **minimum**. Kies de
+`min:` dus zo dat een vergeten waarde geen ramp is, en voeg de standaardwaarde
+toe aan de lijst in die automatisering.
 
 ## De beslistabel wijzigen
 
