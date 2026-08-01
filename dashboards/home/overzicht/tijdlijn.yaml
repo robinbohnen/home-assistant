@@ -101,18 +101,40 @@ card:
             // Echte voorspelling als Forecast.Solar die per tijdstip levert,
             // anders een klokvorm tussen op- en ondergang op het dagtotaal.
             var zonBron = null, punten = [];
-            ['sensor.energy_production_today','sensor.overloop_zolder_zonnepanelen_schatting_geschatte_energieproductie_vandaag','sensor.forecast_solar_production_today'].forEach(function(id){
-              if(zonBron) return;
-              var e = states[id];
-              if(!e || !e.attributes) return;
-              var d = e.attributes.watts || e.attributes.wh_hours || e.attributes.wh_period;
-              if(d && typeof d === 'object' && Object.keys(d).length > 2){ zonBron = 'echt';
-                Object.keys(d).forEach(function(k){
-                  var t = new Date(k).getTime();
-                  if(!isNaN(t)) punten.push({t: t, v: Number(d[k]) || 0});
-                });
-              }
+            // Forecast.Solar hangt zijn voorspelling per tijdstip in een
+            // attribuut (watts / wh_period / wh_hours). Eerst de bekende
+            // entiteitsnamen, daarna een scan over alle sensoren: die naam is
+            // hier al eens gewijzigd en dan viel de grafiek stilletjes terug op
+            // de benadering. De sleutels moeten tijdstippen zijn — zo wordt een
+            // willekeurig ander attribuut dat toevallig 'watts' heet niet
+            // aangezien voor een zonvoorspelling.
+            var pak = function(e){
+              if(!e || !e.attributes) return null;
+              var d = e.attributes.watts || e.attributes.wh_period || e.attributes.wh_hours;
+              if(!d || typeof d !== 'object') return null;
+              var ks = Object.keys(d).filter(function(k){ return !isNaN(new Date(k).getTime()); });
+              return ks.length > 2 ? {d: d, ks: ks} : null;
+            };
+            var reeks = null;
+            ['sensor.energy_production_today',
+             'sensor.overloop_zolder_zonnepanelen_schatting_geschatte_energieproductie_vandaag',
+             'sensor.forecast_solar_production_today'].some(function(id){
+              reeks = pak(states[id]);
+              return !!reeks;
             });
+            if(!reeks){
+              Object.keys(states).some(function(k){
+                if(k.lastIndexOf('sensor.', 0) !== 0) return false;
+                reeks = pak(states[k]);
+                return !!reeks;
+              });
+            }
+            if(reeks){
+              zonBron = 'echt';
+              reeks.ks.forEach(function(k){
+                punten.push({t: new Date(k).getTime(), v: Number(reeks.d[k]) || 0});
+              });
+            }
             if(zonBron) punten.sort(function(a,b){ return a.t - b.t; });
             if(!zonBron && onder && op){
               // benadering: zonsopkomst afleiden en een sinusboog leggen

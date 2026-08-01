@@ -304,15 +304,18 @@ sections:
             show_icon: true
             show_state: true
             icon: mdi:transmission-tower
+        # .includes i.p.v. === : het tariefniveau kent vijf waarden
+        # (very_low t/m very_high), dus een test op exact 'low' liet de kaart
+        # juist bij het goedkoopste tarief ongekleurd.
         styles: |-
           ha-card {
-              ${hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state === 'low' ? '--bubble-icon-background-color: #AFE1AF !important' : ''}
-              ${hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state === 'high' ? '--bubble-icon-background-color: #FFCCCB !important' : ''}
+              ${(hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state || '').includes('low') ? '--bubble-icon-background-color: #AFE1AF !important' : ''}
+              ${(hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state || '').includes('high') ? '--bubble-icon-background-color: #FFCCCB !important' : ''}
           }
           @media (prefers-color-scheme: dark) {
                .bubble-icon, .bubble-sub-button-1, .bubble-sub-button-2 {
-                    ${hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state === 'low' ? 'color: black !important' : ''}
-                    ${hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state === 'high' ? 'color: black !important' : ''}
+                    ${(hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state || '').includes('low') ? 'color: black !important' : ''}
+                    ${(hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state || '').includes('high') ? 'color: black !important' : ''}
               }
           }
       - type: custom:bubble-card
@@ -4340,14 +4343,12 @@ badges:
     color: var(--bubble-default-color)
     label: Huidig tarief
     content: >-
-      {% if is_state('sensor.slimhuys_zonneplan_tariefniveau_nu','low') -%} Laag
+      {# Vijf niveaus (very_low t/m very_high); met alleen low/medium/high viel
+         het woord bij het goedkoopste tarief helemaal weg. #}
+      {% set n = states('sensor.slimhuys_zonneplan_tariefniveau_nu') %}
 
-      {% elif is_state('sensor.slimhuys_zonneplan_tariefniveau_nu','medium') -%}
-      Gemiddeld
-
-      {% elif is_state('sensor.slimhuys_zonneplan_tariefniveau_nu','high') -%} Hoog
-
-      {% endif -%}
+      {{ {'very_low': 'Zeer laag', 'low': 'Laag', 'medium': 'Gemiddeld',
+          'high': 'Hoog', 'very_high': 'Zeer hoog'}.get(n, n | replace('_', ' ') | capitalize) }}
 
       - € {{ states['sensor.slimhuys_zonneplan_huidige_prijs'].state |
       round(3) }}

@@ -1,3 +1,8 @@
+# sensor.slimhuys_zonneplan_tariefniveau_nu kent VIJF niveaus:
+# very_low | low | medium | high | very_high. Deze automation luisterde alleen
+# op low/medium/high, waardoor een sprong van medium naar very_low geen enkele
+# trigger raakte: de batterij begon dan juist op het allergoedkoopste moment
+# niet te laden. very_low telt daarom als low en very_high als high.
 battery_package:
   automation:
     - id: battery_disable_charging
@@ -8,7 +13,9 @@ battery_package:
         - trigger: state
           entity_id:
             - sensor.slimhuys_zonneplan_tariefniveau_nu
-          to: low
+          to:
+            - very_low
+            - low
           id: low_price
         - trigger: time
           at: "06:00:00"
@@ -19,7 +26,9 @@ battery_package:
         - trigger: state
           entity_id:
             - sensor.slimhuys_zonneplan_tariefniveau_nu
-          to: high
+          to:
+            - high
+            - very_high
           id: high_price
         - trigger: state
           entity_id:

@@ -14,6 +14,15 @@ card_mod:
     }
 cards:
   - type: custom:button-card
+    # De klok hieronder wordt in JS opgebouwd uit new Date(), maar button-card
+    # rendert een kaart alleen opnieuw als zijn entity verandert. Zonder entity
+    # bleef de tijd hangen op het moment van de laatste page-load — op een
+    # wandpaneel dat dagen open staat liep dat ver achter. sensor.time tikt elke
+    # minuut (time_date, zie packages/9 - Other/Dashboard Context.yaml).
+    entity: sensor.time
+    show_name: false
+    show_state: false
+    show_icon: false
     tap_action:
       action: none
     styles:
@@ -50,20 +59,25 @@ cards:
         styles:
           card:
             - background: >
-                [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && g.state === 'low') ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
+                [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && /low/.test(g.state)) ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
             - border: >
-                [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && g.state === 'low') ? '1px solid rgba(52,168,120,0.28)' : '1px solid rgba(255,255,255,0.06)'; ]]]
+                [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && /low/.test(g.state)) ? '1px solid rgba(52,168,120,0.28)' : '1px solid rgba(255,255,255,0.06)'; ]]]
         custom_fields:
           c: |
             [[[
               var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
               var p = states['sensor.slimhuys_zonneplan_huidige_prijs'];
-              var lbl = {low:'laag', medium:'gemiddeld', high:'hoog'};
-              var col = {low:'#4ade80', medium:'#f59e0b', high:'#ef4444'};
+              // SlimHuys levert vijf niveaus, niet drie. Een niveau dat hier nog
+              // niet in staat valt terug op zijn eigen naam plus een grijze stip,
+              // dus het leest nooit meer als "tarief very_low".
+              var lbl = {very_low:'zeer laag', low:'laag', medium:'gemiddeld', high:'hoog', very_high:'zeer hoog'};
+              // Dezelfde drie kleuren als de legenda onder de stroomprijsgrafiek,
+              // zodat deze stip hetzelfde zegt als een balk daar.
+              var col = {very_low:'#4ade80', low:'#4ade80', medium:'#f59e0b', high:'#ef4444', very_high:'#ef4444'};
               var gs = g ? g.state : 'medium';
               var price = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '';
-              var txt = gs === 'low' ? '#4ade80' : 'rgba(255,255,255,0.85)';
-              return `<span style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:${col[gs]||'#888'}"></span><span style="color:${txt}">tarief ${lbl[gs]||gs} · ${price}</span></span>`;
+              var txt = /low/.test(gs) ? '#4ade80' : 'rgba(255,255,255,0.85)';
+              return `<span style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:${col[gs]||'#888'}"></span><span style="color:${txt}">tarief ${lbl[gs]||String(gs).replace(/_/g,' ')} · ${price}</span></span>`;
             ]]]
       # Conditioneel: auto laadt
       - type: custom:button-card
@@ -112,11 +126,14 @@ cards:
           - condition: state
             entity: sensor.stroomprijs_niveau_volgend_uur
             state: high
+          # state_not in plaats van een opsomming van de lage niveaus: SlimHuys
+          # kent ook very_low/very_high, en met een opsomming bleef de pil juist
+          # bij het allergoedkoopste tarief verborgen.
           - condition: state
             entity: sensor.slimhuys_zonneplan_tariefniveau_nu
-            state:
-              - low
-              - medium
+            state_not:
+              - high
+              - very_high
         custom_fields:
           c: |
             [[[

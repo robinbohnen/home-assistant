@@ -30,10 +30,30 @@ cards:
               [[[
                 var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
                 var solar = states['sensor.solar_power_generated_now'];
-                var cheap = g && g.state === 'low';
-                var green = solar && Number(solar.state) > 0.1;
-                var txt = (green && cheap) ? 'stroom is groen en goedkoop' : (cheap ? 'stroom is goedkoop' : (green ? 'stroom is groen' : 'normaal tarief'));
-                var col = (green || cheap) ? '#4ade80' : 'rgba(255,255,255,0.6)';
+                // /low/ vangt zowel low als very_low; SlimHuys kent vijf niveaus.
+                var cheap = g && /low/.test(g.state);
+                // Deze sensor staat in W (zie het prod-veld hieronder). De oude
+                // drempel 0,1 was als kW bedoeld en maakte "groen" al waar bij
+                // het minste schemerlicht; 100 W is pas een echte bijdrage.
+                var su = solar && solar.attributes ? solar.attributes.unit_of_measurement : null;
+                var sw = solar && !isNaN(Number(solar.state)) ? Number(solar.state) * (su === 'kW' ? 1000 : 1) : 0;
+                var green = sw > 100;
+                var duur = g && /high/.test(g.state);
+                // Het tarief wint van "groen": met alleen een zon-test stond hier
+                // op het duurste moment van de dag een groene "stroom is groen",
+                // wat leest als "goed moment om iets aan te zetten". Zelfde
+                // driedeling als de kopregel op dashboards/home/nest_hub.yaml.
+                var txt, col;
+                if(cheap){
+                  txt = green ? 'stroom is groen en goedkoop' : 'stroom is goedkoop';
+                  col = '#4ade80';
+                } else if(duur){
+                  txt = green ? 'stroom is groen maar duur' : 'stroom is duur';
+                  col = green ? '#f59e0b' : '#ef4444';
+                } else {
+                  txt = green ? 'stroom is groen' : 'normaal tarief';
+                  col = green ? '#4ade80' : 'rgba(255,255,255,0.6)';
+                }
                 return `<span style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:${col}"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span>${txt}</span>`;
               ]]]
         # stats row
@@ -283,7 +303,8 @@ cards:
                 // hetzelfde zegt als de pil in de header en waar de batterij
                 // op schakelt.
                 var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
-                var col = {low:'#4ade80', medium:'#f59e0b', high:'#ef4444'}[g ? g.state : ''] || 'rgba(255,255,255,0.6)';
+                var col = {very_low:'#4ade80', low:'#4ade80', medium:'#f59e0b',
+                           high:'#ef4444', very_high:'#ef4444'}[g ? g.state : ''] || 'rgba(255,255,255,0.6)';
                 // Kwartierblokken als de integratie ze levert, anders de uurblokken.
                 var blok = function(eid){ var e = states[eid]; return (e && e.attributes && e.attributes.raw_today) || []; };
                 var kw = blok('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier');

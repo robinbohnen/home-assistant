@@ -190,6 +190,13 @@ cards:
                 type: area
                 color: "#4ade80"
                 stroke_width: 2
+                float_precision: 2
+                # Deze sensor staat in W en het verbruik in kW; zonder gelijk-
+                # trekken drukt de productie (duizendtallen) de verbruikslijn
+                # plat tegen de nullijn. Zelfde transform als in kolom_midden.
+                transform: >-
+                  return hass.states['sensor.solar_power_generated_now']
+                    .attributes.unit_of_measurement === 'W' ? x / 1000 : x;
                 group_by:
                   duration: 5m
                   func: avg
@@ -232,7 +239,11 @@ cards:
                 primary: Huidig tarief
                 secondary: "{{ ('€ ' ~ states('sensor.slimhuys_zonneplan_huidige_prijs')) if has_value('sensor.slimhuys_zonneplan_huidige_prijs') else '—' }}"
                 icon: mdi:cash-clock
-                icon_color: "{{ 'green' if is_state('sensor.slimhuys_zonneplan_tariefniveau_nu','low') else 'grey' }}"
+                # SlimHuys kent vijf niveaus (very_low t/m very_high); een test
+                # op alleen 'low' liet het goedkoopste tarief grijs.
+                icon_color: >-
+                  {% set n = states('sensor.slimhuys_zonneplan_tariefniveau_nu') %}
+                  {{ 'green' if 'low' in n else ('red' if 'high' in n else 'grey') }}
               - type: custom:mushroom-template-card
                 entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
                 primary: Thuisbatterij
@@ -544,6 +555,128 @@ cards:
             entities:
               - input_text.brandweer_laatste_melding
               - binary_sensor.brandweer_uitgerukt_op_laatste_melding
+
+      # --------- Deuren & ramen ---------
+      # De rij in de RUIMTES-kaart zegt alleen dát er iets open staat. Hier
+      # staat wélk contact dat is: gesorteerd op state (reverse, dus "on" boven
+      # "off"), zodat wat open staat altijd bovenaan begint. De lijsten zijn
+      # dezelfde als de groepen in packages/9 - Other/Firealarm.yaml; komt daar
+      # een contact bij, dan ook hier.
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-deuren"
+        name: Deuren & ramen
+        icon: mdi:door-open
+        styles: *ov_popup
+        cards:
+          - type: custom:mushroom-template-card
+            entity: binary_sensor.all_doors
+            primary: >-
+              {% set d = is_state('binary_sensor.all_doors','on') %}
+              {% set r = is_state('binary_sensor.all_windows','on') %}
+              {{ 'Alles dicht' if not d and not r else
+                 (('Deur' if d else '') ~ (' & ' if d and r else '') ~ ('Raam' if r else '')) ~ ' open' }}
+            secondary: >-
+              {% set n = expand('binary_sensor.all_doors','binary_sensor.all_windows')
+                         | selectattr('state','eq','on') | list | count %}
+              {{ 'het huis is dicht' if n == 0 else (n ~ (' contact' if n == 1 else ' contacten') ~ ' open') }}
+            icon: >-
+              {{ 'mdi:door-open' if is_state('binary_sensor.all_doors','on')
+                 else ('mdi:window-open-variant' if is_state('binary_sensor.all_windows','on') else 'mdi:home-lock') }}
+            icon_color: >-
+              {{ 'amber' if is_state('binary_sensor.all_doors','on')
+                    or is_state('binary_sensor.all_windows','on') else 'green' }}
+          - type: custom:mushroom-title-card
+            title: Deuren
+          - type: custom:auto-entities
+            show_empty: false
+            card:
+              type: grid
+              columns: 2
+              square: false
+            card_param: cards
+            sort:
+              method: state
+              reverse: true
+            filter:
+              include:
+                - entity_id: binary_sensor.entree_voordeur_contact
+                  options: &ov_contact
+                    type: custom:mushroom-entity-card
+                    secondary_info: last-changed
+                    tap_action:
+                      action: more-info
+                - entity_id: binary_sensor.garage_achterdeur_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.woonkamer_achterdeur_buiten_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.woonkamer_openslaande_deuren_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.speelkamer_openslaande_deuren_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.entree_deur_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.badkamer_deur_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.kantoor_deur_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.slaapkamer_deur_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.slaapkamer_mini_deur_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.slaapkamer_maxi_deur_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.toilet_deur_contact
+                  options: *ov_contact
+              exclude:
+                - state: unavailable
+                - state: unknown
+          - type: custom:mushroom-title-card
+            title: Ramen
+          - type: custom:auto-entities
+            show_empty: false
+            card:
+              type: grid
+              columns: 2
+              square: false
+            card_param: cards
+            sort:
+              method: state
+              reverse: true
+            filter:
+              include:
+                - entity_id: binary_sensor.keuken_raam_groot_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.keuken_raam_klein_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.badkamer_raam_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.kantoor_raam_links_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.kantoor_raam_rechts_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.slaapkamer_raam_links_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.slaapkamer_raam_rechts_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.slaapkamer_maxi_raam_links_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.slaapkamer_maxi_raam_rechts_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.slaapkamer_mini_raam_contact
+                  options: *ov_contact
+                - entity_id: binary_sensor.slaapkamer_mini_dakraam_contact
+                  options: *ov_contact
+              exclude:
+                - state: unavailable
+                - state: unknown
+          # Het voordeurslot hoort bij dit blik op "is het huis dicht", maar
+          # zit niet in de deurgroep: dat is een lock, geen contactsensor.
+          - type: custom:mushroom-title-card
+            title: Slot
+          - type: custom:mushroom-lock-card
+            entity: lock.kroon18voordeur
+            name: Voordeur
 
       # --------- Ruimte-popups (lichtbediening) ---------
       - type: custom:bubble-card

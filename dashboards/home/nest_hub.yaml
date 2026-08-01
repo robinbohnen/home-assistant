@@ -71,6 +71,15 @@ cards:
       - type: horizontal-stack
         cards:
           - type: custom:button-card
+            # Deze klok komt uit new Date() en heeft dus geen bron die hem laat
+            # tikken; button-card rendert pas opnieuw als zijn entity wijzigt.
+            # sensor.time (time_date, zie packages/9 - Other/Dashboard
+            # Context.yaml) verandert elke minuut en is die bron. Zonder
+            # entity bleef de tijd staan op het moment dat de Cast-sessie begon.
+            entity: sensor.time
+            show_name: false
+            show_state: false
+            show_icon: false
             tap_action:
               action: none
             update_timer: 30s
@@ -113,7 +122,7 @@ cards:
                 styles:
                   card:
                     - background: >
-                        [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && g.state === 'low') ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
+                        [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && /low/.test(g.state)) ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
                     - border: 1px solid rgba(255,255,255,0.07)
                     - border-radius: 999px
                     - box-shadow: none
@@ -131,12 +140,14 @@ cards:
                     [[[
                       var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
                       var p = states['sensor.slimhuys_zonneplan_huidige_prijs'];
-                      var lbl = {low:'laag', medium:'gemiddeld', high:'hoog'};
-                      var col = {low:'#4ade80', medium:'#f59e0b', high:'#ef4444'};
+                      // SlimHuys levert vijf niveaus, niet drie. Zonder very_low
+                      // en very_high stond hier letterlijk "tarief very_low".
+                      var lbl = {very_low:'zeer laag', low:'laag', medium:'gemiddeld', high:'hoog', very_high:'zeer hoog'};
+                      var col = {very_low:'#4ade80', low:'#4ade80', medium:'#f59e0b', high:'#ef4444', very_high:'#ef4444'};
                       var gs = g ? g.state : 'medium';
                       var prijs = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '—';
-                      return `<span style="display:flex;align-items:center;gap:1vh;white-space:nowrap;font-size:2.7vh;font-weight:500;color:${gs === 'low' ? '#4ade80' : 'rgba(255,255,255,0.85)'}">
-                        <span style="width:1.1vh;height:1.1vh;border-radius:50%;background:${col[gs]||'#888'}"></span>tarief ${lbl[gs]||gs} · ${prijs}</span>`;
+                      return `<span style="display:flex;align-items:center;gap:1vh;white-space:nowrap;font-size:2.7vh;font-weight:500;color:${/low/.test(gs) ? '#4ade80' : 'rgba(255,255,255,0.85)'}">
+                        <span style="width:1.1vh;height:1.1vh;border-radius:50%;background:${col[gs]||'#888'}"></span>tarief ${lbl[gs]||String(gs).replace(/_/g,' ')} · ${prijs}</span>`;
                     ]]]
               - type: custom:button-card
                 entity: weather.knmi_thuis
@@ -351,12 +362,15 @@ cards:
                     if((s.attributes.unit_of_measurement || '') === 'W') prod = prod / 1000;
                   }
                   var groen = prod !== null && prod > 0.1;
+                  // /low/ en /high/ vangen ook very_low en very_high; SlimHuys
+                  // kent vijf niveaus en een test op alleen 'low' miste juist
+                  // het goedkoopste tarief.
                   var gs = g ? g.state : null;
                   var txt, col;
-                  if(gs === 'low'){
+                  if(gs && /low/.test(gs)){
                     txt = groen ? 'groen en goedkoop' : 'goedkoop';
                     col = '#4ade80';
-                  } else if(gs === 'high'){
+                  } else if(gs && /high/.test(gs)){
                     txt = groen ? 'groen maar duur' : 'duur';
                     col = groen ? '#f59e0b' : '#ef4444';
                   } else {
