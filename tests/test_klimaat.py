@@ -518,6 +518,27 @@ for domein, prefix in [("timer", "override_"),
     else:
         print(f"PASS  {domein + '.' + prefix + '<slug> bestaat voor elke zone':52}")
 
+# De Klimaat-weergave somt de zones met de hand op. Voeg je een zone toe en
+# vergeet je die kaarten, dan stuurt de regie wél maar zie je er niets van --
+# precies wat er met het zonnescherm gebeurde.
+dashboard = open(f"{CONFIG}/dashboards/home/klimaat.yaml").read()
+zones_cfg = json.loads(MOD.zones_json())
+
+zonder_advies = [z for z in zones_cfg if f"sensor.zonwering_advies_{z}" not in dashboard]
+if zonder_advies:
+    print(f"FAIL  zones ontbreken op de Klimaat-weergave: {zonder_advies}")
+    FOUTEN.append(f"dashboard mist adviessensor voor: {zonder_advies}")
+else:
+    print(f"PASS  {'elke zone staat op de Klimaat-weergave':52} "
+          f"({len(zones_cfg)} zones)")
+
+zonder_cover = [z for z, cfg in zones_cfg.items() if cfg["cover"] not in dashboard]
+if zonder_cover:
+    print(f"FAIL  covers ontbreken bij 'Werkelijke stand': {zonder_cover}")
+    FOUTEN.append(f"dashboard mist cover voor: {zonder_cover}")
+else:
+    print(f"PASS  {'elke cover staat bij Werkelijke stand':52}")
+
 print()
 if FOUTEN:
     print(f"{len(FOUTEN)} FOUT(EN):")
