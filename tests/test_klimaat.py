@@ -8,6 +8,7 @@ float/to_json/from_json-filters na, zodat de beslistabel te testen is zonder
 Home Assistant te herstarten.
 """
 import json
+import re
 import datetime as dt
 import os
 
@@ -93,7 +94,7 @@ def scenario(naam, tijd, **kw):
         "sensor.slaapkamer_mini_temperatuur_temperature": "20",
     })
     for z in json.loads(MOD.zone_lijst()):
-        STATES[f"input_boolean.auto_zonwering_{z}"] = "on"
+        STATES[f"input_boolean.zonwering_handmatig_{z}"] = "off"
         STATES[f"timer.override_{z}"] = "idle"
     STATES.update(kw)
     return naam
@@ -165,7 +166,7 @@ scenario("winteravond", "19:30",
             "input_number.klimaat_verwachte_max": "6",
             "sun.sun.elevation": -12.0})
 check("winter: isolatie na zonsondergang", "kantoor_links", "dicht")
-check("winter: kind slaapt", "maxi", "dicht")
+check("winter: kind slaapt", "slaapkamer_logan", "dicht")
 
 # --- nacht -----------------------------------------------------------------
 scenario("zomernacht, buiten flink koeler", "21:30",
@@ -175,7 +176,7 @@ scenario("zomernacht, buiten flink koeler", "21:30",
             "sensor.knmi_temperatuur": "19",
             "sensor.kantoor_kantoor_temperatuur_temperatuur": "25"})
 check("nachtspui kantoor", "kantoor_rechts", "kier")
-check("kind slaapt op hittedag -> kier", "maxi", "kier")
+check("kind slaapt op hittedag -> kier", "slaapkamer_logan", "kier")
 
 scenario("zomernacht binnen stille uren, warme kamer", "23:30",
          **{"input_select.klimaat_regime": "Koelen",
@@ -246,6 +247,41 @@ scenario("temperatuursensor weg", "14:00",
             "input_number.klimaat_verwachte_max": "24",
             "sensor.kantoor_kantoor_temperatuur_temperatuur": "unavailable"})
 check("kapotte sensor mag niet ontploffen", "kantoor_links", "open")
+
+# --- consistentiecheck: slug == entity_id dat HA van de sensornaam maakt -----
+# Home Assistant leidt het entity_id van een template-sensor af uit de NAAM,
+# niet uit unique_id. Loopt dat uit de pas met de zoneslug, dan slaat de
+# uitvoerder die zone stilzwijgend over. Precies dat ging een keer mis met
+# 'maxi' vs 'slaapkamer_logan'.
+def slugify(naam):
+    uit = "".join(c.lower() if c.isalnum() else "_" for c in naam)
+    while "__" in uit:
+        uit = uit.replace("__", "_")
+    return uit.strip("_")
+
+
+pakket = open(f"{CONFIG}/packages/9 - Other/Klimaat Zonwering.yaml").read()
+namen = re.findall(r'- name: "(Zonwering advies [^"]+)"', pakket)
+verwacht = {f"sensor.zonwering_advies_{z}" for z in json.loads(MOD.zone_lijst())}
+gevonden = {f"sensor.{slugify(n)}" for n in namen}
+if verwacht == gevonden:
+    print(f"PASS  {'slug komt overeen met entity_id van elke sensornaam':52} "
+          f"({len(verwacht)} zones)")
+else:
+    print("FAIL  slug en sensornaam lopen uit de pas")
+    FOUTEN.append(f"zones zonder sensor: {verwacht - gevonden}; "
+                  f"sensoren zonder zone: {gevonden - verwacht}")
+
+# Ook de helpers volgen de slug.
+for domein, prefix in [("timer", "override_"),
+                       ("input_boolean", "zonwering_handmatig_")]:
+    ontbreekt = [z for z in json.loads(MOD.zone_lijst())
+                 if f"{prefix}{z}:" not in pakket]
+    if ontbreekt:
+        print(f"FAIL  {domein}.{prefix}<slug> ontbreekt voor {ontbreekt}")
+        FOUTEN.append(f"{domein}: {ontbreekt}")
+    else:
+        print(f"PASS  {domein + '.' + prefix + '<slug> bestaat voor elke zone':52}")
 
 print()
 if FOUTEN:

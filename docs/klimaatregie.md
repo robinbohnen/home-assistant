@@ -67,15 +67,21 @@ klepperen bij overdrijvende wolken.
 
 Zeven zones, elk met een sensor `sensor.zonwering_advies_<zone>`:
 
-| Zone | Cover | Gevel | Temperatuur |
+| Zone (slug) | Cover | Gevel | Bijzonder |
 |---|---|---|---|
-| Keuken screens | `cover.covers_kitchen_screens` | voor | woonkamer |
-| Kantoor links | `cover.kantoor_links_low_speed` | voor | kantoor |
-| Kantoor rechts | `cover.kantoor_rechts_low_speed` | achter | kantoor |
-| Badkamer | `cover.badkamer_rolluik_low_speed` | achter | badkamer |
-| Slaapkamer | `cover.slaapkamer_rolluik_low_speed` | achter | slaapkamer |
-| Slaapkamer Logan | `cover.covers_bedroom_maxi` | voor | maxi |
-| Slaapkamer Emma | `cover.slaapkamer_mini` | achter | mini |
+| `keuken_screens` | `cover.covers_kitchen_screens` | voor | screen: geen kier, in bij storm |
+| `kantoor_links` | `cover.kantoor_links_low_speed` | voor | |
+| `kantoor_rechts` | `cover.kantoor_rechts_low_speed` | achter | |
+| `badkamer` | `cover.badkamer_rolluik_low_speed` | achter | stille uren |
+| `slaapkamer` | `cover.slaapkamer_rolluik_low_speed` | achter | stille uren |
+| `slaapkamer_logan` | `cover.covers_bedroom_maxi` | voor | slaapvenster vanaf 19:00 |
+| `slaapkamer_emma` | `cover.slaapkamer_mini` | achter | slaapvenster vanaf 19:00 |
+
+De slug bepaalt de naam van de bijbehorende helpers:
+`sensor.zonwering_advies_<slug>`, `timer.override_<slug>` en
+`input_boolean.zonwering_handmatig_<slug>`. Voeg je een zone toe, geef hem dan
+een slug die gelijk is aan het entity_id dat Home Assistant van de sensornaam
+maakt — anders vindt de uitvoerder de zone niet.
 
 > **Controleer de gevelindeling.** Die is afgeleid uit de oude automatisering
 > `covers_morning_routine` (in de tak "Sunny Backyard" gingen badkamer,
@@ -168,8 +174,8 @@ door `script_attic_ac` voordat de airco aangaat.
    getallen in bij `klimaat_voorgevel_azimut_van/tot`. Idem voor achter. Daarna
    reageert de zonwering eerder en rustiger.
 4. **Aanzetten.** `input_boolean.klimaatregie_actief` aan. Wil je voorzichtig
-   beginnen, zet dan eerst `auto_zonwering_*` uit voor de slaapkamers en laat
-   alleen kantoor en badkamer meedoen.
+   beginnen, zet dan eerst `zonwering_handmatig_*` aan voor de slaapkamers, zodat
+   alleen kantoor, badkamer en de keukenscreens meedoen.
 
 Terugdraaien is altijd één schakelaar, op elk moment.
 
@@ -189,7 +195,10 @@ Terugdraaien is altijd één schakelaar, op elk moment.
 | `klimaat_nachtspui` | uit | mag er 's nachts een kier open voor koelte |
 
 Beide schakelaars (`klimaatregie_actief` en `klimaat_nachtspui`) staan na de
-eerste start uit; die zet je zelf aan. De drempels hierboven worden bij de
+eerste start uit; die zet je zelf aan. De zeven
+`input_boolean.zonwering_handmatig_<slug>` staan dan óók uit, en dat betekent
+hier "doet mee" — bewust omgekeerd, want een verse helper staat altijd uit en
+dat mag geen zone stilzwijgend blokkeren. De drempels hierboven worden bij de
 eerste start ingevuld door `automation.klimaat_standaardwaarden` en daarna
 nooit meer aangeraakt, dus jouw aanpassingen overleven een herstart.
 
