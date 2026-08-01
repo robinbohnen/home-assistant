@@ -97,7 +97,7 @@ def scenario(naam, tijd, **kw):
         "sensor.badkamer_badkamer_temperatuur_temperatuur": "20",
         "sensor.slaapkamer_slaapkamer_temperatuur_temperatuur": "20",
         "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur": "20",
-        "sensor.slaapkamer_mini_temperatuur_temperature": "20",
+        "sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur": "20",
     })
     for z in json.loads(MOD.zone_lijst()):
         STATES[f"input_boolean.zonwering_handmatig_{z}"] = "off"
