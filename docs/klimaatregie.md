@@ -51,13 +51,28 @@ laat de automatisering de keuze met rust.
 
 ### Laag 2 — Gevelzon
 
+Het huis heeft drie gevels met ramen. Kroon 18 staat aan de westkant van de
+straat, dus:
+
+| Gevel | Kijkt op | Krijgt zon | Lichtsensor |
+|---|---|---|---|
+| Voorgevel | oost (80°) | ochtend | `sensor.voortuin_zon_luminance` |
+| Zijgevel | zuid (170°) | midden op de dag | geen eigen sensor |
+| Achtergevel | west (260°) | middag en avond | `sensor.achtertuin_zon_luminance` |
+
 Per gevel twee sensoren:
 
-- `binary_sensor.zon_richting_<gevel>` — de zon staat geometrisch aan die kant
-  (azimut + hoogte). Loopt vóór op het licht, dus bruikbaar om preventief te
-  sluiten.
+- `binary_sensor.zon_richting_<gevel>` — de zon staat geometrisch aan die kant:
+  hoog genoeg, en minder dan `klimaat_gevel_breedte` (85°) van recht-voor-de-
+  gevel af. Loopt vóór op het licht, dus bruikbaar om preventief te sluiten.
 - `binary_sensor.zon_op_<gevel>` — hij schijnt er nu echt op: richting **en**
-  genoeg licht op de lux-sensor van die tuin.
+  genoeg licht.
+
+Je stelt maar twee richtingen in, `klimaat_voorgevel_richting` en
+`klimaat_zijgevel_richting`; de achtergevel wordt afgeleid (voorgevel + 180°).
+De zijgevel heeft geen eigen lichtsensor, daar geldt de hoogste van de twee
+tuinsensoren als maat voor "het is echt zonnig" — de richting doet daar het
+onderscheid.
 
 De lux-drempel heeft hysterese (aan bij 20.000, uit pas onder 14.000) plus
 `delay_on` van 2 en `delay_off` van 10 minuten. Anders staat de zonwering te
@@ -67,26 +82,27 @@ klepperen bij overdrijvende wolken.
 
 Zeven zones, elk met een sensor `sensor.zonwering_advies_<zone>`:
 
-| Zone (slug) | Cover | Gevel | Bijzonder |
+| Zone (slug) | Cover | Gevels | Bijzonder |
 |---|---|---|---|
-| `keuken_screens` | `cover.covers_kitchen_screens` | voor | screen: geen kier, in bij storm |
-| `kantoor_links` | `cover.kantoor_links_low_speed` | voor | |
-| `kantoor_rechts` | `cover.kantoor_rechts_low_speed` | achter | |
+| `keuken_screens` | `cover.covers_kitchen_screens` | voor + zij | screen: geen kier, in bij storm |
+| `kantoor_links` | `cover.kantoor_links_low_speed` | voor + zij | |
+| `kantoor_rechts` | `cover.kantoor_rechts_low_speed` | voor + zij | |
 | `badkamer` | `cover.badkamer_rolluik_low_speed` | achter | stille uren |
 | `slaapkamer` | `cover.slaapkamer_rolluik_low_speed` | achter | stille uren |
 | `slaapkamer_logan` | `cover.covers_bedroom_maxi` | voor | slaapvenster vanaf 19:00 |
-| `slaapkamer_emma` | `cover.slaapkamer_mini` | achter | slaapvenster vanaf 19:00 |
+| `slaapkamer_emma` | `cover.slaapkamer_mini` | zij + achter | slaapvenster vanaf 19:00 |
+
+Hoekkamers staan op twee gevels: de zon telt zodra hij op één ervan staat.
+Van de twee kantoorrolluiken is niet bekend welke op de voorgevel zit en welke
+op de zijgevel, dus reageren ze allebei op beide. Weet je het wel, zet dan bij
+dat rolluik in `klimaat.jinja` `'gevels': ['voor']` of `['zij']`; dan blijft
+het andere raam langer licht.
 
 De slug bepaalt de naam van de bijbehorende helpers:
 `sensor.zonwering_advies_<slug>`, `timer.override_<slug>` en
 `input_boolean.zonwering_handmatig_<slug>`. Voeg je een zone toe, geef hem dan
 een slug die gelijk is aan het entity_id dat Home Assistant van de sensornaam
 maakt — anders vindt de uitvoerder de zone niet.
-
-> **Controleer de gevelindeling.** Die is afgeleid uit de oude automatisering
-> `covers_morning_routine` (in de tak "Sunny Backyard" gingen badkamer,
-> slaapkamer, mini en kantoor-rechts dicht terwijl maxi en kantoor-links open
-> gingen). Klopt het niet, wijzig dan `gevel` in `klimaat.jinja`.
 
 De staat van zo'n sensor is `open`, `kier`, `dicht` of `rust` (= niet bewegen).
 Attributen: `positie` (0–100 of −1), `uitvoeren`, `reden` en `blokkade`.
@@ -167,12 +183,12 @@ door `script_attic_ac` voordat de airco aangaat.
    (`/lovelace/klimaat`) en vergelijk een week lang de kolommen "Advies" en
    "Werkelijke stand". Er beweegt nog niets. Klopt een advies niet, dan pas je
    `klimaat.jinja` of de drempels aan.
-3. **Gevels kalibreren** (optioneel maar de moeite waard). De azimut-sectoren
-   staan standaard op 0–360°, waardoor het systeem puur op de lux-sensoren
-   draait. Kijk op een zonnige dag in de grafiek "Zonstand tegen het licht
-   buiten" bij welke azimut de voortuin oploopt en weer wegzakt, en vul die twee
-   getallen in bij `klimaat_voorgevel_azimut_van/tot`. Idem voor achter. Daarna
-   reageert de zonwering eerder en rustiger.
+3. **Gevelrichtingen controleren.** Ze staan al ingevuld op oost (80°) voor de
+   voorgevel en zuid (170°) voor de zijgevel, afgeleid uit de ligging aan de
+   Kroon. Kijk op een zonnige dag of `Zon op voorgevel` 's ochtends aan gaat,
+   `Zon op zijgevel` rond het middaguur en `Zon op achtergevel` in de middag.
+   Loopt het een uur voor of achter, dan draai je de richting een graad of
+   tien bij; klopt de volgorde niet, dan staan voor- en zijgevel verwisseld.
 4. **Aanzetten.** `input_boolean.klimaatregie_actief` aan. Wil je voorzichtig
    beginnen, zet dan eerst `zonwering_handmatig_*` aan voor de slaapkamers, zodat
    alleen kantoor, badkamer en de keukenscreens meedoen.
@@ -190,6 +206,9 @@ Terugdraaien is altijd één schakelaar, op elk moment.
 | `klimaat_spui_delta` | 1 °C | zoveel koeler moet het buiten zijn om te spuien |
 | `klimaat_kier_positie` | 15 % | wat een "kier" is |
 | `klimaat_override_uren` | 4 u | hoe lang handbediening blijft gelden |
+| `klimaat_voorgevel_richting` | 80 ° | kompasrichting van de voorgevel (oost) |
+| `klimaat_zijgevel_richting` | 170 ° | kompasrichting van de zijgevel (zuid) |
+| `klimaat_gevel_breedte` | 85 ° | hoe schuin de zon nog op een gevel telt |
 | `klimaat_zon_lux_drempel` | 20.000 lx | wanneer de zon "op de gevel staat" |
 | `klimaat_zon_min_elevatie` | 8 ° | lager dan dit telt de zon niet mee |
 | `klimaat_nachtspui` | uit | mag er 's nachts een kier open voor koelte |
@@ -214,9 +233,11 @@ python3 -m venv .venv && .venv/bin/pip install jinja2
 .venv/bin/python tests/test_klimaat.py
 ```
 
-Die dekt 25 situaties: hete dag met zon voor, preventief dimmen, niemand thuis,
+Die dekt 32 situaties: hete dag met zon voor, preventief dimmen, niemand thuis,
 winterzon, nachtspui, stille uren, storm op de screens, airco aan, geblokkeerde
-zones en een kapotte temperatuursensor. Bouw je een regel om, voeg dan een
+zones, een kapotte temperatuursensor en de zon die over alle drie de gevels
+draait. Hij controleert ook of elke zoneslug nog overeenkomt met het entity_id
+dat Home Assistant van de sensornaam maakt. Bouw je een regel om, voeg dan een
 scenario toe — dat is sneller dan wachten op de volgende hittegolf.
 
 ## Wat dit bewust niet doet

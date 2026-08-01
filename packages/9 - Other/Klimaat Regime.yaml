@@ -87,41 +87,37 @@ klimaat_regime_package:
       unit_of_measurement: "°"
       mode: box
 
-    # --- Gevelsectoren in kompasgraden ---
-    # Standaard 0-360, dus "altijd waar": het systeem draait dan puur op de
-    # lux-sensoren. Vul de echte sector in zodra je hem weet (zie
-    # docs/klimaatregie.md, "Gevels kalibreren") en de zonwering reageert
-    # eerder en rustiger. Een sector mag door 0 heen lopen (bijv. 300 -> 60).
-    klimaat_voorgevel_azimut_van:
-      name: "Klimaat - Voorgevel azimut van"
+    # --- Gevelrichtingen in kompasgraden (0 = noord, 90 = oost) ---
+    # Kroon 18 staat aan de westkant van de straat, dus de voorgevel (keuken,
+    # entree, Logan) kijkt op het oosten, de tuin op het westen en de zijgevel
+    # (speelkamer, deel van de keuken, kantoor, Emma) op het zuiden.
+    # De achtergevel wordt afgeleid uit de voorgevel + 180, die twee liggen
+    # per definitie tegenover elkaar.
+    klimaat_voorgevel_richting:
+      name: "Klimaat - Voorgevel kijkt op"
       icon: mdi:compass-outline
       min: 0
-      max: 360
-      step: 1
+      max: 359
+      step: 5
       unit_of_measurement: "°"
       mode: box
-    klimaat_voorgevel_azimut_tot:
-      name: "Klimaat - Voorgevel azimut tot"
+    klimaat_zijgevel_richting:
+      name: "Klimaat - Zijgevel kijkt op"
       icon: mdi:compass-outline
       min: 0
-      max: 360
-      step: 1
+      max: 359
+      step: 5
       unit_of_measurement: "°"
       mode: box
-    klimaat_achtergevel_azimut_van:
-      name: "Klimaat - Achtergevel azimut van"
-      icon: mdi:compass-outline
-      min: 0
-      max: 360
-      step: 1
-      unit_of_measurement: "°"
-      mode: box
-    klimaat_achtergevel_azimut_tot:
-      name: "Klimaat - Achtergevel azimut tot"
-      icon: mdi:compass-outline
-      min: 0
-      max: 360
-      step: 1
+    # Hoe ver de zon van recht-voor-de-gevel mag staan en er nog op schijnt.
+    # 85° is bijna het theoretische maximum (90° = precies langs de gevel);
+    # lager zetten maakt het systeem kieskeuriger.
+    klimaat_gevel_breedte:
+      name: "Klimaat - Hoek waarover een gevel zon vangt"
+      icon: mdi:angle-obtuse
+      min: 30
+      max: 90
+      step: 5
       unit_of_measurement: "°"
       mode: box
 
@@ -148,6 +144,9 @@ klimaat_regime_package:
         #######################################################################
         ## De zon staat geometrisch aan deze kant (ook door de wolken heen).
         ## Loopt vóór op de lux-sensor, dus bruikbaar om preventief te sluiten.
+        ##
+        ## De hoekberekening `((az - normaal + 180) % 360) - 180` geeft het
+        ## kortste verschil tussen twee kompasrichtingen, ook over 0° heen.
         #######################################################################
         - name: "Zon richting voorgevel"
           unique_id: zon_richting_voorgevel
@@ -155,11 +154,21 @@ klimaat_regime_package:
           state: >
             {% set az = state_attr('sun.sun', 'azimuth') | float(0) %}
             {% set el = state_attr('sun.sun', 'elevation') | float(-90) %}
-            {% set van = states('input_number.klimaat_voorgevel_azimut_van') | float(0) %}
-            {% set tot = states('input_number.klimaat_voorgevel_azimut_tot') | float(360) %}
+            {% set normaal = states('input_number.klimaat_voorgevel_richting') | float(80) %}
+            {% set breedte = states('input_number.klimaat_gevel_breedte') | float(85) %}
             {% set min_el = states('input_number.klimaat_zon_min_elevatie') | float(8) %}
-            {% set in_sector = (az >= van and az <= tot) if van <= tot else (az >= van or az <= tot) %}
-            {{ el >= min_el and in_sector }}
+            {{ el >= min_el and (((az - normaal + 180) % 360) - 180) | abs <= breedte }}
+
+        - name: "Zon richting zijgevel"
+          unique_id: zon_richting_zijgevel
+          icon: mdi:sun-compass
+          state: >
+            {% set az = state_attr('sun.sun', 'azimuth') | float(0) %}
+            {% set el = state_attr('sun.sun', 'elevation') | float(-90) %}
+            {% set normaal = states('input_number.klimaat_zijgevel_richting') | float(170) %}
+            {% set breedte = states('input_number.klimaat_gevel_breedte') | float(85) %}
+            {% set min_el = states('input_number.klimaat_zon_min_elevatie') | float(8) %}
+            {{ el >= min_el and (((az - normaal + 180) % 360) - 180) | abs <= breedte }}
 
         - name: "Zon richting achtergevel"
           unique_id: zon_richting_achtergevel
@@ -167,11 +176,10 @@ klimaat_regime_package:
           state: >
             {% set az = state_attr('sun.sun', 'azimuth') | float(0) %}
             {% set el = state_attr('sun.sun', 'elevation') | float(-90) %}
-            {% set van = states('input_number.klimaat_achtergevel_azimut_van') | float(0) %}
-            {% set tot = states('input_number.klimaat_achtergevel_azimut_tot') | float(360) %}
+            {% set normaal = (states('input_number.klimaat_voorgevel_richting') | float(80) + 180) % 360 %}
+            {% set breedte = states('input_number.klimaat_gevel_breedte') | float(85) %}
             {% set min_el = states('input_number.klimaat_zon_min_elevatie') | float(8) %}
-            {% set in_sector = (az >= van and az <= tot) if van <= tot else (az >= van or az <= tot) %}
-            {{ el >= min_el and in_sector }}
+            {{ el >= min_el and (((az - normaal + 180) % 360) - 180) | abs <= breedte }}
 
         #######################################################################
         ## De zon schijnt er nu echt op: richting + genoeg licht.
@@ -190,6 +198,22 @@ klimaat_regime_package:
             {% set drempel = states('input_number.klimaat_zon_lux_drempel') | float(20000) %}
             {% set aan = this.state == 'on' %}
             {{ is_state('binary_sensor.zon_richting_voorgevel', 'on')
+               and (lux >= drempel or (aan and lux >= drempel * 0.7)) }}
+
+        # De zijgevel heeft geen eigen lichtsensor. De hoogste van de twee
+        # tuinsensoren is hier de maat voor "het is echt zonnig"; de richting
+        # doet het onderscheid tussen de gevels.
+        - name: "Zon op zijgevel"
+          unique_id: zon_op_zijgevel
+          icon: mdi:weather-sunny
+          delay_on: "00:02:00"
+          delay_off: "00:10:00"
+          state: >
+            {% set lux = [states('sensor.voortuin_zon_luminance') | float(0),
+                          states('sensor.achtertuin_zon_luminance') | float(0)] | max %}
+            {% set drempel = states('input_number.klimaat_zon_lux_drempel') | float(20000) %}
+            {% set aan = this.state == 'on' %}
+            {{ is_state('binary_sensor.zon_richting_zijgevel', 'on')
                and (lux >= drempel or (aan and lux >= drempel * 0.7)) }}
 
         - name: "Zon op achtergevel"
@@ -229,10 +253,10 @@ klimaat_regime_package:
               input_number.klimaat_hittedag_vanaf: 28
               input_number.klimaat_zon_lux_drempel: 20000
               input_number.klimaat_zon_min_elevatie: 8
-              input_number.klimaat_voorgevel_azimut_van: 0
-              input_number.klimaat_voorgevel_azimut_tot: 360
-              input_number.klimaat_achtergevel_azimut_van: 0
-              input_number.klimaat_achtergevel_azimut_tot: 360
+              # Kroon 18: voorgevel op het oosten, zijgevel op het zuiden.
+              input_number.klimaat_voorgevel_richting: 80
+              input_number.klimaat_zijgevel_richting: 170
+              input_number.klimaat_gevel_breedte: 85
               input_number.klimaat_kamer_warm: 22
               input_number.klimaat_spui_delta: 1
               input_number.klimaat_kier_positie: 15

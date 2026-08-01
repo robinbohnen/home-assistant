@@ -80,8 +80,10 @@ def scenario(naam, tijd, **kw):
         "binary_sensor.knmi_waarschuwing": "off",
         "sun.sun.elevation": 40.0,
         "binary_sensor.zon_op_voorgevel": "off",
+        "binary_sensor.zon_op_zijgevel": "off",
         "binary_sensor.zon_op_achtergevel": "off",
         "binary_sensor.zon_richting_voorgevel": "off",
+        "binary_sensor.zon_richting_zijgevel": "off",
         "binary_sensor.zon_richting_achtergevel": "off",
         "climate.airco_zolder": "off",
         "climate.airco_woonkamer": "off",
@@ -123,10 +125,11 @@ scenario("hete dag, zon op voorgevel", "14:00",
             "binary_sensor.zon_richting_voorgevel": "on"})
 check("hete dag, zon voor", "kantoor_links", "dicht")
 check("hete dag, zon voor", "keuken_screens", "dicht")
-# De schaduwzijde blijft open zolang de zon daar niet naartoe draait; anders
+# Het kantoor heeft zelf een voorgevelraam, dus dat rolluik gaat mee dicht.
+check("kantoor ligt ook op de voorgevel", "kantoor_rechts", "dicht")
+# De achtergevel blijft open zolang de zon daar niet naartoe draait; anders
 # zit je op elke warme dag de hele dag in het donker.
-check("hete dag, schaduwzijde blijft licht", "badkamer", "open")
-check("hete dag, schaduwzijde blijft licht", "kantoor_rechts", "open")
+check("hete dag, achterzijde blijft licht", "badkamer", "open")
 
 # --- preventief: zon draait naar de achtergevel, schijnt er nog niet --------
 scenario("hittedag, zon draait naar achteren", "16:00",
@@ -247,6 +250,33 @@ scenario("temperatuursensor weg", "14:00",
             "input_number.klimaat_verwachte_max": "24",
             "sensor.kantoor_kantoor_temperatuur_temperatuur": "unavailable"})
 check("kapotte sensor mag niet ontploffen", "kantoor_links", "open")
+
+# --- drie gevels: middagzon op de zijgevel ---------------------------------
+scenario("hete middag, zon op de zijgevel", "13:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "30",
+            "sensor.knmi_temperatuur": "29",
+            "binary_sensor.zon_op_zijgevel": "on",
+            "binary_sensor.zon_richting_zijgevel": "on",
+            # zon op ~180 graden: de achtergevel (260) valt al binnen 85 graden
+            "binary_sensor.zon_richting_achtergevel": "on"})
+check("zijgevel: kantoor dicht", "kantoor_links", "dicht")
+check("zijgevel: keuken screens dicht", "keuken_screens", "dicht")
+check("zijgevel: Emma ligt er ook aan", "slaapkamer_emma", "dicht")
+check("achter krijgt de zon zo, dus preventief", "badkamer", "kier")
+check("voorgevel is klaar, Logan mag open", "slaapkamer_logan", "open")
+
+# --- avondzon op de achtergevel -------------------------------------------
+scenario("avondzon achter", "18:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "30",
+            "sensor.knmi_temperatuur": "28",
+            "binary_sensor.zon_op_achtergevel": "on",
+            "binary_sensor.zon_richting_achtergevel": "on"})
+check("achtergevel: slaapkamer dicht", "slaapkamer", "dicht")
+check("achtergevel: Emma ligt er ook aan", "slaapkamer_emma", "dicht")
+check("voor- en zijgevel zijn klaar, mag open", "slaapkamer_logan", "open")
+check("kantoor krijgt geen zon meer", "kantoor_links", "open")
 
 # --- consistentiecheck: slug == entity_id dat HA van de sensornaam maakt -----
 # Home Assistant leidt het entity_id van een template-sensor af uit de NAAM,

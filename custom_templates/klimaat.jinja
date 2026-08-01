@@ -37,7 +37,8 @@
 {#-
   naam       label op het dashboard
   cover      entiteit die bestuurd wordt
-  gevel      'voor' of 'achter' (bepaalt welke zonsensor telt)
+  gevels     lijst met 'voor', 'zij' en/of 'achter'. Hoekkamers staan op
+             twee gevels; de zon telt zodra hij op één ervan staat.
   temp       temperatuursensor van de ruimte
   kier       ondersteunt de cover een tussenstand?
   screen     buitenscreen (moet in bij storm/vorst) i.p.v. rolluik
@@ -49,7 +50,7 @@
       'keuken_screens': {
         'naam': 'Keuken screens',
         'cover': 'cover.covers_kitchen_screens',
-        'gevel': 'voor',
+        'gevels': ['voor', 'zij'],
         'temp': 'sensor.woonkamer_temperatuur',
         'airco': 'climate.airco_woonkamer',
         'kier': false,
@@ -60,7 +61,7 @@
       'kantoor_links': {
         'naam': 'Kantoor links',
         'cover': 'cover.kantoor_links_low_speed',
-        'gevel': 'voor',
+        'gevels': ['voor', 'zij'],
         'temp': 'sensor.kantoor_kantoor_temperatuur_temperatuur',
         'airco': 'climate.airco_zolder',
         'kier': true,
@@ -71,7 +72,7 @@
       'kantoor_rechts': {
         'naam': 'Kantoor rechts',
         'cover': 'cover.kantoor_rechts_low_speed',
-        'gevel': 'achter',
+        'gevels': ['voor', 'zij'],
         'temp': 'sensor.kantoor_kantoor_temperatuur_temperatuur',
         'airco': 'climate.airco_zolder',
         'kier': true,
@@ -82,7 +83,7 @@
       'badkamer': {
         'naam': 'Badkamer',
         'cover': 'cover.badkamer_rolluik_low_speed',
-        'gevel': 'achter',
+        'gevels': ['achter'],
         'temp': 'sensor.badkamer_badkamer_temperatuur_temperatuur',
         'airco': 'climate.airco_zolder',
         'kier': true,
@@ -93,7 +94,7 @@
       'slaapkamer': {
         'naam': 'Slaapkamer',
         'cover': 'cover.slaapkamer_rolluik_low_speed',
-        'gevel': 'achter',
+        'gevels': ['achter'],
         'temp': 'sensor.slaapkamer_slaapkamer_temperatuur_temperatuur',
         'airco': 'climate.airco_zolder',
         'kier': true,
@@ -104,7 +105,7 @@
       'slaapkamer_logan': {
         'naam': 'Slaapkamer Logan',
         'cover': 'cover.covers_bedroom_maxi',
-        'gevel': 'voor',
+        'gevels': ['voor'],
         'temp': 'sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur',
         'airco': 'climate.airco_zolder',
         'kier': true,
@@ -115,7 +116,7 @@
       'slaapkamer_emma': {
         'naam': 'Slaapkamer Emma',
         'cover': 'cover.slaapkamer_mini',
-        'gevel': 'achter',
+        'gevels': ['zij', 'achter'],
         'temp': 'sensor.slaapkamer_mini_temperatuur_temperature',
         'airco': 'climate.airco_zolder',
         'kier': true,
@@ -176,8 +177,21 @@
 {%- set zone_auto = not is_state('input_boolean.zonwering_handmatig_' ~ zone, 'on') -%}
 {%- set override = is_state('timer.override_' ~ zone, 'active') -%}
 {%- set elevatie = state_attr('sun.sun', 'elevation') | float(0) -%}
-{%- set zon_op = is_state('binary_sensor.zon_op_' ~ z.gevel ~ 'gevel', 'on') -%}
-{%- set zon_richting = is_state('binary_sensor.zon_richting_' ~ z.gevel ~ 'gevel', 'on') -%}
+{#- Een zone kan op meerdere gevels liggen; de zon telt zodra hij op één
+    ervan staat. De lus leest beide sensoren per gevel altijd uit, zodat Home
+    Assistant ze allemaal blijft volgen. -#}
+{%- set zon = namespace(op=false, richting=false) -%}
+{%- for g in z.gevels -%}
+  {%- if is_state('binary_sensor.zon_op_' ~ g ~ 'gevel', 'on') -%}
+    {%- set zon.op = true -%}
+  {%- endif -%}
+  {%- if is_state('binary_sensor.zon_richting_' ~ g ~ 'gevel', 'on') -%}
+    {%- set zon.richting = true -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- set zon_op = zon.op -%}
+{%- set zon_richting = zon.richting -%}
+{%- set gevel_txt = z.gevels | join('/') ~ 'gevel' -%}
 {%- set thuis = is_state('group.all_adults', 'home') -%}
 {%- set weeralarm = is_state('binary_sensor.knmi_waarschuwing', 'on') -%}
 {%- set airco = z.get('airco') -%}
@@ -232,7 +246,7 @@
 {%- elif regime == 'koelen' -%}
   {%- if zon_op -%}
     {%- set ns.a = 'dicht' -%}
-    {%- set ns.r = 'zon op de ' ~ z.gevel ~ 'gevel, warmte buiten houden' -%}
+    {%- set ns.r = 'zon op de ' ~ gevel_txt ~ ', warmte buiten houden' -%}
   {%- elif not thuis and (hittedag or te_warm) -%}
     {%- set ns.a = 'dicht' -%}
     {%- set ns.r = 'niemand thuis op een warme dag' -%}
@@ -253,7 +267,7 @@
     {%- set ns.r = 'zon, maar kamer is al ' ~ b_txt -%}
   {%- elif zon_op -%}
     {%- set ns.a = 'open' -%}
-    {%- set ns.r = 'zon op de ' ~ z.gevel ~ 'gevel, gratis warmte binnenhalen' -%}
+    {%- set ns.r = 'zon op de ' ~ gevel_txt ~ ', gratis warmte binnenhalen' -%}
   {%- else -%}
     {%- set ns.a = 'open' -%}
     {%- set ns.r = 'daglicht' -%}
@@ -313,6 +327,6 @@
      'blokkade': blokkade,
      'cover': z.cover,
      'naam': z.naam,
-     'gevel': z.gevel,
+     'gevel': gevel_txt,
      'regime': regime} | to_json -}}
 {%- endmacro -%}
