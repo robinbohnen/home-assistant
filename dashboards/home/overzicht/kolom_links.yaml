@@ -417,13 +417,16 @@ cards:
             # button-card evalueert variabelen opnieuw bij elke render.
             venster: |
               [[[
-                var t = states['sensor.slimhuys_zonneplan_huidige_prijs'];
-                var raw = (t && t.attributes && t.attributes.forecast) || [];
-                var norm = function(x){ if(x === null || x === undefined || isNaN(Number(x))) return null; var n = Number(x); if(Math.abs(n) > 100) n = n / 10000000; return n; };
+                // Prijsblokken uit SlimHuys: kwartieren als die er zijn, anders uren,
+                // plus die van morgen. 't' is de START van een blok; de code hieronder
+                // leidt de bloklengte af uit het verschil tussen twee starts.
+                var blok = function(eid, sleutel){ var e = states[eid]; return (e && e.attributes && e.attributes[sleutel]) || []; };
+                var kw = blok('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier', 'raw_today');
+                var raw = (kw.length ? kw : blok('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today'))
+                  .concat(blok('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow'));
                 var punten = raw.map(function(e){
-                  var d = new Date(e.datetime || e.date || e.time || e.start);
-                  var p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
-                  return (isNaN(d.getTime()) || p === null) ? null : {t: d.getTime(), p: p};
+                  var d = new Date(e.start), p = Number(e.value);
+                  return (isNaN(d.getTime()) || isNaN(p)) ? null : {t: d.getTime(), p: p};
                 }).filter(Boolean).sort(function(a,b){ return a.t - b.t; });
                 if(punten.length < 2) return null;
                 // Bloklengte uit de data zelf: 60 min nu, 15 min na de overgang.
