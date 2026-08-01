@@ -28,3 +28,86 @@ dashboard_context_package:
               {% endif %}
             {% endfor %}
             {{ ns.any }}
+
+    # De deurbel-sensor van UniFi staat maar een paar tellen op 'on'. Te kort om
+    # een pil in de kopbalk aan op te hangen: wie langsloopt heeft hem dan al
+    # gemist. Deze blijft drie minuten staan, zodat je bij binnenkomst nog ziet
+    # dát er is aangebeld en met één tik de camera erbij pakt.
+    - trigger:
+        - trigger: state
+          entity_id: binary_sensor.g4_doorbell_voortuin_doorbell
+          to: "on"
+      binary_sensor:
+        - name: Deurbel recent
+          unique_id: deurbel_recent
+          icon: mdi:doorbell-video
+          state: "true"
+          auto_off:
+            minutes: 3
+
+    # Systeemgezondheid in één entiteit: de state ('ok' of 'aandacht') stuurt de
+    # zichtbaarheid van de pil, de attributen leveren de tekst. Bewust
+    # TRIGGER-based: een gewone template-sensor die over `states` loopt abonneert
+    # zich op élke statuswijziging in huis en zou bij elke lamp opnieuw rekenen.
+    # Nu gebeurt dat eens per vijf minuten (en meteen als de zigbee-bridge omvalt).
+    - trigger:
+        - trigger: time_pattern
+          minutes: "/5"
+        - trigger: homeassistant
+          event: start
+        - trigger: state
+          entity_id: binary_sensor.zigbee2mqtt_bridge_connection_state_3
+      sensor:
+        - name: Systeem status
+          unique_id: systeem_status
+          icon: mdi:heart-pulse
+          # Drempels: onder de 5 onbeschikbare entiteiten is het normale ruis
+          # (apparaten die even niet inchecken). Batterijen pas bij 10% - de
+          # systeem-pagina waarschuwt al vanaf 25%, dus dit is de harde grens.
+          # device_tracker telt niet mee: telefoons komen en gaan.
+          state: >
+            {% set ns = namespace(weg=0, accu=0) %}
+            {% for s in states %}
+              {% if s.state == 'unavailable' and s.domain not in ['device_tracker', 'update'] %}
+                {% set ns.weg = ns.weg + 1 %}
+              {% endif %}
+            {% endfor %}
+            {% for s in states.sensor %}
+              {% if s.attributes.device_class | default('') == 'battery'
+                    and s.state | float(101) <= 10 %}
+                {% set ns.accu = ns.accu + 1 %}
+              {% endif %}
+            {% endfor %}
+            {% set zigbee = states('binary_sensor.zigbee2mqtt_bridge_connection_state_3') in ['off', 'unavailable'] %}
+            {{ 'aandacht' if (ns.weg > 5 or ns.accu > 0 or zigbee) else 'ok' }}
+          attributes:
+            onbeschikbaar: >
+              {% set ns = namespace(n=0) %}
+              {% for s in states %}
+                {% if s.state == 'unavailable' and s.domain not in ['device_tracker', 'update'] %}
+                  {% set ns.n = ns.n + 1 %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.n }}
+            kritieke_batterijen: >
+              {% set ns = namespace(n=0) %}
+              {% for s in states.sensor %}
+                {% if s.attributes.device_class | default('') == 'battery'
+                      and s.state | float(101) <= 10 %}
+                  {% set ns.n = ns.n + 1 %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.n }}
+            # Updates zetten de pil bewust NIET aan: er is bijna altijd wel iets
+            # bij te werken en dan staat hij permanent aan, waarna je hem niet
+            # meer ziet. Ze verschijnen alleen als extra regel zodra er tóch al
+            # iets stuk is.
+            updates: >
+              {% set ns = namespace(n=0) %}
+              {% for s in states.update %}
+                {% if s.state == 'on' %}{% set ns.n = ns.n + 1 %}{% endif %}
+              {% endfor %}
+              {{ ns.n }}
+            zigbee: >
+              {{ 'stuk' if states('binary_sensor.zigbee2mqtt_bridge_connection_state_3')
+                 in ['off', 'unavailable'] else 'ok' }}

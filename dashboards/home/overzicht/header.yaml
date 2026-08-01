@@ -79,6 +79,66 @@ cards:
               var txt = /low/.test(gs) ? '#4ade80' : 'rgba(255,255,255,0.85)';
               return `<span style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:${col[gs]||'#888'}"></span><span style="color:${txt}">tarief ${lbl[gs]||String(gs).replace(/_/g,' ')} · ${price}</span></span>`;
             ]]]
+      # Conditioneel: er is aangebeld (blijft 3 min staan, zie Dashboard Context.yaml).
+      # Staat vooraan omdat er dan iemand voor de deur kan staan.
+      - type: custom:button-card
+        template: ov_pill
+        entity: binary_sensor.deurbel_recent
+        tap_action:
+          action: navigate
+          navigation_path: "#ov-deurbel"
+        visibility:
+          - condition: state
+            entity: binary_sensor.deurbel_recent
+            state: "on"
+        styles:
+          card:
+            - background: rgba(245,158,11,0.16)
+            - border: 1px solid rgba(245,158,11,0.35)
+        custom_fields:
+          c: |
+            [[[
+              // Het tijdstip zelf, niet "x min geleden": die tekst zou meelopen
+              // met de klok en de kaart rendert alleen bij statuswijzigingen.
+              var d = states['binary_sensor.deurbel_recent'];
+              var t = d && d.last_changed ? new Date(d.last_changed) : null;
+              var klok = (t && !isNaN(t.getTime())) ? ('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2) : '';
+              return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:doorbell-video" style="--mdc-icon-size:16px"></ha-icon>er is aangebeld${klok ? ' · ' + klok : ''}</span>`;
+            ]]]
+      # Conditioneel: er is iets stuk in huis. Tikken gaat naar het
+      # systeem-dashboard, waar de volledige lijst per integratie staat.
+      - type: custom:button-card
+        template: ov_pill
+        entity: sensor.systeem_status
+        tap_action:
+          action: navigate
+          navigation_path: /lovelace/systeem
+        visibility:
+          - condition: state
+            entity: sensor.systeem_status
+            state: aandacht
+        custom_fields:
+          c: |
+            [[[
+              var s = states['sensor.systeem_status'];
+              if(!s) return '';
+              var a = s.attributes || {};
+              var n = function(k){ var v = Number(a[k]); return isNaN(v) ? 0 : v; };
+              var delen = [];
+              // Volgorde = urgentie: een omgevallen bridge verklaart meestal
+              // meteen de onbeschikbare entiteiten eronder.
+              if(a.zigbee === 'stuk') delen.push('zigbee-bridge offline');
+              if(n('onbeschikbaar') > 0) delen.push(n('onbeschikbaar') + ' onbeschikbaar');
+              if(n('kritieke_batterijen') > 0) delen.push(n('kritieke_batterijen') + (n('kritieke_batterijen') === 1 ? ' lege batterij' : ' lege batterijen'));
+              if(n('updates') > 0) delen.push(n('updates') + ' update' + (n('updates') === 1 ? '' : 's'));
+              if(!delen.length) return '';
+              // Op een slechte dag staan hier vier dingen en duwt de pil de rest
+              // van de kopbalk weg. De lijst is al op urgentie gesorteerd, dus
+              // afkappen laat vanzelf het minst dringende (updates) vallen.
+              var rest = delen.length - 3;
+              var tekst = delen.slice(0, 3).join(' · ') + (rest > 0 ? ' · +' + rest : '');
+              return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:heart-pulse" style="--mdc-icon-size:16px"></ha-icon>${tekst}</span>`;
+            ]]]
       # Conditioneel: auto laadt
       - type: custom:button-card
         template: ov_pill

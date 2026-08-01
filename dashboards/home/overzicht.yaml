@@ -736,6 +736,62 @@ cards:
               - input_text.brandweer_laatste_melding
               - binary_sensor.brandweer_uitgerukt_op_laatste_melding
 
+      # --------- Deurbel ---------
+      # Echt automatisch openklappen bij een bel vraagt browser_mod (om een
+      # specifiek scherm te laten navigeren); dat staat niet in
+      # dashboards/resources.yaml. Daarom hangt dit aan de pil in de kopbalk:
+      # die verschijnt drie minuten na een bel en brengt je hier met één tik.
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-deurbel"
+        name: Deurbel
+        icon: mdi:doorbell-video
+        styles: *ov_popup
+        cards:
+          # Zelfde cameraparen als de #doorbell-popup op het oude dashboard:
+          # de deurbel zelf plus de pakketcamera die omlaag kijkt.
+          - type: custom:advanced-camera-card
+            cameras:
+              - camera_entity: camera.g4_doorbell_pro_high_resolution_channel
+              - camera_entity: camera.g4_doorbell_pro_package_camera
+          # Opendoen vanaf het wandpaneel; de reden dat je hier staat te kijken.
+          - type: custom:mushroom-lock-card
+            entity: lock.kroon18voordeur
+            name: Voordeur
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: binary_sensor.g4_doorbell_voortuin_doorbell
+                primary: Laatst aangebeld
+                secondary: >-
+                  {% set s = states.binary_sensor.g4_doorbell_voortuin_doorbell %}
+                  {{ (relative_time(s.last_changed) ~ ' geleden') if s else '—' }}
+                icon: mdi:doorbell
+                icon_color: >-
+                  {{ 'amber' if is_state('binary_sensor.deurbel_recent','on') else 'grey' }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: binary_sensor.g4_doorbell_pro_motion
+                primary: Beweging voordeur
+                secondary: >-
+                  {% set s = states.binary_sensor.g4_doorbell_pro_motion %}
+                  {{ 'nu' if is_state('binary_sensor.g4_doorbell_pro_motion','on')
+                     else ((relative_time(s.last_changed) ~ ' geleden') if s else '—') }}
+                icon: mdi:motion-sensor
+                icon_color: >-
+                  {{ 'amber' if is_state('binary_sensor.g4_doorbell_pro_motion','on') else 'grey' }}
+                tap_action:
+                  action: more-info
+          - type: logbook
+            hours_to_show: 48
+            entities:
+              - binary_sensor.g4_doorbell_voortuin_doorbell
+              - binary_sensor.g4_doorbell_pro_motion
+              - lock.kroon18voordeur
+
       # --------- Deuren & ramen ---------
       # De rij in de RUIMTES-kaart zegt alleen dát er iets open staat. Hier
       # staat wélk contact dat is: gesorteerd op state (reverse, dus "on" boven
