@@ -75,6 +75,9 @@ def scenario(naam, tijd, **kw):
         "input_number.klimaat_kier_positie": "15",
         "input_boolean.klimaat_nachtspui": "on",
         "input_boolean.klimaatregie_actief": "on",
+        # Basiswereld = huis is wakker, zodat de bestaande scenario's over de
+        # dag-logica gaan. De wakker-gate heeft eigen scenario's onderaan.
+        "input_boolean.klimaat_wakker": "on",
         "sensor.knmi_temperatuur": "18",
         "weather.knmi_thuis.wind_speed": 12.0,
         "input_number.klimaat_screen_max_wind": "45",
@@ -92,7 +95,7 @@ def scenario(naam, tijd, **kw):
         "climate.airco_zolder": "off",
         "climate.airco_woonkamer": "off",
         # kamertemperaturen
-        "sensor.woonkamer_temperatuur": "20",
+        "sensor.woonkamer_woonkamer_multisensor_temperatuur": "20",
         "sensor.kantoor_kantoor_temperatuur_temperatuur": "20",
         "sensor.badkamer_badkamer_temperatuur_temperatuur": "20",
         "sensor.slaapkamer_slaapkamer_temperatuur_temperatuur": "20",
@@ -319,6 +322,166 @@ check("achtergevel: slaapkamer dicht", "slaapkamer", "dicht")
 check("achtergevel: Emma ligt er ook aan", "slaapkamer_emma", "dicht")
 check("voor- en zijgevel zijn klaar, mag open", "slaapkamer_logan", "open")
 check("kantoor krijgt geen zon meer", "kantoor_links", "open")
+
+# --- screens werken alleen tegen directe zon -------------------------------
+# Een screen houdt straling tegen, geen warmte die er al is. Hiervoor erfde hij
+# de uitkomst van de regime-tak en ging hij dus ook omlaag om redenen die niets
+# met zon te maken hebben; daardoor bleef hij de hele warme avond hangen.
+scenario("warme avond, zon van de gevel af", "20:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "30",
+            "sensor.knmi_temperatuur": "26",
+            "sensor.woonkamer_woonkamer_multisensor_temperatuur": "25",
+            "sun.sun.elevation": 5.0})
+check("screen omhoog zodra de zon weg is", "keuken_screens", "open")
+
+scenario("warme kamer, maar geen zon", "15:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "26",
+            "sensor.woonkamer_woonkamer_multisensor_temperatuur": "25",
+            "sensor.kantoor_kantoor_temperatuur_temperatuur": "25"})
+check("warme kamer alleen is geen reden", "keuken_screens", "open")
+# Het rolluik dempt wél licht en gaat daarom wel op een kier: dat is precies
+# het verschil tussen een screen en een rolluik.
+check("rolluik dempt wel bij een warme kamer", "kantoor_links", "kier")
+
+scenario("niemand thuis op een hete dag, zon elders", "11:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "30",
+            "group.all_adults": "not_home",
+            "binary_sensor.zon_op_achtergevel": "on",
+            "binary_sensor.zon_richting_achtergevel": "on"})
+check("screen dicht hoeft niet zonder zon op zijn gevel", "keuken_screens", "open")
+check("het rolluik aan de zonzijde gaat wel dicht", "badkamer", "dicht")
+
+scenario("airco koelt, geen zon op de keukengevel", "11:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "26",
+            "climate.airco_woonkamer": "cool"})
+check("airco is geen reden voor een screen", "keuken_screens", "open")
+
+scenario("zon staat er wel echt op", "12:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "29",
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on"})
+check("met zon gaat het screen gewoon omlaag", "keuken_screens", "dicht")
+
+scenario("hittedag, zon draait naar de keukengevel", "09:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "binary_sensor.zon_richting_zijgevel": "on"})
+check("preventief blijft overeind op een hittedag", "keuken_screens", "dicht")
+
+# --- rolluiken blijven dicht tot het huis wakker is ------------------------
+# STIL_TOT is 07:00, maar in de zomer staat de zon dan allang op. Zonder deze
+# gate gingen de slaapkamerrolluiken om 07:00 omhoog terwijl er nog geslapen
+# werd.
+scenario("zomerochtend, nog niemand op", "08:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "27",
+            "input_boolean.klimaat_wakker": "off"})
+check("slaapkamer blijft staan", "slaapkamer", "rust", False)
+check("badkamer blijft staan", "badkamer", "rust", False)
+check("kinderkamer blijft staan", "slaapkamer_emma", "rust", False)
+# Kantoor en keuken slapen niet en gaan gewoon hun gang.
+check("kantoor trekt zich er niets van aan", "kantoor_links", "open")
+
+scenario("zelfde ochtend, knop ingedrukt", "08:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "27",
+            "input_boolean.klimaat_wakker": "on"})
+check("na de knop mag het rolluik omhoog", "slaapkamer", "open")
+
+scenario("niemand drukte, maar het is al laat", "10:30",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "27",
+            "input_boolean.klimaat_wakker": "off"})
+check("noodrem: na 10:00 toch omhoog", "slaapkamer", "open")
+
+scenario("warme ochtend, nog niemand op, spuien mag", "08:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "19",
+            "sensor.slaapkamer_slaapkamer_temperatuur_temperatuur": "25",
+            "input_boolean.klimaat_wakker": "off"})
+check("ventileren mag wel, omhoog niet", "slaapkamer", "kier")
+
+scenario("winterochtend, nog donker", "07:30",
+         **{"input_select.klimaat_regime": "Verwarmen",
+            "input_number.klimaat_verwachte_max": "6",
+            "sun.sun.elevation": -8.0,
+            "input_boolean.klimaat_wakker": "off"})
+check("nog donker en nog niemand op", "slaapkamer", "rust", False)
+
+# --- zonnescherm: omgekeerd bedrade cover ---------------------------------
+# HA-stand `open` = uitgeschoven = zon tegenhouden. De beslistabel denkt in
+# zonwerings-termen ('dicht' = zon buiten houden), dus `positie` moet precies
+# omgekeerd zijn aan die van een gewoon rolluik. Een tekenfout hier zet het
+# scherm uit tijdens een storm, dus dit wordt hard nagerekend.
+def check_positie(naam, zone, verwacht_advies, verwacht_positie):
+    a = advies(zone)
+    ok = a["advies"] == verwacht_advies and a["positie"] == verwacht_positie
+    print(f"{'PASS' if ok else 'FAIL'}  {naam:52} {zone:15} -> {a['advies']:6} "
+          f"pos={a['positie']:4} uitvoeren={str(a['uitvoeren']):5}  {a['reden']}")
+    if not ok:
+        FOUTEN.append(f"{naam} / {zone}: kreeg {a['advies']}/{a['positie']}, "
+                      f"verwachtte {verwacht_advies}/{verwacht_positie}")
+
+
+scenario("middagzon op de achtergevel", "17:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "29",
+            "binary_sensor.zon_op_achtergevel": "on",
+            "binary_sensor.zon_richting_achtergevel": "on"})
+# 'dicht' = zon tegenhouden = scherm UIT = cover open = positie 100
+check_positie("zon achter: scherm uitschuiven", "zonnescherm", "dicht", 100)
+
+scenario("zon is van de achtergevel af", "11:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "29",
+            "sensor.woonkamer_woonkamer_multisensor_temperatuur": "25",
+            "binary_sensor.zon_op_voorgevel": "on"})
+# geen zon achter -> scherm heeft geen functie -> intrekken -> positie 0
+check_positie("geen zon achter: scherm intrekken", "zonnescherm", "open", 0)
+
+scenario("storm terwijl de zon er vol op staat", "17:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "binary_sensor.zon_op_achtergevel": "on",
+            "binary_sensor.zon_richting_achtergevel": "on",
+            "weather.knmi_thuis.wind_speed": 60.0})
+# DE belangrijkste: harde wind moet het scherm INTREKKEN, dus positie 0.
+check_positie("storm: scherm intrekken ondanks zon", "zonnescherm", "open", 0)
+
+scenario("vorst met winterzon achter", "13:00",
+         **{"input_select.klimaat_regime": "Verwarmen",
+            "input_number.klimaat_verwachte_max": "3",
+            "sensor.knmi_temperatuur": "1",
+            "binary_sensor.zon_op_achtergevel": "on"})
+check_positie("vorst: scherm ingetrokken", "zonnescherm", "open", 0)
+
+scenario("winterzon achter, geen vorst", "13:00",
+         **{"input_select.klimaat_regime": "Verwarmen",
+            "input_number.klimaat_verwachte_max": "10",
+            "sensor.knmi_temperatuur": "7",
+            "binary_sensor.zon_op_achtergevel": "on"})
+check_positie("winter: gratis warmte binnenlaten", "zonnescherm", "open", 0)
+
+scenario("zomernacht", "23:30",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "30",
+            "sun.sun.elevation": -12.0})
+check_positie("nacht: scherm ingetrokken", "zonnescherm", "open", 0)
+
+# Een gewoon rolluik in dezelfde situatie moet juist NIET omgekeerd zijn.
+scenario("controle: rolluik blijft normaal", "17:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "29",
+            "binary_sensor.zon_op_achtergevel": "on",
+            "binary_sensor.zon_richting_achtergevel": "on"})
+check_positie("rolluik: dicht is gewoon 0", "badkamer", "dicht", 0)
 
 # --- consistentiecheck: slug == entity_id dat HA van de sensornaam maakt -----
 # Home Assistant leidt het entity_id van een template-sensor af uit de NAAM,

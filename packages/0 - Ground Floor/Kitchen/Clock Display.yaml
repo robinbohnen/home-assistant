@@ -162,10 +162,19 @@ kitchen_clock_display_package:
             qos: 0
             retain: true
             topic: clock_1/custom/temperature_living
+            # Eerste bron met een waarde wint. Hier stond alleen de oude
+            # sensor.woonkamer_temperatuur; toen die stil wegviel bleef de klok
+            # op '--' staan zonder dat iets dat meldde. Vandaar de terugval.
             payload: >-
+              {%- set ns = namespace(t=none) -%}
+              {%- for s in ['sensor.woonkamer_woonkamer_multisensor_temperatuur',
+                            'sensor.woonkamer_kamertemperatuur'] -%}
+                {%- if ns.t is none and has_value(s) -%}
+                  {%- set ns.t = states(s) | float(none) -%}
+                {%- endif -%}
+              {%- endfor -%}
               {"icon": 7112,"color":"FFFFFF","repeat": 2,"text": "{{
-              states('sensor.woonkamer_temperatuur') | float(0) | round(1)
-              if has_value('sensor.woonkamer_temperatuur') else '--' }}"}
+              ns.t | round(1) if ns.t is not none else '--' }}"}
           action: mqtt.publish
           alias: Display temperature
         - data:

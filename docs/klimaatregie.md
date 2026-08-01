@@ -80,7 +80,7 @@ klepperen bij overdrijvende wolken.
 
 ### Laag 3 — Advies per zone
 
-Zeven zones, elk met een sensor `sensor.zonwering_advies_<zone>`:
+Acht zones, elk met een sensor `sensor.zonwering_advies_<zone>`:
 
 | Zone (slug) | Cover | Gevels | Bijzonder |
 |---|---|---|---|
@@ -91,6 +91,20 @@ Zeven zones, elk met een sensor `sensor.zonwering_advies_<zone>`:
 | `slaapkamer` | `cover.slaapkamer_rolluik_low_speed` | achter | stille uren |
 | `slaapkamer_logan` | `cover.covers_bedroom_maxi` | voor | slaapvenster vanaf 19:00 |
 | `slaapkamer_emma` | `cover.slaapkamer_mini` | zij + achter | slaapvenster vanaf 19:00 |
+| `zonnescherm` | `cover.achtertuin_zonnescherm` | achter | screen; **omgekeerd bedraad** |
+
+> **Het zonnescherm is andersom bedraad.** Voor die cover betekent de HA-stand
+> `open` *uitgeschoven* (zon tegenhouden) en `closed` *ingetrokken*. De hele
+> beslistabel blijft in gewone zonweringstermen denken — `dicht` is en blijft
+> "zon buiten houden". De vertaling gebeurt op precies één plek: onderaan
+> `klimaat.jinja`, waar `positie` voor een zone met `'omgekeerd': true` wordt
+> gespiegeld. De uitvoerder en de handbediening-herkenning weten daar niets
+> van en vergelijken gewoon `positie` met `current_position`.
+>
+> Reken bij twijfel de veilige kant na: bij storm zet de veiligheidsregel het
+> advies op `open` (zon mag erdoor), dat wordt positie 100, en na spiegeling 0
+> — waarop de uitvoerder `close_cover` stuurt en het scherm dus intrekt. Er
+> staan zes scenario's in `tests/test_klimaat.py` die dit hard narekenen.
 
 Hoekkamers staan op twee gevels: de zon telt zodra hij op één ervan staat.
 Van de twee kantoorrolluiken is niet bekend welke op de voorgevel zit en welke
@@ -114,6 +128,15 @@ De beslistabel, van hoog naar laag:
 1. **Stille uren** (22:00–07:00, voor slaapkamers en badkamer): niet bewegen.
    Enige uitzondering is openen naar een kier om te spuien als het binnen echt
    te warm is.
+   Dat venster loopt door tot het huis **wakker** is. 07:00 is een klok en zegt
+   niets over of er iemand op is; in de zomer stond de zon dan allang op en
+   gingen de slaapkamerrolluiken omhoog terwijl er nog geslapen werd. De eerste
+   druk op de slaapkamerknop zet `input_boolean.klimaat_wakker` aan
+   (`automation.klimaat_wakker_bijhouden`, dezelfde knop die 's avonds de
+   naar-bed-routine start — vandaar dat alleen een druk tussen 04:00 en 12:00
+   telt). Drukt niemand, dan gaat het slot er om 10:00 alsnog af. Ventileren
+   blijft ondertussen gewoon toegestaan: de spui-kier valt niet onder deze
+   rem, alleen omhóóg gaan.
 2. **Slaapvenster kinderkamer** (vanaf 19:00): dicht. Op een hittedag een kier,
    en dat staat de hele dag vast, zodat het niet midden in de nacht alsnog van
    gedachten verandert.
@@ -126,8 +149,18 @@ De beslistabel, van hoog naar laag:
      Anders open voor het daglicht.
    - *Neutraal*: open, tenzij zon én een warme kamer.
 5. **Airco koelt** in die zone → geen open rolluik; anders koel je de straat.
-6. **Screens**: kennen geen kier, gaan 's nachts omhoog, en gaan in bij harde
-   wind of vorst (< 4 °C). Die veiligheidsregel staat als laatste en
+6. **Screens** (de keukenscreens en het zonnescherm) beslissen opnieuw en
+   overschrijven stap 4 en 5. Een screen houdt namelijk *straling* tegen en
+   geen warmte die er al is, dus hij heeft alleen zin zolang de zon echt op de
+   gevel staat: omlaag bij zon op de gevel, of preventief op een hittedag als
+   de zon die kant op draait — en verder omhoog. In het verwarmregime blijft
+   hij altijd omhoog, want dan is de zon juist welkom.
+   Voorheen erfde een screen de uitkomst van stap 4, en die laat een rolluik
+   ook zakken bij een warme kamer, een leeg huis of een koelende airco. Voor
+   een rolluik klopt dat (dat dempt ook licht), voor een screen niet: hij bleef
+   daardoor de hele warme avond omlaag terwijl de zon allang weg was.
+   Screens kennen geen kier en gaan 's nachts omhoog. Ze gaan in bij harde
+   wind of vorst (< 4 °C); die veiligheidsregel staat als laatste en
    overschrijft al het bovenstaande.
 
 > **Wanneer moet een screen in?** Bij wind, niet bij hitte. Twee bronnen:
@@ -141,7 +174,7 @@ De beslistabel, van hoog naar laag:
 
 ### Laag 4 — Uitvoeren
 
-`automation.klimaat_zonwering_uitvoeren` loopt de zeven zones langs en beweegt
+`automation.klimaat_zonwering_uitvoeren` loopt de acht zones langs en beweegt
 alleen als het advies mag worden uitgevoerd én de huidige stand meer dan 5%
 afwijkt. Er is dus geen beweging als er niets te winnen valt.
 
@@ -177,12 +210,14 @@ Die laatste hebben daarvoor een conditie gekregen (`state: "off"`):
 - `bedroom_maxi_covers`, `bedroom_mini_covers`
 - de vier `cover.close_cover`-acties in `temp_control_automation` — de
   meldingen daar blijven wél gewoon werken
+- `backyard_sunscreen` (`packages/3 - Outside/Backyard/Sunscreen.yaml`) — die
+  keek alleen naar lux en zou 's winters het scherm uitzetten terwijl je de zon
+  juist binnen wilt hebben
 
 Ongemoeid gelaten, omdat het gebruikersacties zijn die de handbediening-laag
 netjes afvangt: de knop-automatiseringen (slaapkamer, kantoor, badkamer), de
-keuken-rolgordijnen (binnenzonwering, gaat over inkijk), het achtertuin-
-zonnescherm (heeft een eigen bevestigingsvraag) en het sluiten van de rolluiken
-door `script_attic_ac` voordat de airco aangaat.
+keuken-rolgordijnen (binnenzonwering, gaat over inkijk) en het sluiten van de
+rolluiken door `script_attic_ac` voordat de airco aangaat.
 
 ## Uitrollen
 
@@ -222,6 +257,7 @@ Terugdraaien is altijd één schakelaar, op elk moment.
 | `klimaat_zon_lux_drempel` | 20.000 lx | wanneer de zon "op de gevel staat" |
 | `klimaat_zon_min_elevatie` | 8 ° | lager dan dit telt de zon niet mee |
 | `klimaat_nachtspui` | uit | mag er 's nachts een kier open voor koelte |
+| `klimaat_wakker` | uit | staat aan zodra het huis wakker is; uit houdt de slaapzones dicht |
 
 Beide schakelaars (`klimaatregie_actief` en `klimaat_nachtspui`) staan na de
 eerste start uit; die zet je zelf aan. De zeven
@@ -252,7 +288,7 @@ python3 -m venv .venv && .venv/bin/pip install jinja2
 .venv/bin/python tests/test_klimaat.py
 ```
 
-Die dekt 34 situaties: hete dag met zon voor, preventief dimmen, niemand thuis,
+Die dekt inmiddels ruim vijftig situaties: hete dag met zon voor, preventief dimmen, niemand thuis,
 winterzon, nachtspui, stille uren, storm op de screens, airco aan, geblokkeerde
 zones, een kapotte temperatuursensor en de zon die over alle drie de gevels
 draait. Hij controleert ook of elke zoneslug nog overeenkomt met het entity_id
@@ -263,7 +299,6 @@ scenario toe — dat is sneller dan wachten op de volgende hittegolf.
 
 - **Ramen en deuren openzetten** blijft een melding, geen actie. Daar zit een
   mens tussen.
-- **Het achtertuin-zonnescherm** blijft bij zijn eigen bevestigingsvraag.
 - **De keuken-rolgordijnen** (binnen) blijven bij inkijk en het raamcontact.
 - **Bewegingen begrenzen per uur** doen we niet met een teller, maar met
   hysterese en `delay_off` op de zonsensoren. Blijkt een cover in de praktijk

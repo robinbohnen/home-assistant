@@ -25,6 +25,11 @@ klimaat_zonwering_package:
     klimaat_nachtspui:
       name: "Klimaat - Nachtspui toestaan"
       icon: mdi:weather-night
+    # Staat deze uit, dan blijven de slaapzones ná het einde van de stille uren
+    # nog staan waar ze staan. Zie WAKKER_UITERLIJK in custom_templates/klimaat.jinja.
+    klimaat_wakker:
+      name: "Klimaat - Het huis is wakker"
+      icon: mdi:weather-sunset-up
     # Per zone op handmatig te zetten zonder de rest te raken.
     # Uit = de klimaatregie mag deze zone sturen.
     zonwering_handmatig_keuken_screens:
@@ -48,6 +53,9 @@ klimaat_zonwering_package:
     zonwering_handmatig_slaapkamer_emma:
       name: "Zonwering handmatig - Slaapkamer Emma"
       icon: mdi:window-shutter
+    zonwering_handmatig_zonnescherm:
+      name: "Zonwering handmatig - Zonnescherm achtertuin"
+      icon: mdi:awning-outline
 
   input_number:
     klimaat_kamer_warm:
@@ -121,6 +129,10 @@ klimaat_zonwering_package:
       icon: mdi:hand-back-right
     override_slaapkamer_emma:
       name: "Handbediening Slaapkamer Emma"
+      duration: "04:00:00"
+      icon: mdi:hand-back-right
+    override_zonnescherm:
+      name: "Handbediening Zonnescherm achtertuin"
       duration: "04:00:00"
       icon: mdi:hand-back-right
 
@@ -215,7 +227,86 @@ klimaat_zonwering_package:
             blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_emma') | trim | from_json).blokkade }}"
             cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_emma') | trim | from_json).cover }}"
 
+        # Het zonnescherm. `positie` is hier al vertaald naar cover-termen
+        # (die cover is omgekeerd bedraad), dus de uitvoerder hoeft niets
+        # bijzonders te doen. Zie de opmerking onderaan klimaat.jinja.
+        - name: "Zonwering advies Zonnescherm"
+          unique_id: zonwering_advies_zonnescherm
+          icon: mdi:awning-outline
+          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('zonnescherm') | trim | from_json).advies }}"
+          attributes:
+            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('zonnescherm') | trim | from_json).positie }}"
+            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('zonnescherm') | trim | from_json).uitvoeren }}"
+            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('zonnescherm') | trim | from_json).reden }}"
+            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('zonnescherm') | trim | from_json).blokkade }}"
+            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('zonnescherm') | trim | from_json).cover }}"
+
   automation:
+    ###########################################################################
+    ## Wakker-signaal
+    ##
+    ## Het einde van de stille uren is een klok en zegt dus niets over of er
+    ## iemand op is. In de zomer stond de zon om 07:00 allang op en gingen de
+    ## slaapkamerrolluiken omhoog terwijl er nog geslapen werd. De slaapkamer-
+    ## knop is het signaal dat het huis wakker is; zolang die niet is ingedrukt
+    ## blijven die zones staan (zie WAKKER_UITERLIJK in klimaat.jinja voor de
+    ## noodrem).
+    ###########################################################################
+    - id: klimaat_wakker_bijhouden
+      alias: Klimaat - Wakker bijhouden
+      description: >-
+        Zet input_boolean.klimaat_wakker aan bij de eerste druk op de
+        slaapkamerknop 's ochtends, en 's avonds weer uit.
+      mode: single
+      triggers:
+        # Zelfde knoppen als packages/3 - Outside/Backyard/Sunscreen.yaml.
+        - domain: mqtt
+          device_id: !secret bedroom_button_1
+          type: action
+          subtype: single
+          trigger: device
+          id: wakker
+        - domain: mqtt
+          device_id: !secret bedroom_button_2
+          type: action
+          subtype: single
+          trigger: device
+          id: wakker
+        # Virtuele druk vanaf het dashboard, zie Virtual Buttons.yaml
+        - trigger: event
+          event_type: virtual_button
+          event_data:
+            button: bedroom_buttons
+            action: single
+          id: wakker
+        # Zelfde tijdstip als STIL_VAN in custom_templates/klimaat.jinja.
+        - trigger: time
+          at: "22:00:00"
+          id: slapen
+      conditions: []
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id: wakker
+                # Dezelfde knop start 's avonds de naar-bed-routine. Die druk
+                # mag het huis niet wakker melden, anders staan de rolluiken
+                # morgenochtend om 07:00 alsnog omhoog.
+                - condition: time
+                  after: "04:00:00"
+                  before: "12:00:00"
+              sequence:
+                - action: input_boolean.turn_on
+                  target:
+                    entity_id: input_boolean.klimaat_wakker
+            - conditions:
+                - condition: trigger
+                  id: slapen
+              sequence:
+                - action: input_boolean.turn_off
+                  target:
+                    entity_id: input_boolean.klimaat_wakker
+
     ###########################################################################
     ## Laag 4a - adviezen uitvoeren
     ###########################################################################

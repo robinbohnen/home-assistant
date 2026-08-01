@@ -33,6 +33,17 @@
 {%- set STIL_VAN = '22:00' -%}
 {%- set STIL_TOT = '07:00' -%}
 
+{#- Het einde van de stille uren is een klok, geen mens. In de zomer staat de
+    zon om 07:00 allang op en gingen de slaapkamerrolluiken dus omhoog terwijl
+    er nog geslapen werd. Daarom blijven de slaapzones ná STIL_TOT staan waar
+    ze staan totdat iemand het huis wakker meldt (de slaapkamerknop zet
+    `input_boolean.klimaat_wakker` aan, zie `automation.klimaat_wakker_bijhouden`).
+    Ventileren mag ondertussen gewoon: een kier voor nachtspui valt hier niet
+    onder, alleen omhoog gaan.
+    Drukt niemand op de knop, dan gaat het slot er om WAKKER_UITERLIJK alsnog
+    af - anders zit je op een vrije dag tot de avond in het donker. -#}
+{%- set WAKKER_UITERLIJK = '10:00' -%}
+
 {#- ========================== ZONECONFIGURATIE ============================ -#}
 {#-
   naam       label op het dashboard
@@ -41,7 +52,13 @@
              twee gevels; de zon telt zodra hij op één ervan staat.
   temp       temperatuursensor van de ruimte
   kier       ondersteunt de cover een tussenstand?
-  screen     buitenscreen (moet in bij storm/vorst) i.p.v. rolluik
+  screen     buitenscreen (moet in bij storm/vorst) i.p.v. rolluik. Een screen
+             werkt alleen tegen directe zon, dus hij gaat omhoog zodra de zon
+             van de gevel af is - ook als de kamer nog warm is.
+  omgekeerd  cover die andersom bedraad is: HA-stand `open` betekent dan
+             uitgeschoven (zon tegenhouden) en `closed` ingetrokken. Alleen het
+             zonnescherm is zo. De hele tabel blijft in gewone zonwerings-
+             termen; de vertaling gebeurt één keer, onderaan bij `positie`.
   slaap      none | 'kind' | 'volwassen'
   slaap_van  begin van het slaapvenster voor kinderkamers
   stil       niet bewegen tijdens de stille uren
@@ -51,7 +68,7 @@
         'naam': 'Keuken screens',
         'cover': 'cover.covers_kitchen_screens',
         'gevels': ['voor', 'zij'],
-        'temp': 'sensor.woonkamer_temperatuur',
+        'temp': 'sensor.woonkamer_woonkamer_multisensor_temperatuur',
         'airco': 'climate.airco_woonkamer',
         'kier': false,
         'screen': true,
@@ -124,6 +141,18 @@
         'slaap': 'kind',
         'slaap_van': '19:00',
         'stil': true },
+      'zonnescherm': {
+        'naam': 'Zonnescherm achtertuin',
+        'cover': 'cover.achtertuin_zonnescherm',
+        'gevels': ['achter'],
+        'temp': 'sensor.woonkamer_woonkamer_multisensor_temperatuur',
+        'airco': 'climate.airco_woonkamer',
+        'kier': false,
+        'screen': true,
+        'omgekeerd': true,
+        'slaap': none,
+        'slaap_van': none,
+        'stil': false },
     } -%}
 
 {#- ============================== HELPERS ================================= -#}
@@ -225,7 +254,12 @@
 {%- set spui_ok = binnen is not none and buiten is not none and buiten <= (binnen - spui_delta) -%}
 {%- set b_txt = (binnen | round(1) | string ~ '°') if binnen is not none else '?' -%}
 {%- set u_txt = (buiten | round(1) | string ~ '°') if buiten is not none else '?' -%}
-{%- set stil_nu = z.stil and (now() >= today_at(STIL_VAN) or now() < today_at(STIL_TOT)) -%}
+{%- set wakker = is_state('input_boolean.klimaat_wakker', 'on') -%}
+{%- set in_stille_uren = now() >= today_at(STIL_VAN) or now() < today_at(STIL_TOT) -%}
+{#- Na de stille uren, maar nog niemand wakker gemeld en het is nog vroeg. -#}
+{%- set nog_slapen = not wakker and now() >= today_at(STIL_TOT)
+                     and now() < today_at(WAKKER_UITERLIJK) -%}
+{%- set stil_nu = z.stil and (in_stille_uren or nog_slapen) -%}
 {%- set kind_slaapt = z.slaap == 'kind' and z.slaap_van is not none
                       and (now() >= today_at(z.slaap_van) or now() < today_at(STIL_TOT)) -%}
 
@@ -236,6 +270,9 @@
   {%- if regime == 'koelen' and nachtspui and spui_ok and heet -%}
     {%- set ns.a = 'kier' -%}
     {%- set ns.r = 'warme nacht: kier om koelte binnen te laten (' ~ b_txt ~ ' binnen, ' ~ u_txt ~ ' buiten)' -%}
+  {%- elif nog_slapen -%}
+    {%- set ns.a = 'rust' -%}
+    {%- set ns.r = 'nog niemand wakker gemeld, rolluik blijft staan' -%}
   {%- else -%}
     {%- set ns.a = 'rust' -%}
     {%- set ns.r = 'stille uren (' ~ STIL_VAN ~ '-' ~ STIL_TOT ~ '), niet bewegen' -%}
@@ -312,13 +349,32 @@
   {%- set ns.r = 'airco koelt, zon eruit houden' -%}
 {%- endif -%}
 
-{#- 5. Screens kennen geen kier en horen 's nachts omhoog. -#}
+{#- 5. Een screen houdt STRALING tegen, geen warmte die er al is. Hij heeft dus
+      alleen zin zolang de zon echt op de gevel staat.
+
+      Hiervoor erfde een screen de uitkomst van de regime-tak hierboven, en die
+      laat een rolluik ook zakken om andere redenen: kamer boven de comfort-
+      grens, niemand thuis op een warme dag, airco die koelt. Voor een rolluik
+      klopt dat (dat dempt ook licht), voor een screen niet. Gevolg: het screen
+      bleef de hele warme avond omlaag terwijl de zon allang van de gevel af
+      was. Daarom beslist een screen hier opnieuw, en overschrijft dat de tak
+      hierboven. -#}
 {%- if z.screen -%}
   {%- if nacht -%}
     {%- set ns.a = 'open' -%}
     {%- set ns.r = 'donker: screen omhoog' -%}
-  {%- elif ns.a == 'kier' -%}
-    {%- set ns.a = 'open' if regime == 'verwarmen' else 'dicht' -%}
+  {%- elif regime == 'verwarmen' -%}
+    {%- set ns.a = 'open' -%}
+    {%- set ns.r = 'zon is welkom vandaag, screen omhoog' -%}
+  {%- elif zon_op -%}
+    {%- set ns.a = 'dicht' -%}
+    {%- set ns.r = 'zon op de ' ~ gevel_txt ~ ', warmte buiten houden' -%}
+  {%- elif hittedag and zon_richting -%}
+    {%- set ns.a = 'dicht' -%}
+    {%- set ns.r = 'hittedag: screen alvast omlaag, de zon draait naar de ' ~ gevel_txt -%}
+  {%- else -%}
+    {%- set ns.a = 'open' -%}
+    {%- set ns.r = 'geen zon op de ' ~ gevel_txt ~ ': een screen helpt alleen tegen zon' -%}
   {%- endif -%}
 {%- endif -%}
 
@@ -336,7 +392,18 @@
   {%- set ns.a = 'dicht' -%}
 {%- endif -%}
 
-{%- set positie = {'open': 100, 'kier': kier_pos | int, 'dicht': 0, 'rust': -1}[ns.a] -%}
+{%- set positie_zon = {'open': 100, 'kier': kier_pos | int, 'dicht': 0, 'rust': -1}[ns.a] -%}
+{#- Vertaling naar cover-termen, en dit is de enige plek waar dat gebeurt.
+    Bij een omgekeerde cover (het zonnescherm: HA-stand `open` = uitgeschoven)
+    is 'dicht voor de zon' juist een volledig open cover. Door dat hier te doen
+    hoeven de uitvoerder en de handbediening-herkenning niets te weten van
+    omgekeerde covers; die vergelijken gewoon `positie` met `current_position`.
+    Controle op de veilige kant: bij storm zet regel 6 het advies op 'open'
+    (= zon mag erdoor), wat hier 100 wordt en na omkering 0 - en 0 laat de
+    uitvoerder `close_cover` sturen, oftewel het scherm trekt in. -#}
+{%- set positie = (100 - positie_zon)
+                  if (z.get('omgekeerd') and positie_zon >= 0)
+                  else positie_zon -%}
 {%- set uitvoeren = actief and zone_auto and not override and positie >= 0 -%}
 {%- set blokkade = 'handbediening actief' if override
                    else ('zone staat op handmatig' if not zone_auto
