@@ -101,39 +101,76 @@ card:
             // Echte voorspelling als Forecast.Solar die per tijdstip levert,
             // anders een klokvorm tussen op- en ondergang op het dagtotaal.
             var zonBron = null, punten = [];
-            // Forecast.Solar hangt zijn voorspelling per tijdstip in een
-            // attribuut (watts / wh_period / wh_hours). Eerst de bekende
-            // entiteitsnamen, daarna een scan over alle sensoren: die naam is
-            // hier al eens gewijzigd en dan viel de grafiek stilletjes terug op
-            // de benadering. De sleutels moeten tijdstippen zijn — zo wordt een
-            // willekeurig ander attribuut dat toevallig 'watts' heet niet
-            // aangezien voor een zonvoorspelling.
-            var pak = function(e){
-              if(!e || !e.attributes) return null;
-              var d = e.attributes.watts || e.attributes.wh_period || e.attributes.wh_hours;
-              if(!d || typeof d !== 'object') return null;
-              var ks = Object.keys(d).filter(function(k){ return !isNaN(new Date(k).getTime()); });
-              return ks.length > 2 ? {d: d, ks: ks} : null;
+            // De voorspelling per tijdstip zit in een ATTRIBUUT van een sensor,
+            // maar hoe dat heet verschilt per integratie én per versie:
+            // watt_hours, wh_hours, wh_period, watts, detailedForecast...
+            // Zoeken op naam brak daar stilletjes op (dan stond er weer
+            // "benadering"). Daarom herkennen we hier de VORM, niet de naam:
+            //   a) {"2026-08-01T14:00:00+02:00": 3200, ...}
+            //   b) [{period_start: "...", pv_estimate: 3.2}, ...]
+            var venster = 3 * 86400000;
+            var alsReeks = function(v){
+              if(!v || typeof v !== 'object') return null;
+              var p = [];
+              if(Array.isArray(v)){
+                v.forEach(function(o){
+                  if(!o || typeof o !== 'object') return;
+                  var t = null, w = null;
+                  Object.keys(o).forEach(function(k){
+                    if(t === null && typeof o[k] === 'string'){
+                      var d = new Date(o[k]);
+                      if(!isNaN(d.getTime())) t = d.getTime();
+                    }
+                    if(w === null && typeof o[k] === 'number') w = o[k];
+                  });
+                  if(t !== null && w !== null) p.push({t: t, v: w});
+                });
+              } else {
+                Object.keys(v).forEach(function(k){
+                  if(typeof v[k] === 'boolean' || v[k] === null) return;
+                  var d = new Date(k), w = Number(v[k]);
+                  if(!isNaN(d.getTime()) && !isNaN(w)) p.push({t: d.getTime(), v: w});
+                });
+              }
+              if(p.length < 3) return null;
+              // Moet rond vandaag liggen en variatie hebben. Dat sluit tabellen
+              // met vaste waarden en reeksen over heel andere periodes uit.
+              var tmin = Infinity, tmax = -Infinity, vmin = Infinity, vmax = -Infinity;
+              p.forEach(function(o){
+                if(o.t < tmin) tmin = o.t;
+                if(o.t > tmax) tmax = o.t;
+                if(o.v < vmin) vmin = o.v;
+                if(o.v > vmax) vmax = o.v;
+              });
+              if(tmax < nu - venster || tmin > nu + venster) return null;
+              if(vmax <= vmin) return null;
+              return p;
             };
-            var reeks = null;
-            ['sensor.energy_production_today',
-             'sensor.overloop_zolder_zonnepanelen_schatting_geschatte_energieproductie_vandaag',
-             'sensor.forecast_solar_production_today'].some(function(id){
-              reeks = pak(states[id]);
-              return !!reeks;
+            // Alleen sensoren die iets met zon te maken hebben, zodat een
+            // willekeurig ander tijdreeks-attribuut (bv. prijzen) niet meetelt.
+            var zonNaam = /solar|zonnepane|zonnesch|pv_|_pv|energy_production|forecast/i;
+            var gevonden = [];
+            Object.keys(states).forEach(function(id){
+              if(id.lastIndexOf('sensor.', 0) !== 0) return;
+              var s = states[id];
+              if(!s || !s.attributes) return;
+              if(!zonNaam.test((s.attributes.friendly_name || '') + ' ' + id)) return;
+              Object.keys(s.attributes).some(function(a){
+                var r = alsReeks(s.attributes[a]);
+                if(r) gevonden.push({id: id, punten: r});
+                return !!r;   // één reeks per sensor is genoeg
+              });
             });
-            if(!reeks){
-              Object.keys(states).some(function(k){
-                if(k.lastIndexOf('sensor.', 0) !== 0) return false;
-                reeks = pak(states[k]);
-                return !!reeks;
+            if(gevonden.length){
+              // Er staan twee installaties op het dak (zolder + overkapping),
+              // elk met een eigen voorspelling. Per tijdstip optellen, net als
+              // het dagtotaal in packages/3 - Outside/Backyard/Solarpanels.yaml.
+              var som = {};
+              gevonden.forEach(function(g){
+                g.punten.forEach(function(o){ som[o.t] = (som[o.t] || 0) + o.v; });
               });
-            }
-            if(reeks){
+              Object.keys(som).forEach(function(t){ punten.push({t: Number(t), v: som[t]}); });
               zonBron = 'echt';
-              reeks.ks.forEach(function(k){
-                punten.push({t: new Date(k).getTime(), v: Number(reeks.d[k]) || 0});
-              });
             }
             if(zonBron) punten.sort(function(a,b){ return a.t - b.t; });
             if(!zonBron && onder && op){
