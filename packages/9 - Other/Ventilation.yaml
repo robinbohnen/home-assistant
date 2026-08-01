@@ -8,6 +8,11 @@ ventilation_cooling_package:
   ## geen effect meer heeft (referentielucht niet meer koeler dan binnen)
   ## of de ruimte voldoende is afgekoeld.
   ##
+  ## Extra UIT-reden: stagnatie. Draait de ventilator al een uur en is de
+  ## ruimte in dat uur niet minstens X graden gezakt, dan levert draaien
+  ## niets meer op -> uit, met een lockout zodat hij niet meteen weer
+  ## aanslaat op de gewone AAN-voorwaarden.
+  ##
   ## Schuur en meterkast hebben elk hun eigen drempel-helpers.
   ##
   ## Gebruikte entiteiten:
@@ -100,6 +105,61 @@ ventilation_cooling_package:
       unit_of_measurement: "°C"
       mode: box
 
+    ## --- Stagnatie (beide ruimtes) ---
+    # Minimale daling per uur die de ventilator moet realiseren. Zakt de
+    # temperatuur in een uur minder dan dit, dan gaat hij uit.
+    ventilation_schuur_stagnation_delta:
+      name: "Ventilatie Schuur - Min. daling per uur"
+      icon: mdi:trending-down
+      min: 0.1
+      max: 2
+      step: 0.1
+      initial: 0.2
+      unit_of_measurement: "°C"
+      mode: box
+    ventilation_meterkast_stagnation_delta:
+      name: "Ventilatie Meterkast - Min. daling per uur"
+      icon: mdi:trending-down
+      min: 0.1
+      max: 2
+      step: 0.1
+      initial: 0.2
+      unit_of_measurement: "°C"
+      mode: box
+
+  input_datetime:
+    # Tot wanneer de ventilator niet opnieuw mag aanslaan na een stagnatie-uit.
+    ventilation_schuur_lockout_until:
+      name: "Ventilatie Schuur - Geblokkeerd tot"
+      icon: mdi:timer-lock-outline
+      has_date: true
+      has_time: true
+    ventilation_meterkast_lockout_until:
+      name: "Ventilatie Meterkast - Geblokkeerd tot"
+      icon: mdi:timer-lock-outline
+      has_date: true
+      has_time: true
+
+  sensor:
+    # Temperatuurverandering over het laatste uur (laatste meting minus de
+    # oudste in het venster). Negatief = de ruimte koelt af.
+    - platform: statistics
+      name: "Ventilatie Schuur Temp Verandering 1u"
+      unique_id: ventilation_schuur_temp_change_1h
+      entity_id: sensor.achtertuin_schuur_temperatuur_temperature
+      state_characteristic: change
+      sampling_size: 500
+      max_age:
+        hours: 1
+    - platform: statistics
+      name: "Ventilatie Meterkast Temp Verandering 1u"
+      unique_id: ventilation_meterkast_temp_change_1h
+      entity_id: sensor.meterkast_temperatuur_temperature
+      state_characteristic: change
+      sampling_size: 500
+      max_age:
+        hours: 1
+
   automation:
     - id: ventilation_cooling_shed
       alias: Ventilation - Schuur ventilator koelen
@@ -136,6 +196,11 @@ ventilation_cooling_package:
                 - condition: state
                   entity_id: switch.achtertuin_achtertuin_schuur_stopcontact_ventilatoren
                   state: "off"
+                # Niet aanzetten zolang de stagnatie-lockout loopt
+                - condition: template
+                  value_template: >-
+                    {{ now().timestamp() >=
+                       (state_attr('input_datetime.ventilation_schuur_lockout_until', 'timestamp') | float(0)) }}
               sequence:
                 - action: switch.turn_on
                   target:
@@ -157,6 +222,31 @@ ventilation_cooling_package:
                 - action: switch.turn_off
                   target:
                     entity_id: switch.achtertuin_achtertuin_schuur_stopcontact_ventilatoren
+            # UIT: draait al een uur maar koelt niet meer merkbaar
+            - conditions:
+                # Pas beoordelen na een vol uur draaien, anders kijkt het
+                # meetvenster deels naar de periode vóór het aanzetten.
+                - condition: state
+                  entity_id: switch.achtertuin_achtertuin_schuur_stopcontact_ventilatoren
+                  state: "on"
+                  for:
+                    hours: 1
+                - condition: template
+                  value_template: >-
+                    {% set verandering = states('sensor.ventilatie_schuur_temp_verandering_1u') | float(none) %}
+                    {% set stagnatie = states('input_number.ventilation_schuur_stagnation_delta') | float %}
+                    {{ verandering is not none and verandering > (0 - stagnatie) }}
+              sequence:
+                - action: switch.turn_off
+                  target:
+                    entity_id: switch.achtertuin_achtertuin_schuur_stopcontact_ventilatoren
+                # 2 uur niet opnieuw aanslaan, anders start hij bij de
+                # volgende evaluatie meteen weer op de gewone AAN-voorwaarden.
+                - action: input_datetime.set_datetime
+                  target:
+                    entity_id: input_datetime.ventilation_schuur_lockout_until
+                  data:
+                    datetime: "{{ (now() + timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S') }}"
 
     - id: ventilation_cooling_meter_cupboard
       alias: Ventilation - Meterkast ventilator koelen
@@ -192,6 +282,11 @@ ventilation_cooling_package:
                 - condition: state
                   entity_id: switch.meterkast_meterkast_stopcontact_ventilatoren
                   state: "off"
+                # Niet aanzetten zolang de stagnatie-lockout loopt
+                - condition: template
+                  value_template: >-
+                    {{ now().timestamp() >=
+                       (state_attr('input_datetime.ventilation_meterkast_lockout_until', 'timestamp') | float(0)) }}
               sequence:
                 - action: switch.turn_on
                   target:
@@ -213,3 +308,24 @@ ventilation_cooling_package:
                 - action: switch.turn_off
                   target:
                     entity_id: switch.meterkast_meterkast_stopcontact_ventilatoren
+            # UIT: draait al een uur maar koelt niet meer merkbaar
+            - conditions:
+                - condition: state
+                  entity_id: switch.meterkast_meterkast_stopcontact_ventilatoren
+                  state: "on"
+                  for:
+                    hours: 1
+                - condition: template
+                  value_template: >-
+                    {% set verandering = states('sensor.ventilatie_meterkast_temp_verandering_1u') | float(none) %}
+                    {% set stagnatie = states('input_number.ventilation_meterkast_stagnation_delta') | float %}
+                    {{ verandering is not none and verandering > (0 - stagnatie) }}
+              sequence:
+                - action: switch.turn_off
+                  target:
+                    entity_id: switch.meterkast_meterkast_stopcontact_ventilatoren
+                - action: input_datetime.set_datetime
+                  target:
+                    entity_id: input_datetime.ventilation_meterkast_lockout_until
+                  data:
+                    datetime: "{{ (now() + timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S') }}"
