@@ -1,0 +1,306 @@
+##############################################################################
+## KLIMAATREGIE - laag 1 (dagregime) en laag 2 (waar staat de zon)
+##
+## Laag 1: één keer per dag bepalen wat voor dag het wordt op basis van de
+##         VERWACHTE maximumtemperatuur. Daarmee kan de zonwering al dicht
+##         voordat de warmte binnen is, in plaats van pas als de lux-sensor
+##         het merkt.
+## Laag 2: per gevel twee sensoren:
+##           zon_op_<gevel>       de zon schijnt er nu echt op (lux + stand)
+##           zon_richting_<gevel> de zon staat aan die kant, ook bij bewolking
+##
+## De beslissing zelf staat in custom_templates/klimaat.jinja, het uitvoeren
+## in "Klimaat Zonwering.yaml". Zie docs/klimaatregie.md.
+##############################################################################
+
+klimaat_regime_package:
+
+  input_select:
+    klimaat_regime:
+      name: "Klimaat - Regime van vandaag"
+      icon: mdi:home-thermometer
+      # Neutraal staat bewust vooraan: zonder herstelde waarde pakt Home
+      # Assistant de eerste optie, en dat moet de onschuldigste zijn. De
+      # automatisering hieronder zet 'm bij het opstarten meteen goed.
+      options:
+        - Neutraal
+        - Koelen
+        - Verwarmen
+
+  input_boolean:
+    klimaat_regime_handmatig:
+      name: "Klimaat - Regime handmatig vastzetten"
+      icon: mdi:hand-back-right
+
+  input_number:
+    # --- Regimegrenzen (verwachte maximumtemperatuur van vandaag) ---
+    klimaat_koelen_vanaf:
+      name: "Klimaat - Koelen vanaf verwachte max"
+      icon: mdi:snowflake-thermometer
+      min: 15
+      max: 35
+      step: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+    klimaat_verwarmen_tot:
+      name: "Klimaat - Verwarmen tot verwachte max"
+      icon: mdi:sun-thermometer
+      min: 0
+      max: 20
+      step: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+    klimaat_hittedag_vanaf:
+      name: "Klimaat - Hittedag vanaf verwachte max"
+      icon: mdi:weather-sunny-alert
+      min: 20
+      max: 40
+      step: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+    # Gezet door de automatisering hieronder, staat hier zodat het zichtbaar
+    # en corrigeerbaar is.
+    klimaat_verwachte_max:
+      name: "Klimaat - Verwachte max vandaag"
+      icon: mdi:thermometer-chevron-up
+      min: -20
+      max: 50
+      step: 0.1
+      unit_of_measurement: "°C"
+      mode: box
+
+    # --- Wanneer telt de zon als "op de gevel" ---
+    klimaat_zon_lux_drempel:
+      name: "Klimaat - Zon lux drempel"
+      icon: mdi:brightness-5
+      min: 5000
+      max: 60000
+      step: 1000
+      unit_of_measurement: "lx"
+      mode: box
+    klimaat_zon_min_elevatie:
+      name: "Klimaat - Zon minimale hoogte"
+      icon: mdi:angle-acute
+      min: 0
+      max: 30
+      step: 1
+      unit_of_measurement: "°"
+      mode: box
+
+    # --- Gevelsectoren in kompasgraden ---
+    # Standaard 0-360, dus "altijd waar": het systeem draait dan puur op de
+    # lux-sensoren. Vul de echte sector in zodra je hem weet (zie
+    # docs/klimaatregie.md, "Gevels kalibreren") en de zonwering reageert
+    # eerder en rustiger. Een sector mag door 0 heen lopen (bijv. 300 -> 60).
+    klimaat_voorgevel_azimut_van:
+      name: "Klimaat - Voorgevel azimut van"
+      icon: mdi:compass-outline
+      min: 0
+      max: 360
+      step: 1
+      unit_of_measurement: "°"
+      mode: box
+    klimaat_voorgevel_azimut_tot:
+      name: "Klimaat - Voorgevel azimut tot"
+      icon: mdi:compass-outline
+      min: 0
+      max: 360
+      step: 1
+      unit_of_measurement: "°"
+      mode: box
+    klimaat_achtergevel_azimut_van:
+      name: "Klimaat - Achtergevel azimut van"
+      icon: mdi:compass-outline
+      min: 0
+      max: 360
+      step: 1
+      unit_of_measurement: "°"
+      mode: box
+    klimaat_achtergevel_azimut_tot:
+      name: "Klimaat - Achtergevel azimut tot"
+      icon: mdi:compass-outline
+      min: 0
+      max: 360
+      step: 1
+      unit_of_measurement: "°"
+      mode: box
+
+  template:
+    - sensor:
+        # De zonstand wordt wél bewaard in de recorder (het domein sun. niet),
+        # zodat je achteraf kunt zien bij welke azimut de voortuin oplichtte.
+        # Dat is precies wat je nodig hebt om de gevelsectoren te kalibreren.
+        - name: "Klimaat zon azimut"
+          unique_id: klimaat_zon_azimut
+          icon: mdi:compass
+          unit_of_measurement: "°"
+          state_class: measurement
+          state: "{{ state_attr('sun.sun', 'azimuth') | float(0) | round(1) }}"
+
+        - name: "Klimaat zon elevatie"
+          unique_id: klimaat_zon_elevatie
+          icon: mdi:angle-acute
+          unit_of_measurement: "°"
+          state_class: measurement
+          state: "{{ state_attr('sun.sun', 'elevation') | float(0) | round(1) }}"
+
+    - binary_sensor:
+        #######################################################################
+        ## De zon staat geometrisch aan deze kant (ook door de wolken heen).
+        ## Loopt vóór op de lux-sensor, dus bruikbaar om preventief te sluiten.
+        #######################################################################
+        - name: "Zon richting voorgevel"
+          unique_id: zon_richting_voorgevel
+          icon: mdi:sun-compass
+          state: >
+            {% set az = state_attr('sun.sun', 'azimuth') | float(0) %}
+            {% set el = state_attr('sun.sun', 'elevation') | float(-90) %}
+            {% set van = states('input_number.klimaat_voorgevel_azimut_van') | float(0) %}
+            {% set tot = states('input_number.klimaat_voorgevel_azimut_tot') | float(360) %}
+            {% set min_el = states('input_number.klimaat_zon_min_elevatie') | float(8) %}
+            {% set in_sector = (az >= van and az <= tot) if van <= tot else (az >= van or az <= tot) %}
+            {{ el >= min_el and in_sector }}
+
+        - name: "Zon richting achtergevel"
+          unique_id: zon_richting_achtergevel
+          icon: mdi:sun-compass
+          state: >
+            {% set az = state_attr('sun.sun', 'azimuth') | float(0) %}
+            {% set el = state_attr('sun.sun', 'elevation') | float(-90) %}
+            {% set van = states('input_number.klimaat_achtergevel_azimut_van') | float(0) %}
+            {% set tot = states('input_number.klimaat_achtergevel_azimut_tot') | float(360) %}
+            {% set min_el = states('input_number.klimaat_zon_min_elevatie') | float(8) %}
+            {% set in_sector = (az >= van and az <= tot) if van <= tot else (az >= van or az <= tot) %}
+            {{ el >= min_el and in_sector }}
+
+        #######################################################################
+        ## De zon schijnt er nu echt op: richting + genoeg licht.
+        ##
+        ## Hysterese via `this.state`: aangaan bij de drempel, uitgaan pas
+        ## onder 70% daarvan, plus delay_off. Zonder dat gaat de zonwering
+        ## klepperen bij overdrijvende wolken.
+        #######################################################################
+        - name: "Zon op voorgevel"
+          unique_id: zon_op_voorgevel
+          icon: mdi:weather-sunny
+          delay_on: "00:02:00"
+          delay_off: "00:10:00"
+          state: >
+            {% set lux = states('sensor.voortuin_zon_luminance') | float(0) %}
+            {% set drempel = states('input_number.klimaat_zon_lux_drempel') | float(20000) %}
+            {% set aan = this.state == 'on' %}
+            {{ is_state('binary_sensor.zon_richting_voorgevel', 'on')
+               and (lux >= drempel or (aan and lux >= drempel * 0.7)) }}
+
+        - name: "Zon op achtergevel"
+          unique_id: zon_op_achtergevel
+          icon: mdi:weather-sunny
+          delay_on: "00:02:00"
+          delay_off: "00:10:00"
+          state: >
+            {% set lux = states('sensor.achtertuin_zon_luminance') | float(0) %}
+            {% set drempel = states('input_number.klimaat_zon_lux_drempel') | float(20000) %}
+            {% set aan = this.state == 'on' %}
+            {{ is_state('binary_sensor.zon_richting_achtergevel', 'on')
+               and (lux >= drempel or (aan and lux >= drempel * 0.7)) }}
+
+  automation:
+    ###########################################################################
+    ## Standaardwaarden invullen
+    ##
+    ## Bewust geen `initial:` op de helpers hierboven: dat zet je eigen
+    ## instellingen bij élke herstart terug. Deze automatisering vult alleen
+    ## waarden die nog nooit gezet zijn, dus na de eerste start doet hij niets
+    ## meer.
+    ###########################################################################
+    - id: klimaat_standaardwaarden
+      alias: Klimaat - Standaardwaarden invullen
+      description: Vult instelbare drempels die nog leeg zijn
+      mode: single
+      triggers:
+        - trigger: homeassistant
+          event: start
+      conditions: []
+      actions:
+        - variables:
+            standaard:
+              input_number.klimaat_koelen_vanaf: 23
+              input_number.klimaat_verwarmen_tot: 14
+              input_number.klimaat_hittedag_vanaf: 28
+              input_number.klimaat_zon_lux_drempel: 20000
+              input_number.klimaat_zon_min_elevatie: 8
+              input_number.klimaat_voorgevel_azimut_van: 0
+              input_number.klimaat_voorgevel_azimut_tot: 360
+              input_number.klimaat_achtergevel_azimut_van: 0
+              input_number.klimaat_achtergevel_azimut_tot: 360
+              input_number.klimaat_kamer_warm: 22
+              input_number.klimaat_spui_delta: 1
+              input_number.klimaat_kier_positie: 15
+              input_number.klimaat_override_uren: 4
+        - repeat:
+            for_each: "{{ standaard.keys() | list }}"
+            sequence:
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ states(repeat.item) in ['unknown', 'unavailable', 'none', ''] }}
+                then:
+                  - action: input_number.set_value
+                    target:
+                      entity_id: "{{ repeat.item }}"
+                    data:
+                      value: "{{ standaard[repeat.item] }}"
+
+    ###########################################################################
+    ## Regime van de dag bepalen uit de weersverwachting
+    ###########################################################################
+    - id: klimaat_regime_bepalen
+      alias: Klimaat - Regime bepalen
+      description: >-
+        Kies koelen/neutraal/verwarmen op basis van de verwachte maximum-
+        temperatuur van vandaag. 's Ochtends vroeg, zodat de zonwering de
+        warmte vóór kan zijn, en 's middags nog een keer als bijsturing.
+      mode: single
+      triggers:
+        - trigger: time
+          at: "05:30:00"
+        - trigger: time
+          at: "12:00:00"
+        - trigger: homeassistant
+          event: start
+        - trigger: state
+          entity_id: input_boolean.klimaat_regime_handmatig
+          to: "off"
+      conditions:
+        - condition: state
+          entity_id: input_boolean.klimaat_regime_handmatig
+          state: "off"
+      actions:
+        - action: weather.get_forecasts
+          target:
+            entity_id: weather.knmi_thuis
+          data:
+            type: daily
+          response_variable: verwachting
+          continue_on_error: true
+        - variables:
+            # Valt terug op de actuele buitentemperatuur als de verwachting
+            # (nog) niet beschikbaar is, zodat het regime nooit blijft hangen.
+            max_vandaag: >-
+              {% set f = (verwachting | default({}, true)).get('weather.knmi_thuis', {}).get('forecast', []) %}
+              {{ (f[0].temperature if f | count > 0 else states('sensor.knmi_temperatuur'))
+                 | float(states('sensor.knmi_temperatuur') | float(18)) }}
+        - action: input_number.set_value
+          target:
+            entity_id: input_number.klimaat_verwachte_max
+          data:
+            value: "{{ max_vandaag | round(1) }}"
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.klimaat_regime
+          data:
+            option: >-
+              {% set koelen = states('input_number.klimaat_koelen_vanaf') | float(23) %}
+              {% set verwarmen = states('input_number.klimaat_verwarmen_tot') | float(14) %}
+              {{ 'Koelen' if max_vandaag >= koelen
+                 else ('Verwarmen' if max_vandaag <= verwarmen else 'Neutraal') }}

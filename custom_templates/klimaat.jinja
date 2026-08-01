@@ -1,0 +1,316 @@
+{#-
+==============================================================================
+  KLIMAATREGIE - centrale beslislogica voor de buitenzonwering
+==============================================================================
+
+  Dit bestand is de enige plek waar staat WAT een zone wil. De packages
+  (`packages/9 - Other/Klimaat *.yaml`) doen alleen nog het meten en het
+  uitvoeren. Zie docs/klimaatregie.md voor de achtergrond.
+
+  Gebruik in een template of automatisering:
+
+      {% from 'klimaat.jinja' import advies %}
+      {{ (advies('badkamer') | trim | from_json).advies }}
+
+  LET OP: wijzigingen in dit bestand vragen een volledige herstart van Home
+  Assistant (custom_templates worden alleen bij het opstarten ingelezen).
+
+  ---------------------------------------------------------------------------
+  CONTROLEER DIT EERST: de gevel per zone
+  ---------------------------------------------------------------------------
+  De indeling voor/achter hieronder is afgeleid uit de oude automatisering
+  `covers_morning_routine`: in de tak "Sunny Backyard" gingen badkamer,
+  slaapkamer, mini en kantoor-rechts dicht terwijl maxi en kantoor-links
+  juist open gingen. Klopt dat niet, dan is 'gevel' hier het enige dat je
+  hoeft te wijzigen.
+-#}
+
+{#- ========================== VASTE INSTELLINGEN ========================== -#}
+
+{#- Stille uren: in dit venster bewegen zones met 'stil': true niet, zodat er
+    's nachts geen rolluik naast een slapend hoofd gaat lopen. Enige
+    uitzondering is het openen naar een kier om te spuien op een warme nacht. -#}
+{%- set STIL_VAN = '22:00' -%}
+{%- set STIL_TOT = '07:00' -%}
+
+{#- ========================== ZONECONFIGURATIE ============================ -#}
+{#-
+  naam       label op het dashboard
+  cover      entiteit die bestuurd wordt
+  gevel      'voor' of 'achter' (bepaalt welke zonsensor telt)
+  temp       temperatuursensor van de ruimte
+  kier       ondersteunt de cover een tussenstand?
+  screen     buitenscreen (moet in bij storm/vorst) i.p.v. rolluik
+  slaap      none | 'kind' | 'volwassen'
+  slaap_van  begin van het slaapvenster voor kinderkamers
+  stil       niet bewegen tijdens de stille uren
+-#}
+{%- set ZONES = {
+      'keuken_screens': {
+        'naam': 'Keuken screens',
+        'cover': 'cover.covers_kitchen_screens',
+        'gevel': 'voor',
+        'temp': 'sensor.woonkamer_temperatuur',
+        'airco': 'climate.airco_woonkamer',
+        'kier': false,
+        'screen': true,
+        'slaap': none,
+        'slaap_van': none,
+        'stil': false },
+      'kantoor_links': {
+        'naam': 'Kantoor links',
+        'cover': 'cover.kantoor_links_low_speed',
+        'gevel': 'voor',
+        'temp': 'sensor.kantoor_kantoor_temperatuur_temperatuur',
+        'airco': 'climate.airco_zolder',
+        'kier': true,
+        'screen': false,
+        'slaap': none,
+        'slaap_van': none,
+        'stil': false },
+      'kantoor_rechts': {
+        'naam': 'Kantoor rechts',
+        'cover': 'cover.kantoor_rechts_low_speed',
+        'gevel': 'achter',
+        'temp': 'sensor.kantoor_kantoor_temperatuur_temperatuur',
+        'airco': 'climate.airco_zolder',
+        'kier': true,
+        'screen': false,
+        'slaap': none,
+        'slaap_van': none,
+        'stil': false },
+      'badkamer': {
+        'naam': 'Badkamer',
+        'cover': 'cover.badkamer_rolluik_low_speed',
+        'gevel': 'achter',
+        'temp': 'sensor.badkamer_badkamer_temperatuur_temperatuur',
+        'airco': 'climate.airco_zolder',
+        'kier': true,
+        'screen': false,
+        'slaap': none,
+        'slaap_van': none,
+        'stil': true },
+      'slaapkamer': {
+        'naam': 'Slaapkamer',
+        'cover': 'cover.slaapkamer_rolluik_low_speed',
+        'gevel': 'achter',
+        'temp': 'sensor.slaapkamer_slaapkamer_temperatuur_temperatuur',
+        'airco': 'climate.airco_zolder',
+        'kier': true,
+        'screen': false,
+        'slaap': 'volwassen',
+        'slaap_van': none,
+        'stil': true },
+      'maxi': {
+        'naam': 'Slaapkamer Logan',
+        'cover': 'cover.covers_bedroom_maxi',
+        'gevel': 'voor',
+        'temp': 'sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur',
+        'airco': 'climate.airco_zolder',
+        'kier': true,
+        'screen': false,
+        'slaap': 'kind',
+        'slaap_van': '19:00',
+        'stil': true },
+      'mini': {
+        'naam': 'Slaapkamer Emma',
+        'cover': 'cover.slaapkamer_mini',
+        'gevel': 'achter',
+        'temp': 'sensor.slaapkamer_mini_temperatuur_temperature',
+        'airco': 'climate.airco_zolder',
+        'kier': true,
+        'screen': false,
+        'slaap': 'kind',
+        'slaap_van': '19:00',
+        'stil': true },
+    } -%}
+
+{#- ============================== HELPERS ================================= -#}
+
+{#- Lijst met zoneslugs, voor automatiseringen die over alle zones lopen. -#}
+{%- macro zone_lijst() -%}
+{{- ZONES.keys() | list | to_json -}}
+{%- endmacro -%}
+
+{#- Volledige configuratie, voor dashboards en debugging. -#}
+{%- macro zones_json() -%}
+{{- ZONES | to_json -}}
+{%- endmacro -%}
+
+{#- Bij welke zone hoort deze cover? Lege string als hij niet beheerd wordt. -#}
+{%- macro zone_van_cover(cover_id) -%}
+{%- set ns = namespace(zone='') -%}
+{%- for slug, z in ZONES.items() if z.cover == cover_id -%}
+{%- set ns.zone = slug -%}
+{%- endfor -%}
+{{- ns.zone -}}
+{%- endmacro -%}
+
+{#- ========================= DE BESLISSING ZELF =========================== -#}
+{#-
+  Geeft JSON terug:
+    advies     open | kier | dicht | rust
+    positie    0-100, of -1 bij 'rust' (= niet bewegen)
+    reden      leesbare uitleg voor het dashboard
+    uitvoeren  mag de uitvoerder hier iets mee doen?
+    blokkade   waarom niet, als uitvoeren false is
+-#}
+{%- macro advies(zone) -%}
+{%- set z = ZONES[zone] -%}
+
+{#- Alles eerst uitlezen. Home Assistant volgt alleen de entiteiten die tijdens
+    het renderen echt gelezen zijn; staat een states() diep in een tak die nu
+    niet gekozen wordt, dan ververst de sensor niet als die entiteit wijzigt. -#}
+{%- set regime = states('input_select.klimaat_regime') | lower -%}
+{%- set binnen = states(z.temp) | float(none) -%}
+{%- set buiten = states('sensor.knmi_temperatuur') | float(none) -%}
+{%- set warm = states('input_number.klimaat_kamer_warm') | float(22) -%}
+{%- set hitte_vanaf = states('input_number.klimaat_hittedag_vanaf') | float(28) -%}
+{%- set max_vandaag = states('input_number.klimaat_verwachte_max') | float(none) -%}
+{%- set spui_delta = states('input_number.klimaat_spui_delta') | float(1) -%}
+{%- set kier_pos = states('input_number.klimaat_kier_positie') | float(15) -%}
+{%- set nachtspui = is_state('input_boolean.klimaat_nachtspui', 'on') -%}
+{%- set actief = is_state('input_boolean.klimaatregie_actief', 'on') -%}
+{%- set zone_auto = is_state('input_boolean.auto_zonwering_' ~ zone, 'on') -%}
+{%- set override = is_state('timer.override_' ~ zone, 'active') -%}
+{%- set elevatie = state_attr('sun.sun', 'elevation') | float(0) -%}
+{%- set zon_op = is_state('binary_sensor.zon_op_' ~ z.gevel ~ 'gevel', 'on') -%}
+{%- set zon_richting = is_state('binary_sensor.zon_richting_' ~ z.gevel ~ 'gevel', 'on') -%}
+{%- set thuis = is_state('group.all_adults', 'home') -%}
+{%- set weeralarm = is_state('binary_sensor.knmi_waarschuwing', 'on') -%}
+{%- set airco = z.get('airco') -%}
+{%- set airco_koelt = airco is not none and states(airco) in ['cool', 'dry'] -%}
+
+{%- set nacht = elevatie < -3 -%}
+{%- set hittedag = max_vandaag is not none and max_vandaag >= hitte_vanaf -%}
+{%- set te_warm = binnen is not none and binnen > warm -%}
+{%- set heet = binnen is not none and binnen > (warm + 1) -%}
+{%- set spui_ok = binnen is not none and buiten is not none and buiten <= (binnen - spui_delta) -%}
+{%- set b_txt = (binnen | round(1) | string ~ '°') if binnen is not none else '?' -%}
+{%- set u_txt = (buiten | round(1) | string ~ '°') if buiten is not none else '?' -%}
+{%- set stil_nu = z.stil and (now() >= today_at(STIL_VAN) or now() < today_at(STIL_TOT)) -%}
+{%- set kind_slaapt = z.slaap == 'kind' and z.slaap_van is not none
+                      and (now() >= today_at(z.slaap_van) or now() < today_at(STIL_TOT)) -%}
+
+{%- set ns = namespace(a='open', r='') -%}
+
+{#- 1. Stille uren: alleen een kier om te spuien mag nog, verder niets. -#}
+{%- if stil_nu -%}
+  {%- if regime == 'koelen' and nachtspui and spui_ok and heet -%}
+    {%- set ns.a = 'kier' -%}
+    {%- set ns.r = 'warme nacht: kier om koelte binnen te laten (' ~ b_txt ~ ' binnen, ' ~ u_txt ~ ' buiten)' -%}
+  {%- else -%}
+    {%- set ns.a = 'rust' -%}
+    {%- set ns.r = 'stille uren (' ~ STIL_VAN ~ '-' ~ STIL_TOT ~ '), niet bewegen' -%}
+  {%- endif -%}
+
+{#- 2. Kinderkamer in het slaapvenster: donker, en op hittedagen op een kier.
+      De hittedag staat de hele dag vast, dus dit wisselt niet midden in de
+      nacht van gedachten. -#}
+{%- elif kind_slaapt -%}
+  {%- if regime == 'koelen' and hittedag -%}
+    {%- set ns.a = 'kier' -%}
+    {%- set ns.r = 'hittedag: kier tijdens het slapen' -%}
+  {%- else -%}
+    {%- set ns.a = 'dicht' -%}
+    {%- set ns.r = 'slaapvenster kinderkamer' -%}
+  {%- endif -%}
+
+{#- 3. Nacht. -#}
+{%- elif nacht -%}
+  {%- if regime == 'koelen' and nachtspui and spui_ok -%}
+    {%- set ns.a = 'kier' -%}
+    {%- set ns.r = 'nachtspui: buiten ' ~ u_txt ~ ', binnen ' ~ b_txt -%}
+  {%- else -%}
+    {%- set ns.a = 'dicht' -%}
+    {%- set ns.r = 'donker: ' ~ ('isolatie' if regime == 'verwarmen' else 'dicht voor de nacht') -%}
+  {%- endif -%}
+
+{#- 4. Overdag, per regime. -#}
+{%- elif regime == 'koelen' -%}
+  {%- if zon_op -%}
+    {%- set ns.a = 'dicht' -%}
+    {%- set ns.r = 'zon op de ' ~ z.gevel ~ 'gevel, warmte buiten houden' -%}
+  {%- elif not thuis and (hittedag or te_warm) -%}
+    {%- set ns.a = 'dicht' -%}
+    {%- set ns.r = 'niemand thuis op een warme dag' -%}
+  {%- elif hittedag and zon_richting -%}
+    {%- set ns.a = 'kier' -%}
+    {%- set ns.r = 'hittedag: preventief gedimd voordat de zon er komt' -%}
+  {%- elif te_warm -%}
+    {%- set ns.a = 'kier' -%}
+    {%- set ns.r = 'kamer is ' ~ b_txt ~ ', licht temperen' -%}
+  {%- else -%}
+    {%- set ns.a = 'open' -%}
+    {%- set ns.r = 'geen zon op de gevel en kamer koel genoeg (' ~ b_txt ~ ')' -%}
+  {%- endif -%}
+
+{%- elif regime == 'verwarmen' -%}
+  {%- if zon_op and te_warm -%}
+    {%- set ns.a = 'kier' -%}
+    {%- set ns.r = 'zon, maar kamer is al ' ~ b_txt -%}
+  {%- elif zon_op -%}
+    {%- set ns.a = 'open' -%}
+    {%- set ns.r = 'zon op de ' ~ z.gevel ~ 'gevel, gratis warmte binnenhalen' -%}
+  {%- else -%}
+    {%- set ns.a = 'open' -%}
+    {%- set ns.r = 'daglicht' -%}
+  {%- endif -%}
+
+{%- else -%}
+  {%- if zon_op and te_warm -%}
+    {%- set ns.a = 'kier' -%}
+    {%- set ns.r = 'zon en kamer is ' ~ b_txt -%}
+  {%- else -%}
+    {%- set ns.a = 'open' -%}
+    {%- set ns.r = 'neutrale dag' -%}
+  {%- endif -%}
+{%- endif -%}
+
+{#- 4b. Draait de airco om te koelen, dan de zon eruit houden: anders staat hij
+       te betalen voor warmte die er zo weer in komt. Alleen bij 'open', want
+       'dicht' is al beter en 'rust' moet rust blijven. -#}
+{%- if airco_koelt and not nacht and ns.a == 'open' -%}
+  {%- set ns.a = 'kier' -%}
+  {%- set ns.r = 'airco koelt, zon eruit houden' -%}
+{%- endif -%}
+
+{#- 5. Screens kennen geen kier en horen 's nachts omhoog. -#}
+{%- if z.screen -%}
+  {%- if nacht -%}
+    {%- set ns.a = 'open' -%}
+    {%- set ns.r = 'donker: screen omhoog' -%}
+  {%- elif ns.a == 'kier' -%}
+    {%- set ns.a = 'open' if regime == 'verwarmen' else 'dicht' -%}
+  {%- endif -%}
+{%- endif -%}
+
+{#- 6. Veiligheid gaat boven alles: een screen mag niet uitstaan bij storm of
+      vorst. Staat bewust als laatste, zodat het elke andere keuze overschrijft. -#}
+{%- if z.screen and (weeralarm or (buiten is not none and buiten < 4)) -%}
+  {%- set ns.a = 'open' -%}
+  {%- set ns.r = 'screen ingetrokken: ' ~ ('weerwaarschuwing' if weeralarm else 'vorstgevaar') -%}
+{%- endif -%}
+
+{#- 7. Een cover zonder tussenstand kan geen kier. -#}
+{%- if ns.a == 'kier' and not z.kier -%}
+  {%- set ns.a = 'dicht' -%}
+{%- endif -%}
+
+{%- set positie = {'open': 100, 'kier': kier_pos | int, 'dicht': 0, 'rust': -1}[ns.a] -%}
+{%- set uitvoeren = actief and zone_auto and not override and positie >= 0 -%}
+{%- set blokkade = 'handbediening actief' if override
+                   else ('zone staat op handmatig' if not zone_auto
+                   else ('klimaatregie staat uit' if not actief
+                   else ('advies is rust' if positie < 0 else ''))) -%}
+
+{{- {'advies': ns.a,
+     'positie': positie,
+     'reden': ns.r,
+     'uitvoeren': uitvoeren,
+     'blokkade': blokkade,
+     'cover': z.cover,
+     'naam': z.naam,
+     'gevel': z.gevel,
+     'regime': regime} | to_json -}}
+{%- endmacro -%}

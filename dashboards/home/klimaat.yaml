@@ -1,0 +1,238 @@
+# Klimaatregie: bedienen en meekijken.
+#
+# Deze weergave is bewust met standaardkaarten gebouwd (geen button-card of
+# card-mod): het is een instel- en controlepagina, geen wandpaneel, en hij moet
+# het ook doen als de custom cards een keer niet laden.
+#
+# In de eerste week is de kolom "Wat wil elke zone" de belangrijkste: daar zie
+# je wat het systeem zou doen terwijl de hoofdschakelaar nog uit staat.
+type: sections
+max_columns: 3
+title: Klimaat
+path: klimaat
+icon: mdi:home-thermometer
+dense_section_placement: true
+sections:
+  #############################################################################
+  ## Bediening
+  #############################################################################
+  - type: grid
+    cards:
+      - type: heading
+        heading: Regelaar
+        heading_style: title
+        icon: mdi:tune-variant
+
+      - type: entities
+        title: Aan en uit
+        state_color: true
+        entities:
+          - entity: input_boolean.klimaatregie_actief
+            name: Klimaatregie stuurt de zonwering
+            secondary_info: last-changed
+          - entity: input_boolean.klimaat_nachtspui
+            name: Nachtspui toestaan
+          - type: divider
+          - entity: input_select.klimaat_regime
+            name: Regime vandaag
+          - entity: input_boolean.klimaat_regime_handmatig
+            name: Regime handmatig vastzetten
+          - entity: input_number.klimaat_verwachte_max
+            name: Verwachte max vandaag
+
+      - type: heading
+        heading: Instellingen
+        heading_style: subtitle
+        icon: mdi:sliders
+
+      - type: entities
+        title: Grenzen
+        entities:
+          - entity: input_number.klimaat_koelen_vanaf
+            name: Koelen vanaf
+          - entity: input_number.klimaat_verwarmen_tot
+            name: Verwarmen tot
+          - entity: input_number.klimaat_hittedag_vanaf
+            name: Hittedag vanaf
+          - type: divider
+          - entity: input_number.klimaat_kamer_warm
+            name: Kamer is warm boven
+          - entity: input_number.klimaat_spui_delta
+            name: Spuien vanaf verschil
+          - entity: input_number.klimaat_kier_positie
+            name: Stand van een kier
+          - entity: input_number.klimaat_override_uren
+            name: Handbediening geldt
+
+  #############################################################################
+  ## Wat wil elke zone
+  #############################################################################
+  - type: grid
+    cards:
+      - type: heading
+        heading: Wat wil elke zone
+        heading_style: title
+        icon: mdi:window-shutter-auto
+
+      - type: entities
+        title: Advies
+        state_color: true
+        entities:
+          - entity: sensor.zonwering_advies_keuken_screens
+            name: Keuken screens
+          - entity: sensor.zonwering_advies_kantoor_links
+            name: Kantoor links
+          - entity: sensor.zonwering_advies_kantoor_rechts
+            name: Kantoor rechts
+          - entity: sensor.zonwering_advies_badkamer
+            name: Badkamer
+          - entity: sensor.zonwering_advies_slaapkamer
+            name: Slaapkamer
+          - entity: sensor.zonwering_advies_maxi
+            name: Slaapkamer Logan
+          - entity: sensor.zonwering_advies_mini
+            name: Slaapkamer Emma
+
+      - type: entities
+        title: Waarom
+        entities:
+          - entity: sensor.zonwering_advies_keuken_screens
+            type: attribute
+            attribute: reden
+            name: Keuken screens
+          - entity: sensor.zonwering_advies_kantoor_links
+            type: attribute
+            attribute: reden
+            name: Kantoor links
+          - entity: sensor.zonwering_advies_kantoor_rechts
+            type: attribute
+            attribute: reden
+            name: Kantoor rechts
+          - entity: sensor.zonwering_advies_badkamer
+            type: attribute
+            attribute: reden
+            name: Badkamer
+          - entity: sensor.zonwering_advies_slaapkamer
+            type: attribute
+            attribute: reden
+            name: Slaapkamer
+          - entity: sensor.zonwering_advies_maxi
+            type: attribute
+            attribute: reden
+            name: Slaapkamer Logan
+          - entity: sensor.zonwering_advies_mini
+            type: attribute
+            attribute: reden
+            name: Slaapkamer Emma
+
+      - type: entities
+        title: Werkelijke stand
+        state_color: true
+        entities:
+          - entity: cover.covers_kitchen_screens
+            name: Keuken screens
+          - entity: cover.kantoor_links_low_speed
+            name: Kantoor links
+          - entity: cover.kantoor_rechts_low_speed
+            name: Kantoor rechts
+          - entity: cover.badkamer_rolluik_low_speed
+            name: Badkamer
+          - entity: cover.slaapkamer_rolluik_low_speed
+            name: Slaapkamer
+          - entity: cover.covers_bedroom_maxi
+            name: Slaapkamer Logan
+          - entity: cover.slaapkamer_mini
+            name: Slaapkamer Emma
+
+  #############################################################################
+  ## Waarnemingen en uitzonderingen
+  #############################################################################
+  - type: grid
+    cards:
+      - type: heading
+        heading: Zon en buiten
+        heading_style: title
+        icon: mdi:weather-sunny
+
+      - type: entities
+        title: Staat de zon op de gevel
+        state_color: true
+        entities:
+          - entity: binary_sensor.zon_op_voorgevel
+            name: Zon op voorgevel
+          - entity: binary_sensor.zon_op_achtergevel
+            name: Zon op achtergevel
+          - type: divider
+          - entity: binary_sensor.zon_richting_voorgevel
+            name: Zon draait naar de voorgevel
+          - entity: binary_sensor.zon_richting_achtergevel
+            name: Zon draait naar de achtergevel
+
+      - type: entities
+        title: Meetwaarden
+        entities:
+          - entity: sensor.klimaat_zon_azimut
+            name: Zon azimut (kompas)
+          - entity: sensor.klimaat_zon_elevatie
+            name: Zon hoogte
+          - entity: sensor.voortuin_zon_luminance
+            name: Licht voortuin
+          - entity: sensor.achtertuin_zon_luminance
+            name: Licht achtertuin
+          - type: divider
+          - entity: sensor.knmi_temperatuur
+            name: Buiten
+          - entity: binary_sensor.knmi_waarschuwing
+            name: Weerwaarschuwing
+
+      # Voor het kalibreren van de gevelsectoren, zie docs/klimaatregie.md.
+      - type: history-graph
+        title: Zonstand tegen het licht buiten (voor kalibratie)
+        hours_to_show: 24
+        entities:
+          - entity: sensor.klimaat_zon_azimut
+          - entity: sensor.voortuin_zon_luminance
+          - entity: sensor.achtertuin_zon_luminance
+
+      - type: heading
+        heading: Uitzonderingen
+        heading_style: title
+        icon: mdi:hand-back-right
+
+      - type: entities
+        title: Handbediening actief
+        state_color: true
+        entities:
+          - entity: timer.override_keuken_screens
+            name: Keuken screens
+          - entity: timer.override_kantoor_links
+            name: Kantoor links
+          - entity: timer.override_kantoor_rechts
+            name: Kantoor rechts
+          - entity: timer.override_badkamer
+            name: Badkamer
+          - entity: timer.override_slaapkamer
+            name: Slaapkamer
+          - entity: timer.override_maxi
+            name: Slaapkamer Logan
+          - entity: timer.override_mini
+            name: Slaapkamer Emma
+
+      - type: entities
+        title: Zone doet mee
+        state_color: true
+        entities:
+          - entity: input_boolean.auto_zonwering_keuken_screens
+            name: Keuken screens
+          - entity: input_boolean.auto_zonwering_kantoor_links
+            name: Kantoor links
+          - entity: input_boolean.auto_zonwering_kantoor_rechts
+            name: Kantoor rechts
+          - entity: input_boolean.auto_zonwering_badkamer
+            name: Badkamer
+          - entity: input_boolean.auto_zonwering_slaapkamer
+            name: Slaapkamer
+          - entity: input_boolean.auto_zonwering_maxi
+            name: Slaapkamer Logan
+          - entity: input_boolean.auto_zonwering_mini
+            name: Slaapkamer Emma

@@ -1,0 +1,370 @@
+##############################################################################
+## KLIMAATREGIE - laag 3 (advies per zone) en laag 4 (uitvoeren)
+##
+## Laag 3: per zone een sensor met wat die zone wil (open/kier/dicht/rust),
+##         waarom, en of de uitvoerder er iets mee mag. De beslislogica zelf
+##         staat in custom_templates/klimaat.jinja - dat is de enige plek waar
+##         je hoeft te zijn als het gedrag moet veranderen.
+## Laag 4: één automatisering die die adviezen uitvoert, plus één die
+##         handbediening herkent en de zone dan met rust laat.
+##
+## AAN/UIT: input_boolean.klimaatregie_actief. Staat die uit, dan beweegt hier
+## niets en doen de oude cover-automatiseringen hun oude werk. Staat hij aan,
+## dan stappen die opzij (ze hebben er een conditie voor gekregen). Eén schuif
+## dus, en volledig terug te draaien.
+##
+## Zie docs/klimaatregie.md.
+##############################################################################
+
+klimaat_zonwering_package:
+
+  input_boolean:
+    klimaatregie_actief:
+      name: "Klimaat - Klimaatregie stuurt de zonwering"
+      icon: mdi:window-shutter-auto
+    klimaat_nachtspui:
+      name: "Klimaat - Nachtspui toestaan"
+      icon: mdi:weather-night
+    # Per zone uit te zetten zonder de rest te raken.
+    auto_zonwering_keuken_screens:
+      name: "Zonwering automatisch - Keuken screens"
+      icon: mdi:blinds-horizontal
+    auto_zonwering_kantoor_links:
+      name: "Zonwering automatisch - Kantoor links"
+      icon: mdi:window-shutter
+    auto_zonwering_kantoor_rechts:
+      name: "Zonwering automatisch - Kantoor rechts"
+      icon: mdi:window-shutter
+    auto_zonwering_badkamer:
+      name: "Zonwering automatisch - Badkamer"
+      icon: mdi:window-shutter
+    auto_zonwering_slaapkamer:
+      name: "Zonwering automatisch - Slaapkamer"
+      icon: mdi:window-shutter
+    auto_zonwering_maxi:
+      name: "Zonwering automatisch - Slaapkamer Logan"
+      icon: mdi:window-shutter
+    auto_zonwering_mini:
+      name: "Zonwering automatisch - Slaapkamer Emma"
+      icon: mdi:window-shutter
+
+  input_number:
+    klimaat_kamer_warm:
+      name: "Klimaat - Kamer is warm boven"
+      icon: mdi:home-thermometer-outline
+      min: 16
+      max: 30
+      step: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+    klimaat_spui_delta:
+      name: "Klimaat - Buiten moet koeler zijn voor spuien"
+      icon: mdi:thermometer-minus
+      min: 0
+      max: 6
+      step: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+    klimaat_kier_positie:
+      name: "Klimaat - Stand van een kier"
+      icon: mdi:arrow-expand-vertical
+      min: 5
+      max: 60
+      step: 5
+      unit_of_measurement: "%"
+      mode: box
+    klimaat_override_uren:
+      name: "Klimaat - Handbediening blijft gelden"
+      icon: mdi:hand-back-right-outline
+      min: 0.5
+      max: 24
+      step: 0.5
+      unit_of_measurement: "u"
+      mode: box
+
+  timer:
+    # Zolang zo'n timer loopt blijft de uitvoerder van die zone af.
+    override_keuken_screens:
+      name: "Handbediening Keuken screens"
+      duration: "04:00:00"
+      icon: mdi:hand-back-right
+    override_kantoor_links:
+      name: "Handbediening Kantoor links"
+      duration: "04:00:00"
+      icon: mdi:hand-back-right
+    override_kantoor_rechts:
+      name: "Handbediening Kantoor rechts"
+      duration: "04:00:00"
+      icon: mdi:hand-back-right
+    override_badkamer:
+      name: "Handbediening Badkamer"
+      duration: "04:00:00"
+      icon: mdi:hand-back-right
+    override_slaapkamer:
+      name: "Handbediening Slaapkamer"
+      duration: "04:00:00"
+      icon: mdi:hand-back-right
+    override_maxi:
+      name: "Handbediening Slaapkamer Logan"
+      duration: "04:00:00"
+      icon: mdi:hand-back-right
+    override_mini:
+      name: "Handbediening Slaapkamer Emma"
+      duration: "04:00:00"
+      icon: mdi:hand-back-right
+
+  ###########################################################################
+  ## Laag 3 - het advies per zone
+  ##
+  ## Alle zeven sensoren roepen dezelfde macro aan; verander je de tabel in
+  ## custom_templates/klimaat.jinja, dan verandert alles mee. `positie` en
+  ## `uitvoeren` zijn wat de uitvoerder leest, `reden` en `blokkade` zijn voor
+  ## het dashboard.
+  ###########################################################################
+  template:
+    - sensor:
+        - name: "Zonwering advies Keuken screens"
+          unique_id: zonwering_advies_keuken_screens
+          icon: mdi:blinds-horizontal
+          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).advies }}"
+          attributes:
+            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).positie }}"
+            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).uitvoeren }}"
+            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).reden }}"
+            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).blokkade }}"
+            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).cover }}"
+
+        - name: "Zonwering advies Kantoor links"
+          unique_id: zonwering_advies_kantoor_links
+          icon: mdi:window-shutter
+          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_links') | trim | from_json).advies }}"
+          attributes:
+            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_links') | trim | from_json).positie }}"
+            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_links') | trim | from_json).uitvoeren }}"
+            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_links') | trim | from_json).reden }}"
+            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_links') | trim | from_json).blokkade }}"
+            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_links') | trim | from_json).cover }}"
+
+        - name: "Zonwering advies Kantoor rechts"
+          unique_id: zonwering_advies_kantoor_rechts
+          icon: mdi:window-shutter
+          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_rechts') | trim | from_json).advies }}"
+          attributes:
+            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_rechts') | trim | from_json).positie }}"
+            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_rechts') | trim | from_json).uitvoeren }}"
+            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_rechts') | trim | from_json).reden }}"
+            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_rechts') | trim | from_json).blokkade }}"
+            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_rechts') | trim | from_json).cover }}"
+
+        - name: "Zonwering advies Badkamer"
+          unique_id: zonwering_advies_badkamer
+          icon: mdi:window-shutter
+          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('badkamer') | trim | from_json).advies }}"
+          attributes:
+            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('badkamer') | trim | from_json).positie }}"
+            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('badkamer') | trim | from_json).uitvoeren }}"
+            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('badkamer') | trim | from_json).reden }}"
+            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('badkamer') | trim | from_json).blokkade }}"
+            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('badkamer') | trim | from_json).cover }}"
+
+        - name: "Zonwering advies Slaapkamer"
+          unique_id: zonwering_advies_slaapkamer
+          icon: mdi:window-shutter
+          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer') | trim | from_json).advies }}"
+          attributes:
+            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer') | trim | from_json).positie }}"
+            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer') | trim | from_json).uitvoeren }}"
+            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer') | trim | from_json).reden }}"
+            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer') | trim | from_json).blokkade }}"
+            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer') | trim | from_json).cover }}"
+
+        - name: "Zonwering advies Slaapkamer Logan"
+          unique_id: zonwering_advies_maxi
+          icon: mdi:window-shutter
+          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('maxi') | trim | from_json).advies }}"
+          attributes:
+            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('maxi') | trim | from_json).positie }}"
+            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('maxi') | trim | from_json).uitvoeren }}"
+            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('maxi') | trim | from_json).reden }}"
+            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('maxi') | trim | from_json).blokkade }}"
+            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('maxi') | trim | from_json).cover }}"
+
+        - name: "Zonwering advies Slaapkamer Emma"
+          unique_id: zonwering_advies_mini
+          icon: mdi:window-shutter
+          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('mini') | trim | from_json).advies }}"
+          attributes:
+            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('mini') | trim | from_json).positie }}"
+            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('mini') | trim | from_json).uitvoeren }}"
+            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('mini') | trim | from_json).reden }}"
+            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('mini') | trim | from_json).blokkade }}"
+            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('mini') | trim | from_json).cover }}"
+
+  automation:
+    ###########################################################################
+    ## Laag 4a - adviezen uitvoeren
+    ###########################################################################
+    - id: klimaat_zonwering_uitvoeren
+      alias: Klimaat - Zonwering uitvoeren
+      description: >-
+        Voert het advies per zone uit, maar alleen als die zone niet op
+        handbediening staat en de stand echt afwijkt. Beweegt dus niets zolang
+        er niets te winnen valt.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        # Alleen op de twee attributen die er echt toe doen; op de sensor zelf
+        # triggeren zou ook afgaan op elke wijziging van de reden-tekst.
+        - trigger: state
+          entity_id: &advies_sensoren
+            - sensor.zonwering_advies_keuken_screens
+            - sensor.zonwering_advies_kantoor_links
+            - sensor.zonwering_advies_kantoor_rechts
+            - sensor.zonwering_advies_badkamer
+            - sensor.zonwering_advies_slaapkamer
+            - sensor.zonwering_advies_maxi
+            - sensor.zonwering_advies_mini
+          attribute: positie
+        - trigger: state
+          entity_id: *advies_sensoren
+          attribute: uitvoeren
+        # Vangnet: ook bijsturen als er niets veranderde maar de stand toch
+        # afwijkt (cover was onbereikbaar, handbediening afgelopen, herstart).
+        - trigger: time_pattern
+          minutes: "/15"
+        - trigger: homeassistant
+          event: start
+      conditions:
+        - condition: state
+          entity_id: input_boolean.klimaatregie_actief
+          state: "on"
+      actions:
+        - repeat:
+            for_each: >-
+              {% from 'klimaat.jinja' import zone_lijst %}
+              {{ zone_lijst() | from_json }}
+            sequence:
+              - variables:
+                  advies_sensor: "sensor.zonwering_advies_{{ repeat.item }}"
+              - variables:
+                  cover: "{{ state_attr(advies_sensor, 'cover') }}"
+                  doel: "{{ state_attr(advies_sensor, 'positie') | int(-1) }}"
+                  mag: "{{ state_attr(advies_sensor, 'uitvoeren') in [true, 'True', 'true'] }}"
+              - variables:
+                  # Covers zonder tussenstand (de screengroep) kennen geen
+                  # current_position; die vertalen we naar 100 of 0.
+                  huidig: >-
+                    {% set p = state_attr(cover, 'current_position') %}
+                    {{ p | int(0) if p is not none
+                       else (100 if is_state(cover, 'open') else 0) }}
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ mag and doel >= 0 and cover not in [none, 'None']
+                         and (huidig - doel) | abs > 5 }}
+                then:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ doel >= 95 }}"
+                        sequence:
+                          - action: cover.open_cover
+                            target:
+                              entity_id: "{{ cover }}"
+                            continue_on_error: true
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ doel <= 5 }}"
+                        sequence:
+                          - action: cover.close_cover
+                            target:
+                              entity_id: "{{ cover }}"
+                            continue_on_error: true
+                    default:
+                      - action: cover.set_cover_position
+                        target:
+                          entity_id: "{{ cover }}"
+                        data:
+                          position: "{{ doel }}"
+                        continue_on_error: true
+                  # Even spreiden, zeven rolluiken tegelijk is veel voor het
+                  # zigbee-netwerk.
+                  - delay:
+                      seconds: 2
+
+    ###########################################################################
+    ## Laag 4b - handbediening herkennen
+    ##
+    ## Elke beweging die 90 seconden stil ligt op een andere stand dan het
+    ## advies telt als handbediening: app, knop, wandschakelaar of een van de
+    ## oude automatiseringen. De zone wordt dan een paar uur met rust gelaten.
+    ## Zet iemand hem terug op de geadviseerde stand, dan vervalt dat weer.
+    ##
+    ## Onze eigen bewegingen eindigen per definitie op het advies, dus die
+    ## herkent hij niet als handbediening.
+    ###########################################################################
+    - id: klimaat_handbediening_herkennen
+      alias: Klimaat - Handbediening herkennen
+      description: Laat een zone met rust nadat iemand de cover zelf heeft gezet
+      mode: queued
+      max: 20
+      max_exceeded: silent
+      triggers:
+        - trigger: state
+          entity_id: &beheerde_covers
+            - cover.covers_kitchen_screens
+            - cover.kantoor_links_low_speed
+            - cover.kantoor_rechts_low_speed
+            - cover.badkamer_rolluik_low_speed
+            - cover.slaapkamer_rolluik_low_speed
+            - cover.covers_bedroom_maxi
+            - cover.slaapkamer_mini
+          attribute: current_position
+          for: "00:01:30"
+        - trigger: state
+          entity_id: *beheerde_covers
+          to:
+            - open
+            - closed
+          for: "00:01:30"
+      conditions:
+        - condition: state
+          entity_id: input_boolean.klimaatregie_actief
+          state: "on"
+      actions:
+        - variables:
+            zone: >-
+              {% from 'klimaat.jinja' import zone_van_cover %}
+              {{ zone_van_cover(trigger.entity_id) | trim }}
+        - variables:
+            advies_sensor: "sensor.zonwering_advies_{{ zone }}"
+            override_timer: "timer.override_{{ zone }}"
+        - variables:
+            doel: "{{ state_attr(advies_sensor, 'positie') | int(-1) }}"
+            huidig: >-
+              {% set p = state_attr(trigger.entity_id, 'current_position') %}
+              {{ p | int(0) if p is not none
+                 else (100 if is_state(trigger.entity_id, 'open') else 0) }}
+        - choose:
+            # Staat ergens anders dan geadviseerd: iemand wilde dit zo.
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {{ zone != '' and doel >= 0 and (huidig - doel) | abs > 5 }}
+              sequence:
+                - action: timer.start
+                  target:
+                    entity_id: "{{ override_timer }}"
+                  data:
+                    duration: >-
+                      {{ (states('input_number.klimaat_override_uren') | float(4) * 3600) | int }}
+            # Staat weer op het advies: handbediening mag vervallen.
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {{ zone != '' and doel >= 0 and (huidig - doel) | abs <= 5
+                       and is_state(override_timer, 'active') }}
+              sequence:
+                - action: timer.cancel
+                  target:
+                    entity_id: "{{ override_timer }}"
