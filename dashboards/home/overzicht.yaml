@@ -436,6 +436,186 @@ cards:
             name: Zonnescherm achtertuin
             show_buttons_control: true
             show_position_control: true
+
+      # --------- Lucht woonkamer ---------
+      # De regel op de KLIMAAT-kaart vat drie metingen samen, maar tikken gaf
+      # more-info van alleen de luchtkwaliteits-entiteit: één grafiek, en juist
+      # niet die van CO2, fijnstof of vocht. Hier staan ze alle drie, met de
+      # drempels uit de kaartcode als lijn in de grafiek zodat een uitschieter
+      # meteen te plaatsen is. De lijst onderaan haalt met een glob alles op wat
+      # dit apparaat verder nog levert (VOC, temperatuur, batterij, ...), zodat
+      # er niets buiten beeld valt wat ik hier niet met naam ken.
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-lucht"
+        name: Lucht woonkamer
+        icon: mdi:air-filter
+        styles: *ov_popup
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.woonkamer_woonkamer_multisensor_kooldioxide
+                primary: CO₂
+                secondary: >-
+                  {{ (states('sensor.woonkamer_woonkamer_multisensor_kooldioxide') | round(0) ~ ' ppm')
+                     if has_value('sensor.woonkamer_woonkamer_multisensor_kooldioxide') else '—' }}
+                icon: mdi:molecule-co2
+                # float(-1) als sein voor "geen meting": met float(0) viel een
+                # uitgevallen sensor onder elke drempel en stond het icoon
+                # groen, alsof de lucht prima was.
+                icon_color: >-
+                  {% set v = states('sensor.woonkamer_woonkamer_multisensor_kooldioxide') | float(-1) %}
+                  {{ 'grey' if v < 0 else ('red' if v >= 1200 else ('orange' if v >= 800 else 'green')) }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.woonkamer_woonkamer_multisensor_pm2_5
+                primary: Fijnstof
+                secondary: >-
+                  {{ ('PM2.5 ' ~ states('sensor.woonkamer_woonkamer_multisensor_pm2_5'))
+                     if has_value('sensor.woonkamer_woonkamer_multisensor_pm2_5') else '—' }}
+                icon: mdi:blur
+                icon_color: >-
+                  {% set v = states('sensor.woonkamer_woonkamer_multisensor_pm2_5') | float(-1) %}
+                  {{ 'grey' if v < 0 else ('red' if v >= 35 else ('orange' if v >= 15 else 'green')) }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.woonkamer_woonkamer_multisensor_luchtvochtigheid
+                primary: Luchtvochtigheid
+                secondary: >-
+                  {{ (states('sensor.woonkamer_woonkamer_multisensor_luchtvochtigheid') | round(0) ~ '% rv')
+                     if has_value('sensor.woonkamer_woonkamer_multisensor_luchtvochtigheid') else '—' }}
+                icon: mdi:water-percent
+                # Vocht knijpt aan twee kanten: te droog is net zo goed mis.
+                icon_color: >-
+                  {% set v = states('sensor.woonkamer_woonkamer_multisensor_luchtvochtigheid') | float(-1) %}
+                  {{ 'grey' if v < 0 else ('orange' if (v < 30 or v > 70) else 'green') }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.woonkamer_woonkamer_multisensor_luchtkwaliteit
+                primary: Luchtkwaliteit
+                secondary: >-
+                  {% set m = {'excellent': 'uitstekend', 'good': 'goed', 'fair': 'redelijk',
+                              'moderate': 'matig', 'poor': 'slecht', 'very_poor': 'zeer slecht',
+                              'extremely_poor': 'extreem slecht'} %}
+                  {% set s = states('sensor.woonkamer_woonkamer_multisensor_luchtkwaliteit') %}
+                  {{ m.get(s, s | replace('_', ' '))
+                     if has_value('sensor.woonkamer_woonkamer_multisensor_luchtkwaliteit') else '—' }}
+                icon: mdi:air-filter
+                icon_color: >-
+                  {% set s = states('sensor.woonkamer_woonkamer_multisensor_luchtkwaliteit') %}
+                  {{ 'green' if s in ['excellent', 'good'] else
+                     ('red' if s in ['very_poor', 'extremely_poor'] else
+                     ('orange' if s in ['moderate', 'poor'] else 'grey')) }}
+                tap_action:
+                  action: more-info
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            header:
+              show: true
+              title: CO₂ (24 uur)
+            # 800 ppm wordt benauwd, boven 1200 echt ventileren; dezelfde
+            # drempels als de kleuren op de KLIMAAT-kaart.
+            apex_config:
+              chart:
+                height: 150
+              annotations:
+                yaxis:
+                  - y: 800
+                    borderColor: "#f59e0b"
+                    strokeDashArray: 4
+                  - y: 1200
+                    borderColor: "#ef4444"
+                    strokeDashArray: 4
+            series:
+              - entity: sensor.woonkamer_woonkamer_multisensor_kooldioxide
+                name: CO₂
+                type: area
+                color: "#38bdf8"
+                stroke_width: 2
+                float_precision: 0
+                group_by:
+                  duration: 10m
+                  func: avg
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            header:
+              show: true
+              title: Fijnstof PM2.5 (24 uur)
+            # WHO-daggemiddelde ligt op 15 µg/m³.
+            apex_config:
+              chart:
+                height: 150
+              annotations:
+                yaxis:
+                  - y: 15
+                    borderColor: "#f59e0b"
+                    strokeDashArray: 4
+            series:
+              - entity: sensor.woonkamer_woonkamer_multisensor_pm2_5
+                name: PM2.5
+                type: area
+                color: "#a78bfa"
+                stroke_width: 2
+                float_precision: 1
+                group_by:
+                  duration: 10m
+                  func: avg
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            header:
+              show: true
+              title: Luchtvochtigheid (24 uur)
+            apex_config:
+              chart:
+                height: 150
+              annotations:
+                yaxis:
+                  - y: 30
+                    borderColor: "#f59e0b"
+                    strokeDashArray: 4
+                  - y: 70
+                    borderColor: "#f59e0b"
+                    strokeDashArray: 4
+            series:
+              - entity: sensor.woonkamer_woonkamer_multisensor_luchtvochtigheid
+                name: Luchtvochtigheid
+                type: line
+                color: "#4ade80"
+                stroke_width: 2
+                float_precision: 0
+                group_by:
+                  duration: 10m
+                  func: avg
+          # Vangnet: alles wat dit apparaat verder nog levert en hierboven geen
+          # eigen grafiek heeft. Glob, dus een nieuwe meting verschijnt vanzelf.
+          - type: custom:mushroom-title-card
+            title: Alle metingen van deze sensor
+          - type: custom:auto-entities
+            show_empty: false
+            card:
+              type: grid
+              columns: 2
+              square: false
+            card_param: cards
+            sort:
+              method: friendly_name
+            filter:
+              include:
+                - entity_id: sensor.woonkamer_woonkamer_multisensor_*
+                  options:
+                    type: custom:mushroom-entity-card
+                    secondary_info: last-changed
+                    tap_action:
+                      action: more-info
+              exclude:
+                - state: unavailable
+                - state: unknown
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-brandweer"
