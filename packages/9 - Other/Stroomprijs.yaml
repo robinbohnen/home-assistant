@@ -1,0 +1,67 @@
+##############################################################################
+## STROOMPRIJS - vooruitblik op het volgende uur
+##
+## De SlimHuys-integratie levert de huidige prijs, het tariefniveau, de
+## extremen van vandaag en de blokken zelf. Het enige dat er niet in zit is een
+## vooruitblik ("wordt het straks duurder?"), en dat is precies wat de pil in
+## de header van het Overzicht-dashboard laat zien. Die twee sensoren staan
+## hier.
+##
+## Ze rekenen over de blokken die binnen het komende uur beginnen: bij
+## uurprijzen is dat één blok, bij kwartierprijzen het gemiddelde van vier.
+## Zo blijft "straks" hetzelfde betekenen als de integratie op kwartieren
+## overgaat, in plaats van dat de pil elke 15 minuten omslaat.
+##
+## Alles wat hier niet staat komt rechtstreeks uit SlimHuys:
+##   sensor.slimhuys_zonneplan_huidige_prijs        prijs nu
+##   sensor.slimhuys_zonneplan_tariefniveau_nu      low | medium | high
+##   sensor.slimhuys_zonneplan_laagste_vandaag      extremen van vandaag
+##   sensor.slimhuys_zonneplan_hoogste_vandaag
+##   binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu
+##############################################################################
+
+stroomprijs_package:
+
+  template:
+    - sensor:
+        - name: "Stroomprijs volgend uur"
+          unique_id: stroomprijs_volgend_uur
+          unit_of_measurement: "€/kWh"
+          state_class: measurement
+          icon: mdi:cash-clock
+          availability: >
+            {{ has_value('sensor.slimhuys_zonneplan_huidige_prijs') }}
+          state: >
+            {# Kwartierblokken als de integratie ze levert, anders de uurblokken.
+               De blokken van morgen erbij, zodat het rond middernacht klopt. #}
+            {% set kw = state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier', 'raw_today') %}
+            {% set vandaag = kw if kw else (state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today') or []) %}
+            {% set morgen = state_attr('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow') or [] %}
+            {% set ns = namespace(som=0.0, n=0) %}
+            {% for b in (vandaag + morgen) %}
+              {% set s = b.start | as_datetime %}
+              {% if s is not none and s > now() and s <= now() + timedelta(hours=1) %}
+                {% set ns.som = ns.som + (b.value | float(0)) %}
+                {% set ns.n = ns.n + 1 %}
+              {% endif %}
+            {% endfor %}
+            {{ (ns.som / ns.n) | round(4) if ns.n > 0 else 'unknown' }}
+
+        - name: "Stroomprijs niveau volgend uur"
+          unique_id: stroomprijs_niveau_volgend_uur
+          icon: mdi:trending-up
+          availability: >
+            {{ has_value('sensor.stroomprijs_volgend_uur')
+               and has_value('sensor.slimhuys_zonneplan_laagste_vandaag')
+               and has_value('sensor.slimhuys_zonneplan_hoogste_vandaag') }}
+          state: >
+            {# Dezelfde driedeling als de balken in de STROOMPRIJS-kaart:
+               onderste derde van het dagbereik is goedkoop, bovenste derde
+               duur. Een vlakke dag (< 2 ct verschil) is nooit extreem. #}
+            {% set p = states('sensor.stroomprijs_volgend_uur') | float(none) %}
+            {% set mn = states('sensor.slimhuys_zonneplan_laagste_vandaag') | float(none) %}
+            {% set mx = states('sensor.slimhuys_zonneplan_hoogste_vandaag') | float(none) %}
+            {% set spread = (mx - mn) if (mn is not none and mx is not none) else none %}
+            {% set r = 0.5 if (p is none or spread is none or spread < 0.02)
+                       else [[(p - mn) / spread, 0] | max, 1] | min %}
+            {{ 'low' if r <= 0.33 else ('high' if r >= 0.66 else 'medium') }}

@@ -28,7 +28,7 @@ cards:
           custom_fields:
             b: |
               [[[
-                var g = states['sensor.zonneplan_current_tariff_group'];
+                var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
                 var solar = states['sensor.solar_power_generated_now'];
                 var cheap = g && g.state === 'low';
                 var green = solar && Number(solar.state) > 0.1;
@@ -277,23 +277,25 @@ cards:
           custom_fields:
             b: |
               [[[
-                var t = states['sensor.zonneplan_current_electricity_tariff'];
-                var g = states['sensor.zonneplan_current_tariff_group'];
-                var nu = t && !isNaN(Number(t.state)) ? Number(t.state) : null;
-                var col = {low:'#4ade80', normal:'#f59e0b', high:'#ef4444'}[g ? g.state : ''] || 'rgba(255,255,255,0.6)';
-                // goedkoopste resterende prijsblok van vandaag uit de forecast halen.
-                // Zonneplan levert vanaf augustus 2026 kwartieren i.p.v. uren; de
-                // lengte van een blok maakt hier niet uit, alleen de tijdstempel.
-                var raw = (t && t.attributes && t.attributes.forecast) || [];
-                var norm = function(v){ if(v === null || v === undefined || isNaN(Number(v))) return null; var n = Number(v); if(Math.abs(n) > 100) n = n / 10000000; return n; };
+                var p = states['sensor.slimhuys_zonneplan_huidige_prijs'];
+                var nu = p && !isNaN(Number(p.state)) ? Number(p.state) : null;
+                // Het tariefniveau komt uit SlimHuys zelf, zodat deze stip
+                // hetzelfde zegt als de pil in de header en waar de batterij
+                // op schakelt.
+                var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
+                var col = {low:'#4ade80', medium:'#f59e0b', high:'#ef4444'}[g ? g.state : ''] || 'rgba(255,255,255,0.6)';
+                // Kwartierblokken als de integratie ze levert, anders de uurblokken.
+                var blok = function(eid){ var e = states[eid]; return (e && e.attributes && e.attributes.raw_today) || []; };
+                var kw = blok('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier');
+                var raw = kw.length ? kw : blok('sensor.slimhuys_zonneplan_prijzen_vandaag');
+                // Goedkoopste blok dat nog komt, inclusief het blok dat nu loopt.
                 var now = new Date();
                 var best = null;
                 raw.forEach(function(e){
-                  var d = new Date(e.datetime || e.date || e.time || e.start);
-                  if(isNaN(d.getTime()) || d.toDateString() !== now.toDateString() || d < now) return;
-                  var p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
-                  if(p === null) return;
-                  if(best === null || p < best.p) best = {p: p, d: d};
+                  var d = new Date(e.start), t = new Date(e.end), v = Number(e.value);
+                  if(isNaN(d.getTime()) || isNaN(v)) return;
+                  if(!isNaN(t.getTime()) && t <= now) return;
+                  if(best === null || v < best.p) best = {p: v, d: d};
                 });
                 var nuTxt = nu !== null ? '€ ' + nu.toFixed(3).replace('.',',') : '—';
                 var klok = function(d){ return ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2); };
@@ -380,12 +382,15 @@ cards:
                   }
             plotOptions:
               bar:
-                columnWidth: 82%
+                # Met kwartierblokken passen er 120 balken in het venster van
+                # 30 uur; bij 82% blijft daar zoveel wit tussen dat het streept.
+                # Vrijwel dicht tegen elkaar leest het als een prijsverloop.
+                columnWidth: 96%
           series:
-            # Drie series over dezelfde tijdstippen: per prijsblok vult er precies één,
-            # de andere twee zijn null. Gestapeld levert dat één balk per blok
-            # in de kleur van de prijsklasse (t.o.v. de rest van díe dag).
-            - entity: sensor.zonneplan_current_electricity_tariff
+            # Drie series over dezelfde tijdstippen: per prijsblok vult er precies
+            # een, de andere twee zijn null. Gestapeld levert dat een balk per blok
+            # in de kleur van de prijsklasse (t.o.v. de rest van die dag).
+            - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
               name: goedkoop
               type: column
               color: "#4ade80"
@@ -394,48 +399,46 @@ cards:
               float_precision: 3
               data_generator: |
                 const BAND = 0;
-                const raw = (entity.attributes && entity.attributes.forecast) || [];
-                const norm = (v) => {
-                  if (v === null || v === undefined || isNaN(Number(v))) return null;
-                  let n = Number(v);
-                  if (Math.abs(n) > 100) n = n / 10000000; // integer-eenheden -> euro
-                  return n;
-                };
-                const pts = raw.map((e) => {
-                  const ts = new Date(e.datetime || e.date || e.time || e.start).getTime();
-                  const p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
-                  return [ts, p];
-                }).filter((x) => !isNaN(x[0]));
-                // ApexCharts centreert een kolom op zijn timestamp, maar een
-                // prijsblok is het interval [t, t+blok). Ongecorrigeerd loopt de
-                // balk van 10:00 dus van 09:30 tot 10:30 en staat de nu-lijn er om
-                // 09:55 al middenin. Daarom plotten we op het midden van het blok:
-                // de balk dekt dan exact zijn eigen uur (of kwartier, vanaf 2026).
-                // Kleinste positieve stap, zodat een gat in de forecast of een
-                // DST-sprong de blokbreedte niet oprekt.
-                const stepMs = pts.map(([ts]) => ts).sort((a, b) => a - b)
-                  .reduce((acc, ts, i, arr) => (i && ts - arr[i - 1] > 0) ? Math.min(acc, ts - arr[i - 1]) : acc, Infinity);
-                const shift = (isFinite(stepMs) ? stepMs : 3600000) / 2;
-                const dayKey = (ts) => new Date(ts).toDateString();
+                // SlimHuys geeft per blok een start EN een end, dus de blokbreedte
+                // hoeft niet uit de onderlinge afstand geraden te worden. Daarmee
+                // werkt dit voor kwartieren net zo goed als voor uren, en zelfs
+                // voor de dag waarop het overschakelt.
+                const blokken = (ent, key) => (ent && ent.attributes && ent.attributes[key]) || [];
+                const st = (typeof hass !== 'undefined' && hass.states) ? hass.states : {};
+                const vandaag = blokken(entity, 'raw_today').length
+                  ? blokken(entity, 'raw_today')
+                  : blokken(st['sensor.slimhuys_zonneplan_prijzen_vandaag'], 'raw_today');
+                const pts = vandaag
+                  .concat(blokken(st['sensor.slimhuys_zonneplan_prijzen_morgen'], 'raw_tomorrow'))
+                  .map((e) => {
+                    const s = new Date(e.start).getTime();
+                    const t = new Date(e.end).getTime();
+                    const p = Number(e.value);
+                    // ApexCharts centreert een kolom op zijn timestamp; plotten op
+                    // het midden van [start, end) laat de balk exact zijn eigen
+                    // blok dekken in plaats van een half blok ernaast.
+                    return { x: isFinite(t) ? (s + t) / 2 : s, dag: new Date(s).toDateString(), p: isNaN(p) ? null : p };
+                  })
+                  .filter((o) => isFinite(o.x))
+                  .sort((a, b) => a.x - b.x);
                 const stats = {};
-                pts.forEach(([ts, p]) => {
-                  if (p === null) return;
-                  const k = dayKey(ts);
-                  if (!stats[k]) stats[k] = { min: p, max: p };
-                  else { stats[k].min = Math.min(stats[k].min, p); stats[k].max = Math.max(stats[k].max, p); }
+                pts.forEach((o) => {
+                  if (o.p === null) return;
+                  const st2 = stats[o.dag] || (stats[o.dag] = { min: o.p, max: o.p });
+                  st2.min = Math.min(st2.min, o.p); st2.max = Math.max(st2.max, o.p);
                 });
-                // Ook de null-punten schuiven mee: bij een gestapelde grafiek
+                // Ook de null-punten blijven staan: bij een gestapelde grafiek
                 // moeten alle series exact dezelfde x-waarden hebben.
-                return pts.map(([ts, p]) => {
-                  if (p === null) return [ts + shift, null];
-                  const s = stats[dayKey(ts)];
-                  const spread = s.max - s.min;
+                return pts.map((o) => {
+                  if (o.p === null) return [o.x, null];
+                  const d = stats[o.dag];
+                  const spread = d.max - d.min;
                   // vlakke dag (< 2 ct verschil): niets is echt goedkoop of duur
-                  const r = (spread < 0.02) ? 0.5 : (p - s.min) / spread;
+                  const r = (spread < 0.02) ? 0.5 : (o.p - d.min) / spread;
                   const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
-                  return [ts + shift, band === BAND ? p : null];
+                  return [o.x, band === BAND ? o.p : null];
                 });
-            - entity: sensor.zonneplan_current_electricity_tariff
+            - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
               name: gemiddeld
               type: column
               color: "#f59e0b"
@@ -444,48 +447,46 @@ cards:
               float_precision: 3
               data_generator: |
                 const BAND = 1;
-                const raw = (entity.attributes && entity.attributes.forecast) || [];
-                const norm = (v) => {
-                  if (v === null || v === undefined || isNaN(Number(v))) return null;
-                  let n = Number(v);
-                  if (Math.abs(n) > 100) n = n / 10000000;
-                  return n;
-                };
-                const pts = raw.map((e) => {
-                  const ts = new Date(e.datetime || e.date || e.time || e.start).getTime();
-                  const p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
-                  return [ts, p];
-                }).filter((x) => !isNaN(x[0]));
-                // ApexCharts centreert een kolom op zijn timestamp, maar een
-                // prijsblok is het interval [t, t+blok). Ongecorrigeerd loopt de
-                // balk van 10:00 dus van 09:30 tot 10:30 en staat de nu-lijn er om
-                // 09:55 al middenin. Daarom plotten we op het midden van het blok:
-                // de balk dekt dan exact zijn eigen uur (of kwartier, vanaf 2026).
-                // Kleinste positieve stap, zodat een gat in de forecast of een
-                // DST-sprong de blokbreedte niet oprekt.
-                const stepMs = pts.map(([ts]) => ts).sort((a, b) => a - b)
-                  .reduce((acc, ts, i, arr) => (i && ts - arr[i - 1] > 0) ? Math.min(acc, ts - arr[i - 1]) : acc, Infinity);
-                const shift = (isFinite(stepMs) ? stepMs : 3600000) / 2;
-                const dayKey = (ts) => new Date(ts).toDateString();
+                // SlimHuys geeft per blok een start EN een end, dus de blokbreedte
+                // hoeft niet uit de onderlinge afstand geraden te worden. Daarmee
+                // werkt dit voor kwartieren net zo goed als voor uren, en zelfs
+                // voor de dag waarop het overschakelt.
+                const blokken = (ent, key) => (ent && ent.attributes && ent.attributes[key]) || [];
+                const st = (typeof hass !== 'undefined' && hass.states) ? hass.states : {};
+                const vandaag = blokken(entity, 'raw_today').length
+                  ? blokken(entity, 'raw_today')
+                  : blokken(st['sensor.slimhuys_zonneplan_prijzen_vandaag'], 'raw_today');
+                const pts = vandaag
+                  .concat(blokken(st['sensor.slimhuys_zonneplan_prijzen_morgen'], 'raw_tomorrow'))
+                  .map((e) => {
+                    const s = new Date(e.start).getTime();
+                    const t = new Date(e.end).getTime();
+                    const p = Number(e.value);
+                    // ApexCharts centreert een kolom op zijn timestamp; plotten op
+                    // het midden van [start, end) laat de balk exact zijn eigen
+                    // blok dekken in plaats van een half blok ernaast.
+                    return { x: isFinite(t) ? (s + t) / 2 : s, dag: new Date(s).toDateString(), p: isNaN(p) ? null : p };
+                  })
+                  .filter((o) => isFinite(o.x))
+                  .sort((a, b) => a.x - b.x);
                 const stats = {};
-                pts.forEach(([ts, p]) => {
-                  if (p === null) return;
-                  const k = dayKey(ts);
-                  if (!stats[k]) stats[k] = { min: p, max: p };
-                  else { stats[k].min = Math.min(stats[k].min, p); stats[k].max = Math.max(stats[k].max, p); }
+                pts.forEach((o) => {
+                  if (o.p === null) return;
+                  const st2 = stats[o.dag] || (stats[o.dag] = { min: o.p, max: o.p });
+                  st2.min = Math.min(st2.min, o.p); st2.max = Math.max(st2.max, o.p);
                 });
-                // Ook de null-punten schuiven mee: bij een gestapelde grafiek
+                // Ook de null-punten blijven staan: bij een gestapelde grafiek
                 // moeten alle series exact dezelfde x-waarden hebben.
-                return pts.map(([ts, p]) => {
-                  if (p === null) return [ts + shift, null];
-                  const s = stats[dayKey(ts)];
-                  const spread = s.max - s.min;
+                return pts.map((o) => {
+                  if (o.p === null) return [o.x, null];
+                  const d = stats[o.dag];
+                  const spread = d.max - d.min;
                   // vlakke dag (< 2 ct verschil): niets is echt goedkoop of duur
-                  const r = (spread < 0.02) ? 0.5 : (p - s.min) / spread;
+                  const r = (spread < 0.02) ? 0.5 : (o.p - d.min) / spread;
                   const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
-                  return [ts + shift, band === BAND ? p : null];
+                  return [o.x, band === BAND ? o.p : null];
                 });
-            - entity: sensor.zonneplan_current_electricity_tariff
+            - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
               name: duur
               type: column
               color: "#ef4444"
@@ -494,46 +495,44 @@ cards:
               float_precision: 3
               data_generator: |
                 const BAND = 2;
-                const raw = (entity.attributes && entity.attributes.forecast) || [];
-                const norm = (v) => {
-                  if (v === null || v === undefined || isNaN(Number(v))) return null;
-                  let n = Number(v);
-                  if (Math.abs(n) > 100) n = n / 10000000;
-                  return n;
-                };
-                const pts = raw.map((e) => {
-                  const ts = new Date(e.datetime || e.date || e.time || e.start).getTime();
-                  const p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
-                  return [ts, p];
-                }).filter((x) => !isNaN(x[0]));
-                // ApexCharts centreert een kolom op zijn timestamp, maar een
-                // prijsblok is het interval [t, t+blok). Ongecorrigeerd loopt de
-                // balk van 10:00 dus van 09:30 tot 10:30 en staat de nu-lijn er om
-                // 09:55 al middenin. Daarom plotten we op het midden van het blok:
-                // de balk dekt dan exact zijn eigen uur (of kwartier, vanaf 2026).
-                // Kleinste positieve stap, zodat een gat in de forecast of een
-                // DST-sprong de blokbreedte niet oprekt.
-                const stepMs = pts.map(([ts]) => ts).sort((a, b) => a - b)
-                  .reduce((acc, ts, i, arr) => (i && ts - arr[i - 1] > 0) ? Math.min(acc, ts - arr[i - 1]) : acc, Infinity);
-                const shift = (isFinite(stepMs) ? stepMs : 3600000) / 2;
-                const dayKey = (ts) => new Date(ts).toDateString();
+                // SlimHuys geeft per blok een start EN een end, dus de blokbreedte
+                // hoeft niet uit de onderlinge afstand geraden te worden. Daarmee
+                // werkt dit voor kwartieren net zo goed als voor uren, en zelfs
+                // voor de dag waarop het overschakelt.
+                const blokken = (ent, key) => (ent && ent.attributes && ent.attributes[key]) || [];
+                const st = (typeof hass !== 'undefined' && hass.states) ? hass.states : {};
+                const vandaag = blokken(entity, 'raw_today').length
+                  ? blokken(entity, 'raw_today')
+                  : blokken(st['sensor.slimhuys_zonneplan_prijzen_vandaag'], 'raw_today');
+                const pts = vandaag
+                  .concat(blokken(st['sensor.slimhuys_zonneplan_prijzen_morgen'], 'raw_tomorrow'))
+                  .map((e) => {
+                    const s = new Date(e.start).getTime();
+                    const t = new Date(e.end).getTime();
+                    const p = Number(e.value);
+                    // ApexCharts centreert een kolom op zijn timestamp; plotten op
+                    // het midden van [start, end) laat de balk exact zijn eigen
+                    // blok dekken in plaats van een half blok ernaast.
+                    return { x: isFinite(t) ? (s + t) / 2 : s, dag: new Date(s).toDateString(), p: isNaN(p) ? null : p };
+                  })
+                  .filter((o) => isFinite(o.x))
+                  .sort((a, b) => a.x - b.x);
                 const stats = {};
-                pts.forEach(([ts, p]) => {
-                  if (p === null) return;
-                  const k = dayKey(ts);
-                  if (!stats[k]) stats[k] = { min: p, max: p };
-                  else { stats[k].min = Math.min(stats[k].min, p); stats[k].max = Math.max(stats[k].max, p); }
+                pts.forEach((o) => {
+                  if (o.p === null) return;
+                  const st2 = stats[o.dag] || (stats[o.dag] = { min: o.p, max: o.p });
+                  st2.min = Math.min(st2.min, o.p); st2.max = Math.max(st2.max, o.p);
                 });
-                // Ook de null-punten schuiven mee: bij een gestapelde grafiek
+                // Ook de null-punten blijven staan: bij een gestapelde grafiek
                 // moeten alle series exact dezelfde x-waarden hebben.
-                return pts.map(([ts, p]) => {
-                  if (p === null) return [ts + shift, null];
-                  const s = stats[dayKey(ts)];
-                  const spread = s.max - s.min;
+                return pts.map((o) => {
+                  if (o.p === null) return [o.x, null];
+                  const d = stats[o.dag];
+                  const spread = d.max - d.min;
                   // vlakke dag (< 2 ct verschil): niets is echt goedkoop of duur
-                  const r = (spread < 0.02) ? 0.5 : (p - s.min) / spread;
+                  const r = (spread < 0.02) ? 0.5 : (o.p - d.min) / spread;
                   const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
-                  return [ts + shift, band === BAND ? p : null];
+                  return [o.x, band === BAND ? o.p : null];
                 });
         # samenvatting laagste / hoogste per dag + kleurlegenda (één regel)
         - type: custom:button-card
@@ -559,20 +558,20 @@ cards:
           custom_fields:
             dagen: |
               [[[
-                var t = states['sensor.zonneplan_current_electricity_tariff'];
-                var raw = (t && t.attributes && t.attributes.forecast) || [];
-                var norm = function(v){ if(v === null || v === undefined || isNaN(Number(v))) return null; var n = Number(v); if(Math.abs(n) > 100) n = n / 10000000; return n; };
-                var extremen = function(offset){
-                  var ref = new Date(); ref.setDate(ref.getDate() + offset);
-                  var key = ref.toDateString();
+                var blok = function(eid, key){ var e = states[eid]; return (e && e.attributes && e.attributes[key]) || []; };
+                var extremen = function(eid, key){
+                  var raw = blok(eid, key);
+                  // vandaag: kwartierblokken hebben voorrang op de uurblokken
+                  if(key === 'raw_today') {
+                    var kw = blok('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier', 'raw_today');
+                    if(kw.length) raw = kw;
+                  }
                   var lo = null, hi = null;
                   raw.forEach(function(e){
-                    var d = new Date(e.datetime || e.date || e.time || e.start);
-                    if(isNaN(d.getTime()) || d.toDateString() !== key) return;
-                    var p = norm(e.electricity_price !== undefined ? e.electricity_price : (e.price !== undefined ? e.price : e.value));
-                    if(p === null) return;
-                    if(lo === null || p < lo.p) lo = {p: p, d: d};
-                    if(hi === null || p > hi.p) hi = {p: p, d: d};
+                    var d = new Date(e.start), v = Number(e.value);
+                    if(isNaN(d.getTime()) || isNaN(v)) return;
+                    if(lo === null || v < lo.p) lo = {p: v, d: d};
+                    if(hi === null || v > hi.p) hi = {p: v, d: d};
                   });
                   return lo === null ? null : {lo: lo, hi: hi};
                 };
@@ -582,7 +581,9 @@ cards:
                   if(!x) return `<span style="color:rgba(255,255,255,0.55)">${lbl}</span> <span style="color:rgba(255,255,255,0.3)">nog niet bekend</span>`;
                   return `<span style="color:rgba(255,255,255,0.55)">${lbl}</span> ${f(x.lo,'#4ade80')} <span style="color:rgba(255,255,255,0.2)">·</span> ${f(x.hi,'#ef4444')}`;
                 };
-                return `<span style="display:flex;align-items:center;gap:14px;font-size:12px;white-space:nowrap">${deel('vandaag', extremen(0))}${deel('morgen', extremen(1))}</span>`;
+                var vandaag = extremen('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today');
+                var morgen = extremen('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow');
+                return `<span style="display:flex;align-items:center;gap:14px;font-size:12px;white-space:nowrap">${deel('vandaag', vandaag)}${deel('morgen', morgen)}</span>`;
               ]]]
             key: |
               [[[

@@ -104,7 +104,7 @@ cards:
           - type: horizontal-stack
             cards:
               - type: custom:button-card
-                entity: sensor.zonneplan_current_electricity_tariff
+                entity: sensor.slimhuys_zonneplan_huidige_prijs
                 show_icon: false
                 show_name: false
                 show_state: false
@@ -113,7 +113,7 @@ cards:
                 styles:
                   card:
                     - background: >
-                        [[[ var g = states['sensor.zonneplan_current_tariff_group']; return (g && g.state === 'low') ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
+                        [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && g.state === 'low') ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
                     - border: 1px solid rgba(255,255,255,0.07)
                     - border-radius: 999px
                     - box-shadow: none
@@ -129,11 +129,11 @@ cards:
                 custom_fields:
                   c: |
                     [[[
-                      var g = states['sensor.zonneplan_current_tariff_group'];
-                      var p = states['sensor.zonneplan_current_electricity_tariff'];
-                      var lbl = {low:'laag', normal:'gemiddeld', high:'hoog'};
-                      var col = {low:'#4ade80', normal:'#f59e0b', high:'#ef4444'};
-                      var gs = g ? g.state : 'normal';
+                      var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
+                      var p = states['sensor.slimhuys_zonneplan_huidige_prijs'];
+                      var lbl = {low:'laag', medium:'gemiddeld', high:'hoog'};
+                      var col = {low:'#4ade80', medium:'#f59e0b', high:'#ef4444'};
+                      var gs = g ? g.state : 'medium';
                       var prijs = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '—';
                       return `<span style="display:flex;align-items:center;gap:1vh;white-space:nowrap;font-size:2.7vh;font-weight:500;color:${gs === 'low' ? '#4ade80' : 'rgba(255,255,255,0.85)'}">
                         <span style="width:1.1vh;height:1.1vh;border-radius:50%;background:${col[gs]||'#888'}"></span>tarief ${lbl[gs]||gs} · ${prijs}</span>`;
@@ -338,7 +338,7 @@ cards:
             custom_fields:
               t: |
                 [[[
-                  var g = states['sensor.zonneplan_current_tariff_group'];
+                  var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
                   var s = states['sensor.solar_power_generated_now'];
                   // 'groen' zegt alleen dat de eigen panelen leveren (> 100 W,
                   // met dezelfde W/kW-normalisatie als de cijfers hieronder);
@@ -415,7 +415,7 @@ cards:
                   var start = nu - 3600000, eind = nu + 11 * 3600000;
                   var pct = function(t){ return (t - start) / (eind - start) * 100; };
                   var klem = function(v){ return Math.max(0, Math.min(100, v)); };
-                  var t = states['sensor.zonneplan_current_electricity_tariff'];
+                  var t = states['sensor.slimhuys_zonneplan_huidige_prijs'];
                   var raw = (t && t.attributes && t.attributes.forecast) || [];
                   var norm = function(x){ if(x === null || x === undefined || isNaN(Number(x))) return null; var n = Number(x); if(Math.abs(n) > 100) n = n / 10000000; return n; };
                   var slots = raw.map(function(e){

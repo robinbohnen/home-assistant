@@ -50,17 +50,17 @@ cards:
         styles:
           card:
             - background: >
-                [[[ var g = states['sensor.zonneplan_current_tariff_group']; return (g && g.state === 'low') ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
+                [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && g.state === 'low') ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
             - border: >
-                [[[ var g = states['sensor.zonneplan_current_tariff_group']; return (g && g.state === 'low') ? '1px solid rgba(52,168,120,0.28)' : '1px solid rgba(255,255,255,0.06)'; ]]]
+                [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && g.state === 'low') ? '1px solid rgba(52,168,120,0.28)' : '1px solid rgba(255,255,255,0.06)'; ]]]
         custom_fields:
           c: |
             [[[
-              var g = states['sensor.zonneplan_current_tariff_group'];
-              var p = states['sensor.zonneplan_current_electricity_tariff'];
-              var lbl = {low:'laag', normal:'gemiddeld', high:'hoog'};
-              var col = {low:'#4ade80', normal:'#f59e0b', high:'#ef4444'};
-              var gs = g ? g.state : 'normal';
+              var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
+              var p = states['sensor.slimhuys_zonneplan_huidige_prijs'];
+              var lbl = {low:'laag', medium:'gemiddeld', high:'hoog'};
+              var col = {low:'#4ade80', medium:'#f59e0b', high:'#ef4444'};
+              var gs = g ? g.state : 'medium';
               var price = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '';
               var txt = gs === 'low' ? '#4ade80' : 'rgba(255,255,255,0.85)';
               return `<span style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:${col[gs]||'#888'}"></span><span style="color:${txt}">tarief ${lbl[gs]||gs} · ${price}</span></span>`;
@@ -110,17 +110,17 @@ cards:
           navigation_path: "#ov-energie"
         visibility:
           - condition: state
-            entity: sensor.zonneplan_forecast_tariff_group_hour_1
+            entity: sensor.stroomprijs_niveau_volgend_uur
             state: high
           - condition: state
-            entity: sensor.zonneplan_current_tariff_group
+            entity: sensor.slimhuys_zonneplan_tariefniveau_nu
             state:
               - low
-              - normal
+              - medium
         custom_fields:
           c: |
             [[[
-              var p = states['sensor.zonneplan_forecast_tariff_hour_1'];
+              var p = states['sensor.stroomprijs_volgend_uur'];
               var price = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '';
               return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:trending-up" style="--mdc-icon-size:16px"></ha-icon>straks duurder${price ? ' · ' + price : ''}</span>`;
             ]]]
