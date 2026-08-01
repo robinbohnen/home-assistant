@@ -193,7 +193,13 @@
 {%- set zon_richting = zon.richting -%}
 {%- set gevel_txt = z.gevels | join('/') ~ 'gevel' -%}
 {%- set thuis = is_state('group.all_adults', 'home') -%}
-{%- set weeralarm = is_state('binary_sensor.knmi_waarschuwing', 'on') -%}
+{#- De KNMI-sensor staat ook op 'on' als er niets aan de hand is; de tekst in
+    het description-attribuut is wél betrouwbaar. Zelfde truc als in de
+    bestaande automatisering `knmi_weeralarm` (packages/9 - Other/Weather.yaml),
+    die daarom ook op die tekst filtert in plaats van op de staat. -#}
+{%- set alarm_tekst = (state_attr('binary_sensor.knmi_waarschuwing', 'description') or '') | lower -%}
+{%- set weeralarm = is_state('binary_sensor.knmi_waarschuwing', 'on')
+                    and 'geen waarschuwingen' not in alarm_tekst -%}
 {%- set airco = z.get('airco') -%}
 {%- set airco_koelt = airco is not none and states(airco) in ['cool', 'dry'] -%}
 

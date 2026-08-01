@@ -127,8 +127,15 @@ De beslistabel, van hoog naar laag:
    - *Neutraal*: open, tenzij zon én een warme kamer.
 5. **Airco koelt** in die zone → geen open rolluik; anders koel je de straat.
 6. **Screens**: kennen geen kier, gaan 's nachts omhoog, en gaan altijd in bij
-   een KNMI-waarschuwing of vorst. Die veiligheidsregel staat als laatste en
-   overschrijft al het bovenstaande.
+   een KNMI-waarschuwing of vorst (< 4 °C). Die veiligheidsregel staat als
+   laatste en overschrijft al het bovenstaande.
+
+> **`binary_sensor.knmi_waarschuwing` is niet te vertrouwen op zijn staat.**
+> Hij staat regelmatig op `on` ("Onveilig") terwijl er niets aan de hand is.
+> Daarom telt alleen het `description`-attribuut: staat daar "geen
+> waarschuwingen van kracht", dan is er geen waarschuwing. De bestaande
+> automatisering `knmi_weeralarm` doet hetzelfde. Zou je op de staat afgaan,
+> dan gaan de keukenscreens nooit meer naar beneden.
 
 ### Laag 4 — Uitvoeren
 
@@ -240,7 +247,7 @@ python3 -m venv .venv && .venv/bin/pip install jinja2
 .venv/bin/python tests/test_klimaat.py
 ```
 
-Die dekt 32 situaties: hete dag met zon voor, preventief dimmen, niemand thuis,
+Die dekt 34 situaties: hete dag met zon voor, preventief dimmen, niemand thuis,
 winterzon, nachtspui, stille uren, storm op de screens, airco aan, geblokkeerde
 zones, een kapotte temperatuursensor en de zon die over alle drie de gevels
 draait. Hij controleert ook of elke zoneslug nog overeenkomt met het entity_id
