@@ -590,6 +590,70 @@ cards:
                 var dot = function(c, lbl){ return `<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${lbl}</span>`; };
                 return `<span style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:rgba(255,255,255,0.52)">${dot('#4ade80','goedkoop')}${dot('#f59e0b','gemiddeld')}${dot('#ef4444','duur')}</span>`;
               ]]]
+        # tips: goedkoopste blok, negatieve prijs, en hoe fijn de prijzen zijn
+        - type: custom:button-card
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-energie"
+          styles:
+            card:
+              - background: none
+              - border: none
+              - box-shadow: none
+              - padding: 2px 2px 0 2px
+            grid:
+              - grid-template-areas: '"tips gran"'
+              - grid-template-columns: 1fr auto
+              - align-items: center
+              - column-gap: 12px
+            custom_fields:
+              tips:
+                - justify-self: start
+              gran:
+                - justify-self: end
+          custom_fields:
+            tips: |
+              [[[
+                var klok = function(d){ return ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2); };
+                // Safari struikelt over "2026-08-01 13:00"; met een T ertussen
+                // parseert het overal. Lukt het niet, dan tonen we de tekst zelf.
+                var lees = function(eid){
+                  var s = states[eid];
+                  if(!s || ['geen','none','unknown','unavailable',''].indexOf(String(s.state).toLowerCase()) >= 0) return null;
+                  var d = new Date(String(s.state).replace(' ', 'T'));
+                  return isNaN(d.getTime()) ? {tekst: s.state} : {d: d};
+                };
+                var wanneer = function(x){
+                  if(!x) return '';
+                  if(!x.d) return x.tekst;
+                  return (new Date().toDateString() === x.d.toDateString() ? '' : 'morgen ') + klok(x.d);
+                };
+                var ico = function(n, extra){ return `<ha-icon icon="${n}" style="--mdc-icon-size:14px;vertical-align:-3px;${extra||'opacity:0.45'}"></ha-icon>`; };
+                var delen = [];
+                var blok = lees('sensor.slimhuys_zonneplan_goedkoopste_blok_start');
+                if(blok) {
+                  var p = states['sensor.slimhuys_zonneplan_goedkoopste_blok_gemiddelde'];
+                  var pTxt = p && !isNaN(Number(p.state)) ? ` <span style="color:#4ade80">€ ${Number(p.state).toFixed(3).replace('.',',')}</span>` : '';
+                  delen.push(`<span>${ico('mdi:clock-check-outline')} goedkoopste blok <span style="color:white">${wanneer(blok)}</span>${pTxt}</span>`);
+                }
+                var nu = states['binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu'];
+                var straks = lees('sensor.slimhuys_zonneplan_volgende_negatieve_prijs');
+                if(nu && nu.state === 'on') {
+                  delen.push(`<span style="color:#4ade80">${ico('mdi:flash', 'color:#4ade80')} prijs is nu negatief</span>`);
+                } else if(straks) {
+                  delen.push(`<span>${ico('mdi:flash-outline')} negatief vanaf <span style="color:white">${wanneer(straks)}</span></span>`);
+                }
+                if(!delen.length) return '';
+                return `<span style="display:flex;align-items:center;gap:10px;font-size:12px;color:rgba(255,255,255,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${delen.join('<span style="opacity:0.25">·</span>')}</span>`;
+              ]]]
+            gran: |
+              [[[
+                var e = states['sensor.slimhuys_zonneplan_prijzen_vandaag'];
+                var m = e && e.attributes ? Number(e.attributes.granularity_minutes) : NaN;
+                if(!isFinite(m) || m <= 0) return '';
+                var lbl = m === 15 ? 'kwartierprijzen' : (m === 60 ? 'uurprijzen' : `prijzen per ${m} min`);
+                return `<span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${lbl}</span>`;
+              ]]]
   # VEELGEBRUIKERS
   - type: custom:mod-card
     card_mod:
