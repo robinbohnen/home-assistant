@@ -1,10 +1,17 @@
 attic_ac_package:
 
-  group:
-    temperature_sensors_upstairs:
-      name: Temperature Sensors Upstairs
-      icon: mdi:temperature-celsius
-      entities:
+  sensor:
+    # Hier stond een `group:` van deze vijf sensoren, waar de trigger hieronder
+    # een numeric_state op deed. Een groep middelt geen sensorwaarden maar geeft
+    # een groepsstatus, en die blijft bij sensoren `unknown`: de trigger is
+    # daardoor nooit afgegaan en de airco-vraag is nooit gesteld. Een min_max
+    # met type mean geeft wel een getal om op te triggeren.
+    - platform: min_max
+      type: mean
+      round_digits: 1
+      name: Temperatuur boven gemiddeld
+      unique_id: temperatuur_boven_gemiddeld
+      entity_ids:
         - sensor.badkamer_badkamer_temperatuur_temperatuur
         - sensor.slaapkamer_slaapkamer_temperatuur_temperatuur
         - sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur
@@ -30,10 +37,17 @@ attic_ac_package:
       description: "Turn on the AC if it is too hot upstairs"
       mode: single
       triggers:
+        # De grens stond op 21, maar die is nooit in de praktijk getoetst omdat
+        # de trigger niet werkte (zie de sensor hierboven). 21 graden gemiddeld
+        # over vijf kamers is een normale kamertemperatuur, geen "snikheet":
+        # daarmee zou deze vraag vrijwel elke zomerdag binnenkomen. 24 ligt in
+        # lijn met de woonkamer, die op 22,5 vraagt voor één kamer.
+        # `for` vangt af dat een gemiddelde dat rond de grens schommelt de vraag
+        # meerdere keren per dag stelt.
         - trigger: numeric_state
-          entity_id:
-            - group.temperature_sensors_upstairs
-          above: 21
+          entity_id: sensor.temperatuur_boven_gemiddeld
+          above: 24
+          for: "00:10:00"
       conditions: []
       actions:
         - if:
@@ -76,8 +90,12 @@ attic_ac_package:
         - alias: Perform the action
           choose:
             - conditions:
+                # `wait.trigger` is None als er niet geantwoord is binnen de
+                # timeout; zonder die check gooit dit template dan een fout.
                 - condition: template
-                  value_template: "{{ wait.trigger.event.data.action == action_airco_aan }}"
+                  value_template: >-
+                    {{ wait.trigger is not none
+                       and wait.trigger.event.data.action == action_airco_aan }}
               sequence:
                 - data: {}
                   target:

@@ -84,14 +84,14 @@ Acht zones, elk met een sensor `sensor.zonwering_advies_<zone>`:
 
 | Zone (slug) | Cover | Gevels | Bijzonder |
 |---|---|---|---|
-| `keuken_screens` | `cover.covers_kitchen_screens` | voor + zij | screen: geen kier, in bij storm |
+| `keuken_screens` | `cover.covers_kitchen_screens` | voor | screen: geen kier, in bij storm |
 | `kantoor_links` | `cover.kantoor_links_low_speed` | voor + zij | |
 | `kantoor_rechts` | `cover.kantoor_rechts_low_speed` | voor + zij | |
 | `badkamer` | `cover.badkamer_rolluik_low_speed` | achter | stille uren |
 | `slaapkamer` | `cover.slaapkamer_rolluik_low_speed` | achter | stille uren |
 | `slaapkamer_logan` | `cover.covers_bedroom_maxi` | voor | slaapvenster vanaf 19:00 |
 | `slaapkamer_emma` | `cover.slaapkamer_mini` | zij + achter | slaapvenster vanaf 19:00 |
-| `zonnescherm` | `cover.achtertuin_zonnescherm` | achter | screen; **omgekeerd bedraad** |
+| `zonnescherm` | `cover.achtertuin_zonnescherm` | achter | screen; **omgekeerd bedraad**; **vraagt eerst** |
 
 > **Het zonnescherm is andersom bedraad.** Voor die cover betekent de HA-stand
 > `open` *uitgeschoven* (zon tegenhouden) en `closed` *ingetrokken*. De hele
@@ -112,6 +112,16 @@ op de zijgevel, dus reageren ze allebei op beide. Weet je het wel, zet dan bij
 dat rolluik in `klimaat.jinja` `'gevels': ['voor']` of `['zij']`; dan blijft
 het andere raam langer licht.
 
+> **Een gevel er "voor de zekerheid" bij zetten kost je een halve dag licht.**
+> De keukenscreens stonden op voor + zij en bleven daardoor tot een uur of zes
+> omlaag, terwijl de zon voor de keuken (oost) al rond het middaguur weg is.
+> Dat komt van twee kanten: `zon_richting_zijgevel` telt met een gevelbreedte
+> van 85° door tot een azimut van 255° — bijna west — en `zon_op_zijgevel`
+> heeft geen eigen lichtsensor en pakt dan de meting uit de áchtertuin. De
+> zijgevel stond dus nog "aan" op de avondzon van de andere kant van het huis.
+> Ze staan nu op alleen `['voor']`, net zoals de oude `covers_sun_protection`
+> puur naar `sensor.voortuin_zon_luminance` keek.
+
 De slug bepaalt de naam van de bijbehorende helpers:
 `sensor.zonwering_advies_<slug>`, `timer.override_<slug>` en
 `input_boolean.zonwering_handmatig_<slug>`. Voeg je een zone toe, geef hem dan
@@ -119,7 +129,8 @@ een slug die gelijk is aan het entity_id dat Home Assistant van de sensornaam
 maakt — anders vindt de uitvoerder de zone niet.
 
 De staat van zo'n sensor is `open`, `kier`, `dicht` of `rust` (= niet bewegen).
-Attributen: `positie` (0–100 of −1), `uitvoeren`, `reden` en `blokkade`.
+Attributen: `positie` (0–100 of −1), `uitvoeren`, `vraagt`, `reden` en
+`blokkade`.
 `reden` is bewust in gewone taal geschreven, dat is wat je op het dashboard
 leest als je je afvraagt waarom een rolluik doet wat het doet.
 
@@ -165,23 +176,34 @@ De beslistabel, van hoog naar laag:
    een rolluik klopt dat (dat dempt ook licht), voor een screen niet: hij bleef
    daardoor de hele warme avond omlaag terwijl de zon allang weg was.
    Screens kennen geen kier en gaan 's nachts omhoog. Ze gaan in bij harde
-   wind of vorst (< 4 °C); die veiligheidsregel staat als laatste en
-   overschrijft al het bovenstaande.
+   wind, verwachte regen of vorst (< 4 °C); die veiligheidsregel staat als
+   laatste en overschrijft al het bovenstaande — ook de vraag uit stap 8, want
+   binnenhalen doe je niet in overleg.
 
-> **Wanneer moet een screen in?** Bij wind, niet bij hitte. Twee bronnen:
-> `wind_speed` uit `weather.knmi_thuis` (boven `klimaat_screen_max_wind`,
-> standaard 45 km/u) en de KNMI-waarschuwing. Die laatste is dubbel
-> onbetrouwbaar: hij staat ook op `on` ("Onveilig") als er niets aan de hand
-> is, én hij gaat net zo goed af voor een hitteplan of gladheid. Daarom telt
-> hij alleen mee als de tekst in het `description`-attribuut over wind, storm,
-> onweer of hagel gaat. Zou je op de staat afgaan, dan gaan de keukenscreens
-> nooit meer omlaag — precies op de dagen dat je ze nodig hebt.
+> **Wanneer moet een screen in?** Bij wind en regen, niet bij hitte. Voor wind
+> twee bronnen: `wind_speed` uit `weather.knmi_thuis` (boven
+> `klimaat_screen_max_wind`, standaard 45 km/u) en de KNMI-waarschuwing. Die
+> laatste is dubbel onbetrouwbaar: hij staat ook op `on` ("Onveilig") als er
+> niets aan de hand is, én hij gaat net zo goed af voor een hitteplan of
+> gladheid. Daarom telt hij alleen mee als de tekst in het
+> `description`-attribuut over wind, storm, onweer of hagel gaat. Zou je op de
+> staat afgaan, dan gaan de keukenscreens nooit meer omlaag — precies op de
+> dagen dat je ze nodig hebt.
+>
+> Voor regen telt `sensor.neerslag_komende_30_minuten` (echte millimeters)
+> boven `klimaat_screen_max_regen`, standaard 0,1 mm. Een onbereikbare sensor
+> telt als droog: niets doen is dan beter dan de hele dag alles binnenhalen.
+> Hiervóór liep binnenhalen bij regen alleen via de melding in
+> `packages/3 - Outside/Backyard/Sunscreen.yaml`, die een tik op je telefoon
+> nodig heeft; die melding is nu stil zolang de klimaatregie aan staat.
 
 ### Laag 4 — Uitvoeren
 
 `automation.klimaat_zonwering_uitvoeren` loopt de acht zones langs en beweegt
 alleen als het advies mag worden uitgevoerd én de huidige stand meer dan 5%
-afwijkt. Er is dus geen beweging als er niets te winnen valt.
+afwijkt. Er is dus geen beweging als er niets te winnen valt. Zones die eerst
+toestemming vragen slaat hij over zolang het advies "naar buiten" is (zie
+hieronder).
 
 `automation.klimaat_handbediening_herkennen` is de tegenhanger: elke beweging
 die 90 seconden stil ligt op een *andere* stand dan het advies telt als
@@ -193,6 +215,36 @@ vervalt de uitzondering meteen weer.
 Onze eigen bewegingen eindigen per definitie op het advies en worden daarom
 nooit als handbediening gezien. Dat is de hele truc: geen contextgegoochel,
 gewoon kijken waar de cover uiteindelijk blijft staan.
+
+#### Het zonnescherm vraagt eerst
+
+Het zonnescherm gaat **niet uit zichzelf naar buiten**. Het is het enige stuk
+zonwering waar je in de tuin tegenaan loopt en het enige dat kapot waait als je
+het vergeet, dus daar hoort een mens aan te pas te komen.
+`automation.klimaat_zonnescherm_vragen` stuurt in plaats van een beweging een
+melding naar de telefoons van de volwassenen — met de reden erbij, dus je weet
+waarom hij het vraagt:
+
+- **Ja** → het scherm rolt uit.
+- **Nee** → `timer.override_zonnescherm` gaat lopen en de klimaatregie laat het
+  scherm de hele overridetijd (standaard 4 uur) met rust, precies zoals bij
+  handbediening.
+- **Geen antwoord** → er gebeurt niets. Na twee uur
+  (`timer.zonnescherm_vraag`) mag hij het opnieuw vragen.
+
+**Binnenhalen blijft wél automatisch.** Op het intrekken bij wind, vorst, regen
+of een weggedraaide zon moet niemand hoeven wachten; dat doet de gewone
+uitvoerder. In de beslistabel is dat het attribuut `vraagt`: dat staat alleen
+op `true` als het advies `dicht` of `kier` is voor een zone met
+`'vraagt': true`. Zowel de uitvoerder als de handbediening-herkenning slaat de
+zone dan over — die laatste omdat een scherm dat nog binnen staat terwijl het
+advies "uit" is geen handbediening is maar een openstaande vraag. Op het
+dashboard zie je dat terug als blokkade *"wacht op je akkoord"*.
+
+> Met de klimaatregie **uit** doet `backyard_sunscreen`
+> (`packages/3 - Outside/Backyard/Sunscreen.yaml`) hetzelfde: die vroeg al om
+> een bevestiging voordat het scherm uitging. Het gedrag is nu dus hetzelfde,
+> of de hoofdschakelaar nu aan of uit staat.
 
 > **Let op de ochtendknop.** Druk je 's ochtends op de slaapkamerknop, dan
 > gaan de rolluiken open en telt dat als handbediening: die zones liggen dan
@@ -259,6 +311,7 @@ Terugdraaien is altijd één schakelaar, op elk moment.
 | `klimaat_zijgevel_richting` | 170 ° | kompasrichting van de zijgevel (zuid) |
 | `klimaat_gevel_breedte` | 85 ° | hoe schuin de zon nog op een gevel telt |
 | `klimaat_screen_max_wind` | 45 km/u | hierboven gaan de screens in |
+| `klimaat_screen_max_regen` | 0,1 mm | zoveel verwachte neerslag haalt de screens in |
 | `klimaat_zon_lux_drempel` | 20.000 lx | wanneer de zon "op de gevel staat" |
 | `klimaat_zon_min_elevatie` | 8 ° | lager dan dit telt de zon niet mee |
 | `klimaat_nachtspui` | uit | mag er 's nachts een kier open voor koelte |

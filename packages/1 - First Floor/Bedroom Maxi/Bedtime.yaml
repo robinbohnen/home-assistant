@@ -15,11 +15,23 @@ bedtime_maxi_package:
 
   template:
     - binary_sensor:
+        # De naam blijft bewust kleingeschreven: het entity_id komt hiervandaan
+        # en het dashboard verwijst naar binary_sensor.bedtime_kids.
+        #
+        # Het hele template stond eerder tussen aanhalingstekens binnen het
+        # blok, waardoor de uitkomst een string met quotes werd in plaats van
+        # true/false - en die is nooit als "aan" te lezen. Deze sensor stond dus
+        # altijd op off.
         - name: bedtime_kids
+          unique_id: bedtime_kids
+          icon: mdi:sleep
+          availability: >
+            {{ has_value('input_datetime.bedtime_maxi_1h_off')
+               and has_value('input_datetime.bedtime_mini_1h_off') }}
           state: >
-            "{% set bedtime_hour_maxi = strptime(states('input_datetime.bedtime_maxi_1h_off'), "%H:%M:%S").hour %}
-            {% set bedtime_hour_mini = strptime(states('input_datetime.bedtime_mini_1h_off'), "%H:%M:%S").hour %}
-            {{ (now().hour >= bedtime_hour_maxi or now().hour >= bedtime_hour_mini or now().hour < 9) }}"
+            {% set maxi = strptime(states('input_datetime.bedtime_maxi_1h_off'), '%H:%M:%S').hour %}
+            {% set mini = strptime(states('input_datetime.bedtime_mini_1h_off'), '%H:%M:%S').hour %}
+            {{ now().hour >= maxi or now().hour >= mini or now().hour < 9 }}
 
   automation:
     - id: bedtime_for_maxi_lights_off

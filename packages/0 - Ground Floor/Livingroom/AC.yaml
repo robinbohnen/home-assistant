@@ -15,7 +15,7 @@ airco_livingroom_package:
           to: "off"
       conditions:
         - condition: state
-          entity_id: climate.woonkamer
+          entity_id: climate.airco_woonkamer
           state: "off"
       actions:
         - variables:
@@ -46,44 +46,48 @@ airco_livingroom_package:
                 milliseconds: 0
             - choose:
                 - conditions:
+                    # `wait.trigger` is None als er niet geantwoord is binnen de
+                    # timeout; zonder die check gooit dit template dan een fout.
                     - condition: template
-                      value_template: "{{ wait.trigger.event.data.action == action_ac_living_on }}"
+                      value_template: >-
+                        {{ wait.trigger is not none
+                           and wait.trigger.event.data.action == action_ac_living_on }}
                   sequence:
                     - action: climate.turn_on
                       metadata: {}
                       data: {}
                       target:
-                        entity_id: climate.woonkamer
+                        entity_id: climate.airco_woonkamer
                     - action: climate.set_hvac_mode
                       metadata: {}
                       data:
                         hvac_mode: cool
                       target:
-                        entity_id: climate.woonkamer
+                        entity_id: climate.airco_woonkamer
                     - action: climate.set_temperature
                       metadata: {}
                       data:
                         temperature: 18
                       target:
-                        entity_id: climate.woonkamer
+                        entity_id: climate.airco_woonkamer
                     - action: climate.set_fan_mode
                       metadata: {}
                       data:
                         fan_mode: auto
                       target:
-                        entity_id: climate.woonkamer
+                        entity_id: climate.airco_woonkamer
                     - action: climate.set_swing_mode
                       metadata: {}
                       data:
                         swing_mode: auto
                       target:
-                        entity_id: climate.woonkamer
+                        entity_id: climate.airco_woonkamer
                     - action: climate.set_swing_horizontal_mode
                       metadata: {}
                       data:
                         swing_horizontal_mode: auto
                       target:
-                        entity_id: climate.woonkamer
+                        entity_id: climate.airco_woonkamer
           else:
             - if:
                 - condition: numeric_state

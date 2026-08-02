@@ -50,6 +50,14 @@
   cover      entiteit die bestuurd wordt
   gevels     lijst met 'voor', 'zij' en/of 'achter'. Hoekkamers staan op
              twee gevels; de zon telt zodra hij op één ervan staat.
+             Let op wat je erbij zet: de keukenscreens stonden hier op
+             ['voor', 'zij'] en bleven daardoor de hele middag omlaag. De
+             zijgevelsensor telt namelijk door tot een azimut van 255° en
+             gebruikt daarbij de lichtmeting uit de áchtertuin, dus die blijft
+             tot een uur of zes aan terwijl de zon voor de keuken (oost) al
+             rond het middaguur weg is. Ze staan nu op alleen ['voor'], net
+             zoals de oude `covers_sun_protection` alleen naar
+             sensor.voortuin_zon_luminance keek.
   temp       temperatuursensor van de ruimte
   kier       ondersteunt de cover een tussenstand?
   screen     buitenscreen (moet in bij storm/vorst) i.p.v. rolluik. Een screen
@@ -59,6 +67,10 @@
              uitgeschoven (zon tegenhouden) en `closed` ingetrokken. Alleen het
              zonnescherm is zo. De hele tabel blijft in gewone zonwerings-
              termen; de vertaling gebeurt één keer, onderaan bij `positie`.
+  vraagt     zonwering die niet uit zichzelf naar buiten gaat: het advies om te
+             sluiten wordt eerst als vraag gestuurd. Binnenhalen gebeurt wél
+             meteen - dat is de veilige kant en daar wil je niet op een antwoord
+             wachten. Zie `automation.klimaat_zonnescherm_vragen`.
   slaap      none | 'kind' | 'volwassen'
   slaap_van  begin van het slaapvenster voor kinderkamers
   stil       niet bewegen tijdens de stille uren
@@ -67,7 +79,7 @@
       'keuken_screens': {
         'naam': 'Keuken screens',
         'cover': 'cover.covers_kitchen_screens',
-        'gevels': ['voor', 'zij'],
+        'gevels': ['voor'],
         'temp': 'sensor.woonkamer_woonkamer_multisensor_temperatuur',
         'airco': 'climate.airco_woonkamer',
         'kier': false,
@@ -150,6 +162,7 @@
         'kier': false,
         'screen': true,
         'omgekeerd': true,
+        'vraagt': true,
         'slaap': none,
         'slaap_van': none,
         'stil': false },
@@ -244,6 +257,16 @@
 {%- set wind = state_attr('weather.knmi_thuis', 'wind_speed') | float(0) -%}
 {%- set max_wind = states('input_number.klimaat_screen_max_wind') | float(45) -%}
 {%- set te_hard = wind >= max_wind -%}
+{#- Regen is de derde reden om een screen in te halen. Nat doek gaat schimmelen
+    en opgerold nat doek nog harder; een zonnescherm hoort er niet in te hangen
+    als het gaat regenen. Zonder deze regel liep dat alleen via de melding in
+    packages/3 - Outside/Backyard/Sunscreen.yaml, die een tik op je telefoon
+    nodig heeft - en als niemand kijkt, blijft het scherm dus uit staan.
+    Een onbereikbare sensor telt als droog: dan is niets doen beter dan de hele
+    dag alles binnenhalen. -#}
+{%- set regen = states('sensor.neerslag_komende_30_minuten') | float(0) -%}
+{%- set max_regen = states('input_number.klimaat_screen_max_regen') | float(0.1) -%}
+{%- set nat = regen >= max_regen -%}
 {%- set airco = z.get('airco') -%}
 {%- set airco_koelt = airco is not none and states(airco) in ['cool', 'dry'] -%}
 
@@ -379,12 +402,16 @@
 {%- endif -%}
 
 {#- 6. Veiligheid gaat boven alles: een screen mag niet uitstaan bij harde
-      wind of vorst. Staat bewust als laatste, zodat het elke andere keuze
-      overschrijft. -#}
-{%- if z.screen and (te_hard or stormalarm or (buiten is not none and buiten < 4)) -%}
+      wind, regen of vorst. Staat bewust als laatste, zodat het elke andere
+      keuze overschrijft - ook een zone die normaal eerst toestemming vraagt
+      gaat hierdoor zonder overleg naar binnen. -#}
+{%- if z.screen and (te_hard or stormalarm or nat
+                     or (buiten is not none and buiten < 4)) -%}
   {%- set ns.a = 'open' -%}
   {%- set ns.r = 'screen ingetrokken: ' ~ ('wind ' ~ wind | round | int ~ ' km/u' if te_hard
-                  else ('stormwaarschuwing' if stormalarm else 'vorstgevaar')) -%}
+                  else ('stormwaarschuwing' if stormalarm
+                  else ('regen op komst (' ~ regen | round(1) ~ ' mm)' if nat
+                  else 'vorstgevaar'))) -%}
 {%- endif -%}
 
 {#- 7. Een cover zonder tussenstand kan geen kier. -#}
@@ -405,15 +432,23 @@
                   if (z.get('omgekeerd') and positie_zon >= 0)
                   else positie_zon -%}
 {%- set uitvoeren = actief and zone_auto and not override and positie >= 0 -%}
+{#- Zonwering die eerst toestemming vraagt: alleen het naar buiten gaan is een
+    vraag. 'open' (binnenhalen, ook bij wind en vorst) blijft iets dat de
+    uitvoerder gewoon zelf doet. `uitvoeren` blijft hierbij true - de zone doet
+    mee, alleen loopt hij via de vraag-automatisering in plaats van via de
+    uitvoerder. Die twee lezen allebei dit vlaggetje. -#}
+{%- set vraagt = z.get('vraagt', false) and ns.a in ['dicht', 'kier'] -%}
 {%- set blokkade = 'handbediening actief' if override
                    else ('zone staat op handmatig' if not zone_auto
                    else ('klimaatregie staat uit' if not actief
-                   else ('advies is rust' if positie < 0 else ''))) -%}
+                   else ('advies is rust' if positie < 0
+                   else ('wacht op je akkoord' if vraagt else '')))) -%}
 
 {{- {'advies': ns.a,
      'positie': positie,
      'reden': ns.r,
      'uitvoeren': uitvoeren,
+     'vraagt': vraagt,
      'blokkade': blokkade,
      'cover': z.cover,
      'naam': z.naam,

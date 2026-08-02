@@ -81,6 +81,8 @@ def scenario(naam, tijd, **kw):
         "sensor.knmi_temperatuur": "18",
         "weather.knmi_thuis.wind_speed": 12.0,
         "input_number.klimaat_screen_max_wind": "45",
+        "sensor.neerslag_komende_30_minuten": "0",
+        "input_number.klimaat_screen_max_regen": "0.1",
         "group.all_adults": "home",
         "binary_sensor.knmi_waarschuwing": "off",
         "binary_sensor.knmi_waarschuwing.description":
@@ -273,6 +275,38 @@ scenario("harde wind zonder waarschuwing", "14:00",
 check("wind boven de grens: screen in", "keuken_screens", "open")
 check("rolluiken hebben geen last van wind", "kantoor_links", "dicht")
 
+# Regen. Nat doek is net zo goed een reden om in te halen als wind, en het mag
+# niet afhangen van of iemand op een melding tikt.
+scenario("regen op komst terwijl de zon schijnt", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "28",
+            "sensor.neerslag_komende_30_minuten": "0.4",
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on"})
+check("regen: screen in ondanks zon", "keuken_screens", "open")
+check("rolluiken hebben geen last van regen", "kantoor_links", "dicht")
+
+# De sensor rondt op 2 decimalen af, dus droog is exact 0. Een spoor onder de
+# ingestelde grens mag de screens niet de hele zomer binnenhouden.
+scenario("een spoortje regen onder de grens", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "28",
+            "sensor.neerslag_komende_30_minuten": "0.05",
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on"})
+check("onder de regengrens blijft het screen omlaag", "keuken_screens", "dicht")
+
+scenario("regensensor onbereikbaar", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "28",
+            "sensor.neerslag_komende_30_minuten": "unavailable",
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on"})
+check("kapotte regensensor telt als droog", "keuken_screens", "dicht")
+
 # --- blokkades -------------------------------------------------------------
 scenario("handbediening actief", "14:00",
          **{"input_select.klimaat_regime": "Koelen",
@@ -306,7 +340,10 @@ scenario("hete middag, zon op de zijgevel", "13:00",
             # zon op ~180 graden: de achtergevel (260) valt al binnen 85 graden
             "binary_sensor.zon_richting_achtergevel": "on"})
 check("zijgevel: kantoor dicht", "kantoor_links", "dicht")
-check("zijgevel: keuken screens dicht", "keuken_screens", "dicht")
+# De keukenscreens hangen aan de voorgevel en trekken zich niets aan van de
+# zijgevel: die staat 's middags nog uren "aan" terwijl de zon voor de keuken
+# allang weg is.
+check("zijgevel: keuken screens juist omhoog", "keuken_screens", "open")
 check("zijgevel: Emma ligt er ook aan", "slaapkamer_emma", "dicht")
 check("achter krijgt de zon zo, dus preventief", "badkamer", "kier")
 check("voorgevel is klaar, Logan mag open", "slaapkamer_logan", "open")
@@ -371,8 +408,25 @@ check("met zon gaat het screen gewoon omlaag", "keuken_screens", "dicht")
 scenario("hittedag, zon draait naar de keukengevel", "09:00",
          **{"input_select.klimaat_regime": "Koelen",
             "input_number.klimaat_verwachte_max": "31",
-            "binary_sensor.zon_richting_zijgevel": "on"})
+            "binary_sensor.zon_richting_voorgevel": "on"})
 check("preventief blijft overeind op een hittedag", "keuken_screens", "dicht")
+
+# --- de keukenscreens volgen alleen de voorgevel ---------------------------
+# Ze hangen voor de keukenramen aan de straatkant (oost). Stond de zijgevel er
+# ook bij, dan bleven ze tot een uur of zes omlaag: die sensor telt tot een
+# azimut van 255° en gebruikt daarbij het licht uit de achtertuin.
+scenario("middag, zon staat inmiddels op zij en achter", "16:30",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "30",
+            "sensor.knmi_temperatuur": "28",
+            "sensor.woonkamer_woonkamer_multisensor_temperatuur": "25",
+            "binary_sensor.zon_op_zijgevel": "on",
+            "binary_sensor.zon_richting_zijgevel": "on",
+            "binary_sensor.zon_op_achtergevel": "on",
+            "binary_sensor.zon_richting_achtergevel": "on"})
+check("zon weg bij de voorgevel: screens omhoog", "keuken_screens", "open")
+# Het zonnescherm hoort in diezelfde situatie juist uit te willen.
+check("achtertuin krijgt de zon nu wel", "zonnescherm", "dicht")
 
 # --- rolluiken blijven dicht tot het huis wakker is ------------------------
 # STIL_TOT is 07:00, maar in de zomer staat de zon dan allang op. Zonder deze
@@ -455,6 +509,15 @@ scenario("storm terwijl de zon er vol op staat", "17:00",
 # DE belangrijkste: harde wind moet het scherm INTREKKEN, dus positie 0.
 check_positie("storm: scherm intrekken ondanks zon", "zonnescherm", "open", 0)
 
+scenario("regen terwijl de zon er vol op staat", "17:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "binary_sensor.zon_op_achtergevel": "on",
+            "binary_sensor.zon_richting_achtergevel": "on",
+            "sensor.neerslag_komende_30_minuten": "0.3"})
+# Net als bij storm: regen moet het scherm INTREKKEN, dus positie 0.
+check_positie("regen: scherm intrekken ondanks zon", "zonnescherm", "open", 0)
+
 scenario("vorst met winterzon achter", "13:00",
          **{"input_select.klimaat_regime": "Verwarmen",
             "input_number.klimaat_verwachte_max": "3",
@@ -483,6 +546,42 @@ scenario("controle: rolluik blijft normaal", "17:00",
             "binary_sensor.zon_richting_achtergevel": "on"})
 check_positie("rolluik: dicht is gewoon 0", "badkamer", "dicht", 0)
 
+# --- het zonnescherm vraagt eerst -----------------------------------------
+# Uitschuiven is een vraag, binnenhalen niet: op het intrekken bij wind, vorst
+# of een weggedraaide zon mag niemand hoeven wachten. `vraagt` is het vlaggetje
+# waar zowel de uitvoerder als de handbediening-herkenning op afgaat, dus een
+# fout hier laat het scherm óf uit zichzelf uitrollen óf bij storm buiten staan.
+def check_vraagt(naam, zone, verwacht):
+    a = advies(zone)
+    ok = a["vraagt"] == verwacht
+    print(f"{'PASS' if ok else 'FAIL'}  {naam:52} {zone:15} -> {a['advies']:6} "
+          f"vraagt={str(a['vraagt']):5} blokkade={a['blokkade'] or '-'}")
+    if not ok:
+        FOUTEN.append(f"{naam} / {zone}: vraagt={a['vraagt']}, verwachtte {verwacht}")
+
+
+scenario("zon vol op de achtergevel", "17:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "29",
+            "binary_sensor.zon_op_achtergevel": "on",
+            "binary_sensor.zon_richting_achtergevel": "on"})
+check_vraagt("uitschuiven gaat via een vraag", "zonnescherm", True)
+check_vraagt("een gewoon screen vraagt niets", "keuken_screens", False)
+
+scenario("zon van de achtergevel af", "11:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "29",
+            "binary_sensor.zon_op_voorgevel": "on"})
+check_vraagt("binnenhalen gebeurt zonder vragen", "zonnescherm", False)
+
+scenario("storm terwijl het scherm uit staat", "17:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "binary_sensor.zon_op_achtergevel": "on",
+            "binary_sensor.zon_richting_achtergevel": "on",
+            "weather.knmi_thuis.wind_speed": 60.0})
+check_vraagt("bij storm niet eerst overleggen", "zonnescherm", False)
+
 # --- consistentiecheck: slug == entity_id dat HA van de sensornaam maakt -----
 # Home Assistant leidt het entity_id van een template-sensor af uit de NAAM,
 # niet uit unique_id. Loopt dat uit de pas met de zoneslug, dan slaat de
@@ -506,6 +605,38 @@ else:
     print("FAIL  slug en sensornaam lopen uit de pas")
     FOUTEN.append(f"zones zonder sensor: {verwacht - gevonden}; "
                   f"sensoren zonder zone: {gevonden - verwacht}")
+
+# De twee ankerlijsten in het package worden met de hand bijgehouden. Staat een
+# zone er niet in, dan werkt hij nog steeds - maar pas bij de kwartierronde, en
+# handbediening wordt er nooit voor herkend. Dat is precies wat er met het
+# zonnescherm gebeurde: de sensor bestond, alleen keek niemand ernaar.
+def anker_lijst(naam):
+    """De entiteiten onder `entity_id: &<naam>` tot de eerste andere regel."""
+    uit, verzamelen = [], False
+    for regel in pakket.splitlines():
+        if f"&{naam}" in regel:
+            verzamelen = True
+            continue
+        if verzamelen:
+            m = re.match(r"^\s*- (\S+)", regel)
+            if m:
+                uit.append(m.group(1))
+            elif not re.match(r"^\s*#", regel):
+                break
+    return set(uit)
+
+
+for anker, hoort_bij in [("advies_sensoren", lambda z, cfg: f"sensor.zonwering_advies_{z}"),
+                         ("beheerde_covers", lambda z, cfg: cfg["cover"])]:
+    verwacht_anker = {hoort_bij(z, cfg) for z, cfg in json.loads(MOD.zones_json()).items()}
+    gevonden_anker = anker_lijst(anker)
+    if verwacht_anker == gevonden_anker:
+        print(f"PASS  {'elke zone staat in &' + anker:52} "
+              f"({len(verwacht_anker)} zones)")
+    else:
+        print(f"FAIL  &{anker} loopt uit de pas met de zones")
+        FOUTEN.append(f"&{anker}: mist {verwacht_anker - gevonden_anker}; "
+                      f"onbekend {gevonden_anker - verwacht_anker}")
 
 # Ook de helpers volgen de slug.
 for domein, prefix in [("timer", "override_"),

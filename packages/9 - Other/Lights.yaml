@@ -108,25 +108,27 @@ light_package:
               entity_id: alarm_control_panel.alarmo
               state: disarmed
           then:
+            # Away mag alleen als er echt niemand is. Hier stond `below: 3`,
+            # oftewel: is één van ons weg, dan ging het huis 's nachts op away
+            # terwijl de rest lag te slapen. Alarmo bewaakt in away ook de
+            # bewegingssensoren binnen, dus het eerste toiletbezoek zette de
+            # volledige afschrikking uit packages/0 - Ground Floor/Hallway/
+            # Alarm.yaml in gang. Iedereen weg -> away, verder altijd home.
             - choose:
                 - conditions:
                     - condition: numeric_state
                       entity_id: zone.home
-                      below: 3
+                      below: 1
                   sequence:
                     - action: alarm_control_panel.alarm_arm_away
                       metadata: {}
                       data: {}
                       target:
                         entity_id: alarm_control_panel.alarmo
-                - conditions:
-                    - condition: numeric_state
-                      entity_id: zone.home
-                      above: 2
-                  sequence:
-                    - action: alarm_control_panel.alarm_arm_home
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: alarm_control_panel.alarmo
+              default:
+                - action: alarm_control_panel.alarm_arm_home
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id: alarm_control_panel.alarmo
           alias: Turn on alarm

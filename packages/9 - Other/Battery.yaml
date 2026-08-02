@@ -4,6 +4,20 @@
 # trigger raakte: de batterij begon dan juist op het allergoedkoopste moment
 # niet te laden. very_low telt daarom als low en very_high als high.
 battery_package:
+
+  input_number:
+    # Geen `initial:`: dat zet je eigen instelling bij elke herstart terug.
+    # Een input_number zonder opgeslagen waarde start op zijn minimum, dus het
+    # minimum is hier bewust een waarde waarmee je veilig zit.
+    batterij_min_soc:
+      name: "Batterij - Niet verder ontladen dan"
+      icon: mdi:battery-low
+      min: 10
+      max: 90
+      step: 5
+      unit_of_measurement: "%"
+      mode: box
+
   automation:
     - id: battery_disable_charging
       alias: Battery - Disable charging when no low pricing
@@ -35,6 +49,22 @@ battery_package:
             - sensor.slimhuys_zonneplan_tariefniveau_nu
           to: medium
           id: medium_price
+        # Vangnetten voor het geforceerd ontladen, zie de laatste tak.
+        - trigger: numeric_state
+          entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
+          below: input_number.batterij_min_soc
+          id: soc_leeg
+        - trigger: state
+          entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu
+          to: "on"
+          id: prijs_negatief
+        - trigger: state
+          entity_id: sensor.slimhuys_zonneplan_tariefniveau_nu
+          to:
+            - unknown
+            - unavailable
+          for: "00:15:00"
+          id: tarief_weg
       conditions: []
       actions:
         - choose:
@@ -105,6 +135,19 @@ battery_package:
                 - condition: trigger
                   id:
                     - high_price
+                # Niet onder de ondergrens leegtrekken: geforceerd ontladen
+                # stopt hier niet uit zichzelf, dus zonder deze conditie loopt
+                # de batterij bij een lange dure periode helemaal leeg en staat
+                # er 's avonds niets meer om mee te overbruggen.
+                - condition: numeric_state
+                  entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
+                  above: input_number.batterij_min_soc
+                # Bij een negatieve prijs kost teruglevering geld. "Hoog tarief"
+                # en "negatieve prijs" kunnen tegelijk voorkomen doordat het
+                # niveau over de dag wordt bepaald en de prijs per kwartier.
+                - condition: state
+                  entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu
+                  state: "off"
               sequence:
                 - action: select.select_option
                   metadata: {}
@@ -125,3 +168,40 @@ battery_package:
                   target:
                     entity_id: number.lilygo_rs485_marstek_forcible_discharge_power
               alias: High price; discharge
+            # Vangnet. Geforceerd ontladen blijft staan tot een volgende
+            # trigger het omzet, en die komt niet meer als de tariefsensor
+            # wegvalt: dan blijft de batterij leegtrekken zonder dat er nog
+            # iets meekijkt. Hetzelfde geldt zodra de ondergrens bereikt is of
+            # de prijs negatief wordt. Terug naar het eigen programma van de
+            # batterij is in al die gevallen de veilige stand.
+            - conditions:
+                - condition: trigger
+                  id:
+                    - soc_leeg
+                    - prijs_negatief
+                    - tarief_weg
+                - condition: state
+                  entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+                  state: discharge
+              sequence:
+                - action: select.select_option
+                  metadata: {}
+                  data:
+                    option: stop
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+                - action: select.select_option
+                  metadata: {}
+                  data:
+                    option: disable
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+                - action: logbook.log
+                  data:
+                    name: Batterij
+                    message: >-
+                      Geforceerd ontladen gestopt:
+                      {{ 'ondergrens bereikt' if trigger.id == 'soc_leeg'
+                         else ('negatieve prijs' if trigger.id == 'prijs_negatief'
+                         else 'tariefniveau niet beschikbaar') }}.
+              alias: Stop discharging; guard tripped

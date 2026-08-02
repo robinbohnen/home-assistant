@@ -194,12 +194,13 @@ livingsroom_lights_package:
           entity_id:
             - binary_sensor.entree_deur_contact
       conditions:
-        - condition: or
-          conditions:
-            - condition: template
-              value_template: "{{ state_attr('light.woonkamer_lampen', 'rgb_color') == (254, 67, 255) }}"
-            - condition: template
-              value_template: "{{ state_attr('light.woonkamer_lampen', 'rgb_color') == (11, 0, 255) }}"
+        # rgb_color komt er soms als tuple uit en na een herstart (uit de
+        # database, via JSON) als lijst. Vergelijken met een tuple-literal
+        # klopte dus maar de helft van de tijd; `| list` maakt beide gelijk.
+        - condition: template
+          value_template: >-
+            {{ (state_attr('light.woonkamer_lampen', 'rgb_color') or []) | list
+               in [[254, 67, 255], [11, 0, 255]] }}
       actions:
         - action: light.turn_on
           metadata: {}
