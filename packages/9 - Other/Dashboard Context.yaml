@@ -11,6 +11,27 @@ dashboard_context_package:
         - time
 
   template:
+    # Het systeemdashboard rekent leeftijden uit met last_changed/last_updated.
+    # Na een herstart staat álles op het herstartmoment, dus "9 uur weg" en
+    # "9 uur niets gehoord" betekenen daar iets heel anders dan hetzelfde
+    # getal op een draaiend systeem. Met dit tijdstempel kan de kaart die twee
+    # uit elkaar houden. De uptime-integratie kan dit ook, maar is UI-only
+    # (geen YAML-platform meer), en dit hoort bij deze config.
+    #
+    # Trigger-based, dus de waarde blijft staan tot de volgende start en
+    # overleeft een template-reload. Direct na een schone installatie is hij
+    # 'unknown' tot de eerste herstart; de kaarten vallen dan terug op de
+    # gewone leeftijdsweergave.
+    - trigger:
+        - platform: homeassistant
+          event: start
+      sensor:
+        - name: Home Assistant gestart
+          unique_id: home_assistant_gestart
+          icon: mdi:restart
+          device_class: timestamp
+          state: "{{ now().isoformat() }}"
+
     - binary_sensor:
         - name: Iemand onderweg naar huis
           unique_id: iemand_onderweg_naar_huis

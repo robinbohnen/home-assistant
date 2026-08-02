@@ -4,9 +4,11 @@
 # lopen. Vormen worden met SVG getekend (die mag uitgerekt worden), alles met
 # letters met HTML op percentages (blijft scherp bij elke kolombreedte).
 #
-# update_timer laat de kaart periodiek opnieuw renderen zodat de nu-lijn
-# meeschuift. Let op: met update_timer ververst button-card *alleen* nog op de
-# timer en niet meer op statuswijzigingen — voor een tijdlijn is een minuut ruim.
+# De nu-lijn moet meeschuiven, dus de kaart moet uit zichzelf blijven renderen.
+# Hier stond `update_timer` voor, maar die optie bestaat niet in button-card en
+# deed dus niets: de kaart hing alleen aan de prijssensor en de nu-lijn sprong
+# één keer per uur. `triggers_update` bestaat wél; met sensor.time erbij (tikt
+# elke minuut) schuift de lijn weer mee.
 type: custom:mod-card
 card_mod:
   style: |
@@ -42,7 +44,9 @@ card:
       show_icon: false
       show_name: false
       show_state: false
-      update_timer: 60s
+      triggers_update:
+        - sensor.time
+        - sensor.slimhuys_zonneplan_huidige_prijs
       # Tik = agenda/afval (daar staat de volledige lijst, ook wat achter "+N meer"
       # zit); lang indrukken = de prijsdetails. Hover bestaat niet op het wandpaneel.
       tap_action:

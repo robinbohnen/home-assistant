@@ -4,9 +4,18 @@
 # (`hass.entities[...].platform`). Is dat register er niet, dan valt de groepering
 # terug op het domein van de entiteit.
 #
-# Beide kaarten lezen alle entiteiten. Omdat button-card elke uitgelezen entiteit
-# gaat volgen, zou dat bij elke statuswijziging in huis opnieuw renderen; daarom
-# staat er een update_timer op. Die begrenst het tot één render per interval.
+# Alle drie de kaarten lopen bij elke render door álle entiteiten heen. Hier stond
+# `update_timer` om dat te begrenzen, maar die optie bestáát niet in button-card
+# (het is `triggers_update`) en werd dus stil genegeerd. In plaats daarvan hangen
+# de kaarten aan `sensor.time`: die tikt elke minuut, dus precies één render per
+# minuut. Dat is meteen ook wat de leeftijden ("9 uur") live houdt op een paneel
+# dat dagen open staat — button-card rendert alleen opnieuw als zijn entity
+# verandert, en zonder entity bevriezen die teksten.
+#
+# Leeftijden worden uit last_changed/last_updated berekend, en na een herstart
+# staat álles op het herstartmoment. `sensor.home_assistant_gestart` (zie
+# packages/9 - Other/Dashboard Context.yaml) laat de kaarten dat verschil
+# benoemen in plaats van een misleidend absoluut getal te tonen.
 title: Systeem
 path: systeem
 icon: mdi:heart-pulse
@@ -45,23 +54,42 @@ cards:
             }
         cards:
           # =============== ONBESCHIKBARE ENTITEITEN ===============
+          # Niet elke 'unavailable' is een storing, en zolang ze op één hoop
+          # gaan staat de teller permanent op honderden en zegt hij niets meer.
+          # Daarom vier bakken, waarvan alleen de eerste in de badge telt:
+          #  - storing    : hier moet iemand iets aan doen
+          #  - wees       : `restored: true`, oftewel entiteiten waarvan de
+          #                 integratie weg is. Komen nooit meer terug; dit is
+          #                 opruimwerk in het entiteitenregister, geen defect.
+          #  - afgeleid   : sensoren die een ándere entiteit spiegelen (powercalc
+          #                 volgt zijn bron). Ze vallen om als hun bron omvalt —
+          #                 dezelfde storing, dubbel geteld.
+          #  - ruis       : integraties die per netwerkclient entiteiten maken
+          #                 (unifi). Elke gast die ooit op de wifi zat staat er
+          #                 nog; 'weg' is daar de normale toestand.
+          # De drie laatste bakken verdwijnen niet, ze staan onderaan als telling.
           - type: custom:button-card
+            entity: sensor.time
+            triggers_update: sensor.time
             show_icon: false
             show_name: false
             show_state: false
-            update_timer: 30s
             tap_action:
               action: none
             variables:
               # 'unknown' erbij? Vaak ruis van entiteiten die nog nooit een waarde
               # hadden, daarom standaard uit.
               ook_unknown: false
-              # Alleen deze integraties krijgen een uitgeklapte lijst; de rest
-              # verschijnt onderaan als telling, zodat niets stilletjes wegvalt.
-              focus:
-                - mqtt
-                - group
+              afgeleid:
+                - powercalc
+              ruis:
+                - unifi
+                - unifiprotect
               max_per_groep: 25
+              # Staat iets er al even lang weg als Home Assistant draait, dan is
+              # het bij de herstart niet teruggekomen. Entiteiten vallen niet
+              # allemaal op dezelfde seconde om, vandaar de marge.
+              herstart_marge_min: 3
             styles:
               card:
                 - background: var(--ov-panel-bg)
@@ -82,17 +110,26 @@ cards:
                 [[[
                   var mee = function(s){ return s.state === 'unavailable' || (variables.ook_unknown && s.state === 'unknown'); };
                   var reg = (hass && hass.entities) ? hass.entities : null;
+                  var afgeleid = variables.afgeleid || [];
+                  var ruis = variables.ruis || [];
+                  var alles = 0;
+                  // Zelfde indeling als de lijst hieronder; de badge telt alleen
+                  // wat overblijft als storing.
                   var n = Object.keys(states).filter(function(id){
                     var s = states[id];
                     if(!s || !mee(s)) return false;
                     var e = reg ? reg[id] : null;
-                    return !(e && (e.hidden || e.hidden_by));   // zelfde filter als de lijst
+                    if(e && (e.hidden || e.hidden_by)) return false;
+                    alles++;
+                    if(s.attributes && s.attributes.restored) return false;
+                    var integratie = (e && e.platform) ? e.platform : id.split('.')[0];
+                    return afgeleid.indexOf(integratie) === -1 && ruis.indexOf(integratie) === -1;
                   }).length;
                   var kleur = n === 0 ? '#4ade80' : (n > 10 ? '#ef4444' : '#f59e0b');
                   return `<span style="display:flex;align-items:baseline;gap:12px;width:100%">
-                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:rgba(255,255,255,0.55)">ONBESCHIKBAAR</span>
+                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:rgba(255,255,255,0.55)">STORINGEN</span>
                     <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:rgba(255,255,255,0.06)">${n}</span>
-                    <span style="margin-left:auto;font-size:11.5px;color:rgba(255,255,255,0.4)">uitgeklapt: ${(variables.focus || []).join(' · ') || 'alles'}</span></span>`;
+                    <span style="margin-left:auto;font-size:11.5px;color:rgba(255,255,255,0.4)">${alles} onbeschikbaar totaal</span></span>`;
                 ]]]
               lijst: |
                 [[[
@@ -101,16 +138,28 @@ cards:
                   var apparaten = (hass && hass.devices) ? hass.devices : null;
                   var gebieden = (hass && hass.areas) ? hass.areas : null;
                   var mee = function(s){ return s.state === 'unavailable' || (variables.ook_unknown && s.state === 'unknown'); };
-                  // Per integratie een map van apparaat -> aantal entiteiten.
-                  // Eén apparaat levert vaak 2 tot 4 entiteiten; die als losse
-                  // regels tonen maakt de lijst onleesbaar.
-                  var groepen = {};
+                  var afgeleid = variables.afgeleid || [];
+                  var ruis = variables.ruis || [];
+                  // Hoe lang draait HA al? Een leeftijd die daarmee samenvalt
+                  // betekent "niet teruggekomen na de herstart", en dat is iets
+                  // anders dan een apparaat dat vanochtend spontaan uitviel.
+                  var startS = states['sensor.home_assistant_gestart'];
+                  var startMs = startS ? new Date(startS.state).getTime() : NaN;
+                  var uptime = isNaN(startMs) ? null : nu - startMs;
+                  var marge = (variables.herstart_marge_min || 3) * 60000;
+                  // Per bak, per integratie, een map van apparaat -> aantal
+                  // entiteiten. Eén apparaat levert vaak 2 tot 4 entiteiten; die
+                  // als losse regels tonen maakt de lijst onleesbaar.
+                  var bakken = {storing: {}, wees: {}, afgeleid: {}, ruis: {}};
                   Object.keys(states).forEach(function(id){
                     var s = states[id];
                     if(!s || !mee(s)) return;
                     var e = reg ? reg[id] : null;
                     if(e && (e.hidden || e.hidden_by)) return;
                     var integratie = (e && e.platform) ? e.platform : id.split('.')[0];
+                    var soort = (s.attributes && s.attributes.restored) ? 'wees'
+                              : (afgeleid.indexOf(integratie) !== -1 ? 'afgeleid'
+                              : (ruis.indexOf(integratie) !== -1 ? 'ruis' : 'storing'));
                     var devId = (e && e.device_id) ? e.device_id : null;
                     var dev = (devId && apparaten) ? apparaten[devId] : null;
                     var sleutel = devId || ('los:' + id);
@@ -120,28 +169,31 @@ cards:
                                    : ((s.attributes && s.attributes.friendly_name) || id);
                     var sinds = s.last_changed ? new Date(s.last_changed).getTime() : null;
                     var duur = sinds === null ? null : nu - sinds;
-                    if(!groepen[integratie]) groepen[integratie] = {};
-                    var g = groepen[integratie];
+                    var bak = bakken[soort];
+                    if(!bak[integratie]) bak[integratie] = {};
+                    var g = bak[integratie];
                     if(!g[sleutel]) g[sleutel] = {naam: naam, gebied: gebied, aantal: 0, duur: duur, los: !devId, dev_id: devId, ent: id};
                     g[sleutel].aantal++;
                     // langst weg binnen het apparaat telt
                     if(duur !== null && (g[sleutel].duur === null || duur > g[sleutel].duur)) g[sleutel].duur = duur;
                   });
-                  var namen = Object.keys(groepen);
-                  if(!namen.length) return `<span style="font-size:14px;color:#4ade80">Alles bereikbaar.</span>`;
-                  var lijstVan = function(g){ return Object.keys(groepen[g]).map(function(k){ return groepen[g][k]; }); };
-                  var tel = {};
-                  namen.forEach(function(g){
-                    var l = lijstVan(g).sort(function(a,b){ return (b.duur||0) - (a.duur||0); });
-                    tel[g] = {apparaten: l, entiteiten: l.reduce(function(a,x){ return a + x.aantal; }, 0)};
-                  });
-                  var focus = variables.focus || [];
-                  var uitgeklapt = namen.filter(function(g){ return focus.indexOf(g) !== -1; });
-                  var rest = namen.filter(function(g){ return focus.indexOf(g) === -1; });
-                  uitgeklapt.sort(function(a,b){ return (tel[b].apparaten[0].duur||0) - (tel[a].apparaten[0].duur||0); });
-                  rest.sort(function(a,b){ return tel[b].entiteiten - tel[a].entiteiten; });
+                  // Per bak: apparaten gesorteerd op langst weg, plus tellingen
+                  // per integratie voor de samenvattingsregels onderaan.
+                  var telVan = function(bak){
+                    var per = Object.keys(bak).map(function(g){
+                      var l = Object.keys(bak[g]).map(function(k){ return bak[g][k]; })
+                        .sort(function(a,b){ return (b.duur||0) - (a.duur||0); });
+                      return {naam: g, apparaten: l, entiteiten: l.reduce(function(a,x){ return a + x.aantal; }, 0)};
+                    });
+                    per.sort(function(a,b){ return b.entiteiten - a.entiteiten; });
+                    return {per: per,
+                            apparaten: per.reduce(function(a,x){ return a + x.apparaten.length; }, 0),
+                            entiteiten: per.reduce(function(a,x){ return a + x.entiteiten; }, 0)};
+                  };
+                  var storing = telVan(bakken.storing);
                   var duurTxt = function(ms){
                     if(ms === null) return 'onbekend';
+                    if(uptime !== null && Math.abs(ms - uptime) < marge) return 'sinds herstart';
                     var m = Math.floor(ms / 60000);
                     if(m < 1) return 'net';
                     if(m < 60) return m + ' min';
@@ -169,8 +221,12 @@ cards:
                       onclick="event.preventDefault();event.stopPropagation()">${inner}</a>`;
                   };
                   var limiet = variables.max_per_groep || 25;
-                  var blokken = uitgeklapt.map(function(g){
-                    var app = tel[g].apparaten;
+                  // Storingen: langst weg bovenaan, want dat is meestal het
+                  // apparaat dat echt aandacht nodig heeft.
+                  var blokken = storing.per.slice()
+                    .sort(function(a,b){ return (b.apparaten[0].duur||0) - (a.apparaten[0].duur||0); })
+                    .map(function(grp){
+                    var app = grp.apparaten;
                     var teveel = Math.max(0, app.length - limiet);
                     var rijen = app.slice(0, limiet).map(function(x){
                       var plek = x.gebied ? `<span style="color:rgba(255,255,255,0.35)"> · ${x.gebied}</span>` : '';
@@ -183,40 +239,60 @@ cards:
                     }).join('');
                     return `<div style="margin-bottom:12px">
                       <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:2px;text-align:left">
-                        <span style="font-size:12.5px;font-weight:700;color:#38bdf8">${g}</span>
+                        <span style="font-size:12.5px;font-weight:700;color:#38bdf8">${grp.naam}</span>
                         <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${app.every(function(x){ return x.los; })
-                          ? `${tel[g].entiteiten} entiteiten`
-                          : `${app.length} ${app.length === 1 ? 'apparaat' : 'apparaten'} · ${tel[g].entiteiten} entiteiten`}</span></div>
+                          ? `${grp.entiteiten} entiteiten`
+                          : `${app.length} ${app.length === 1 ? 'apparaat' : 'apparaten'} · ${grp.entiteiten} entiteiten`}</span></div>
                       ${rijen}
                       ${teveel ? `<div style="padding:5px 0;font-size:12px;color:rgba(255,255,255,0.45);text-align:left">+ ${teveel} ${teveel === 1 ? 'apparaat' : 'apparaten'} meer</div>` : ''}</div>`;
                   }).join('');
-                  var overig = '';
-                  if(rest.length){
-                    var totApp = rest.reduce(function(a,g){ return a + tel[g].apparaten.length; }, 0);
-                    var totEnt = rest.reduce(function(a,g){ return a + tel[g].entiteiten; }, 0);
-                    var stukjes = rest.map(function(g){
-                      return `<span style="white-space:nowrap"><span style="color:rgba(255,255,255,0.7)">${g}</span> <span style="color:rgba(255,255,255,0.45)">${tel[g].apparaten.length}</span></span>`;
+                  if(!storing.entiteiten) blokken = `<div style="font-size:14px;color:#4ade80;text-align:left">Geen storingen.</div>`;
+                  // De rest verdwijnt niet uit beeld, maar telt niet mee: één
+                  // regel per bak met de uitsplitsing per integratie erachter.
+                  var voet = function(kop, uitleg, t){
+                    if(!t.entiteiten) return '';
+                    var stukjes = t.per.map(function(p){
+                      return `<span style="white-space:nowrap"><span style="color:rgba(255,255,255,0.7)">${p.naam}</span> <span style="color:rgba(255,255,255,0.45)">${p.entiteiten}</span></span>`;
                     }).join('<span style="color:rgba(255,255,255,0.2)"> · </span>');
-                    overig = `<div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;margin-top:4px">
-                      <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:4px;text-align:left">
-                        <span style="font-size:12.5px;font-weight:700;color:rgba(255,255,255,0.55)">overige integraties</span>
-                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${totApp} apparaten · ${totEnt} entiteiten</span></div>
+                    return `<div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;margin-top:8px">
+                      <div style="display:flex;align-items:baseline;gap:8px;text-align:left">
+                        <span style="font-size:12.5px;font-weight:700;color:rgba(255,255,255,0.55)">${kop}</span>
+                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${t.entiteiten} entiteiten</span></div>
+                      <div style="font-size:11.5px;color:rgba(255,255,255,0.3);text-align:left;padding:1px 0 3px">${uitleg}</div>
                       <div style="font-size:12.5px;line-height:1.7;text-align:left">${stukjes}</div></div>`;
-                  }
+                  };
+                  var overig = voet('weesentiteiten', 'integratie bestaat niet meer — op te ruimen in het entiteitenregister', telVan(bakken.wees))
+                    + voet('afgeleide sensoren', 'spiegelen een andere entiteit; vallen om als hun bron omvalt', telVan(bakken.afgeleid))
+                    + voet('komen en gaan', 'clients die niet altijd aanwezig zijn — weg is hier normaal', telVan(bakken.ruis));
                   var waarschuwing = reg ? '' : `<div style="font-size:11.5px;color:#f59e0b;padding-bottom:8px">Entiteitenregister niet beschikbaar — gegroepeerd op domein in plaats van integratie.</div>`;
                   return `<div style="max-height:calc(100vh - 190px);overflow-y:auto">${waarschuwing}${blokken}${overig}</div>`;
                 ]]]
 
           # =============== BIJNA LEGE BATTERIJEN ===============
+          # Deze kaart gaat over batterijen die je zelf vervangt. Omvormers en
+          # thuisaccu's melden hun laadtoestand óók als `device_class: battery`,
+          # dus die staan elke nacht op een paar procent en maken de kaart dan
+          # onterecht rood. Zelfde valkuil als "veelgebruikers" op het Overzicht:
+          # de device_class zegt niet wat je denkt dat hij zegt.
           - type: custom:button-card
+            entity: sensor.time
+            triggers_update: sensor.time
             show_icon: false
             show_name: false
             show_state: false
-            update_timer: 30s
             tap_action:
               action: none
             variables:
               drempel: 25
+              # Integraties die alleen laadtoestand van accu's leveren.
+              negeer_integraties:
+                - sems
+                - goodwe
+                - anker_solix
+                - marstek
+              # Vangnet voor accu's die via een andere integratie binnenkomen
+              # (denk aan een omvormer achter MQTT).
+              negeer_namen: "omvormer|inverter|thuisbatterij|accu|zonneplan"
             styles:
               card:
                 - background: var(--ov-panel-bg)
@@ -237,11 +313,15 @@ cards:
                 [[[
                   var d = variables.drempel;
                   var reg = (hass && hass.entities) ? hass.entities : null;
+                  var negeerInt = variables.negeer_integraties || [];
+                  var negeerNaam = variables.negeer_namen ? new RegExp(variables.negeer_namen, 'i') : null;
                   var n = Object.keys(states).filter(function(id){
                     var s = states[id];
                     if(!s || !s.attributes || s.attributes.device_class !== 'battery') return false;
                     var e = reg ? reg[id] : null;
                     if(e && (e.hidden || e.hidden_by)) return false;
+                    if(negeerInt.indexOf((e && e.platform) ? e.platform : '') !== -1) return false;
+                    if(negeerNaam && negeerNaam.test(s.attributes.friendly_name || id)) return false;
                     if(id.lastIndexOf('binary_sensor.', 0) === 0) return s.state === 'on';
                     var v = Number(s.state);
                     return !isNaN(v) && v <= d;
@@ -258,12 +338,15 @@ cards:
                   var reg = (hass && hass.entities) ? hass.entities : null;
                   var apparaten = (hass && hass.devices) ? hass.devices : null;
                   var gebieden = (hass && hass.areas) ? hass.areas : null;
+                  var negeerInt = variables.negeer_integraties || [];
+                  var negeerNaam = variables.negeer_namen ? new RegExp(variables.negeer_namen, 'i') : null;
                   // Ook hier per apparaat: een apparaat kan zowel een
                   // percentagesensor als een 'bijna leeg'-binarysensor hebben.
                   var groepen = {};
                   Object.keys(states).forEach(function(id){
                     var s = states[id];
                     if(!s || !s.attributes || s.attributes.device_class !== 'battery') return;
+                    if(negeerNaam && negeerNaam.test(s.attributes.friendly_name || id)) return;
                     var niveau = null, binair = false;
                     if(id.lastIndexOf('binary_sensor.', 0) === 0){
                       if(s.state !== 'on') return;
@@ -276,6 +359,7 @@ cards:
                     var e = reg ? reg[id] : null;
                     if(e && (e.hidden || e.hidden_by)) return;
                     var integratie = (e && e.platform) ? e.platform : id.split('.')[0];
+                    if(negeerInt.indexOf(integratie) !== -1) return;
                     var devId = (e && e.device_id) ? e.device_id : null;
                     var dev = (devId && apparaten) ? apparaten[devId] : null;
                     var sleutel = devId || ('los:' + id);
@@ -346,17 +430,22 @@ cards:
           # Let op: een sensor die alleen bij verandering meldt (deurcontact)
           # kan legitiem uren stil zijn — oud betekent hier 'niets gehoord',
           # niet per se 'stuk'. Onbereikbare apparaten krijgen wel een label.
+          # Apparaten die sinds de laatste herstart niets hebben gestuurd zeggen
+          # 'sinds herstart' in plaats van een leeftijd die toevallig gelijk is
+          # aan de uptime: die twee zijn niet hetzelfde en zagen er wel zo uit.
           - type: custom:button-card
+            entity: sensor.time
+            triggers_update: sensor.time
             show_icon: false
             show_name: false
             show_state: false
-            update_timer: 30s
             tap_action:
               action: none
             variables:
               # Vanaf hier vindt de kaart het de moeite waard om te kleuren
               oud_uren: 6
               stil_uren: 24
+              herstart_marge_min: 3
             styles:
               card:
                 - background: var(--ov-panel-bg)
@@ -396,6 +485,13 @@ cards:
                   var apparaten = (hass && hass.devices) ? hass.devices : null;
                   var gebieden = (hass && hass.areas) ? hass.areas : null;
                   if(!reg) return `<span style="font-size:12.5px;color:#f59e0b">Entiteitenregister niet beschikbaar — Matter-apparaten zijn niet te herkennen.</span>`;
+                  // Na een herstart staat elke last_updated op het herstartmoment,
+                  // dus zonder deze correctie lijkt ieder stil apparaat precies zo
+                  // lang stil als HA draait. Zie de kaart hierboven.
+                  var startS = states['sensor.home_assistant_gestart'];
+                  var startMs = startS ? new Date(startS.state).getTime() : NaN;
+                  var uptime = isNaN(startMs) ? null : nu - startMs;
+                  var marge = (variables.herstart_marge_min || 3) * 60000;
                   var groepen = {};
                   Object.keys(states).forEach(function(id){
                     var s = states[id];
@@ -428,6 +524,7 @@ cards:
                   });
                   var duurTxt = function(ms){
                     if(ms === null) return 'onbekend';
+                    if(uptime !== null && Math.abs(ms - uptime) < marge) return 'sinds herstart';
                     var m = Math.floor(ms / 60000);
                     if(m < 1) return 'net';
                     if(m < 60) return m + ' min';
