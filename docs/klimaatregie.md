@@ -132,9 +132,14 @@ De beslistabel, van hoog naar laag:
    niets over of er iemand op is; in de zomer stond de zon dan allang op en
    gingen de slaapkamerrolluiken omhoog terwijl er nog geslapen werd. De eerste
    druk op de slaapkamerknop zet `input_boolean.klimaat_wakker` aan
-   (`automation.klimaat_wakker_bijhouden`, dezelfde knop die 's avonds de
-   naar-bed-routine start — vandaar dat alleen een druk tussen 04:00 en 12:00
-   telt). Drukt niemand, dan gaat het slot er om 10:00 alsnog af. Ventileren
+   (`automation.klimaat_wakker_bijhouden`). Dezelfde knop start 's avonds de
+   naar-bed-routine, dus het tijdstip bepaalt de betekenis: een druk tussen
+   **06:00 en 17:00** meldt wakker, daarbuiten zet hij de vlag juist uit.
+   Datzelfde venster staat op de kaart "Slaapkamer knop" in
+   `dashboards/home/overzicht.yaml`; die twee horen gelijk te blijven. Om 22:00
+   valt de vlag sowieso terug, zodat een vergeten avonddruk de rolluiken de
+   volgende ochtend niet alsnog opent. Drukt niemand, dan gaat het slot er om
+   10:00 alsnog af. Ventileren
    blijft ondertussen gewoon toegestaan: de spui-kier valt niet onder deze
    rem, alleen omhóóg gaan.
 2. **Slaapvenster kinderkamer** (vanaf 19:00): dicht. Op een hittedag een kier,

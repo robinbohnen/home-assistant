@@ -532,6 +532,55 @@ else:
     print(f"PASS  {'elke zone staat op de Klimaat-weergave':52} "
           f"({len(zones_cfg)} zones)")
 
+# Elke rij op die weergave hoort een eigen `name:` te hebben. Ontbreekt er een,
+# dan valt die rij terug op zijn ruwe friendly_name ("Zonwering handmatig -
+# Slaapkamer Emma") en pikt de rij eronder de naam in die eigenlijk bij zijn
+# voorganger hoorde. Dat gebeurt zodra je een regel tussen een entiteit en zijn
+# naam invoegt, en het is aan de YAML zelf niet te zien: het blijft geldig.
+kaarten, kaart = [], None
+for regel in dashboard.splitlines():
+    # Een kaart loopt tot de volgende `- type:`. Zonder dat afsluiten belanden
+    # de entiteiten van een grafiekkaart erna in de vorige entities-kaart, en
+    # die staan daar bewust zonder naam.
+    soort = re.match(r"^\s*- type: (\S+)", regel)
+    if soort:
+        kaart = {"titel": "?", "rijen": []} if soort.group(1) == "entities" else None
+        if kaart is not None:
+            kaarten.append(kaart)
+    if kaart is None:
+        continue
+    kop = re.match(r"^\s*title: (.+)$", regel)
+    if kop and kaart["titel"] == "?":
+        kaart["titel"] = kop.group(1).strip()
+    ent = re.match(r"^\s*- entity: (\S+)", regel)
+    if ent:
+        kaart["rijen"].append({"entity": ent.group(1), "naam": None})
+    nm = re.match(r"^\s*name: (.+)$", regel)
+    if nm and kaart["rijen"] and kaart["rijen"][-1]["naam"] is None:
+        kaart["rijen"][-1]["naam"] = nm.group(1).strip()
+
+naamloos, dubbel = [], []
+for k in kaarten:
+    for r in k["rijen"]:
+        if r["naam"] is None:
+            naamloos.append(f"{k['titel']} / {r['entity']}")
+    namen = [r["naam"] for r in k["rijen"] if r["naam"]]
+    for naam in sorted(set(namen)):
+        if namen.count(naam) > 1:
+            dubbel.append(f"{k['titel']}: '{naam}' staat {namen.count(naam)}x")
+
+if naamloos or dubbel:
+    for f in naamloos:
+        print(f"FAIL  rij zonder naam op de Klimaat-weergave: {f}")
+    for f in dubbel:
+        print(f"FAIL  dubbele naam op de Klimaat-weergave: {f}")
+    FOUTEN.extend([f"rij zonder naam: {f}" for f in naamloos]
+                  + [f"dubbele naam: {f}" for f in dubbel])
+else:
+    rijen = sum(len(k["rijen"]) for k in kaarten)
+    print(f"PASS  {'elke rij heeft een eigen, unieke naam':52} "
+          f"({rijen} rijen in {len(kaarten)} kaarten)")
+
 zonder_cover = [z for z, cfg in zones_cfg.items() if cfg["cover"] not in dashboard]
 if zonder_cover:
     print(f"FAIL  covers ontbreken bij 'Werkelijke stand': {zonder_cover}")

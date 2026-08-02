@@ -255,8 +255,10 @@ klimaat_zonwering_package:
     - id: klimaat_wakker_bijhouden
       alias: Klimaat - Wakker bijhouden
       description: >-
-        Zet input_boolean.klimaat_wakker aan bij de eerste druk op de
-        slaapkamerknop 's ochtends, en 's avonds weer uit.
+        Een druk op de slaapkamerknop tussen 06:00 en 17:00 is de opstaan-
+        routine en meldt het huis wakker; daarbuiten is het de naar-bed-routine
+        en gaat de vlag juist uit. Om 22:00 valt hij sowieso terug, zodat een
+        vergeten avonddruk de rolluiken morgenochtend niet alsnog opent.
       mode: single
       triggers:
         # Zelfde knoppen als packages/3 - Outside/Backyard/Sunscreen.yaml.
@@ -265,47 +267,48 @@ klimaat_zonwering_package:
           type: action
           subtype: single
           trigger: device
-          id: wakker
+          id: knop
         - domain: mqtt
           device_id: !secret bedroom_button_2
           type: action
           subtype: single
           trigger: device
-          id: wakker
+          id: knop
         # Virtuele druk vanaf het dashboard, zie Virtual Buttons.yaml
         - trigger: event
           event_type: virtual_button
           event_data:
             button: bedroom_buttons
             action: single
-          id: wakker
-        # Zelfde tijdstip als STIL_VAN in custom_templates/klimaat.jinja.
+          id: knop
+        # Vangnet: wordt er 's avonds niet gedrukt, dan mag de vlag niet blijven
+        # staan - anders gaan de rolluiken morgenochtend om 07:00 open terwijl
+        # er nog geslapen wordt. Zelfde tijdstip als STIL_VAN in klimaat.jinja.
         - trigger: time
           at: "22:00:00"
-          id: slapen
+          id: nacht_reset
       conditions: []
       actions:
         - choose:
+            # 06:00-17:00 is de opstaan-routine. Zelfde venster als het label
+            # op de kaart "Slaapkamer knop" in dashboards/home/overzicht.yaml;
+            # die twee horen gelijk te blijven.
             - conditions:
                 - condition: trigger
-                  id: wakker
-                # Dezelfde knop start 's avonds de naar-bed-routine. Die druk
-                # mag het huis niet wakker melden, anders staan de rolluiken
-                # morgenochtend om 07:00 alsnog omhoog.
+                  id: knop
                 - condition: time
-                  after: "04:00:00"
-                  before: "12:00:00"
+                  after: "06:00:00"
+                  before: "17:00:00"
               sequence:
                 - action: input_boolean.turn_on
                   target:
                     entity_id: input_boolean.klimaat_wakker
-            - conditions:
-                - condition: trigger
-                  id: slapen
-              sequence:
-                - action: input_boolean.turn_off
-                  target:
-                    entity_id: input_boolean.klimaat_wakker
+          # Al het andere zet de vlag uit: een druk buiten dat venster is de
+          # naar-bed-routine, en anders is het de reset van 22:00.
+          default:
+            - action: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.klimaat_wakker
 
     ###########################################################################
     ## Laag 4a - adviezen uitvoeren
