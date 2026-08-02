@@ -1,0 +1,184 @@
+##############################################################################
+## OVERKAPPING - de twee knoppen bij de zitplek
+##
+## De knop komt binnen als event-entity met vier gebaren:
+##   multi_press_1 | multi_press_2 | long_press | long_release
+##
+## Indeling (knop 1 = muziek, knop 2 = terras):
+##   Knop 1  1x    Sonos overkapping bij/uit de woonkamergroep
+##   Knop 1  2x    volume overkapping harder
+##   Knop 1  vast  volume overkapping zachter
+##   Knop 2  1x    achtertuinlampen aan/uit
+##   Knop 2  2x    schuurlampen aan/uit
+##   Knop 2  vast  zonnescherm uitschuiven/intrekken
+##
+## long_release wordt bewust genegeerd: dat gebaar hoort bij het loslaten na
+## long_press en zou elke vasthoud-actie dubbel uitvoeren.
+##
+## Anders dan de oudere MQTT-knoppen is dit één state-trigger per knop (de
+## event-entity verandert bij elk gebaar) in plaats van een device-trigger per
+## subtype. Het gebaar zelf staat in het event_type-attribuut; de variabele
+## `actie` maakt dat gelijk aan de action van een virtuele druk, zodat de
+## choose-logica geen verschil ziet tussen fysiek en virtueel (zelfde idee als
+## de trigger-id-conventie in packages/9 - Other/Virtual Buttons.yaml).
+##############################################################################
+
+backyard_buttons_package:
+  automation:
+    - id: overkapping_knop_1_muziek
+      alias: Overkapping - Knop 1 muziek
+      description: >-
+        Sonos overkapping bij of uit de woonkamergroep (1x), volume harder
+        (2x) of zachter (vasthouden).
+      mode: queued
+      max: 10
+      max_exceeded: silent
+      triggers:
+        # unknown/unavailable in beide richtingen uitsluiten: bij een
+        # herstart of het terugkomen van het zigbee-netwerk verandert de
+        # state ook, en dat zou het láátste gebaar nog een keer afspelen.
+        - trigger: state
+          entity_id: event.achtertuin_achtertuin_overkapping_knop_knop_1
+          not_from:
+            - unknown
+            - unavailable
+          not_to:
+            - unknown
+            - unavailable
+          id: fysiek
+        # Virtuele druk, zie packages/9 - Other/Virtual Buttons.yaml
+        - trigger: event
+          event_type: virtual_button
+          event_data:
+            button: overkapping_knop_1
+          id: virtueel
+      conditions: []
+      actions:
+        - variables:
+            actie: >-
+              {{ trigger.to_state.attributes.event_type
+                 if trigger.id == 'fysiek'
+                 else trigger.event.data.action }}
+        - choose:
+            - conditions:
+                - condition: template
+                  value_template: "{{ actie == 'multi_press_1' }}"
+              sequence:
+                # Toggle op de groepsstatus-sensor die ook de dashboardknop
+                # "Overkapping erbij" aanstuurt (Sonos Groups.yaml).
+                - if:
+                    - condition: state
+                      entity_id: binary_sensor.sonos_overkapping_bij_woonkamer
+                      state: "on"
+                  then:
+                    - action: media_player.unjoin
+                      target:
+                        entity_id: media_player.overkapping_sonos
+                  else:
+                    - action: media_player.join
+                      data:
+                        group_members:
+                          - media_player.overkapping_sonos
+                      target:
+                        entity_id: media_player.woonkamer_sonos
+              alias: 1x - bij/uit woonkamergroep
+            - conditions:
+                - condition: template
+                  value_template: "{{ actie == 'multi_press_2' }}"
+              sequence:
+                - action: media_player.volume_set
+                  target:
+                    entity_id: media_player.overkapping_sonos
+                  data:
+                    volume_level: >-
+                      {{ [(state_attr('media_player.overkapping_sonos', 'volume_level')
+                          | float(0.2)) + 0.05, 1] | min }}
+              alias: 2x - volume harder
+            - conditions:
+                - condition: template
+                  value_template: "{{ actie == 'long_press' }}"
+              sequence:
+                - action: media_player.volume_set
+                  target:
+                    entity_id: media_player.overkapping_sonos
+                  data:
+                    volume_level: >-
+                      {{ [(state_attr('media_player.overkapping_sonos', 'volume_level')
+                          | float(0.2)) - 0.05, 0] | max }}
+              alias: Vasthouden - volume zachter
+          # Bewust geen default: long_release en onbekende gebaren doen niets.
+
+    - id: overkapping_knop_2_terras
+      alias: Overkapping - Knop 2 terras
+      description: >-
+        Achtertuinlampen (1x), schuurlampen (2x) of het zonnescherm
+        (vasthouden).
+      mode: queued
+      max: 10
+      max_exceeded: silent
+      triggers:
+        - trigger: state
+          entity_id: event.achtertuin_achtertuin_overkapping_knop_knop_2
+          not_from:
+            - unknown
+            - unavailable
+          not_to:
+            - unknown
+            - unavailable
+          id: fysiek
+        # Virtuele druk, zie packages/9 - Other/Virtual Buttons.yaml
+        - trigger: event
+          event_type: virtual_button
+          event_data:
+            button: overkapping_knop_2
+          id: virtueel
+      conditions: []
+      actions:
+        - variables:
+            actie: >-
+              {{ trigger.to_state.attributes.event_type
+                 if trigger.id == 'fysiek'
+                 else trigger.event.data.action }}
+        - choose:
+            - conditions:
+                - condition: template
+                  value_template: "{{ actie == 'multi_press_1' }}"
+              sequence:
+                - action: light.toggle
+                  target:
+                    entity_id: light.achtertuin_lampen
+                  data:
+                    transition: "{{ states('input_number.lights_transition_seconds') | int(1) }}"
+              alias: 1x - achtertuinlampen
+            - conditions:
+                - condition: template
+                  value_template: "{{ actie == 'multi_press_2' }}"
+              sequence:
+                - action: switch.toggle
+                  target:
+                    entity_id: switch.achtertuin_schuur_lampen
+              alias: 2x - schuurlampen
+            - conditions:
+                - condition: template
+                  value_template: "{{ actie == 'long_press' }}"
+              sequence:
+                # LET OP de omgekeerde bedrading: 'open' = uitgeschoven.
+                # De klimaatregie herkent deze beweging vanzelf als
+                # handbediening en laat het scherm daarna een paar uur met
+                # rust (timer.override_zonnescherm). Schuif je hem uit
+                # tijdens harde wind, dan trekt de veiligheidsregel hem
+                # direct weer in - dat hoort zo.
+                - if:
+                    - condition: state
+                      entity_id: cover.achtertuin_zonnescherm
+                      state: open
+                  then:
+                    - action: cover.close_cover
+                      target:
+                        entity_id: cover.achtertuin_zonnescherm
+                  else:
+                    - action: cover.open_cover
+                      target:
+                        entity_id: cover.achtertuin_zonnescherm
+              alias: Vasthouden - zonnescherm
+          # Bewust geen default: long_release en onbekende gebaren doen niets.
