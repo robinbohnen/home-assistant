@@ -7,8 +7,16 @@ backyard_solarpanels_package:
           unit_of_measurement: kWh
           state_class: total
           device_class: energy
+          # `| float` zonder default brak het hele template zodra een van de
+          # bronnen unavailable was (sensor stuk + errors in de log). Met
+          # availability wordt de sensor dan netjes unavailable, en de
+          # batterij-ochtendtrigger die hierop leunt slaat die dag over.
+          availability: >-
+            {{ has_value('sensor.overloop_zolder_zonnepanelen_schatting_geschatte_energieproductie_vandaag')
+               and has_value('sensor.energy_production_today') }}
           state: >-
-            {{ (states.sensor.overloop_zolder_zonnepanelen_schatting_geschatte_energieproductie_vandaag.state | float + states.sensor.energy_production_today.state | float) }}
+            {{ states('sensor.overloop_zolder_zonnepanelen_schatting_geschatte_energieproductie_vandaag') | float(0)
+               + states('sensor.energy_production_today') | float(0) }}
 
   automation:
     - id: notification_backyard_solarpanels_error

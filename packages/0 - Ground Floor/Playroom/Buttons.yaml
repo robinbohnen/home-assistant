@@ -1,4 +1,17 @@
 playroom_button_package:
+  timer:
+    # Zolang deze loopt zijn de automatische-alarm-automations gepauzeerd.
+    # Dit was een delay van 10 minuten binnen de automatisering zelf, maar een
+    # herstart of reload tijdens die delay betekende dat de automations nooit
+    # meer aangezet werden - en dus dat het alarm 's avonds stil bleef.
+    # `restore: true` laat de timer een herstart overleven; de automatisering
+    # hieronder zet alles weer aan zodra hij afloopt.
+    alarm_automations_pauze:
+      name: "Alarm automations - Gepauzeerd"
+      duration: "00:10:00"
+      restore: true
+      icon: mdi:alarm-snooze
+
   automation:
     - id: playroom_button_disable_alarm
       alias: Playroom - Disable alarm temporary
@@ -62,22 +75,11 @@ playroom_button_package:
                       # de helft van deze knop deed stilletjes niets.
                       - automation.hallway_alarm_on_automatically
                       - automation.hallway_alarm_on_automatically_robin_to_work
-                - delay:
-                    hours: 0
-                    minutes: 10
-                    seconds: 0
-                    milliseconds: 0
-                - action: automation.turn_on
-                  metadata: {}
-                  data: {}
+                # Het weer aanzetten doet playroom_button_enable_alarm zodra de
+                # timer afloopt; een delay hier overleefde geen herstart.
+                - action: timer.start
                   target:
-                    entity_id:
-                      # Het entity_id volgt de alias ("Hallway Alarm - On
-                      # Automatically"), niet de id in de YAML. Hier stond
-                      # automation.alarm_on_automatically; die bestaat niet, dus
-                      # de helft van deze knop deed stilletjes niets.
-                      - automation.hallway_alarm_on_automatically
-                      - automation.hallway_alarm_on_automatically_robin_to_work
+                    entity_id: timer.alarm_automations_pauze
               alias: Alarm is off
             - conditions:
                 - condition: template
@@ -99,3 +101,29 @@ playroom_button_package:
               data:
                 title: Foutmelding
                 message: Knop speelkamer ingedrukt maar dit zou niet moeten kunnen
+
+    - id: playroom_button_enable_alarm
+      alias: Playroom - Enable alarm after pause
+      description: >-
+        Zet de automatische-alarm-automations weer aan zodra de pauzetimer
+        afloopt. De start-trigger is het vangnet: de timer heeft restore: true,
+        maar mocht hij toch ooit als idle terugkomen terwijl de automations nog
+        uit staan, dan zet de herstart ze alsnog aan.
+      mode: single
+      triggers:
+        - trigger: event
+          event_type: timer.finished
+          event_data:
+            entity_id: timer.alarm_automations_pauze
+        - trigger: homeassistant
+          event: start
+      conditions:
+        - condition: state
+          entity_id: timer.alarm_automations_pauze
+          state: idle
+      actions:
+        - action: automation.turn_on
+          target:
+            entity_id:
+              - automation.hallway_alarm_on_automatically
+              - automation.hallway_alarm_on_automatically_robin_to_work

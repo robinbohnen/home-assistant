@@ -8,6 +8,11 @@ frontyard_trash_package:
         - at: "08:15:00"
           trigger: time
       conditions:
+        # Zonder deze guard kwam er bij een haperende integratie letterlijk
+        # "Afval vandaag: unavailable" binnen. Zelfde oplossing als de
+        # AWTRIX-klok (Kitchen/Clock Display.yaml).
+        - condition: template
+          value_template: "{{ has_value('sensor.afvalinfo_home_trash_type_today') }}"
         - condition: not
           conditions:
             - condition: state
@@ -15,7 +20,7 @@ frontyard_trash_package:
               entity_id: sensor.afvalinfo_home_trash_type_today
       actions:
         - data:
-            message: "Afval vandaag: {{states.sensor.afvalinfo_home_trash_type_today.state}}"
+            message: "Afval vandaag: {{ states('sensor.afvalinfo_home_trash_type_today') }}"
             title: Afval vandaag
           action: notify.mobile_devices_adults
 
@@ -27,6 +32,8 @@ frontyard_trash_package:
         - at: "18:00:00"
           trigger: time
       conditions:
+        - condition: template
+          value_template: "{{ has_value('sensor.afvalinfo_home_trash_type_tomorrow') }}"
         - condition: not
           conditions:
             - condition: state
@@ -35,5 +42,5 @@ frontyard_trash_package:
       actions:
         - data:
             title: Afval morgen
-            message: "Afval morgen: {{states.sensor.afvalinfo_home_trash_type_tomorrow.state}}"
+            message: "Afval morgen: {{ states('sensor.afvalinfo_home_trash_type_tomorrow') }}"
           action: notify.mobile_devices_adults

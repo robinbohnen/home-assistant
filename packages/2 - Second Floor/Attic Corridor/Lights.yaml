@@ -16,106 +16,28 @@ attic_corridor_lights_package:
   automation:
     - id: lights_movement_attic_corridor
       alias: Attic Corridor - Lights
-      description: "Turn on the lights of the attic_corridor if there is movement detected"
-      mode: single
-      triggers:
-        - trigger: state
-          entity_id: binary_sensor.overloop_zolder_beweging_occupancy
-          to: "on"
-          id: beweging
-        - trigger: state
-          entity_id: binary_sensor.overloop_zolder_beweging_occupancy
-          to: "off"
-          for:
-            hours: 0
-            minutes: 2
-            seconds: 0
-          id: geenbeweging
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_away
-          id: alarm_on_not_home
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_home
-          id: alarm_on_home
-        - trigger: state
-          entity_id:
-            - lock.kroon18voordeur
-          to: locked
-          id: lock_locked
-          for:
-            hours: 0
-            minutes: 1
-            seconds: 0
-      conditions:
-        - condition: state
-          entity_id: input_boolean.enable_pir_attic_corridor
-          state: "on"
-        - condition: not
-          conditions:
-            - condition: time
-              after: input_datetime.bedtime_maxi
-              before: "07:15:00"
-        - condition: not
-          conditions:
-            - condition: time
-              after: input_datetime.bedtime_mini
-              before: "07:15:00"
-      actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - beweging
-              sequence:
-                - action: light.turn_on
-                  metadata: {}
-                  data:
-                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                    brightness_pct: "{{ states('input_number.lights_attic_corridor_percentage')|int }}"
-                  target:
-                    entity_id: light.overloop_zolder_lampen
-            - conditions:
-                - condition: trigger
-                  id:
-                    - geenbeweging
-              sequence:
-                - action: light.turn_off
-                  metadata: {}
-                  data:
-                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                  target:
-                    entity_id: light.overloop_zolder_lampen
-            - conditions:
-                - condition: trigger
-                  id:
-                    - alarm_on_not_home
-                    - alarm_on_home
-                    - lock_locked
-              sequence:
-                - if:
-                    - condition: not
-                      conditions:
-                        - condition: state
-                          entity_id: group.all_adults
-                          state: home
-                    - condition: state
-                      entity_id: light.overloop_zolder_lampen
-                      state: "on"
-                  then:
-                    - action: light.turn_off
-                      metadata: {}
-                      data:
-                        transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                      target:
-                        entity_id: light.overloop_zolder_lampen
-          default:
-            - action: light.toggle
-              metadata: {}
-              data:
-                transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-              target:
-                entity_id: light.overloop_zolder_lampen
+      description: "Turn on the lights of the attic corridor if there is movement detected"
+      use_blueprint:
+        path: robin/motion_light.yaml
+        input:
+          bewegingssensor: binary_sensor.overloop_zolder_beweging_occupancy
+          lamp: light.overloop_zolder_lampen
+          schakelaar: input_boolean.enable_pir_attic_corridor
+          helderheid: input_number.lights_attic_corridor_percentage
+          # Zelfde bedtijdblokkades als de overloop op de eerste verdieping;
+          # zie de toelichting daar. Alleen het aanzetten wordt geblokkeerd.
+          aan_blokkades:
+            - condition: not
+              conditions:
+                - condition: time
+                  after: input_datetime.bedtime_maxi
+                  before: "07:15:00"
+            - condition: not
+              conditions:
+                - condition: time
+                  after: input_datetime.bedtime_mini
+                  before: "07:15:00"
+          # Overdag bij vol daglicht hoeft hier geen lamp aan; zie de
+          # toelichting bij de speelkamer voor de drempelkeuze.
+          lux_sensor: sensor.buiten_zon_luminance_max
+          lux_drempel: 20000

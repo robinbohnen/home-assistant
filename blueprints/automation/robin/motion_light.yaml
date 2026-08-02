@@ -1,0 +1,283 @@
+# Bewegingslicht: het patroon dat acht kamers deelden, één keer opgeschreven.
+#
+# Vóór deze blueprint had elke kamer zijn eigen kopie van ~120 regels; een fix
+# in de ene kamer belandde nooit in de andere zeven. Twee van die verschillen
+# waren geen keuze maar een bug, en die zijn hier meteen anders dan in de
+# kopieën:
+#
+#   1. Blokkades (bedtijd, nachtvenster, Apple TV) gelden alleen nog voor het
+#      AANzetten. Ze stonden als automatiseringsconditie en blokkeerden dus ook
+#      het UITzetten: licht dat net vóór het blokkadevenster aanging, bleef de
+#      hele nacht branden.
+#   2. Er is geen default-tak met light.toggle meer. Die was overal dood
+#      (elke trigger-id had een eigen tak), maar één nieuwe trigger zonder
+#      afgedekte id en de lamp ging 's avonds spontaan aan.
+#
+# De dubbele-uit uit de hal (transition-uit die soms niet aankomt) is hier
+# veralgemeend: na het uitzetten wordt even gewacht en alleen als de lamp dan
+# nog aan staat, gaat er een tweede uit-commando zonder transition achteraan.
+blueprint:
+  name: Bewegingslicht
+  description: >-
+    Lamp aan bij beweging (en optioneel bij een deur die opengaat), uit na een
+    instelbare tijd zonder beweging, en uit zodra iedereen weg is (alarm op
+    armed_away/armed_home of de voordeur een minuut op slot). Helderheid en
+    overgangstijd komen uit helpers zodat ze per kamer en vanaf het dashboard
+    instelbaar blijven. Blokkades gelden alleen voor het aanzetten; uitzetten
+    mag altijd.
+  author: Robin Bohnen
+  domain: automation
+  homeassistant:
+    # Trigger-/conditieselectors en het mengen van eigen en meegegeven
+    # triggers bestaan sinds 2024.10.
+    min_version: 2024.10.0
+  input:
+    bewegingssensor:
+      name: Bewegingssensor
+      description: >-
+        PIR of PIR-groep. Aan = lamp aan; een tijd uit = lamp uit.
+      selector:
+        entity:
+          filter:
+            domain: binary_sensor
+    deur_contacten:
+      name: Deurcontacten (optioneel)
+      description: Deuren die de lamp ook aanzetten zodra ze opengaan.
+      default: []
+      selector:
+        entity:
+          multiple: true
+          filter:
+            domain: binary_sensor
+    lamp:
+      name: Lamp
+      selector:
+        entity:
+          filter:
+            domain: light
+    schakelaar:
+      name: Aan/uit-schakelaar
+      description: >-
+        input_boolean waarmee de hele automatisering aan of uit kan (de
+        enable_pir_*-helpers op het dashboard). Uit = er beweegt hier niets,
+        ook niet bij vertrek.
+      selector:
+        entity:
+          filter:
+            domain: input_boolean
+    helderheid:
+      name: Helderheid-helper
+      description: input_number met het percentage waarmee de lamp aangaat.
+      selector:
+        entity:
+          filter:
+            domain: input_number
+    overgang:
+      name: Overgangstijd-helper
+      description: input_number met de fade-tijd in seconden.
+      default: input_number.lights_transition_seconds
+      selector:
+        entity:
+          filter:
+            domain: input_number
+    uit_na:
+      name: Uit na
+      description: Zo lang geen beweging, dan gaat de lamp uit.
+      default:
+        hours: 0
+        minutes: 2
+        seconds: 0
+      selector:
+        duration:
+    aan_blokkades:
+      name: Blokkades voor het aanzetten (optioneel)
+      description: >-
+        Condities die het AANzetten tegenhouden: bedtijden, een nachtvenster,
+        een tv die speelt. Het uitzetten gaat hier bewust buitenom, anders
+        blijft een lamp die net vóór het venster aanging de hele nacht branden.
+      default: []
+      selector:
+        condition:
+    uit_vereisten:
+      name: Voorwaarden voor het uitzetten (optioneel)
+      description: >-
+        Condities waaraan voldaan moet zijn vóór de lamp uitgaat, zoals "de tv
+        in deze kamer staat uit". Leeg = altijd uitzetten na de wachttijd.
+      default: []
+      selector:
+        condition:
+    extra_uit_triggers:
+      name: Extra uit-triggers (optioneel)
+      description: >-
+        Triggers die de lamp direct uitzetten, zoals de slaapkamerknop in de
+        hal. Geef elke trigger hier `id: uit` mee, anders doet hij niets.
+      default: []
+      selector:
+        trigger:
+    lux_sensor:
+      name: Lichtsensor (optioneel)
+      description: >-
+        Illuminance-sensor voor daglichtdetectie. Leeg laten = de lamp gaat
+        bij elke beweging aan, ook overdag.
+      default: ""
+      selector:
+        entity:
+          filter:
+            domain: sensor
+            device_class: illuminance
+    lux_drempel:
+      name: Boven deze lux geen licht
+      description: >-
+        Meet de lichtsensor meer dan dit, dan is het licht genoeg en blijft de
+        lamp uit bij beweging. 0 = daglichtdetectie uit.
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100000
+          step: 100
+          unit_of_measurement: lx
+          mode: box
+    alarm_paneel:
+      name: Alarmpaneel
+      default: alarm_control_panel.alarmo
+      selector:
+        entity:
+          filter:
+            domain: alarm_control_panel
+    voordeur_slot:
+      name: Voordeurslot
+      default: lock.kroon18voordeur
+      selector:
+        entity:
+          filter:
+            domain: lock
+    volwassenen:
+      name: Volwassenen-groep
+      description: Alleen als deze groep niet thuis is, dooft vertrek de lamp.
+      default: group.all_adults
+      selector:
+        entity:
+          filter:
+            domain: group
+
+# restart en niet single: in de uit-tak zit een korte wachttijd (zie onderaan),
+# en beweging tijdens dat wachten moet de lamp meteen weer aan kunnen zetten in
+# plaats van genegeerd te worden.
+mode: restart
+max_exceeded: silent
+
+# !input werkt niet binnen templates; alles wat een template nodig heeft gaat
+# via deze variabelen.
+variables:
+  lamp: !input lamp
+  helderheid: !input helderheid
+  overgang: !input overgang
+  lux_sensor: !input lux_sensor
+  lux_drempel: !input lux_drempel
+  volwassenen: !input volwassenen
+
+triggers:
+  - trigger: state
+    entity_id: !input bewegingssensor
+    to: "on"
+    id: beweging
+  - trigger: state
+    entity_id: !input bewegingssensor
+    to: "off"
+    for: !input uit_na
+    id: geen_beweging
+  # Een lege lijst deurcontacten is een geldige trigger die nooit afgaat.
+  - trigger: state
+    entity_id: !input deur_contacten
+    to: "on"
+    id: beweging
+  - trigger: state
+    entity_id: !input alarm_paneel
+    to:
+      - armed_away
+      - armed_home
+    id: vertrokken
+  - trigger: state
+    entity_id: !input voordeur_slot
+    to: locked
+    for: "00:01:00"
+    id: vertrokken
+  - !input extra_uit_triggers
+
+conditions:
+  - alias: "Bewegingslicht staat hier aan"
+    condition: state
+    entity_id: !input schakelaar
+    state: "on"
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id:
+              - beweging
+          - alias: "Donker genoeg (of geen lichtsensor ingesteld)"
+            condition: template
+            value_template: >-
+              {{ lux_sensor in ['', none]
+                 or lux_drempel | float(0) <= 0
+                 or states(lux_sensor) | float(0) <= lux_drempel | float(0) }}
+          - alias: "Kamerspecifieke blokkades"
+            condition: and
+            conditions: !input aan_blokkades
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: !input lamp
+            data:
+              transition: "{{ states(overgang) | int(1) }}"
+              brightness_pct: "{{ states(helderheid) | int(100) }}"
+
+      - conditions:
+          - condition: trigger
+            id:
+              - geen_beweging
+              - uit
+          - alias: "Kamerspecifieke voorwaarden voor uitzetten"
+            condition: and
+            conditions: !input uit_vereisten
+        sequence:
+          - action: light.turn_off
+            target:
+              entity_id: !input lamp
+            data:
+              transition: "{{ states(overgang) | int(1) }}"
+          # Een uit-commando met transition komt niet altijd aan (dit was de
+          # dubbele-uit-hack in de hal). Even wachten en alleen nog een keer
+          # sturen als de lamp dan echt nog aan staat.
+          - wait_template: "{{ is_state(lamp, 'off') }}"
+            timeout: "{{ states(overgang) | int(1) + 3 }}"
+            continue_on_timeout: true
+          - if:
+              - condition: template
+                value_template: "{{ is_state(lamp, 'on') }}"
+            then:
+              - action: light.turn_off
+                target:
+                  entity_id: !input lamp
+
+      - conditions:
+          - condition: trigger
+            id:
+              - vertrokken
+          - alias: "Geen volwassenen meer thuis"
+            condition: template
+            value_template: "{{ not is_state(volwassenen, 'home') }}"
+          - alias: "Lamp staat nog aan"
+            condition: template
+            value_template: "{{ is_state(lamp, 'on') }}"
+        sequence:
+          - action: light.turn_off
+            target:
+              entity_id: !input lamp
+            data:
+              transition: "{{ states(overgang) | int(1) }}"
+    # Bewust geen default: een trigger zonder afgedekte id doet niets. Hier
+    # stond light.toggle, en dat is precies hoe je een lamp 's avonds spontaan
+    # aan krijgt zodra iemand een trigger toevoegt.

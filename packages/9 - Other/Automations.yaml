@@ -1,12 +1,25 @@
 automations_package:
   template:
     - sensor:
+        # Het aantal als state, de namen als attribuut. De namen stonden
+        # eerst zelf in de state, maar een state is maximaal 255 tekens: bij
+        # een handvol lopende automatiseringen tegelijk (precies het moment
+        # waarop je dit wilt zien) sloeg de sensor stuk. Attributen hebben
+        # die limiet niet.
         - name: "Lopende Automatiseringen"
           unique_id: lopende_automatiseringen
-          state: "{{ states.automation
-  | selectattr('attributes.current', 'defined')
-  | selectattr('attributes.current', '>', 0)
-  | map(attribute='name') | join('\n') }}"
+          icon: mdi:play-circle-outline
+          state: >-
+            {{ states.automation
+               | selectattr('attributes.current', 'defined')
+               | selectattr('attributes.current', '>', 0)
+               | list | count }}
+          attributes:
+            namen: >-
+              {{ states.automation
+                 | selectattr('attributes.current', 'defined')
+                 | selectattr('attributes.current', '>', 0)
+                 | map(attribute='name') | list | join('\n') }}
 
     - binary_sensor:
         - name: Work - Maybe travel to work time

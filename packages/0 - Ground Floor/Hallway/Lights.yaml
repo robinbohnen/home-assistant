@@ -25,137 +25,49 @@ hallway_lights_package:
     - id: lights_movement_hallway
       alias: Hallway - Lights
       description: "Turn on the lights of the hallway if there is movement detected"
-      mode: single
-      triggers:
-        - trigger: state
-          entity_id: binary_sensor.entree_beweging_occupancy
-          to: "on"
-          id: beweging
-        - trigger: state
-          entity_id: binary_sensor.entree_beweging_occupancy
-          to: "off"
-          for:
-            hours: 0
-            minutes: 2
-            seconds: 0
-          id: geenbeweging
-        - trigger: state
-          entity_id: binary_sensor.entree_deur_contact
-          to: "on"
-          id: deur_open
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_away
-          id: alarm_on_not_home
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_home
-          id: alarm_on_home
-        - trigger: state
-          entity_id:
-            - lock.kroon18voordeur
-          to: locked
-          id: lock_locked
-          for:
-            hours: 0
-            minutes: 1
-            seconds: 0
-        - domain: mqtt
-          device_id: !secret bedroom_button_1
-          type: action
-          subtype: single
-          trigger: device
-          id: slaapkamer_knop_single
-        - domain: mqtt
-          device_id: !secret bedroom_button_2
-          type: action
-          subtype: single
-          trigger: device
-          id: slaapkamer_knop_single
-        # Virtuele druk, zie packages/9 - Other/Virtual Buttons.yaml
-        - trigger: event
-          event_type: virtual_button
-          event_data:
-            button: bedroom_buttons
-            action: single
-          id: slaapkamer_knop_single
-      conditions:
-        - condition: state
-          entity_id: input_boolean.enable_pir_hallway
-          state: "on"
-        - condition: not
-          conditions:
-            - condition: time
-              after: "03:00:00"
-              before: "07:15:00"
-        - condition: not
-          conditions:
-            - condition: state
-              entity_id: media_player.woonkamer_appletv
-              state: playing
-      actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - beweging
-                    - deur_open
-              sequence:
-                - action: light.turn_on
-                  metadata: {}
-                  data:
-                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                    brightness_pct: "{{ states('input_number.lights_hallway_percentage')|int }}"
-                  target:
-                    entity_id: light.entree_lampen
-            - conditions:
-                - condition: trigger
-                  id:
-                    - geenbeweging
-                    - slaapkamer_knop_single
-              sequence:
-                - action: light.turn_off
-                  metadata: {}
-                  data:
-                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                  target:
-                    entity_id: light.entree_lampen
-                - delay:
-                    seconds: 2
-                - action: light.turn_off
-                  metadata: {}
-                  data: {}
-                  target:
-                    entity_id: light.entree_lampen
-            - conditions:
-                - condition: trigger
-                  id:
-                    - alarm_on_not_home
-                    - alarm_on_home
-                    - lock_locked
-              sequence:
-                - if:
-                    - condition: not
-                      conditions:
-                        - condition: state
-                          entity_id: group.all_adults
-                          state: home
-                    - condition: state
-                      entity_id: light.entree_lampen
-                      state: "on"
-                  then:
-                    - action: light.turn_off
-                      metadata: {}
-                      data:
-                        transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                      target:
-                        entity_id: light.entree_lampen
-          default:
-            - action: light.toggle
-              metadata: {}
-              data:
-                transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-              target:
-                entity_id: light.entree_lampen
+      use_blueprint:
+        path: robin/motion_light.yaml
+        input:
+          bewegingssensor: binary_sensor.entree_beweging_occupancy
+          deur_contacten:
+            - binary_sensor.entree_deur_contact
+          lamp: light.entree_lampen
+          schakelaar: input_boolean.enable_pir_hallway
+          helderheid: input_number.lights_hallway_percentage
+          # Deze blokkades gelden alleen voor het aanzetten. Als voorheen ook
+          # het uitzetten hierdoor geblokkeerd werd, bleef licht dat om 02:58
+          # aanging de hele nacht branden.
+          aan_blokkades:
+            # 's Nachts geen licht in de hal bij een verdwaalde beweging.
+            - condition: not
+              conditions:
+                - condition: time
+                  after: "03:00:00"
+                  before: "07:15:00"
+            # Tijdens een film mag de hal niet opflitsen (open zichtlijn).
+            - condition: not
+              conditions:
+                - condition: state
+                  entity_id: media_player.woonkamer_appletv
+                  state: playing
+          # De slaapkamerknop (welterusten/goedemorgen) dooft de hal direct.
+          extra_uit_triggers:
+            - domain: mqtt
+              device_id: !secret bedroom_button_1
+              type: action
+              subtype: single
+              trigger: device
+              id: uit
+            - domain: mqtt
+              device_id: !secret bedroom_button_2
+              type: action
+              subtype: single
+              trigger: device
+              id: uit
+            # Virtuele druk, zie packages/9 - Other/Virtual Buttons.yaml
+            - trigger: event
+              event_type: virtual_button
+              event_data:
+                button: bedroom_buttons
+                action: single
+              id: uit

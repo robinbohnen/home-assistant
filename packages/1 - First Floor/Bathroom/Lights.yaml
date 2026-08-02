@@ -25,104 +25,19 @@ bathroom_lights_package:
     - id: lights_movement_bathroom
       alias: Bathroom - Lights
       description: "Turn on the lights of the bathroom if there is movement detected"
-      mode: single
-      triggers:
-        - trigger: state
-          entity_id: binary_sensor.pir_group_bathroom
-          to: "on"
-          id: beweging
-        - trigger: state
-          entity_id: binary_sensor.pir_group_bathroom
-          to: "off"
-          for:
-            hours: 0
-            minutes: 2
-            seconds: 0
-          id: geenbeweging
-        - trigger: state
-          entity_id: binary_sensor.badkamer_deur_contact
-          to: "on"
-          id: deur_open
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_away
-          id: alarm_on_not_home
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_home
-          id: alarm_on_home
-        - trigger: state
-          entity_id:
-            - lock.kroon18voordeur
-          to: locked
-          id: lock_locked
-          for:
-            hours: 0
-            minutes: 1
-            seconds: 0
-      conditions:
-        - condition: state
-          entity_id: input_boolean.enable_pir_bathroom
-          state: "on"
-      actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - beweging
-                    - deur_open
-              sequence:
-                - action: light.turn_on
-                  metadata: {}
-                  data:
-                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                    brightness_pct: "{{ states('input_number.lights_bathroom_percentage')|int }}"
-                  target:
-                    entity_id: light.badkamer_spots
-            - conditions:
-                - condition: trigger
-                  id:
-                    - geenbeweging
-              sequence:
-                - action: light.turn_off
-                  metadata: {}
-                  data:
-                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                  target:
-                    entity_id: light.badkamer_spots
-            - conditions:
-                - condition: trigger
-                  id:
-                    - alarm_on_not_home
-                    - alarm_on_home
-                    - lock_locked
-              sequence:
-                - if:
-                    - condition: not
-                      conditions:
-                        - condition: state
-                          entity_id: group.all_adults
-                          state: home
-                    - condition: state
-                      entity_id: light.badkamer_spots
-                      state: "on"
-                  then:
-                    - action: light.turn_off
-                      metadata: {}
-                      data:
-                        transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                      target:
-                        entity_id: light.badkamer_spots
-          default:
-            - action: light.toggle
-              metadata: {}
-              data:
-                transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-              target:
-                entity_id: light.badkamer_spots
+      use_blueprint:
+        path: robin/motion_light.yaml
+        input:
+          bewegingssensor: binary_sensor.pir_group_bathroom
+          deur_contacten:
+            - binary_sensor.badkamer_deur_contact
+          lamp: light.badkamer_spots
+          schakelaar: input_boolean.enable_pir_bathroom
+          helderheid: input_number.lights_bathroom_percentage
 
+    # De helderheid-helper wordt hieronder met de zon meegeschakeld: fel
+    # overdag, gedimd 's avonds en 's nachts. De blueprint leest de helper bij
+    # elke beweging, dus dit werkt automatisch door.
     - id: lights_change_brightness_bathroom
       alias: Bathroom - Lights Change Brightness
       description: "Change the brightness at sunset and sunrise in the bathroom"

@@ -25,6 +25,18 @@ ventilation_cooling_package:
   #############################################################################
 
   input_number:
+    # Zelfde constructie als input_number.klimaat_config_versie: de drempels
+    # hieronder hadden een `initial:` en die zet je eigen instellingen bij
+    # élke herstart terug naar de fabriekswaarde. Nu vult de automatisering
+    # onderaan ze eenmalig; alles wat je daarna zelf bijstelt blijft staan.
+    ventilation_config_versie:
+      name: "Ventilatie - Config versie"
+      icon: mdi:counter
+      min: 0
+      max: 99
+      step: 1
+      mode: box
+
     ## --- Schuur ---
     # Warm genoeg om te willen koelen: ventilator mag pas hierboven aan
     ventilation_schuur_warm_threshold:
@@ -33,7 +45,6 @@ ventilation_cooling_package:
       min: 18
       max: 35
       step: 0.5
-      initial: 24
       unit_of_measurement: "°C"
       mode: box
     # Afgekoeld genoeg: onder deze binnentemperatuur nooit ventileren
@@ -43,7 +54,6 @@ ventilation_cooling_package:
       min: 15
       max: 30
       step: 0.5
-      initial: 21
       unit_of_measurement: "°C"
       mode: box
     # Hoeveel koeler moet de referentie zijn voordat ventileren nut heeft (aanzetten)
@@ -53,7 +63,6 @@ ventilation_cooling_package:
       min: 0.5
       max: 6
       step: 0.5
-      initial: 2
       unit_of_measurement: "°C"
       mode: box
     # Zodra het verschil hieronder zakt heeft ventileren geen effect meer (uit)
@@ -63,7 +72,6 @@ ventilation_cooling_package:
       min: 0
       max: 4
       step: 0.5
-      initial: 0.5
       unit_of_measurement: "°C"
       mode: box
 
@@ -74,7 +82,6 @@ ventilation_cooling_package:
       min: 18
       max: 35
       step: 0.5
-      initial: 22
       unit_of_measurement: "°C"
       mode: box
     ventilation_meterkast_cool_threshold:
@@ -83,7 +90,6 @@ ventilation_cooling_package:
       min: 15
       max: 30
       step: 0.5
-      initial: 20
       unit_of_measurement: "°C"
       mode: box
     ventilation_meterkast_delta_on:
@@ -92,7 +98,6 @@ ventilation_cooling_package:
       min: 0.5
       max: 6
       step: 0.5
-      initial: 1
       unit_of_measurement: "°C"
       mode: box
     ventilation_meterkast_delta_off:
@@ -101,7 +106,6 @@ ventilation_cooling_package:
       min: 0
       max: 4
       step: 0.5
-      initial: 0.5
       unit_of_measurement: "°C"
       mode: box
 
@@ -114,7 +118,6 @@ ventilation_cooling_package:
       min: 0.1
       max: 2
       step: 0.1
-      initial: 0.2
       unit_of_measurement: "°C"
       mode: box
     ventilation_meterkast_stagnation_delta:
@@ -123,7 +126,6 @@ ventilation_cooling_package:
       min: 0.1
       max: 2
       step: 0.1
-      initial: 0.2
       unit_of_measurement: "°C"
       mode: box
 
@@ -161,6 +163,67 @@ ventilation_cooling_package:
         hours: 1
 
   automation:
+    ###########################################################################
+    ## Standaardwaarden invullen - zie de uitleg bij klimaat_standaardwaarden
+    ## in packages/9 - Other/Klimaat Regime.yaml: alleen drempels die nog
+    ## exact op hun minimum staan (nooit door jou gezet) worden gevuld, en
+    ## alleen als het versienummer omhoog is gegaan.
+    ###########################################################################
+    - id: ventilation_standaardwaarden
+      alias: Ventilatie - Standaardwaarden invullen
+      description: Vult nieuwe drempels die nog nooit zijn ingesteld
+      mode: single
+      variables:
+        # 1 = eerste set (de waardes die eerder als initial: in dit bestand
+        # stonden)
+        config_versie: 1
+      triggers:
+        - trigger: homeassistant
+          event: start
+      conditions:
+        - condition: template
+          value_template: >-
+            {{ states('input_number.ventilation_config_versie') | int(0) < config_versie }}
+      actions:
+        - variables:
+            standaard:
+              input_number.ventilation_schuur_warm_threshold: 24
+              input_number.ventilation_schuur_cool_threshold: 21
+              input_number.ventilation_schuur_delta_on: 2
+              input_number.ventilation_schuur_delta_off: 0.5
+              input_number.ventilation_meterkast_warm_threshold: 22
+              input_number.ventilation_meterkast_cool_threshold: 20
+              input_number.ventilation_meterkast_delta_on: 1
+              input_number.ventilation_meterkast_delta_off: 0.5
+              input_number.ventilation_schuur_stagnation_delta: 0.2
+              input_number.ventilation_meterkast_stagnation_delta: 0.2
+        - repeat:
+            for_each: "{{ standaard.keys() | list }}"
+            sequence:
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {% set nu = states(repeat.item) %}
+                      {{ nu in ['unknown', 'unavailable', 'none', '']
+                         or (nu | float(-9999)) == (state_attr(repeat.item, 'min') | float(-9998)) }}
+                then:
+                  - action: input_number.set_value
+                    target:
+                      entity_id: "{{ repeat.item }}"
+                    data:
+                      value: "{{ standaard[repeat.item] }}"
+                    continue_on_error: true
+        - action: input_number.set_value
+          target:
+            entity_id: input_number.ventilation_config_versie
+          data:
+            value: "{{ config_versie }}"
+        - action: logbook.log
+          data:
+            name: Ventilatie
+            message: >-
+              Standaardwaarden bijgewerkt naar versie {{ config_versie }}.
+
     - id: ventilation_cooling_shed
       alias: Ventilation - Schuur ventilator koelen
       description: >-

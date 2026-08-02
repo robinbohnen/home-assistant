@@ -101,10 +101,13 @@ backyard_sunscreen_package:
                         milliseconds: 0
                     - choose:
                         - conditions:
+                            # `wait.trigger` is None bij een timeout; zonder
+                            # die check gooit dit template dan een fout.
                             - condition: template
                               value_template: >-
-                                {{ wait.trigger.event.data.action ==
-                                action_sunscreen_open }}
+                                {{ wait.trigger is not none
+                                   and wait.trigger.event.data.action ==
+                                   action_sunscreen_open }}
                           sequence:
                             - action: cover.open_cover
                               metadata: {}

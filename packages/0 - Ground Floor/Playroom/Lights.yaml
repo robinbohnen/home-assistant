@@ -25,99 +25,27 @@ playroom_lights_package:
     - id: lights_movement_playroom
       alias: Playroom - Lights
       description: Turn on the lights of the playroom if there is movement detected
-      mode: single
-      triggers:
-        - trigger: state
-          entity_id: binary_sensor.pir_group_playroom
-          to: "on"
-          id: beweging
-        - trigger: state
-          entity_id: binary_sensor.pir_group_playroom
-          to: "off"
-          for:
+      use_blueprint:
+        path: robin/motion_light.yaml
+        input:
+          bewegingssensor: binary_sensor.pir_group_playroom
+          lamp: light.speelkamer_lampen
+          schakelaar: input_boolean.enable_pir_playroom
+          helderheid: input_number.lights_playroom_percentage
+          # Kinderen zitten hier langer stil dan een PIR volhoudt.
+          uit_na:
             hours: 0
             minutes: 5
             seconds: 0
-          id: geenbeweging
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_away
-          id: alarm_on_not_home
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_home
-          id: alarm_on_home
-        - trigger: state
-          entity_id:
-            - lock.kroon18voordeur
-          to: locked
-          id: lock_locked
-          for:
-            hours: 0
-            minutes: 1
-            seconds: 0
-      conditions:
-        - condition: state
-          entity_id: input_boolean.enable_pir_playroom
-          state: "on"
-      actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - beweging
-              sequence:
-                - action: light.turn_on
-                  metadata: {}
-                  data:
-                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                    brightness_pct: "{{ states('input_number.lights_playroom_percentage')|int }}"
-                  target:
-                    entity_id: light.speelkamer_lampen
-            - conditions:
-                - condition: trigger
-                  id:
-                    - geenbeweging
-              sequence:
-                - if:
-                    - condition: state
-                      entity_id: media_player.speelkamer_tv
-                      state: "off"
-                  then:
-                    - action: light.turn_off
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: light.speelkamer_lampen
-            - conditions:
-                - condition: trigger
-                  id:
-                    - alarm_on_not_home
-                    - alarm_on_home
-                    - lock_locked
-              sequence:
-                - if:
-                    - condition: not
-                      conditions:
-                        - condition: state
-                          entity_id: group.all_adults
-                          state: home
-                    - condition: state
-                      entity_id: light.speelkamer_lampen
-                      state: "on"
-                  then:
-                    - action: light.turn_off
-                      metadata: {}
-                      data:
-                        transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                      target:
-                        entity_id: light.speelkamer_lampen
-          default:
-            - action: light.toggle
-              metadata: {}
-              data:
-                transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-              target:
-                entity_id: light.speelkamer_lampen
+          # Niet uitgaan terwijl er tv gekeken wordt.
+          uit_vereisten:
+            - condition: state
+              entity_id: media_player.speelkamer_tv
+              state: "off"
+          # Overdag bij vol daglicht hoeft hier geen lamp aan. Drempel bewust
+          # hoog (zelfde 20.000 lx als de klimaatregie voor "zon op de gevel"):
+          # liever een keer onnodig licht dan in een schemerige kamer zitten.
+          # Te ruim? Verlaag richting 10.000 en vergelijk een week met de
+          # kalibratiegrafiek op de Klimaat-weergave.
+          lux_sensor: sensor.buiten_zon_luminance_max
+          lux_drempel: 20000
