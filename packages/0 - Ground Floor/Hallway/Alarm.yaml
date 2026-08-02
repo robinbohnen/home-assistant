@@ -145,6 +145,87 @@ hallway_alarm_package:
                 entity_id: alarm_control_panel.alarmo
               data: {}
 
+    - id: 'alarm_failed_to_arm_notify'
+      alias: Hallway Alarm - Melding als inschakelen mislukt
+      description: >-
+        Alarmo weigert in te schakelen zolang er een deur of raam openstaat en
+        die sensor géén "Automatisch omzeilen" heeft. Zonder melding merk je
+        dat niet: de welterusten-knop lijkt gewoon te werken en het huis staat
+        de hele nacht onbewaakt. Staat omzeilen wél aan, dan schakelt hij in
+        en meldt alarm_bypassed_sensors_notify hieronder wat er niet bewaakt
+        wordt.
+      mode: queued
+      max: 5
+      max_exceeded: silent
+      triggers:
+        - trigger: event
+          event_type: alarmo_failed_to_arm
+      conditions: []
+      actions:
+        - variables:
+            namen: >-
+              {{ expand(trigger.event.data.sensors | default([], true))
+                 | map(attribute='name') | list | join(', ') }}
+        - action: notify.mobile_devices_adults
+          data:
+            title: Alarm NIET ingeschakeld
+            message: >-
+              Het alarm kon niet op {{ trigger.event.data.command | default('aan', true) }}
+              gezet worden{% if namen %}: {{ namen }} staat nog open{% endif %}.
+              Het huis is dus niet bewaakt.
+            data:
+              # Doorbreekt de stille modus: een onbewaakt huis moet je nu weten,
+              # niet morgenochtend.
+              push:
+                sound:
+                  name: default
+                  critical: 1
+                  volume: 0.7
+
+    - id: 'alarm_bypassed_sensors_notify'
+      alias: Hallway Alarm - Melding bij overgeslagen sensoren
+      description: >-
+        Met "Automatisch omzeilen" schakelt Alarmo gewoon in terwijl een raam
+        openstaat, maar dat raam wordt dan de hele periode NIET bewaakt - en
+        dat zie je verder nergens. Deze melding zegt precies welke. Let op: een
+        raam dat dicht was bij het inschakelen wordt wél bewaakt, dus dat kun
+        je daarna niet alsnog openzetten zonder het alarm af te laten gaan.
+        Alarmo vuurt hier geen event voor; vandaar het attribuut.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        # 10 seconden wachten tot de lijst stabiel is: tijdens het inschakelen
+        # (exit delay) schuift dit attribuut nog heen en weer.
+        - trigger: state
+          entity_id: alarm_control_panel.alarmo
+          attribute: bypassed_sensors
+          for: "00:00:10"
+      conditions:
+        - condition: template
+          value_template: >-
+            {{ (state_attr('alarm_control_panel.alarmo', 'bypassed_sensors') or []) | count > 0 }}
+        - condition: state
+          entity_id: alarm_control_panel.alarmo
+          state:
+            - armed_home
+            - armed_away
+            - armed_night
+            - armed_vacation
+            - armed_custom_bypass
+      actions:
+        - variables:
+            namen: >-
+              {{ expand(state_attr('alarm_control_panel.alarmo', 'bypassed_sensors') or [])
+                 | map(attribute='name') | list | join(', ') }}
+        - action: notify.mobile_devices_adults
+          data:
+            title: Alarm aan, maar niet alles bewaakt
+            message: >-
+              Het alarm staat op
+              {{ states('alarm_control_panel.alarmo') | replace('armed_', '') }},
+              maar {{ namen }} stond open bij het inschakelen en wordt dus niet
+              bewaakt.
+
     - id: 'alarm_off_automatically_morning'
       alias: Hallway Alarm - Off Automatically Morning
       description: "Turn off the alarm Automatically when someone wakes up"
