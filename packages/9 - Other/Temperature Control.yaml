@@ -1,308 +1,210 @@
+##############################################################################
+## RAMEN-ADVIES - meldingen op de momenten dat ramen open of dicht lonen
+##
+## Dit bestand verving de oude "Temperature Control - All rooms", die in de
+## praktijk vrijwel nooit iets stuurde. Waarom niet, en wat hier anders is:
+##
+##   1. De oude automatisering triggerde per kamer op het exacte moment dat
+##      buiten de kamertemperatuur kruiste. Het nuttigste kruismoment (buiten
+##      zakt 's avonds onder binnen -> "zet ramen open") valt in de zomer
+##      meestal ná 21:00 - precies buiten het 08:00-21:00-venster dat over de
+##      hele automatisering stond. En in een hittegolf zakt buiten overdag
+##      helemaal nooit onder binnen. Het advies waar je het meest aan had,
+##      kwam dus vrijwel nooit door.
+##   2. Eén kruismoment per dag: herstart gemist = dag gemist. Daarom heeft
+##      elk advies hier een tweede, vaste-tijd-trigger als vangnet; de
+##      condities bepalen of hij dan alsnog zinnig is.
+##   3. Drie triggers (garage, speelkamer, kantoor) hadden geen actie-tak.
+##   4. Geen regime-kennis (adviezen ook buiten het koelseizoen), geen
+##      hysterese (0,1 graad kruising was genoeg) en geen cooldown.
+##
+## De drempels komen uit de klimaatregie-helpers (kamer_warm, spui_delta,
+## regime), zodat dit advies hetzelfde "denkt" als de zonwering. Puur
+## meldingen: covers zijn het domein van de klimaatregie zelf.
+## Binnen = woonkamer-multisensor (leefverdieping); buiten = KNMI.
+##############################################################################
+
 temp_control_package:
   automation:
-    - id: temp_control_automation
-      alias: Temperature Control - All rooms
+    ###########################################################################
+    ## Avond: buiten is koeler geworden dan binnen -> ramen open loont
+    ###########################################################################
+    - id: ramen_advies_open_avond
+      alias: Ramen advies - Open bij avondkoelte
       description: >-
-        Control the temperature inside with the outside temperature and smart
-        notifications
+        Meldt op koeldagen het moment waarop de buitenlucht koeler is dan
+        binnen en ramen openzetten dus gratis koelte oplevert.
       mode: single
       triggers:
-        - trigger: numeric_state
-          entity_id:
-            - weather.knmi_thuis
-          attribute: temperature
-          above: sensor.woonkamer_woonkamer_multisensor_temperatuur
-          id: hot_livingroom
-        - trigger: numeric_state
-          entity_id:
-            - weather.knmi_thuis
-          attribute: temperature
-          above: sensor.garage_garage_temperatuur_temperatuur
-          id: hot_garage
-        - trigger: numeric_state
-          entity_id:
-            - weather.knmi_thuis
-          attribute: temperature
-          above: sensor.speelkamer_speelkamer_temperatuur_temperatuur
-          id: hot_playroom
-        - trigger: numeric_state
-          entity_id:
-            - weather.knmi_thuis
-          attribute: temperature
-          above: sensor.badkamer_badkamer_temperatuur_temperatuur
-          id: hot_bathroom
-        - trigger: numeric_state
-          entity_id:
-            - weather.knmi_thuis
-          attribute: temperature
-          above: sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur
-          id: hot_bedroom_maxi
-        - trigger: numeric_state
-          entity_id:
-            - weather.knmi_thuis
-          attribute: temperature
-          above: sensor.kantoor_kantoor_temperatuur_temperatuur
-          id: hot_office
-        - trigger: numeric_state
-          entity_id:
-            - weather.knmi_thuis
-          attribute: temperature
-          above: sensor.slaapkamer_slaapkamer_temperatuur_temperatuur
-          id: hot_bedroom
-        - trigger: numeric_state
-          entity_id:
-            - weather.knmi_thuis
-          attribute: temperature
-          above: sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur
-          id: hot_bedroom_mini
-        - trigger: numeric_state
-          entity_id:
-            - weather.knmi_thuis
-          attribute: temperature
-          id: cold_livingroom
-          below: sensor.woonkamer_woonkamer_multisensor_temperatuur
-        - trigger: numeric_state
-          entity_id:
-            - weather.knmi_thuis
-          attribute: temperature
-          id: cold_bathroom
-          below: sensor.badkamer_badkamer_temperatuur_temperatuur
-        - trigger: numeric_state
-          entity_id:
-            - weather.knmi_thuis
-          attribute: temperature
-          below: sensor.slaapkamer_slaapkamer_temperatuur_temperatuur
-          id: cold_bedroom
-        - trigger: numeric_state
-          entity_id:
-            - weather.knmi_thuis
-          attribute: temperature
-          below: sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur
-          id: cold_bedroom_maxi
-        - trigger: numeric_state
-          entity_id:
-            - weather.knmi_thuis
-          attribute: temperature
-          below: sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur
-          id: cold_bedroom_mini
+        # Het echte moment: buiten zakt onder binnen minus de spui-delta en
+        # blijft daar een kwartier (geen gefladder rond de kruising).
+        - trigger: template
+          value_template: >-
+            {% set binnen = states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | float(none) %}
+            {% set buiten = states('sensor.knmi_temperatuur') | float(none) %}
+            {% set delta = states('input_number.klimaat_spui_delta') | float(1) %}
+            {{ binnen is not none and buiten is not none
+               and buiten <= binnen - delta }}
+          for: "00:15:00"
+        # Vangnet: was het kruismoment vóór het tijdvenster (of miste een
+        # herstart hem), dan beoordeelt deze vaste check het alsnog.
+        - trigger: time
+          at: "19:30:00"
       conditions:
+        # Alleen in het koelseizoen is avondkoelte binnenhalen het doel.
+        - condition: state
+          entity_id: input_select.klimaat_regime
+          state: Koelen
+        # Binnen moet het ook echt te warm zijn.
+        - condition: numeric_state
+          entity_id: sensor.woonkamer_woonkamer_multisensor_temperatuur
+          above: input_number.klimaat_kamer_warm
+        # Herbevestig de kruising (voor de vaste-tijd-trigger).
+        - condition: template
+          value_template: >-
+            {% set binnen = states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | float(none) %}
+            {% set buiten = states('sensor.knmi_temperatuur') | float(none) %}
+            {% set delta = states('input_number.klimaat_spui_delta') | float(1) %}
+            {{ binnen is not none and buiten is not none
+               and buiten <= binnen - delta }}
+        # Niet midden in de nacht en niet vlak na het opstaan.
+        - condition: time
+          after: "17:00:00"
+          before: "22:30:00"
+        # Iemand moet er iets mee kunnen.
+        - condition: state
+          entity_id: group.all_adults
+          state: home
+        # Staat er al iets open, dan is de tip al opgevolgd.
+        - condition: state
+          entity_id: binary_sensor.all_windows
+          state: "off"
+        # Max één keer per dag, ook al vuren beide triggers.
+        - condition: template
+          value_template: >-
+            {{ this.attributes.last_triggered is none
+               or now() - this.attributes.last_triggered > timedelta(hours=12) }}
+      actions:
+        - action: notify.mobile_devices_adults
+          data:
+            title: Ramen open
+            message: >-
+              Buiten is het nu {{ states('sensor.knmi_temperatuur') | round(1) }}°,
+              binnen {{ states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | round(1) }}°.
+              Goed moment om ramen open te zetten en gratis af te koelen.
+
+    ###########################################################################
+    ## Ochtend: buiten wordt warmer dan binnen -> wat open staat kan dicht
+    ###########################################################################
+    - id: ramen_advies_dicht_ochtend
+      alias: Ramen advies - Dicht als buiten warmer wordt
+      description: >-
+        Meldt op koeldagen het moment waarop de buitenlucht warmer wordt dan
+        binnen, met de lijst van ramen en tuindeuren die nog open staan.
+      mode: single
+      triggers:
+        - trigger: template
+          value_template: >-
+            {% set binnen = states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | float(none) %}
+            {% set buiten = states('sensor.knmi_temperatuur') | float(none) %}
+            {{ binnen is not none and buiten is not none and buiten >= binnen }}
+          for: "00:15:00"
+        # Vangnet, zie de open-variant hierboven.
+        - trigger: time
+          at: "10:30:00"
+      conditions:
+        - condition: state
+          entity_id: input_select.klimaat_regime
+          state: Koelen
+        - condition: template
+          value_template: >-
+            {% set binnen = states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | float(none) %}
+            {% set buiten = states('sensor.knmi_temperatuur') | float(none) %}
+            {{ binnen is not none and buiten is not none and buiten >= binnen }}
+        - condition: time
+          after: "07:30:00"
+          before: "15:00:00"
+        # Alleen zinnig als er echt iets open staat: een raam of een van de
+        # openslaande tuindeuren (die zitten in all_doors, niet all_windows).
+        - condition: or
+          conditions:
+            - condition: state
+              entity_id: binary_sensor.all_windows
+              state: "on"
+            - condition: state
+              entity_id: binary_sensor.woonkamer_openslaande_deuren_contact
+              state: "on"
+            - condition: state
+              entity_id: binary_sensor.speelkamer_openslaande_deuren_contact
+              state: "on"
+        - condition: template
+          value_template: >-
+            {{ this.attributes.last_triggered is none
+               or now() - this.attributes.last_triggered > timedelta(hours=12) }}
+      actions:
+        - variables:
+            nog_open: >-
+              {{ (expand('binary_sensor.all_windows')
+                  + expand('binary_sensor.woonkamer_openslaande_deuren_contact',
+                           'binary_sensor.speelkamer_openslaande_deuren_contact'))
+                 | selectattr('state', 'eq', 'on')
+                 | map(attribute='name') | list | join(', ') }}
+        - action: notify.mobile_devices_adults
+          data:
+            title: Ramen dicht
+            message: >-
+              Buiten wordt het nu warmer dan binnen
+              ({{ states('sensor.knmi_temperatuur') | round(1) }}° om
+              {{ states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | round(1) }}°).
+              Nog open: {{ nog_open }}.
+
+    ###########################################################################
+    ## Stookseizoen: er staat al een tijd een raam open -> warmteverlies
+    ###########################################################################
+    - id: ramen_advies_warmteverlies
+      alias: Ramen advies - Open raam tijdens verwarmen
+      description: >-
+        Meldt in het verwarmen-regime welke ramen al drie kwartier open staan;
+        luchten is prima, vergeten kost stookkosten.
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.all_windows
+          to: "on"
+          for: "00:45:00"
+        # Een state-trigger met `for` overleeft geen herstart; deze periodieke
+        # check vangt dat op. De cooldown hieronder voorkomt herhaal-spam.
+        - trigger: time_pattern
+          minutes: "/30"
+      conditions:
+        - condition: state
+          entity_id: input_select.klimaat_regime
+          state: Verwarmen
+        - condition: state
+          entity_id: binary_sensor.all_windows
+          state: "on"
+          for: "00:45:00"
+        - condition: state
+          entity_id: group.all_adults
+          state: home
+        # Nachtrust: geen stookmeldingen in bed.
         - condition: time
           after: "08:00:00"
-          before: "21:00:00"
+          before: "22:00:00"
+        - condition: template
+          value_template: >-
+            {{ this.attributes.last_triggered is none
+               or now() - this.attributes.last_triggered > timedelta(hours=6) }}
       actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - hot_livingroom
-                - condition: state
-                  entity_id: binary_sensor.woonkamer_openslaande_deuren_contact
-                  state: "on"
-              sequence:
-                - action: notify.mobile_devices_adults
-                  metadata: {}
-                  data:
-                    title: Woonkamer deuren dicht
-                    message: >-
-                      Het is warmer buiten dan binnen, je kunt beter de woonkamer
-                      deuren dichthouden om het koel binnen te houden.
-            - conditions:
-                - condition: trigger
-                  id:
-                    - cold_livingroom
-                - condition: state
-                  entity_id: binary_sensor.woonkamer_openslaande_deuren_contact
-                  state: "off"
-                - condition: state
-                  entity_id: light.woonkamer_lampen
-                  state: "on"
-              sequence:
-                - action: notify.mobile_devices_adults
-                  metadata: {}
-                  data:
-                    title: Woonkamer deuren open
-                    message: >-
-                      Het is warmer binnen dan buiten, je kunt beter de woonkamer
-                      deuren open doen om het koel binnen te maken binnen.
-            - conditions:
-                - condition: trigger
-                  id:
-                    - hot_bathroom
-                - condition: state
-                  entity_id: binary_sensor.badkamer_raam_contact
-                  state: "on"
-              sequence:
-                - action: notify.mobile_devices_adults
-                  metadata: {}
-                  data:
-                    title: Badkamer raam dicht
-                    message: >-
-                      Het is warmer buiten dan binnen, je kunt beter het badkamer raam
-                      dichthouden om het koel binnen te houden.
-                # De meldingen blijven altijd nuttig, het sluiten zelf doet de
-                # klimaatregie zodra die aan staat.
-                - if:
-                    - condition: state
-                      entity_id: input_boolean.klimaatregie_actief
-                      state: "off"
-                  then:
-                    - action: cover.close_cover
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: cover.badkamer_rolluik
-            - conditions:
-                - condition: trigger
-                  id:
-                    - cold_bathroom
-                - condition: state
-                  entity_id: binary_sensor.badkamer_raam_contact
-                  state: "off"
-              sequence:
-                - action: notify.mobile_devices_adults
-                  metadata: {}
-                  data:
-                    title: Badkamer raam open
-                    message: >-
-                      Het is warmer binnen dan buiten, je kunt beter het badkamer raam
-                      open doen om het koel binnen te maken.
-            - conditions:
-                - condition: trigger
-                  id:
-                    - hot_bedroom
-                - condition: or
-                  conditions:
-                    - condition: state
-                      entity_id: binary_sensor.slaapkamer_raam_rechts_contact
-                      state: "on"
-                    - condition: state
-                      entity_id: binary_sensor.slaapkamer_raam_links_contact
-                      state: "on"
-              sequence:
-                - action: notify.mobile_devices_adults
-                  metadata: {}
-                  data:
-                    title: Slaapkamer ramen dicht
-                    message: >-
-                      Het is warmer buiten dan binnen, je kunt beter de slaapkamer
-                      ramen dichthouden om het koel binnen te houden.
-                - if:
-                    - condition: state
-                      entity_id: input_boolean.klimaatregie_actief
-                      state: "off"
-                  then:
-                    - action: cover.close_cover
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: cover.slaapkamer_rolluik
-            - conditions:
-                - condition: trigger
-                  id:
-                    - cold_bedroom
-                - condition: or
-                  conditions:
-                    - condition: state
-                      entity_id: binary_sensor.slaapkamer_raam_rechts_contact
-                      state: "off"
-                    - condition: state
-                      entity_id: binary_sensor.slaapkamer_raam_links_contact
-                      state: "off"
-              sequence:
-                - action: notify.mobile_devices_adults
-                  metadata: {}
-                  data:
-                    title: Slaapkamer ramen open
-                    message: >-
-                      Het is warmer binnen dan buiten, je kunt beter de slaapkamer
-                      ramen open doen om het koel binnen te maken.
-            - conditions:
-                - condition: trigger
-                  id:
-                    - hot_bedroom_maxi
-                - condition: or
-                  conditions:
-                    - condition: state
-                      entity_id: binary_sensor.slaapkamer_maxi_raam_links_contact
-                      state: "on"
-                    - condition: state
-                      entity_id: binary_sensor.slaapkamer_maxi_raam_rechts_contact
-                      state: "on"
-              sequence:
-                - action: notify.mobile_devices_adults
-                  metadata: {}
-                  data:
-                    title: Slaapkamer ramen Logan dicht
-                    message: >-
-                      Het is warmer buiten dan binnen, je kunt beter de slaapkamer
-                      ramen van Logan dichthouden om het koel binnen te houden.
-                - if:
-                    - condition: state
-                      entity_id: input_boolean.klimaatregie_actief
-                      state: "off"
-                  then:
-                    - action: cover.close_cover
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: cover.covers_bedroom_maxi
-            - conditions:
-                - condition: trigger
-                  id:
-                    - cold_bedroom_maxi
-                - condition: or
-                  conditions:
-                    - condition: state
-                      entity_id: binary_sensor.slaapkamer_maxi_raam_links_contact
-                      state: "off"
-                    - condition: state
-                      entity_id: binary_sensor.slaapkamer_maxi_raam_rechts_contact
-                      state: "off"
-              sequence:
-                - action: notify.mobile_devices_adults
-                  metadata: {}
-                  data:
-                    title: Slaapkamer ramen Logan open
-                    message: >-
-                      Het is warmer binnen dan buiten, je kunt beter de slaapkamer
-                      ramen van Logan open doen om het koel binnen te maken.
-            - conditions:
-                - condition: trigger
-                  id:
-                    - hot_bedroom_mini
-                - condition: state
-                  entity_id: binary_sensor.slaapkamer_mini_raam_contact
-                  state: "on"
-              sequence:
-                - action: notify.mobile_devices_adults
-                  metadata: {}
-                  data:
-                    title: Slaapkamer ramen Emma dicht
-                    message: >-
-                      Het is warmer buiten dan binnen, je kunt beter de slaapkamer
-                      ramen van Emma dichthouden om het koel binnen te houden.
-                - if:
-                    - condition: state
-                      entity_id: input_boolean.klimaatregie_actief
-                      state: "off"
-                  then:
-                    - action: cover.close_cover
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: cover.slaapkamer_mini
-            - conditions:
-                - condition: trigger
-                  id:
-                    - cold_bedroom_mini
-                - condition: state
-                  entity_id: binary_sensor.slaapkamer_mini_raam_contact
-                  state: "off"
-              sequence:
-                - action: notify.mobile_devices_adults
-                  metadata: {}
-                  data:
-                    title: Slaapkamer ramen Emma open
-                    message: >-
-                      Het is warmer binnen dan buiten, je kunt beter de slaapkamer
-                      ramen van Emma open doen om het koel binnen te maken.
+        - variables:
+            nog_open: >-
+              {{ expand('binary_sensor.all_windows')
+                 | selectattr('state', 'eq', 'on')
+                 | map(attribute='name') | list | join(', ') }}
+        - action: notify.mobile_devices_adults
+          data:
+            title: Raam staat open
+            message: >-
+              Er staat al zeker drie kwartier een raam open terwijl we
+              verwarmen: {{ nog_open }}. Even luchten is prima, maar dicht is
+              goedkoper.
