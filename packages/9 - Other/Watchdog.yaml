@@ -1,0 +1,189 @@
+##############################################################################
+## WATCHDOG - merken dat er iets stil kapot is
+##
+## De rest van het huis let op apparaten (systeem_status telt onbeschikbare
+## entiteiten, Zigbee.yaml herstelt de zigbee-keten). Wat niemand in de gaten
+## hield: een handvol sensoren waar automatiseringen op leunen zonder dat je
+## ziet dat ze weg zijn, en of er nog backups worden gemaakt.
+##
+## Het verschil met systeem_status: die telt hoevéél entiteiten weg zijn en
+## slaat pas aan boven de vijf. Eén weggevallen lux-meter valt daar dus in het
+## niet, terwijl precies díé de zonwering blind maakt. Deze waakhond kijkt naar
+## een korte lijst met naam en toenaam, en klaagt al bij één.
+##
+## Wat er stil misgaat als een van deze wegvalt:
+##   lux-meters        zonwering blijft open op een zonnige dag; de overloop-
+##                     lampen verliezen hun daglichtcheck
+##   knmi_temperatuur  klimaatregie kan niet meer beslissen over spuien
+##   knmi_thuis        wind- en regenveiligheid van de screens valt weg
+##   neerslag 30 min   screens blijven uithangen in de regen
+##   tariefniveau      batterij blijft in de laatste modus hangen
+##   battery SoC       de ondergrens-guard op ontladen werkt niet meer
+##   alarmo            arm/disarm-automatiseringen doen niets
+##############################################################################
+
+watchdog_package:
+
+  template:
+    - sensor:
+        # De lijst staat hier één keer; de automatisering leest het attribuut.
+        # Een entiteit die niet (meer) bestaat geeft 'unknown' en telt dus ook
+        # mee - een hernoemde sensor is net zo goed een storing.
+        - name: "Watchdog kritieke sensoren"
+          unique_id: watchdog_kritieke_sensoren
+          icon: mdi:shield-alert-outline
+          state: >
+            {% set kritiek = [
+                 'sensor.voortuin_zon_luminance',
+                 'sensor.achtertuin_zon_luminance',
+                 'sensor.knmi_temperatuur',
+                 'weather.knmi_thuis',
+                 'sensor.neerslag_komende_30_minuten',
+                 'binary_sensor.knmi_waarschuwing',
+                 'sensor.slimhuys_zonneplan_tariefniveau_nu',
+                 'binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu',
+                 'sensor.lilygo_rs485_marstek_battery_state_of_charge',
+                 'alarm_control_panel.alarmo'
+               ] %}
+            {% set ns = namespace(n=0) %}
+            {% for e in kritiek %}
+              {% if states(e) in ['unknown', 'unavailable', 'none', ''] %}
+                {% set ns.n = ns.n + 1 %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.n }}
+          unit_of_measurement: "sensoren"
+          state_class: measurement
+          attributes:
+            namen: >
+              {% set kritiek = [
+                   'sensor.voortuin_zon_luminance',
+                   'sensor.achtertuin_zon_luminance',
+                   'sensor.knmi_temperatuur',
+                   'weather.knmi_thuis',
+                   'sensor.neerslag_komende_30_minuten',
+                   'binary_sensor.knmi_waarschuwing',
+                   'sensor.slimhuys_zonneplan_tariefniveau_nu',
+                   'binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu',
+                   'sensor.lilygo_rs485_marstek_battery_state_of_charge',
+                   'alarm_control_panel.alarmo'
+                 ] %}
+              {% set ns = namespace(namen=[]) %}
+              {% for e in kritiek %}
+                {% if states(e) in ['unknown', 'unavailable', 'none', ''] %}
+                  {% set ns.namen = ns.namen + [state_attr(e, 'friendly_name') or e] %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.namen | join(', ') }}
+
+        # Leeftijd van de laatste geslaagde automatische backup, in dagen.
+        #
+        # LET OP: de entiteitnaam hieronder is de standaardnaam van de
+        # backup-integratie, maar niet uit deze repo te verifiëren. Klopt hij
+        # niet, dan wordt de state 'onbekend' en zégt de automatisering dat -
+        # bewust, want een backupwaakhond die stilvalt omdat hij naar de
+        # verkeerde entiteit kijkt is erger dan geen waakhond.
+        - name: "Watchdog backup leeftijd"
+          unique_id: watchdog_backup_leeftijd
+          icon: mdi:backup-restore
+          state: >
+            {% set laatst = states('sensor.backup_last_successful_automatic_backup') | as_datetime %}
+            {{ ((now() - laatst).total_seconds() / 86400) | round(1)
+               if laatst is not none else 'onbekend' }}
+          attributes:
+            laatste_backup: >
+              {% set laatst = states('sensor.backup_last_successful_automatic_backup') | as_datetime %}
+              {{ laatst | as_local | string if laatst is not none else 'geen gegevens' }}
+
+  automation:
+    ###########################################################################
+    ## Kritieke sensor weg
+    ###########################################################################
+    - id: watchdog_kritieke_sensor_weg
+      alias: Watchdog - Kritieke sensor onbereikbaar
+      description: >-
+        Meldt zodra een sensor waar de klimaatregie, de batterijsturing of het
+        alarm op leunt een uur onbereikbaar is.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        # Een uur speling: korte hikjes bij een herstart of een integratie die
+        # opnieuw verbindt zijn geen storing.
+        - trigger: numeric_state
+          entity_id: sensor.watchdog_kritieke_sensoren
+          above: 0
+          for: "01:00:00"
+        # Vangnet voor het geval de storing een herstart overleeft (een `for`
+        # op een numeric_state begint dan opnieuw te tellen).
+        - trigger: time
+          at: "09:00:00"
+      conditions:
+        - condition: numeric_state
+          entity_id: sensor.watchdog_kritieke_sensoren
+          above: 0
+        # Hooguit één keer per twaalf uur; een kapotte sensor blijft anders de
+        # hele dag doorpiepen.
+        - condition: template
+          value_template: >-
+            {{ this.attributes.last_triggered is none
+               or now() - this.attributes.last_triggered > timedelta(hours=12) }}
+      actions:
+        - action: notify.mobile_devices_adults
+          data:
+            title: Sensor onbereikbaar
+            message: >-
+              {{ states('sensor.watchdog_kritieke_sensoren') }} kritieke
+              {{ 'sensor is' if states('sensor.watchdog_kritieke_sensoren') == '1' else 'sensoren zijn' }}
+              onbereikbaar: {{ state_attr('sensor.watchdog_kritieke_sensoren', 'namen') }}.
+              Klimaatregie en batterijsturing vallen daarop terug op hun
+              standaardgedrag.
+
+    ###########################################################################
+    ## Backups
+    ###########################################################################
+    - id: watchdog_backup_te_oud
+      alias: Watchdog - Backup te lang geleden
+      description: >-
+        Meldt als er te lang geen geslaagde automatische backup is geweest, of
+        als de backupsensor niet gevonden wordt.
+      mode: single
+      variables:
+        # Hierboven aanpassen als je een ander backupschema draait.
+        max_dagen: 3
+      triggers:
+        - trigger: time
+          at: "09:15:00"
+      conditions:
+        - condition: template
+          value_template: >-
+            {% set v = states('sensor.watchdog_backup_leeftijd') %}
+            {{ v == 'onbekend' or (v | float(0)) > max_dagen }}
+        # Eén melding per dag is genoeg; deze automatisering draait toch maar
+        # één keer per dag, maar zo blijft het expliciet.
+        - condition: template
+          value_template: >-
+            {{ this.attributes.last_triggered is none
+               or now() - this.attributes.last_triggered > timedelta(hours=20) }}
+      actions:
+        - choose:
+            - conditions:
+                - condition: state
+                  entity_id: sensor.watchdog_backup_leeftijd
+                  state: onbekend
+              sequence:
+                - action: notify.mobile_devices_adults
+                  data:
+                    title: Backupcontrole werkt niet
+                    message: >-
+                      De waakhond kan de backupstatus niet lezen. Controleer of
+                      sensor.backup_last_successful_automatic_backup bestaat en
+                      pas anders de naam aan in
+                      packages/9 - Other/Watchdog.yaml.
+          default:
+            - action: notify.mobile_devices_adults
+              data:
+                title: Backup te lang geleden
+                message: >-
+                  De laatste geslaagde automatische backup is
+                  {{ states('sensor.watchdog_backup_leeftijd') }} dagen oud
+                  ({{ state_attr('sensor.watchdog_backup_leeftijd', 'laatste_backup') }}).

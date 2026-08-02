@@ -144,8 +144,17 @@ bedroom_mini_lights_package:
 
     - id: bedroom_mini_lights_doors_open
       alias: Bedroom Mini - Lights on door opened
-      description: When mini opens her door turn on the lights during sunset
-      mode: single
+      description: >-
+        Doet Emma haar deur open na zonsondergang, dan gaan beide overlopen
+        aan zodat ze niet in het donker staat. Na vijf minuten weer uit, maar
+        alleen als de bewegingssensoren op de overloop het overnemen niet nodig
+        vinden: de motion-lights houden ze anders terecht aan terwijl deze
+        automatisering ze eronder vandaan zou trekken.
+      # restart, niet single: doet ze de deur binnen die vijf minuten opnieuw
+      # open, dan hoort de teller opnieuw te beginnen. Met `single` werd die
+      # tweede keer genegeerd en gingen de lampen alsnog midden in haar
+      # looppad uit.
+      mode: restart
       triggers:
         - trigger: state
           entity_id:
@@ -170,20 +179,33 @@ bedroom_mini_lights_package:
             minutes: 5
             seconds: 0
             milliseconds: 0
+        # Per overloop apart beslissen: ziet de bewegingssensor daar nog iemand,
+        # dan blijft die lamp aan en regelt het motionlicht (de blueprint) de
+        # rest. Zonder deze check doofde deze automatisering het licht terwijl
+        # er nog iemand op de overloop liep.
         - if:
-            - condition: or
-              conditions:
-                - condition: state
-                  entity_id: light.overloop_zolder_lampen
-                  state: "on"
-                - condition: state
-                  entity_id: light.overloop_lampen
-                  state: "on"
+            - condition: state
+              entity_id: light.overloop_lampen
+              state: "on"
+            - condition: state
+              entity_id: binary_sensor.overloop_beweging_occupancy
+              state: "off"
           then:
             - action: light.turn_off
               metadata: {}
               data: {}
               target:
-                entity_id:
-                  - light.overloop_lampen
-                  - light.overloop_zolder_lampen
+                entity_id: light.overloop_lampen
+        - if:
+            - condition: state
+              entity_id: light.overloop_zolder_lampen
+              state: "on"
+            - condition: state
+              entity_id: binary_sensor.overloop_zolder_beweging_occupancy
+              state: "off"
+          then:
+            - action: light.turn_off
+              metadata: {}
+              data: {}
+              target:
+                entity_id: light.overloop_zolder_lampen
