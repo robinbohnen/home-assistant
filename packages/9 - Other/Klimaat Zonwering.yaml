@@ -35,6 +35,12 @@ klimaat_zonwering_package:
     zonwering_handmatig_keuken_screens:
       name: "Zonwering handmatig - Keuken screens"
       icon: mdi:blinds-horizontal
+    zonwering_handmatig_keuken_rolgordijn_groot:
+      name: "Zonwering handmatig - Keuken rolgordijn groot"
+      icon: mdi:blinds
+    zonwering_handmatig_keuken_rolgordijn_klein:
+      name: "Zonwering handmatig - Keuken rolgordijn klein"
+      icon: mdi:blinds
     zonwering_handmatig_kantoor_links:
       name: "Zonwering handmatig - Kantoor links"
       icon: mdi:window-shutter
@@ -118,6 +124,14 @@ klimaat_zonwering_package:
       name: "Handbediening Keuken screens"
       duration: "04:00:00"
       icon: mdi:hand-back-right
+    override_keuken_rolgordijn_groot:
+      name: "Handbediening Keuken rolgordijn groot"
+      duration: "04:00:00"
+      icon: mdi:hand-back-right
+    override_keuken_rolgordijn_klein:
+      name: "Handbediening Keuken rolgordijn klein"
+      duration: "04:00:00"
+      icon: mdi:hand-back-right
     override_kantoor_links:
       name: "Handbediening Kantoor links"
       duration: "04:00:00"
@@ -175,6 +189,32 @@ klimaat_zonwering_package:
             reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).reden }}"
             blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).blokkade }}"
             cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).cover }}"
+
+        # Binnenzonwering. Die springt alleen bij als het screen ervoor niet
+        # omlaag staat; zie blok 5b in klimaat.jinja.
+        - name: "Zonwering advies Keuken rolgordijn groot"
+          unique_id: zonwering_advies_keuken_rolgordijn_groot
+          icon: mdi:blinds
+          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).advies }}"
+          attributes:
+            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).positie }}"
+            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).uitvoeren }}"
+            vraagt: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).vraagt }}"
+            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).reden }}"
+            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).blokkade }}"
+            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).cover }}"
+
+        - name: "Zonwering advies Keuken rolgordijn klein"
+          unique_id: zonwering_advies_keuken_rolgordijn_klein
+          icon: mdi:blinds
+          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).advies }}"
+          attributes:
+            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).positie }}"
+            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).uitvoeren }}"
+            vraagt: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).vraagt }}"
+            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).reden }}"
+            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).blokkade }}"
+            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).cover }}"
 
         - name: "Zonwering advies Kantoor links"
           unique_id: zonwering_advies_kantoor_links
@@ -355,6 +395,8 @@ klimaat_zonwering_package:
         - trigger: state
           entity_id: &advies_sensoren
             - sensor.zonwering_advies_keuken_screens
+            - sensor.zonwering_advies_keuken_rolgordijn_groot
+            - sensor.zonwering_advies_keuken_rolgordijn_klein
             - sensor.zonwering_advies_kantoor_links
             - sensor.zonwering_advies_kantoor_rechts
             - sensor.zonwering_advies_badkamer
@@ -462,6 +504,10 @@ klimaat_zonwering_package:
         - trigger: state
           entity_id: &beheerde_covers
             - cover.covers_kitchen_screens
+            # De rolgordijnen staan hier per stuk: de groep zou de bediening van
+            # één rolgordijn als handbediening van allebei laten tellen.
+            - cover.rollerblind_0001
+            - cover.rollerblind_0002
             - cover.kantoor_links_low_speed
             - cover.kantoor_rechts_low_speed
             - cover.badkamer_rolluik_low_speed

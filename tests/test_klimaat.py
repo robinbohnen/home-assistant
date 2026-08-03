@@ -96,6 +96,12 @@ def scenario(naam, tijd, **kw):
         "binary_sensor.zon_richting_achtergevel": "off",
         "climate.airco_zolder": "off",
         "climate.airco_woonkamer": "off",
+        # Basiswereld voor de binnenzonwering: ramen dicht en de keukenscreens
+        # ingetrokken (er is in de basiswereld ook geen zon).
+        "binary_sensor.keuken_raam_groot_contact": "off",
+        "binary_sensor.keuken_raam_klein_contact": "off",
+        "cover.covers_kitchen_screens": "open",
+        "alarm_control_panel.alarmo": "disarmed",
         # kamertemperaturen
         "sensor.woonkamer_woonkamer_multisensor_temperatuur": "20",
         "sensor.kantoor_kantoor_temperatuur_temperatuur": "20",
@@ -648,6 +654,148 @@ scenario("storm terwijl het scherm uit staat", "17:00",
             "binary_sensor.zon_richting_achtergevel": "on",
             "weather.knmi_thuis.wind_speed": 60.0})
 check_vraagt("bij storm niet eerst overleggen", "zonnescherm", False)
+
+# --- binnenzonwering: de keukenrolgordijnen -------------------------------
+# Een rolgordijn hangt aan de warme kant van het glas en haalt maar een fractie
+# van wat het screen ervoor doet, terwijl hij het hele daglicht kost. Hij hoort
+# dus NIET mee te lopen met de screens, maar bij te springen zodra die er niet
+# kunnen staan.
+scenario("zon op de keukengevel, screen staat gewoon omlaag", "10:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "30",
+            "sensor.knmi_temperatuur": "26",
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on",
+            "cover.covers_kitchen_screens": "closed"})
+check("screen vangt de zon al op", "keuken_rolgordijn_groot", "open")
+check("screen vangt de zon al op", "keuken_rolgordijn_klein", "open")
+
+# DE reden om ze te koppelen: bij wind, regen of vorst gaan de screens in, en
+# dan is het rolgordijn de enige zonwering die er nog is.
+scenario("harde wind: screens ingetrokken terwijl de zon erop staat", "10:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "28",
+            "weather.knmi_thuis.wind_speed": 52.0,
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on",
+            "cover.covers_kitchen_screens": "open"})
+check("screen in bij wind", "keuken_screens", "open")
+check("rolgordijn neemt het over", "keuken_rolgordijn_groot", "dicht")
+check("rolgordijn neemt het over", "keuken_rolgordijn_klein", "dicht")
+
+# Een openstaand raam gaat voor: daar rol je niets tegenaan. Per raam, want
+# daarom zijn het twee zones en niet de groep.
+scenario("zelfde wind, maar het grote raam staat open", "10:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "28",
+            "weather.knmi_thuis.wind_speed": 52.0,
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on",
+            "cover.covers_kitchen_screens": "open",
+            "binary_sensor.keuken_raam_groot_contact": "on"})
+check("open raam blokkeert dit rolgordijn", "keuken_rolgordijn_groot", "rust", False)
+check("het andere raam is dicht en gaat gewoon", "keuken_rolgordijn_klein", "dicht")
+
+# Een onbereikbaar raamcontact telt als open: niet dichtrollen op een gok.
+scenario("raamcontact onbereikbaar", "10:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "28",
+            "weather.knmi_thuis.wind_speed": 52.0,
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on",
+            "cover.covers_kitchen_screens": "open",
+            "binary_sensor.keuken_raam_klein_contact": "unavailable"})
+check("kapot contact telt als open raam", "keuken_rolgordijn_klein", "rust", False)
+
+scenario("hittedag, niemand thuis, geen zon op de keukengevel", "15:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "30",
+            "group.all_adults": "not_home",
+            "binary_sensor.zon_op_achtergevel": "on",
+            "binary_sensor.zon_richting_achtergevel": "on"})
+check("leeg huis op een hete dag: donker kost niets", "keuken_rolgordijn_groot", "dicht")
+check("het screen zelf hoeft niet zonder zon", "keuken_screens", "open")
+
+# Een leeg of afgesloten huis is óók van de inkijk-routine. `covers_lock_alarm_
+# events` trekt de rolgordijnen dicht zodra het alarm scherp gaat; zonder deze
+# rem haalde de uitvoerder ze op een milde dag binnen een kwartier weer omhoog.
+scenario("alarm scherp op een milde dag", "14:00",
+         **{"input_number.klimaat_verwachte_max": "18",
+            "group.all_adults": "not_home",
+            "alarm_control_panel.alarmo": "armed_away"})
+check("alarm scherp: rolgordijn blijft staan", "keuken_rolgordijn_groot", "rust", False)
+check("alarm scherp: en de andere ook", "keuken_rolgordijn_klein", "rust", False)
+
+# Omlaag mag wél gewoon: dat is dezelfde richting als de inkijk-routine wil.
+scenario("alarm scherp op een hete dag", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "30",
+            "group.all_adults": "not_home",
+            "alarm_control_panel.alarmo": "armed_away"})
+check("warmte mag hem wel omlaag sturen", "keuken_rolgordijn_groot", "dicht")
+
+# Ook zonder alarm: is er niemand thuis, dan gaat er niets omhoog.
+scenario("niemand thuis, alarm staat uit", "14:00",
+         **{"input_number.klimaat_verwachte_max": "18",
+            "group.all_adults": "not_home"})
+check("leeg huis: geen rolgordijn omhoog", "keuken_rolgordijn_groot", "rust", False)
+
+# Thuis met het alarm op 'thuis' overdag: dan hoort hij gewoon mee te doen...
+scenario("alarm op thuis-stand, iedereen is er", "14:00",
+         **{"input_number.klimaat_verwachte_max": "18",
+            "alarm_control_panel.alarmo": "armed_home"})
+check("armed_home telt ook als scherp", "keuken_rolgordijn_groot", "rust", False)
+
+scenario("gewone dag, alarm uit, mensen thuis", "14:00",
+         **{"input_number.klimaat_verwachte_max": "18"})
+check("gewoon thuis: rolgordijn omhoog", "keuken_rolgordijn_groot", "open")
+
+# Avond en nacht zijn van de inkijk-routine (kitchen_covers_close om
+# zonsondergang -30 min). Zou de klimaatregie daar 'open' blijven adviseren,
+# dan trok de uitvoerder de rolgordijnen een kwartier later weer omhoog.
+scenario("zomeravond, tegen zonsondergang", "21:15",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "30",
+            "sensor.woonkamer_woonkamer_multisensor_temperatuur": "25",
+            "sun.sun.elevation": 3.0})
+check("avond: rolgordijn is van de inkijk-routine", "keuken_rolgordijn_groot", "rust", False)
+
+scenario("zomernacht", "02:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "30",
+            "sun.sun.elevation": -20.0})
+check("nacht: blijft staan waar hij staat", "keuken_rolgordijn_klein", "rust", False)
+
+# Ze gaan ook niet uit zichzelf omhoog voordat het huis wakker is.
+scenario("vroege zomerochtend, nog niemand op", "07:30",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "30",
+            "sun.sun.elevation": 15.0,
+            "input_boolean.klimaat_wakker": "off"})
+check("wacht op het wakker-signaal", "keuken_rolgordijn_groot", "rust", False)
+
+scenario("zelfde ochtend, huis is wakker", "07:30",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "30",
+            "sun.sun.elevation": 15.0,
+            "input_boolean.klimaat_wakker": "on"})
+check("na het wakker-signaal gewoon omhoog", "keuken_rolgordijn_groot", "open")
+
+# In het verwarmregime is de zon juist welkom; dan blijft hij omhoog, ook als de
+# screens ingetrokken staan.
+scenario("winterzon op de keukengevel", "12:00",
+         **{"input_select.klimaat_regime": "Verwarmen",
+            "input_number.klimaat_verwachte_max": "6",
+            "sensor.knmi_temperatuur": "3",
+            "sun.sun.elevation": 14.0,
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on"})
+check("winter: gratis warmte binnenlaten", "keuken_rolgordijn_groot", "open")
 
 # --- consistentiecheck: slug == entity_id dat HA van de sensornaam maakt -----
 # Home Assistant leidt het entity_id van een template-sensor af uit de NAAM,

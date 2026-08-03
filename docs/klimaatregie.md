@@ -80,11 +80,13 @@ klepperen bij overdrijvende wolken.
 
 ### Laag 3 — Advies per zone
 
-Acht zones, elk met een sensor `sensor.zonwering_advies_<zone>`:
+Tien zones, elk met een sensor `sensor.zonwering_advies_<zone>`:
 
 | Zone (slug) | Cover | Gevels | Bijzonder |
 |---|---|---|---|
 | `keuken_screens` | `cover.covers_kitchen_screens` | voor | screen: geen kier, in bij storm |
+| `keuken_rolgordijn_groot` | `cover.rollerblind_0001` | voor | binnenzonwering; alleen als het screen er niet staat |
+| `keuken_rolgordijn_klein` | `cover.rollerblind_0002` | voor | idem, eigen raamcontact |
 | `kantoor_links` | `cover.kantoor_links_low_speed` | voor + zij | |
 | `kantoor_rechts` | `cover.kantoor_rechts_low_speed` | voor + zij | |
 | `badkamer` | `cover.badkamer_rolluik_low_speed` | achter | stille uren |
@@ -201,9 +203,49 @@ De beslistabel, van hoog naar laag:
 > `packages/3 - Outside/Backyard/Sunscreen.yaml`, die een tik op je telefoon
 > nodig heeft; die melding is nu stil zolang de klimaatregie aan staat.
 
+7. **Binnenzonwering** (de twee keukenrolgordijnen) beslist net als een screen
+   opnieuw en overschrijft stap 4 en 5. Een rolgordijn hangt aan de warme kant
+   van het glas: de zon is er dan al doorheen en de warmte al in huis. Het doek
+   warmt op en geeft die warmte gewoon weer aan de keuken af, dus hij haalt
+   grofweg een derde van wat het screen ervóór doet — en kost wél het uitzicht
+   en het daglicht. Meelopen met de screens levert dus vooral een donkere keuken
+   op. Hij gaat daarom alleen omlaag als:
+   - de zon op de gevel staat terwijl het screen ervoor **niet** omlaag staat.
+     Dat is de situatie na stap 6: wind, regen of vorst hebben de screens
+     ingetrokken (en het geldt net zo goed bij handbediening of een storing).
+     Dan is het rolgordijn de enige zonwering die er nog is;
+   - het een hittedag is of de kamer te warm terwijl er niemand thuis is —
+     donker kost dan niets.
+
+   Staat het screen wél omlaag, dan blijft het rolgordijn omhoog: achter een
+   screen blijft het glas koel en levert een tweede laag vrijwel niets meer op.
+   Dat geldt ook met de airco aan; een dicht rolgordijn helpt daar een beetje,
+   maar niet genoeg om de keuken de hele ochtend donker voor te maken.
+
+   Buiten het dagvenster — vóór het huis wakker is, en vanaf een half uur voor
+   zonsondergang (`AVOND_ELEVATIE`, 5°) — adviseert deze zone `rust`. Avond en
+   nacht blijven van `kitchen_covers_close` en `covers_lock_alarm_events`: die
+   gaan over inkijk en niet over warmte. Zou de klimaatregie daar doorheen
+   blijven adviseren, dan trok de uitvoerder de rolgordijnen een kwartier na
+   zonsondergang weer omhoog.
+
+   Om dezelfde reden gaat er **niets omhoog als het alarm scherp staat
+   (`armed_*`) of er niemand thuis is**: dan heeft de inkijk-routine ze net
+   dichtgetrokken. Omláág mag in die situatie wél gewoon — dat is dezelfde
+   richting. Zonder die rem haalde de uitvoerder ze op een milde dag binnen een
+   kwartier weer omhoog, en zette hij er daarna ook nog vier uur handbediening
+   op omdat hij zijn eigen tegenwerking als handbediening herkent.
+
+   Tot slot het **raamcontact**: staat het raam open, dan wordt `dicht`
+   alsnog `rust`. Je rolt geen gordijn tegen een openstaand raam aan. Een
+   contact op `unknown` of `unavailable` telt daarbij als open. Dat contact
+   hoort bij één raam, en daarom staan de twee rolgordijnen als aparte zones in
+   de tabel en niet als groep — anders houdt een openstaand klein raam ook het
+   grote rolgordijn tegen.
+
 ### Laag 4 — Uitvoeren
 
-`automation.klimaat_zonwering_uitvoeren` loopt de acht zones langs en beweegt
+`automation.klimaat_zonwering_uitvoeren` loopt de tien zones langs en beweegt
 alleen als het advies mag worden uitgevoerd én de huidige stand meer dan 5%
 afwijkt. Er is dus geen beweging als er niets te winnen valt. Zones die eerst
 toestemming vragen slaat hij over zolang het advies "naar buiten" is (zie
@@ -276,9 +318,14 @@ Die laatste hebben daarvoor een conditie gekregen (`state: "off"`):
   juist binnen wilt hebben
 
 Ongemoeid gelaten, omdat het gebruikersacties zijn die de handbediening-laag
-netjes afvangt: de knop-automatiseringen (slaapkamer, kantoor, badkamer), de
-keuken-rolgordijnen (binnenzonwering, gaat over inkijk) en het sluiten van de
-rolluiken door `script_attic_ac` voordat de airco aangaat.
+netjes afvangt: de knop-automatiseringen (slaapkamer, kantoor, badkamer) en het
+sluiten van de rolluiken door `script_attic_ac` voordat de airco aangaat.
+
+Ook ongemoeid, maar om een andere reden: `kitchen_covers_close` (rolgordijnen
+dicht om zonsondergang −30 min) en `covers_lock_alarm_events` (open bij
+ontgrendelen, dicht bij inschakelen van het alarm). Die gaan over inkijk en niet
+over warmte, en de klimaatregie houdt zich daar bewust buiten: buiten het
+dagvenster adviseert ze `rust` voor de rolgordijnen. Zie stap 7 hierboven.
 
 ## Uitrollen
 
@@ -322,7 +369,7 @@ Terugdraaien is altijd één schakelaar, op elk moment.
 | `klimaat_wakker` | uit | staat aan zodra het huis wakker is; uit houdt de slaapzones dicht |
 
 Beide schakelaars (`klimaatregie_actief` en `klimaat_nachtspui`) staan na de
-eerste start uit; die zet je zelf aan. De zeven
+eerste start uit; die zet je zelf aan. De tien
 `input_boolean.zonwering_handmatig_<slug>` staan dan óók uit, en dat betekent
 hier "doet mee" — bewust omgekeerd, want een verse helper staat altijd uit en
 dat mag geen zone stilzwijgend blokkeren. De drempels hierboven worden ingevuld door
@@ -361,7 +408,10 @@ scenario toe — dat is sneller dan wachten op de volgende hittegolf.
 
 - **Ramen en deuren openzetten** blijft een melding, geen actie. Daar zit een
   mens tussen.
-- **De keuken-rolgordijnen** (binnen) blijven bij inkijk en het raamcontact.
+- **De keuken-rolgordijnen mee laten lopen met de screens.** Ze springen alleen
+  bij als het screen er niet kan staan (stap 7). Achter een neergelaten screen
+  levert een tweede laag vrijwel niets op, en het kost je wel het daglicht in de
+  keuken. Avond en nacht blijven van de inkijk-routine.
 - **Bewegingen begrenzen per uur** doen we niet met een teller, maar met
   hysterese en `delay_off` op de zonsensoren. Blijkt een cover in de praktijk
   toch te vaak te lopen, dan is de lux-hysterese de plek om aan te draaien.

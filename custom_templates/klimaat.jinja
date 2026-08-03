@@ -44,6 +44,13 @@
     af - anders zit je op een vrije dag tot de avond in het donker. -#}
 {%- set WAKKER_UITERLIJK = '10:00' -%}
 
+{#- Onder deze zonshoogte laat de binnenzonwering (zie `binnen` hieronder) het
+    aan de avondroutine over. 5° is ruwweg een half uur voor zonsondergang, en
+    dat is precies waar `automation.kitchen_covers_close` de rolgordijnen laat
+    zakken voor de inkijk. Zou de klimaatregie daar doorheen blijven adviseren,
+    dan zou de uitvoerder ze een kwartier later weer omhoog trekken. -#}
+{%- set AVOND_ELEVATIE = 5 -%}
+
 {#- ========================== ZONECONFIGURATIE ============================ -#}
 {#-
   naam       label op het dashboard
@@ -63,6 +70,18 @@
   screen     buitenscreen (moet in bij storm/vorst) i.p.v. rolluik. Een screen
              werkt alleen tegen directe zon, dus hij gaat omhoog zodra de zon
              van de gevel af is - ook als de kamer nog warm is.
+  binnen     binnenzonwering (rolgordijn). Die hangt aan de warme kant van het
+             glas en haalt dus maar een fractie van wat een buitenscreen doet,
+             terwijl hij wél het hele daglicht kost. Hij springt daarom alleen
+             bij als de buitenzonwering het laat afweten. Zie blok 5b.
+  buitenzonwering
+             het screen dat vóór ditzelfde raam hangt. Staat dat omlaag, dan
+             hoeft de binnenzonwering niet mee.
+  raam       raamcontact van dit raam. Staat het open, dan blijft het rolgordijn
+             omhoog - je rolt hem niet tegen een openstaand raam aan. Daarom
+             staan de twee keukenrolgordijnen hier ook los en niet als groep:
+             een contact hoort bij één raam, en met de groep zou een openstaand
+             klein raam ook het grote rolgordijn tegenhouden.
   omgekeerd  cover die andersom bedraad is: HA-stand `open` betekent dan
              uitgeschoven (zon tegenhouden) en `closed` ingetrokken. Alleen het
              zonnescherm is zo. De hele tabel blijft in gewone zonwerings-
@@ -87,6 +106,34 @@
         'slaap': none,
         'slaap_van': none,
         'stil': false },
+      'keuken_rolgordijn_groot': {
+        'naam': 'Keuken rolgordijn groot',
+        'cover': 'cover.rollerblind_0001',
+        'gevels': ['voor'],
+        'temp': 'sensor.woonkamer_woonkamer_multisensor_temperatuur',
+        'airco': 'climate.airco_woonkamer',
+        'kier': false,
+        'screen': false,
+        'binnen': true,
+        'buitenzonwering': 'cover.covers_kitchen_screens',
+        'raam': 'binary_sensor.keuken_raam_groot_contact',
+        'slaap': none,
+        'slaap_van': none,
+        'stil': true },
+      'keuken_rolgordijn_klein': {
+        'naam': 'Keuken rolgordijn klein',
+        'cover': 'cover.rollerblind_0002',
+        'gevels': ['voor'],
+        'temp': 'sensor.woonkamer_woonkamer_multisensor_temperatuur',
+        'airco': 'climate.airco_woonkamer',
+        'kier': false,
+        'screen': false,
+        'binnen': true,
+        'buitenzonwering': 'cover.covers_kitchen_screens',
+        'raam': 'binary_sensor.keuken_raam_klein_contact',
+        'slaap': none,
+        'slaap_van': none,
+        'stil': true },
       'kantoor_links': {
         'naam': 'Kantoor links',
         'cover': 'cover.kantoor_links_low_speed',
@@ -416,6 +463,88 @@
   {%- else -%}
     {%- set ns.a = 'open' -%}
     {%- set ns.r = 'geen zon op de ' ~ gevel_txt ~ ': een screen helpt alleen tegen zon' -%}
+  {%- endif -%}
+{%- endif -%}
+
+{#- 5b. Binnenzonwering: de keukenrolgordijnen.
+
+      Een rolgordijn hangt binnen. De zon is dan al door het glas heen en de
+      warmte al in huis: het doek warmt op en geeft die warmte gewoon weer aan
+      de keuken af. Hij haalt daarmee grofweg een derde van wat het screen
+      ervoor doet, en kost wél het uitzicht en het daglicht in een keuken waar
+      gewerkt wordt. Meelopen met het screen levert dus vooral een donkere
+      keuken op.
+
+      Hij springt daarom alleen bij als er echt iets te winnen valt:
+
+        1. de zon staat op de gevel terwijl het screen ervoor NIET omlaag staat.
+           Dat is de situatie na blok 6: wind, regen of vorst hebben de screens
+           ingetrokken (en het geldt net zo goed bij handbediening of een
+           storing). Dan is het rolgordijn de enige zonwering die er nog is.
+        2. hittedag of een warme kamer terwijl er niemand thuis is. Donker kost
+           dan niets.
+
+      Staat het screen wél omlaag, dan blijft het rolgordijn omhoog: achter een
+      screen blijft het glas koel en levert een tweede laag vrijwel niets meer.
+
+      Buiten het dagvenster - voor het huis wakker is, en vanaf een half uur
+      voor zonsondergang - adviseert deze zone 'rust'. Avond en nacht zijn van
+      `kitchen_covers_close` en `covers_lock_alarm_events`; die gaan over inkijk
+      en niet over warmte, en daar hoort de klimaatregie niet doorheen te
+      fietsen. Zou ze dat wel doen, dan trok de uitvoerder de rolgordijnen een
+      kwartier na zonsondergang weer omhoog.
+-#}
+{%- if z.get('binnen') -%}
+  {%- set screen_id = z.get('buitenzonwering') -%}
+  {#- Alleen een volledig ingetrokken screen telt als "staat er niet". Onderweg
+      naar beneden is de stand 'closing', en dan wachten we die beweging af. -#}
+  {%- set screen_weg = screen_id is none or is_state(screen_id, 'open') -%}
+  {%- set raam_id = z.get('raam') -%}
+  {#- Alleen een aantoonbaar gesloten raam is veilig: 'unknown' of 'unavailable'
+      telt hier als open, net zoals de oude `covers_morning_routine` het contact
+      op 'off' moest zien staan voordat hij het rolgordijn liet zakken. -#}
+  {%- set raam_dicht = raam_id is none or is_state(raam_id, 'off') -%}
+  {#- Staat het alarm scherp, dan heeft `covers_lock_alarm_events` de
+      rolgordijnen net dichtgetrokken tegen de inkijk. Alle armed_*-standen
+      tellen; een onbereikbaar paneel telt als uit, want dan is niets doen
+      beter dan de hele dag dicht blijven. -#}
+  {%- set alarm_scherp = states('alarm_control_panel.alarmo').startswith('armed') -%}
+  {%- if nog_slapen -%}
+    {%- set ns.a = 'rust' -%}
+    {%- set ns.r = 'nog niemand wakker gemeld, rolgordijn blijft staan' -%}
+  {%- elif stil_nu or nacht or elevatie < AVOND_ELEVATIE -%}
+    {%- set ns.a = 'rust' -%}
+    {%- set ns.r = 'avond en nacht gaan over inkijk, niet over warmte' -%}
+  {%- elif regime == 'verwarmen' -%}
+    {%- set ns.a = 'open' -%}
+    {%- set ns.r = 'zon is welkom vandaag' -%}
+  {%- elif zon_op and screen_weg -%}
+    {%- set ns.a = 'dicht' -%}
+    {%- set ns.r = 'zon op de ' ~ gevel_txt ~ ' en het screen staat niet omlaag: rolgordijn neemt het over' -%}
+  {%- elif (hittedag or te_warm) and not thuis -%}
+    {%- set ns.a = 'dicht' -%}
+    {%- set ns.r = 'niemand thuis op een warme dag' -%}
+  {%- elif zon_op -%}
+    {%- set ns.a = 'open' -%}
+    {%- set ns.r = 'het screen vangt de zon al op, rolgordijn kan omhoog' -%}
+  {%- else -%}
+    {%- set ns.a = 'open' -%}
+    {%- set ns.r = 'geen zon op de ' ~ gevel_txt ~ ': daglicht' -%}
+  {%- endif -%}
+  {#- Een leeg of afgesloten huis is van de inkijk-routine, niet van de
+      klimaatregie. Zonder deze rem zou de uitvoerder de rolgordijnen die
+      `covers_lock_alarm_events` net had dichtgetrokken op een milde dag binnen
+      een kwartier weer omhoog halen - en dan ook nog eens vier uur
+      handbediening aanzetten omdat hij zijn eigen tegenwerking als
+      handbediening herkent. Omlaag mag wél gewoon: dat is dezelfde richting. -#}
+  {%- if ns.a == 'open' and (alarm_scherp or not thuis) -%}
+    {%- set ns.a = 'rust' -%}
+    {%- set ns.r = ('alarm staat scherp' if alarm_scherp else 'niemand thuis')
+                   ~ ': rolgordijn is dan van de inkijk-routine' -%}
+  {%- endif -%}
+  {%- if ns.a == 'dicht' and not raam_dicht -%}
+    {%- set ns.a = 'rust' -%}
+    {%- set ns.r = 'raam staat open, rolgordijn blijft omhoog' -%}
   {%- endif -%}
 {%- endif -%}
 
