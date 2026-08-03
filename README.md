@@ -10,6 +10,7 @@ My personal [Home Assistant Container](https://home-assistant.io) configurations
 # <a name="menu">Menu</a>
  | Menu |
  | ------------- |
+ | [Repository layout](#layout) |
  | [Hubs](#hubs) |
  | [Lights](#lights) |
  | [Locks](#locks) |
@@ -22,6 +23,34 @@ My personal [Home Assistant Container](https://home-assistant.io) configurations
  | [Home Assistant Integrations](#haintegrations) |
  | [HACS Integrations](#hacsintegrations) |
 
+## <a name="layout">Repository layout</a>
+
+| [Menu](#menu) |
+
+Nothing lives in `automations.yaml` or `scripts.yaml`; those exist only to keep the
+UI editors happy. Everything is YAML, split per room.
+
+| Path | What lives there |
+| ------------- | ------------- |
+| `configuration.yaml` | Core config only. All entities and automations come in via `packages/`. |
+| `packages/` | Grouped per floor and room, e.g. `0 - Ground Floor/Livingroom/Lights.yaml`. `9 - Other/` holds the house-wide packages: climate, energy, presence, alarm, ventilation, watchdog. |
+| `blueprints/automation/robin/` | Own blueprints. `motion_light.yaml` drives the motion lighting in eight rooms; a room package only supplies the sensor, the lamp and its exceptions. |
+| `custom_templates/` | Jinja macro libraries. `klimaat.jinja` is the single decision table for all sun shading — the one place to change behaviour. Note: edits here need a **full restart**, a YAML reload is not enough. |
+| `dashboards/` | Lovelace in YAML mode. `overzicht/` is the wall panel (split per column), plus separate views for Woning, Klimaat, Systeem, Camera's, Kalender and a Nest Hub cast target. |
+| `docs/` | Design notes. `klimaatregie.md` explains the four layers of the climate control and why each rule exists. |
+| `tests/` | Offline tests that run without Home Assistant. |
+
+Run the tests before restarting after a climate change:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install jinja2
+.venv/bin/python tests/test_klimaat.py
+```
+
+It puts the decision table through 50+ scenarios (summer, winter, night, storm, rain,
+absent, manual override) and checks that every zone has its helpers, its sensors, its
+entry in the executor's trigger lists and a row on the Klimaat view.
+
 ## <a name="hubs">Hubs</a>
 
 | [Menu](#menu) |
@@ -29,7 +58,7 @@ My personal [Home Assistant Container](https://home-assistant.io) configurations
 | Device  | Quantity | Connection | Home Assistant | Notes |
 | ------------- | :---: | ------------- | ------------- | ------------- |
 | [SLZB-MR3](https://smlight.tech/product/slzb-mr3/) | 1 | Ethernet | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Used to control all Zigbee smart bulbs and Blinds. |
-| [Somfy Tahoma](https://amzn.to/4fkzKee) | 1 | Ethernet | [Somfy](https://www.home-assistant.io/integrations/somfy/) | Used to control Somfy accessories like rollerblinds and sunscreens. |
+| [Somfy Tahoma](https://amzn.to/4fkzKee) | 1 | Ethernet | [Overkiz](https://www.home-assistant.io/integrations/overkiz/) | Used to control Somfy accessories like rollerblinds and sunscreens. |
 
 ## <a name="lights">Lights</a>
 | [Menu](#menu) |
@@ -90,8 +119,10 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 
 | Device  | Quantity | Connection | Home Assistant | Notes |
 | ------------- | :---: | ------------- | ------------- | ------------- |
-| [Ubiquiti UniFi G5 Ultra Turret](https://amzn.to/4hICDqL) | 3 | Ethernet | [Ubiquiti UniFi Video](https://www.home-assistant.io/integrations/uvc/) | Turret camera for overviewing outside |
-| [Ubiquiti UniFi G4 Instant](https://amzn.to/48I7EXK) | 2 | Ethernet | [Ubiquiti UniFi Video](https://www.home-assistant.io/integrations/uvc/) | Indoor camera for overviewing inside |
+| [Ubiquiti UniFi G5 Ultra Turret](https://amzn.to/4hICDqL) | 2 | Ethernet | [UniFi Protect](https://www.home-assistant.io/integrations/unifiprotect/) | Turret camera for overviewing outside |
+| [Ubiquiti UniFi G4 Instant](https://amzn.to/48I7EXK) | 2 | Ethernet | [UniFi Protect](https://www.home-assistant.io/integrations/unifiprotect/) | Indoor camera for overviewing inside |
+| [Ubiquiti UniFi G6 180](https://store.ui.com/us/en/products/uvc-g6-180) | 1 | Ethernet | [UniFi Protect](https://www.home-assistant.io/integrations/unifiprotect/) | Wide-angle camera covering the front of the house |
+| [Ubiquiti UniFi G4 Doorbell Pro](https://store.ui.com/us/en/products/uvc-g4-doorbell-pro) | 1 | Ethernet | [UniFi Protect](https://www.home-assistant.io/integrations/unifiprotect/) | Doorbell with package camera and fingerprint reader; the fingerprint unlocks the front door (see `packages/0 - Ground Floor/Hallway/Lock.yaml`) |
 
 ## <a name="climate">Climate</a>
 
@@ -152,6 +183,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Chihiros | [Link](https://github.com/TheMicDiet/chihiros-led-control) | Integrate aquarium lights to ha |
 | Command Line | [Link](https://www.home-assistant.io/integrations/command_line) | To check and operate thing in commandline |
 | CPU-Snelheid | [Link](https://www.home-assistant.io/integrations/cpuspeed) | Add sensors for monitoring CPU speed |
+| Cryptoinfo Advanced | [Link](https://github.com/TheHolyRoger/hass-cryptoinfo) | Crypto prices for the portfolio value on the dashboard |
 | DLNA Digital Media Renderer | [Link](https://www.home-assistant.io/integrations/dlna_dmr) | Control DLNA enabled devices |
 | DSMR Smart Meter | [Link](https://www.home-assistant.io/integrations/dsmr) | Monitoring power and gas usage |
 | Eheim digital | [Link](https://www.home-assistant.io/integrations/eheimdigital) | Aquarium heater integration |
@@ -165,7 +197,6 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Google Cast | [Link](https://www.home-assistant.io/integrations/cast) | Cast dashboard to Google Nest Hub devices |
 | Google Translate Text-to-Speech | [Link](https://www.home-assistant.io/integrations/google_translate) | Speak messages to media players |
 | HACS | [Link](https://hacs.xyz/docs/use/) | Use non-official Home Assistant Plugins |
-| Home Assistant Supervisor | [Link](https://www.home-assistant.io/integrations/hassio) | Easy for Home Assistant operation |
 | Home Connect | [Link](https://www.home-assistant.io/integrations/home_connect) | Insights for Bosch washers and dryers |
 | iBeacon Tracker | [Link](https://www.home-assistant.io/integrations/ibeacon) | Track devices with Bluetooth |
 | Internet Printing Protocol (IPP) | [Link](https://www.home-assistant.io/integrations/ipp) | Monitor local printer |
@@ -235,28 +266,24 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Button Card | [Link](https://github.com/custom-cards/button-card) | Some buttons I need to use this card for |
 | Card-mod | [Link](https://github.com/thomasloven/lovelace-card-mod) | To modify existing cards with thing normally won't be possible |
 | Chihiros | [Link](https://github.com/TheMicDiet/chihiros-led-control) | Integration to integrate aquarium lights to HA |
+| Cryptoinfo Advanced | [Link](https://github.com/TheHolyRoger/hass-cryptoinfo) | Fetches crypto prices; used by `packages/9 - Other/Crypto.yaml` |
 | Custom Brand Icons | [Link](https://github.com/elax46/custom-brand-icons) | Prettier icons with brand icons |
-| Digital Clock | [Link](https://github.com/wassy92x/lovelace-digital-clock) | Integration to display a digital clock in a Dashboard |
 | ENTSO-e | [Link](https://github.com/JaccoR/hass-entso-e) | Custom component for Home Assistant to fetch energy prices of all European countries from the ENTSO-e Transparency Platform |
 | GOODWE Sems API | [Link](https://github.com/TimSoethout/goodwe-sems-home-assistant) | Integration for Home Assistant that retrieves PV data from GoodWe SEMS API. |
 | HACS | [Link](https://github.com/hacs/integration) | Manage (Install, track, upgrade) and discover custom elements for Home Assistant directly from the UI. |
 | Intex Spa | [Link](https://github.com/mathieu-mp/homeassistant-intex-spa) | This integration allows connection with the spas made to be used with the 'Intex Link - Spa Management' app |
 | Kiosk Mode | [Link](https://github.com/NemesisRE/kiosk-mode) | Hides the header and/or sidebar drawer in Home Assistant lovelace dashboards. |
 | KNMI | [Link](https://github.com/golles/ha-knmi) | KNMI custom component for Home Assistant. Weather data provided by KNMI |
-| Logbook Card | [Link](https://github.com/royto/logbook-card) | 2 customs Lovelace cards for displaying history of an entity or multiple entities for Home Assistant. |
 | M365-Calender | [Link](https://github.com/RogerSelwyn/MS365-Calendar) | Microsoft 365 Calendar Integration for Home Assistant |
 | M365-Mail | [Link](https://github.com/RogerSelwyn/MS365-Mail) | Microsoft 365 Mail Integration for Home Assistant |
 | M365-Teams | [Link](https://github.com/RogerSelwyn/MS365-Teams) | Microsoft 365 Teams Integration for Home Assistant |
 | M365-Todo | [Link](https://github.com/RogerSelwyn/MS365-ToDo) | Microsoft 365 To Do Integration for Home Assistant |
 | Mini Media Player | [Link](https://github.com/kalkih/mini-media-player) | A minimalistic yet customizable media player card for Home Assistant Lovelace UI. |
-| Mini Graph Card | [Link](https://github.com/kalkih/mini-graph-card) | A minimalistic and customizable graph card for Home Assistant Lovelace UI. |
 | Mushroom | [Link](https://github.com/piitaya/lovelace-mushroom) | Mushroom is a collection of cards for Home Assistant Dashboard UI. |
 | Neerslag App | [Link](https://github.com/aex351/home-assistant-neerslag-app) | Neerslag app for Home Assistant. All-in-one package (Sensors + Card). |
 | Nest Protect | [Link](https://github.com/iMicknl/ha-nest-protect) | Custom component for Home Assistant to interact with Nest Protect devices via an undocumented and unofficial Nest API. |
 | Parcel App | [Link](https://github.com/jmdevita/parcel-ha) | This is an integration for Home Assistant that allows you to track your parcels using the Parcel REST API. |
 | Places | [Link](https://github.com/custom-components/places) | Component to integrate with OpenStreetMap Reverse Geocode and create a sensor with numerous address and place attributes from a device_tracker, person, or sensor |
-| Power Flow Card Plus | [Link](https://github.com/flixlix/power-flow-card-plus) | Understand and visualize way of displaying the current Power Distribution coming from and to different sources |
 | PowerCalc | [Link](https://github.com/bramstroker/homeassistant-powercalc) | PowerCalc is a versatile custom component for Home Assistant that estimates power consumption for devices like lights, fans, smart speakers, and more |
-| Timer Bar Card | [Link](https://github.com/rianadon/timer-bar-card) | A progress bar display for Home Assistant timers. |
 | Week Planner Card | [Link](https://github.com/FamousWolf/week-planner-card) | Custom Home Assistant card displaying a responsive overview of multiple days with events from one or multiple calendars |
 | Zonneplan | [Link](https://github.com/fsaris/home-assistant-zonneplan-one) | Unofficial integration for Zonneplan. This integration uses the official Zonneplan API to pull the same data available in the Zonneplan app into your Home Assistant instance. |
