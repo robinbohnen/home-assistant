@@ -159,6 +159,98 @@ temp_control_package:
               Nog open: {{ nog_open }}.
 
     ###########################################################################
+    ## Koelseizoen: er staat een raam open terwijl buiten heter is -> hitte
+    ##
+    ## Het ochtendadvies hierboven is een eenmalig tipje op het kruismoment:
+    ## de template-trigger vuurt alleen op de overgang, en zodra buiten een
+    ## keer boven binnen is gekomen blijft die de rest van de dag waar. Zet je
+    ## om 16:00 alsnog een raam open terwijl het buiten 32° is, dan hoor je
+    ## niets meer. Deze automatisering is de bewaker die daarbij hoort - het
+    ## spiegelbeeld van de warmteverlies-melding hieronder, maar dan voor
+    ## warmte die naar binnen komt in plaats van weglekt.
+    ###########################################################################
+    - id: ramen_advies_dicht_hitte
+      alias: Ramen advies - Open raam tijdens hitte
+      description: >-
+        Meldt in het koelen-regime welke ramen of tuindeuren open staan terwijl
+        de buitenlucht duidelijk warmer is dan binnen.
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.all_windows
+            - binary_sensor.woonkamer_openslaande_deuren_contact
+            - binary_sensor.speelkamer_openslaande_deuren_contact
+          to: "on"
+          for: "00:45:00"
+        # Een state-trigger met `for` overleeft geen herstart, en het kan ook
+        # zo zijn dat het raam al open stond toen buiten warmer werd. Deze
+        # periodieke check vangt beide gevallen; de cooldown remt de spam.
+        - trigger: time_pattern
+          minutes: "/30"
+      conditions:
+        - condition: state
+          entity_id: input_select.klimaat_regime
+          state: Koelen
+        # Dezelfde dode zone als bij het spuien, maar dan de andere kant op:
+        # pas melden als buiten er echt bovenuit komt, niet bij 0,1 graad
+        # verschil. Daarmee komt deze melding ook altijd ná het ochtendadvies
+        # (dat al bij buiten >= binnen afgaat) en niet gelijktijdig.
+        - condition: template
+          value_template: >-
+            {% set binnen = states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | float(none) %}
+            {% set buiten = states('sensor.knmi_temperatuur') | float(none) %}
+            {% set delta = states('input_number.klimaat_spui_delta') | float(1) %}
+            {{ binnen is not none and buiten is not none
+               and buiten >= binnen + delta }}
+        # Bewust geen kamer_warm-drempel: juist als binnen nog koel is, is een
+        # open raam op een hittedag het duurst. Dan gooi je de voorsprong weg.
+        - condition: or
+          conditions:
+            - condition: state
+              entity_id: binary_sensor.all_windows
+              state: "on"
+              for: "00:45:00"
+            - condition: state
+              entity_id: binary_sensor.woonkamer_openslaande_deuren_contact
+              state: "on"
+              for: "00:45:00"
+            - condition: state
+              entity_id: binary_sensor.speelkamer_openslaande_deuren_contact
+              state: "on"
+              for: "00:45:00"
+        - condition: state
+          entity_id: group.all_adults
+          state: home
+        # Nachtrust: 's nachts is buiten toch koeler, dan haalt de conditie
+        # hierboven het sowieso niet.
+        - condition: time
+          after: "08:00:00"
+          before: "22:00:00"
+        # Korter dan de 6 uur van de stookvariant: op een hittedag telt elk
+        # uur dat de warmte binnenstroomt zwaarder dan wat stookkosten.
+        - condition: template
+          value_template: >-
+            {{ this.attributes.last_triggered is none
+               or now() - this.attributes.last_triggered > timedelta(hours=3) }}
+      actions:
+        - variables:
+            nog_open: >-
+              {{ (expand('binary_sensor.all_windows')
+                  + expand('binary_sensor.woonkamer_openslaande_deuren_contact',
+                           'binary_sensor.speelkamer_openslaande_deuren_contact'))
+                 | selectattr('state', 'eq', 'on')
+                 | map(attribute='name') | list | join(', ') }}
+        - action: notify.mobile_devices_adults
+          data:
+            title: Hitte komt binnen
+            message: >-
+              Buiten is het {{ states('sensor.knmi_temperatuur') | round(1) }}°,
+              binnen {{ states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | round(1) }}°.
+              Dit staat al drie kwartier open en haalt warmte naar binnen:
+              {{ nog_open }}.
+
+    ###########################################################################
     ## Stookseizoen: er staat al een tijd een raam open -> warmteverlies
     ###########################################################################
     - id: ramen_advies_warmteverlies
