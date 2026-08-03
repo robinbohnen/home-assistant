@@ -270,6 +270,67 @@ scenario("hitteplan actief", "14:00",
             "binary_sensor.zon_richting_voorgevel": "on"})
 check("hitteplan: screens juist omlaag", "keuken_screens", "dicht")
 
+# ECHTE tekst van 3 augustus 2026. Hierin staat "ook onweersbuien brengen
+# plaatselijk enige verkoeling", en 'onweer' zit in 'onweersbuien'. Daardoor
+# telde dit hitteplan als stormalarm en gingen de screens in op een dag die
+# naar de 37 graden liep. De omschrijving is een verhaal over het weer, geen
+# onderwerp - vandaar dat de titel nu leidend is.
+HITTEPLAN_3AUG = (
+    "Het Nationaal Hitteplan van het RIVM is vanaf vandaag actief voor het hele "
+    "land. In het zuidoosten is het aanhoudend warm. Tot en met dinsdag wordt "
+    "het in het hele land zeer warm, met temperaturen tussen 29 en 36°C en "
+    "hittekracht van 7-8. Maandag en dinsdag wordt het overal zeer warm. In de "
+    "loop van de middag koelt het van het westen uit wat af en ook onweersbuien "
+    "brengen plaatselijk enige verkoeling."
+)
+scenario("hitteplan met onweer in de tekst", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "37",
+            "sensor.knmi_temperatuur": "30",
+            "binary_sensor.knmi_waarschuwing": "on",
+            "binary_sensor.knmi_waarschuwing.title": "Nationaal Hitteplan",
+            "binary_sensor.knmi_waarschuwing.description": HITTEPLAN_3AUG,
+            "binary_sensor.zon_richting_voorgevel": "on"})
+check("hitteplan met onweer: screens blijven omlaag", "keuken_screens", "dicht")
+
+# Zonder titel valt hij terug op de omschrijving; ook dan mag een hitteplan de
+# screens niet intrekken.
+scenario("hitteplan met onweer, geen titel", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "37",
+            "sensor.knmi_temperatuur": "30",
+            "binary_sensor.knmi_waarschuwing": "on",
+            "binary_sensor.knmi_waarschuwing.description": HITTEPLAN_3AUG,
+            "binary_sensor.zon_richting_voorgevel": "on"})
+check("hitteplan zonder titel: nog steeds omlaag", "keuken_screens", "dicht")
+
+# Een echte onweerswaarschuwing moet de screens wél intrekken.
+scenario("echte onweerswaarschuwing", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "28",
+            "binary_sensor.knmi_waarschuwing": "on",
+            "binary_sensor.knmi_waarschuwing.title": "Code geel: onweer",
+            "binary_sensor.knmi_waarschuwing.description":
+                "Er trekken onweersbuien over het land met kans op hagel.",
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on"})
+check("echt onweer: screen in", "keuken_screens", "open")
+
+# Titel is leidend: staat daar niets over wind, dan telt een losse opmerking in
+# de omschrijving niet mee.
+scenario("gladheidswaarschuwing die wind noemt", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "28",
+            "binary_sensor.knmi_waarschuwing": "on",
+            "binary_sensor.knmi_waarschuwing.title": "Code geel: gladheid",
+            "binary_sensor.knmi_waarschuwing.description":
+                "Door de wind kan de gevoelstemperatuur lager liggen.",
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on"})
+check("gladheid is geen storm", "keuken_screens", "dicht")
+
 # Harde wind uit de verwachting telt ook zonder KNMI-waarschuwing.
 scenario("harde wind zonder waarschuwing", "14:00",
          **{"input_select.klimaat_regime": "Koelen",

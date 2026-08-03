@@ -239,21 +239,38 @@
     hitteplan-melding is juist een reden om ze te laten zakken.
 
     Twee bronnen. De windsnelheid uit de weersverwachting is de directe maat.
-    Daarnaast de KNMI-waarschuwing, maar die is dubbel onbetrouwbaar: hij staat
-    ook op 'on' als er niets is (vandaar de tekstcheck, net als in
-    `knmi_weeralarm` in packages/9 - Other/Weather.yaml), én hij gaat net zo
-    goed af voor hitte of gladheid. Daarom pas alarm als de tekst over wind of
-    storm gaat. -#}
+    Daarnaast de KNMI-waarschuwing, maar die is drie keer onbetrouwbaar: hij
+    staat ook op 'on' als er niets is (vandaar de tekstcheck, net als in
+    `knmi_weeralarm` in packages/9 - Other/Weather.yaml), hij gaat net zo goed
+    af voor hitte of gladheid, én `description` is geen onderwerp maar een
+    lopend verhaal over het weer van de komende dagen.
+
+    Dat laatste ging op 3 augustus 2026 mis: het Nationaal Hitteplan stond aan
+    en in die tekst zat "ook onweersbuien brengen plaatselijk enige
+    verkoeling". Het woord 'onweer' zit in 'onweersbuien', dus een HITTE-
+    waarschuwing telde als storm en de screens gingen in op een dag die naar de
+    37 graden liep - precies het omgekeerde van wat je wil.
+
+    Daarom kijken we naar `title` (het onderwerp van de waarschuwing) en pas
+    als die leeg is naar de omschrijving. Een hitteplan sluiten we sowieso uit;
+    harde wind wordt dan nog steeds gewoon door `wind_speed` afgevangen, en dat
+    is de betrouwbare meting. -#}
+{%- set alarm_titel = (state_attr('binary_sensor.knmi_waarschuwing', 'title') or '') | lower -%}
 {%- set alarm_tekst = (state_attr('binary_sensor.knmi_waarschuwing', 'description') or '') | lower -%}
+{%- set alarm_onderwerp = alarm_titel if alarm_titel != '' else alarm_tekst -%}
 {%- set alarm_actief = is_state('binary_sensor.knmi_waarschuwing', 'on')
-                       and 'geen waarschuwingen' not in alarm_tekst -%}
+                       and 'geen waarschuwingen' not in alarm_tekst
+                       and 'geen waarschuwingen' not in alarm_titel -%}
 {%- set w = namespace(storm=false) -%}
 {%- for woord in ['wind', 'storm', 'onweer', 'hagel', 'rukwind'] -%}
-  {%- if woord in alarm_tekst -%}
+  {%- if woord in alarm_onderwerp -%}
     {%- set w.storm = true -%}
   {%- endif -%}
 {%- endfor -%}
-{%- set stormalarm = alarm_actief and w.storm -%}
+{#- Een hitteplan is nooit een reden om screens in te trekken, ook niet als er
+    verderop in de tekst onweer wordt genoemd. -#}
+{%- set hitteplan = 'hitteplan' in alarm_onderwerp or 'hitteplan' in alarm_tekst -%}
+{%- set stormalarm = alarm_actief and w.storm and not hitteplan -%}
 {%- set wind = state_attr('weather.knmi_thuis', 'wind_speed') | float(0) -%}
 {%- set max_wind = states('input_number.klimaat_screen_max_wind') | float(45) -%}
 {%- set te_hard = wind >= max_wind -%}
