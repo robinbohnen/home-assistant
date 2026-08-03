@@ -101,20 +101,25 @@ backyard_solarpanels_package:
                 entry_id: 01JCBKS8RM752RMKK5RPYZBGSS
     - id: solarpanels_backyard_onoff
       alias: Solarpanels - Turn off - Energyprice negative
-      description: "Solarpanels off when power price is negative"
+      description: "Solarpanels off when the all-in power price is negative"
       mode: single
       triggers:
-        # Zie de spa: het negatieve-prijs-signaal komt uit SlimHuys zelf en
-        # volgt de kwartieren.
-        - trigger: state
-          entity_id:
-            - binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu
-          to: "on"
+        # NIET op binary_sensor ..._negatieve_prijs_nu, hoewel de spa en de
+        # batterij die wel gebruiken: die sensor kijkt naar de kale marktprijs.
+        # Bij teruglevering krijgen we het TOTAALtarief (markt + inkoop +
+        # energiebelasting + btw), en dat staat bij een licht negatieve
+        # marktprijs nog gewoon positief - de panelen gingen dan uit terwijl
+        # teruglevering nog geld opleverde. Uitzetten mag pas als het
+        # totaaltarief zelf onder nul zakt.
+        # `huidige_prijs` volgt hetzelfde kwartierritme als de binary sensor,
+        # dus we missen geen losse kwartieren.
+        - trigger: numeric_state
+          entity_id: sensor.slimhuys_zonneplan_huidige_prijs
+          below: 0
           id: solar_panels_off
-        - trigger: state
-          entity_id:
-            - binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu
-          to: "off"
+        - trigger: numeric_state
+          entity_id: sensor.slimhuys_zonneplan_huidige_prijs
+          above: 0
           id: solar_panels_on
       conditions: []
       actions:
@@ -128,9 +133,10 @@ backyard_solarpanels_package:
                   metadata: {}
                   data:
                     message: >-
-                      Zonnepanelen zijn uitgezet, hou in de gaten of ze ook weer aan
-                      gaan!
-                    title: Stroomprijs negatief
+                      Totaaltarief is € {{ states('sensor.slimhuys_zonneplan_huidige_prijs') }}
+                      per kWh; zonnepanelen zijn uitgezet, hou in de gaten of ze
+                      ook weer aan gaan!
+                    title: Totaaltarief negatief
                 - action: select.select_option
                   metadata: {}
                   data:
@@ -152,4 +158,4 @@ backyard_solarpanels_package:
                   metadata: {}
                   data:
                     message: Zonnepanelen zijn weer aangezet
-                    title: Stroomprijs positief
+                    title: Totaaltarief positief
