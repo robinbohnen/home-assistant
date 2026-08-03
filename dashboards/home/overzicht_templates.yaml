@@ -576,7 +576,8 @@ kamer_tegel:
           var mi = b.minuten;
           var t = mi === null ? 'onbekend'
                 : (mi < 1 ? 'net nog'
-                : (mi < 60 ? mi + ' min' : (mi < 1440 ? Math.round(mi / 60) + ' uur' : Math.round(mi / 1440) + ' dagen')));
+                : (mi < 60 ? mi + ' min geleden'
+                : (mi < 1440 ? Math.round(mi / 60) + ' uur geleden' : Math.round(mi / 1440) + ' dagen geleden')));
           bew = ic('mdi:motion-sensor', grijs, 13) + `<span style="color:${grijs}">${t}</span>`;
         }
         var ct = k.contacten || {};
@@ -664,6 +665,12 @@ kamer_samenvatting:
       - padding: 16px 18px
     grid:
       - grid-template-areas: '"kop" "lijst"'
+      # Zonder expliciete kolombreedte is de enige kolom `auto`, dus zo breed
+      # als zijn inhoud - en dan is de `width: 100%` hieronder een cirkel: 100%
+      # van een kolom die zich naar de inhoud voegt. De chips liepen daardoor de
+      # kaart uit in plaats van af te breken. `minmax(0, 1fr)` maakt de kolom
+      # precies zo breed als de kaart en niet breder.
+      - grid-template-columns: minmax(0, 1fr)
       - row-gap: 6px
     custom_fields:
       kop:
@@ -743,6 +750,9 @@ kamer_detail:
       - padding: 16px 18px
     grid:
       - grid-template-areas: '"kop" "bronnen"'
+      # Zie kamer_samenvatting: zonder dit is de kolom content-breed en lopen de
+      # lange entity-id's de kaart uit in plaats van af te kappen.
+      - grid-template-columns: minmax(0, 1fr)
       - row-gap: 10px
     custom_fields:
       kop:
@@ -832,6 +842,7 @@ kamer_onderhoud_knop:
       - padding: 11px 16px
     grid:
       - grid-template-areas: '"regel"'
+      - grid-template-columns: minmax(0, 1fr)
     custom_fields:
       regel:
         - grid-area: regel
@@ -869,6 +880,7 @@ kamer_onderhoud_lijst:
       - padding: 16px 18px
     grid:
       - grid-template-areas: '"uitleg" "lijst"'
+      - grid-template-columns: minmax(0, 1fr)
       - row-gap: 10px
     custom_fields:
       uitleg:
