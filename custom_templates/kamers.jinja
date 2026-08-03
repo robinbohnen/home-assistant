@@ -1,0 +1,334 @@
+{#-
+==============================================================================
+  KAMERSTATUS - hoe staat het ervoor in elke ruimte
+==============================================================================
+
+  Dit bestand is de enige plek waar staat WANNEER een kamer goed is. De sensor
+  in `packages/9 - Other/Kamers.yaml` doet alleen het meten en het uitserveren;
+  `dashboards/home/kamers.yaml` tekent alleen wat hier uit komt.
+
+  Gebruik:
+
+      {% from 'kamers.jinja' import kamers_json %}
+      {{ (kamers_json() | trim | from_json).kamers }}
+
+  LET OP: wijzigingen in dit bestand vragen een volledige herstart van Home
+  Assistant (custom_templates worden alleen bij het opstarten ingelezen).
+
+  ---------------------------------------------------------------------------
+  CONTROLEER DIT EERST: de area-namen in de tabel hieronder
+  ---------------------------------------------------------------------------
+  De metingen worden niet met de hand gekoppeld maar opgehaald met
+  `area_entities()`, gefilterd op device_class. Dat betekent dat een nieuwe
+  sensor vanzelf in het overzicht verschijnt zodra hij in de juiste area zit -
+  maar ook dat een kamer leeg blijft als de area anders heet dan hier staat.
+  Blijft een tegel op "geen meting" staan terwijl er wel sensoren hangen, kijk
+  dan eerst naar `area` en pas daarna naar de rest.
+
+  Per kamer kun je bijsturen zonder de automatiek te verlaten:
+    voorkeur  entiteiten die vóór de area-vondsten worden geprobeerd. Nodig als
+              een ruimte meerdere sensoren van hetzelfde soort heeft en de
+              volgorde uit de registry willekeurig is (woonkamer heeft er drie).
+    extra     entiteiten die buiten de area vallen maar er wel bij horen.
+    negeer    entiteiten die in de area zitten maar niet meetellen.
+
+  Waarom niet gewoon een vaste tabel met entity-ids, zoals ZONES in
+  klimaat.jinja? Omdat die tabel over ACTIES gaat (welke cover stuur ik aan) en
+  deze over WAARNEMINGEN. Bij een actie is een expliciete koppeling precies wat
+  je wil; bij een waarneming is elke sensor die je vergeet toe te voegen een
+  gat dat je niet ziet - en dit overzicht bestaat juist om gaten te tonen.
+-#}
+
+{#- ========================== DE KAMERS ==================================== -#}
+{#-
+  slug        sleutel voor het dashboard, moet uniek zijn
+  naam        label op de tegel
+  icoon       mdi-icoon
+  verdieping  kop waaronder de tegel valt (bepaalt de kolom op het dashboard)
+  area        naam of id van de area in Home Assistant
+  soort       leef | slaap | nat | techniek | buiten, bepaalt de comfortgrenzen
+-#}
+{%- set KAMERS = [
+      {'slug': 'woonkamer', 'naam': 'Woonkamer', 'icoon': 'mdi:sofa-outline',
+       'verdieping': 'Begane grond', 'area': 'Woonkamer', 'soort': 'leef',
+       'voorkeur': ['sensor.woonkamer_woonkamer_multisensor_temperatuur']},
+      {'slug': 'keuken', 'naam': 'Keuken', 'icoon': 'mdi:countertop',
+       'verdieping': 'Begane grond', 'area': 'Keuken', 'soort': 'leef'},
+      {'slug': 'entree', 'naam': 'Entree', 'icoon': 'mdi:coat-rack',
+       'verdieping': 'Begane grond', 'area': 'Entree', 'soort': 'leef'},
+      {'slug': 'toilet', 'naam': 'Toilet', 'icoon': 'mdi:toilet',
+       'verdieping': 'Begane grond', 'area': 'Toilet', 'soort': 'nat'},
+      {'slug': 'speelkamer', 'naam': 'Speelkamer', 'icoon': 'mdi:teddy-bear',
+       'verdieping': 'Begane grond', 'area': 'Speelkamer', 'soort': 'leef'},
+      {'slug': 'garage', 'naam': 'Garage', 'icoon': 'mdi:garage-variant',
+       'verdieping': 'Begane grond', 'area': 'Garage', 'soort': 'techniek'},
+      {'slug': 'meterkast', 'naam': 'Meterkast', 'icoon': 'mdi:flash-outline',
+       'verdieping': 'Begane grond', 'area': 'Meterkast', 'soort': 'techniek'},
+
+      {'slug': 'slaapkamer', 'naam': 'Slaapkamer', 'icoon': 'mdi:bed-king-outline',
+       'verdieping': 'Eerste verdieping', 'area': 'Slaapkamer', 'soort': 'slaap'},
+      {'slug': 'slaapkamer_logan', 'naam': 'Slaapkamer Logan', 'icoon': 'mdi:bed-single-outline',
+       'verdieping': 'Eerste verdieping', 'area': 'Slaapkamer Logan', 'soort': 'slaap'},
+      {'slug': 'badkamer', 'naam': 'Badkamer', 'icoon': 'mdi:shower',
+       'verdieping': 'Eerste verdieping', 'area': 'Badkamer', 'soort': 'nat'},
+      {'slug': 'kantoor', 'naam': 'Kantoor', 'icoon': 'mdi:desk',
+       'verdieping': 'Eerste verdieping', 'area': 'Kantoor', 'soort': 'leef'},
+      {'slug': 'overloop', 'naam': 'Overloop', 'icoon': 'mdi:stairs',
+       'verdieping': 'Eerste verdieping', 'area': 'Overloop', 'soort': 'leef'},
+
+      {'slug': 'slaapkamer_emma', 'naam': 'Slaapkamer Emma', 'icoon': 'mdi:bed-single-outline',
+       'verdieping': 'Tweede verdieping', 'area': 'Slaapkamer Emma', 'soort': 'slaap'},
+      {'slug': 'zolder', 'naam': 'Zolder', 'icoon': 'mdi:home-roof',
+       'verdieping': 'Tweede verdieping', 'area': 'Zolder', 'soort': 'techniek'},
+
+      {'slug': 'schuur', 'naam': 'Schuur', 'icoon': 'mdi:home-outline',
+       'verdieping': 'Buiten', 'area': 'Schuur', 'soort': 'techniek'},
+      {'slug': 'achtertuin', 'naam': 'Achtertuin', 'icoon': 'mdi:tree-outline',
+       'verdieping': 'Buiten', 'area': 'Achtertuin', 'soort': 'buiten'},
+      {'slug': 'voortuin', 'naam': 'Voortuin', 'icoon': 'mdi:home-city-outline',
+       'verdieping': 'Buiten', 'area': 'Voortuin', 'soort': 'buiten'},
+    ] -%}
+
+{#- ======================== WAT METEN WE ================================== -#}
+{#- sleutel, device_class, label op de tegel, eenheid, volgorde bij gelijke
+    score (lager wint). Lucht gaat vóór comfort: een kamer van 26° is
+    vervelend, 1400 ppm CO2 merk je in je hoofd. -#}
+{%- set METINGEN = [
+      {'k': 'co2',  'dc': 'carbon_dioxide', 'label': 'CO₂',   'eenheid': '', 'prio': 0},
+      {'k': 'pm25', 'dc': 'pm25',           'label': 'PM2.5', 'eenheid': '', 'prio': 1},
+      {'k': 'temp', 'dc': 'temperature',    'label': 'temp',  'eenheid': '°', 'prio': 2},
+      {'k': 'rv',   'dc': 'humidity',       'label': 'RV',    'eenheid': '%', 'prio': 3},
+      {'k': 'lux',  'dc': 'illuminance',    'label': 'licht', 'eenheid': '',  'prio': 9},
+    ] -%}
+
+{#- ======================== DE GRENZEN ==================================== -#}
+{#-
+  Elke band is min_slecht / min_ok / max_ok / max_slecht. Daarbuiten is het
+  rood, daartussen oranje, ertussenin groen. `none` betekent: aan die kant
+  bestaat geen grens (CO2 kan niet te laag zijn).
+
+  Herkomst: CO2 800/1200 ppm is de gangbare binnenluchtnorm (Bouwbesluit-klasse
+  B ligt op 950, boven 1200 gaat concentratie meetbaar achteruit). PM2.5 volgt
+  de WHO-daggrens van 15 µg/m3, met 10 als 'nog echt goed' en 25 als de oude
+  EU-jaargrens. RV 40-60% is het venster waarin huisstofmijt, schimmel en droge
+  slijmvliezen elkaar het minst in de weg zitten.
+
+  Lux krijgt bewust geen band: licht is context ("het is er donker"), geen
+  kwaliteitsoordeel. Een donkere slaapkamer om 23:00 is precies goed.
+-#}
+{%- set BASIS = {
+      'temp': {'min_slecht': 15, 'min_ok': 18,   'max_ok': 25,  'max_slecht': 28},
+      'rv':   {'min_slecht': 25, 'min_ok': 35,   'max_ok': 65,  'max_slecht': 75},
+      'co2':  {'min_slecht': none, 'min_ok': none, 'max_ok': 800, 'max_slecht': 1200},
+      'pm25': {'min_slecht': none, 'min_ok': none, 'max_ok': 10,  'max_slecht': 25},
+      'lux':  none,
+    } -%}
+
+{#- Alleen de afwijkingen per soort ruimte. Een slaapkamer mag kouder zijn, een
+    badkamer natter, en in een garage of meterkast gaat het niet om comfort maar
+    om vorst en condens. Buiten meten we wel, maar beoordelen we niets. -#}
+{%- set AFWIJKEND = {
+      'slaap': {
+        'temp': {'min_slecht': 13, 'min_ok': 15, 'max_ok': 21, 'max_slecht': 24} },
+      'nat': {
+        'temp': {'min_slecht': 14, 'min_ok': 17, 'max_ok': 26, 'max_slecht': 30},
+        'rv':   {'min_slecht': 25, 'min_ok': 35, 'max_ok': 75, 'max_slecht': 85} },
+      'techniek': {
+        'temp': {'min_slecht': 2, 'min_ok': 5, 'max_ok': 30, 'max_slecht': 38},
+        'rv':   {'min_slecht': none, 'min_ok': none, 'max_ok': 70, 'max_slecht': 80},
+        'co2':  none,
+        'pm25': none },
+      'buiten': {
+        'temp': none, 'rv': none, 'co2': none, 'pm25': none },
+    } -%}
+
+{#- Binaire sensoren worden op device_class herkend, met de naamgeving van dit
+    huis als vangnet: zigbee2mqtt levert `_occupancy` en `_contact` en niet elke
+    integratie zet een device_class. -#}
+{%- set DC_BEWEGING = ['motion', 'occupancy', 'presence'] -%}
+{%- set DC_CONTACT = ['door', 'window', 'opening', 'garage_door'] -%}
+
+{#- ============================== HELPERS ================================= -#}
+
+{#- Eerste bruikbare meting uit een lijst kandidaten. `unavailable` telt niet
+    als meting maar ook niet als storing: de volgende kandidaat mag het
+    overnemen. Zo valt een kamer met twee thermometers niet uit als er één
+    batterij leeg is. -#}
+{%- macro _meting(kandidaten, dc) -%}
+{%- set ns = namespace(id='', w=none) -%}
+{%- for e in kandidaten if ns.w is none -%}
+  {%- if e[:7] == 'sensor.' and state_attr(e, 'device_class') == dc -%}
+    {%- set w = states(e) | float(none) -%}
+    {%- if w is not none -%}{%- set ns.id = e -%}{%- set ns.w = w -%}{%- endif -%}
+  {%- elif e[:8] == 'climate.' and dc == 'temperature' -%}
+    {%- set w = state_attr(e, 'current_temperature') | float(none) -%}
+    {%- if w is not none -%}{%- set ns.id = e -%}{%- set ns.w = w -%}{%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+{{- {'id': ns.id, 'w': ns.w} | to_json -}}
+{%- endmacro -%}
+
+{#- 0 goed, 1 let op, 2 slecht, -1 niet gemeten of niet beoordeeld. -#}
+{%- macro _score(w, b) -%}
+{%- if w is none or b is none -%}-1
+{%- elif b.min_slecht is not none and w < b.min_slecht -%}2
+{%- elif b.max_slecht is not none and w > b.max_slecht -%}2
+{%- elif b.min_ok is not none and w < b.min_ok -%}1
+{%- elif b.max_ok is not none and w > b.max_ok -%}1
+{%- else -%}0
+{%- endif -%}
+{%- endmacro -%}
+
+{#- ========================= HET OVERZICHT ================================ -#}
+{#-
+  Geeft JSON terug: {'kamers': [ ... ]} met per kamer
+
+    slug, naam, icoon, verdieping, soort
+    status     goed | let op | slecht | geen meting
+    score      0 | 1 | 2 | -1
+    reden      wat er aan de hand is, of wat er goed gaat
+    advies     wat je eraan kunt doen (leeg als er niets te doen is)
+    metingen   lijst met {k, label, w, eenheid, score, id, oud}
+    beweging   {gemeten, actief, minuten}
+    contacten  {gemeten, open, totaal, namen}
+-#}
+{%- macro kamers_json() -%}
+{%- set buiten = states('sensor.knmi_temperatuur') | float(none) -%}
+{#- Leeftijden zijn na een herstart allemaal even oud, dus dan zegt "al 3 uur
+    niets gehoord" niets. Pas als HA zelf lang genoeg draait mag een meting
+    'oud' heten. Zelfde redenering als de tijdlijn op het overzicht. -#}
+{%- set gestart = states('sensor.home_assistant_gestart') | as_datetime -%}
+{%- set mag_verouderen = gestart is not none
+                         and (now() - gestart).total_seconds() > 7200 -%}
+{%- set uit = namespace(lijst=[]) -%}
+
+{%- for k in KAMERS -%}
+  {%- set soort = k.soort -%}
+  {%- set negeer = k.get('negeer', []) -%}
+
+  {#- Kandidaten ophalen. Volgorde: eerst wat de tabel voorschrijft, dan de
+      sensoren uit de area, dan pas climate-entiteiten - een airco kent zijn
+      kamertemperatuur, maar een echte thermometer is nauwkeuriger. -#}
+  {%- set c = namespace(sens=[], clim=[], bin=[]) -%}
+  {%- for e in area_entities(k.area) if e not in negeer -%}
+    {%- if e[:7] == 'sensor.' -%}{%- set c.sens = c.sens + [e] -%}
+    {%- elif e[:8] == 'climate.' -%}{%- set c.clim = c.clim + [e] -%}
+    {%- elif e[:14] == 'binary_sensor.' -%}{%- set c.bin = c.bin + [e] -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- set kandidaten = k.get('voorkeur', []) + c.sens + k.get('extra', []) + c.clim -%}
+
+  {#- --- de meetwaarden --- -#}
+  {%- set m = namespace(lijst=[], ergst=-1, prio=99, ergste_k='', ergste_w=none,
+                        aantal=0) -%}
+  {%- for meting in METINGEN -%}
+    {%- set v = _meting(kandidaten, meting.dc) | trim | from_json -%}
+    {%- set band = AFWIJKEND.get(soort, {}).get(meting.k, BASIS[meting.k]) -%}
+    {%- set score = _score(v.w, band) | int -%}
+    {#- Een sensor die uren stil staat is geen meting meer maar een aanname.
+        Hij blijft staan (met een merkteken), want een leeg vakje zou suggereren
+        dat er geen sensor hángt - en dat is een heel ander probleem. -#}
+    {%- set oud = mag_verouderen and v.id != ''
+                  and (now() - states[v.id].last_updated).total_seconds() > 7200 -%}
+    {%- if v.w is not none -%}{%- set m.aantal = m.aantal + 1 -%}{%- endif -%}
+    {%- if score > m.ergst or (score == m.ergst and meting.prio < m.prio and score > 0) -%}
+      {%- if score > 0 -%}
+        {%- set m.ergst = score -%}{%- set m.prio = meting.prio -%}
+        {%- set m.ergste_k = meting.k -%}{%- set m.ergste_w = v.w -%}
+      {%- elif m.ergst < 0 -%}
+        {%- set m.ergst = score -%}
+      {%- endif -%}
+    {%- endif -%}
+    {%- set m.lijst = m.lijst + [{'k': meting.k, 'label': meting.label,
+                                  'w': v.w, 'eenheid': meting.eenheid,
+                                  'score': score, 'id': v.id, 'oud': oud}] -%}
+  {%- endfor -%}
+
+  {#- --- beweging --- -#}
+  {%- set bw = namespace(aantal=0, actief=false, jongste=none) -%}
+  {%- for e in c.bin -%}
+    {%- set dc = state_attr(e, 'device_class') -%}
+    {%- if dc in DC_BEWEGING or 'beweging' in e or e.endswith('_occupancy') -%}
+      {%- set bw.aantal = bw.aantal + 1 -%}
+      {%- if is_state(e, 'on') -%}{%- set bw.actief = true -%}{%- endif -%}
+      {%- set leeftijd = (now() - states[e].last_changed).total_seconds() / 60 -%}
+      {%- if bw.jongste is none or leeftijd < bw.jongste -%}
+        {%- set bw.jongste = leeftijd -%}
+      {%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+
+  {#- --- ramen en deuren --- -#}
+  {%- set ct = namespace(totaal=0, open=0, namen=[]) -%}
+  {%- for e in c.bin -%}
+    {%- set dc = state_attr(e, 'device_class') -%}
+    {%- if dc in DC_CONTACT or e.endswith('_contact') -%}
+      {%- set ct.totaal = ct.totaal + 1 -%}
+      {%- if is_state(e, 'on') -%}
+        {%- set ct.open = ct.open + 1 -%}
+        {%- set ct.namen = ct.namen + [state_attr(e, 'friendly_name') or e] -%}
+      {%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+
+  {#- --- oordeel --- -#}
+  {%- set status = {2: 'slecht', 1: 'let op', 0: 'goed'}.get(m.ergst, 'geen meting') -%}
+  {%- set w = m.ergste_w -%}
+  {%- set g = (w | round(1) | string | replace('.0', '') | replace('.', ',')) if w is not none else '?' -%}
+
+  {%- set ns = namespace(reden='', advies='') -%}
+  {%- if m.ergst < 0 -%}
+    {#- Niet beoordeeld is niet hetzelfde als niet gemeten. Buiten meten we wel
+        maar oordelen we niet, en een ruimte waar alleen een lichtsensor hangt
+        heeft ook geen oordeel - maar wel een sensor. Die twee door elkaar halen
+        zou het overzicht juist blind maken voor echte gaten. -#}
+    {%- if m.aantal == 0 -%}
+      {%- set ns.reden = 'geen sensoren in deze ruimte' -%}
+    {%- elif soort == 'buiten' -%}
+      {%- set ns.reden = 'buitenwaarden, niet beoordeeld' -%}
+    {%- else -%}
+      {%- set ns.reden = 'gemeten, maar niet beoordeeld' -%}
+    {%- endif -%}
+  {%- elif m.ergst == 0 -%}
+    {#- Ook bij groen iets zeggen: een tegel die alleen "goed" meldt is een tegel
+        die je na een week niet meer leest. -#}
+    {%- set ns.reden = 'alles binnen de grenzen' -%}
+  {%- elif m.ergste_k == 'co2' -%}
+    {%- set ns.reden = 'CO₂ ' ~ (w | round | int) ~ ' ppm' -%}
+    {%- set ns.advies = 'raam staat al open, even geduld' if ct.open > 0
+                        else ('zet een raam open' if ct.totaal > 0 else 'ventileren') -%}
+  {%- elif m.ergste_k == 'pm25' -%}
+    {%- set ns.reden = 'fijnstof ' ~ g ~ ' µg/m³' -%}
+    {%- set ns.advies = 'luchtreiniger aan, ramen dicht' -%}
+  {%- elif m.ergste_k == 'temp' -%}
+    {%- set koud = m.lijst | selectattr('k', 'eq', 'temp') | map(attribute='w') | first -%}
+    {%- set te_koud = koud is not none and koud < 18 -%}
+    {%- set ns.reden = ('koud, ' if te_koud else 'warm, ') ~ g ~ '°' -%}
+    {%- if te_koud -%}
+      {%- set ns.advies = 'verwarming of zonwering omhoog' -%}
+    {%- elif buiten is not none and w is not none and buiten < (w - 1) -%}
+      {%- set ns.advies = 'buiten is ' ~ (buiten | round | int) ~ '°, spuien kan' -%}
+    {%- else -%}
+      {%- set ns.advies = 'zonwering dicht houden' -%}
+    {%- endif -%}
+  {%- elif m.ergste_k == 'rv' -%}
+    {%- set droog = w is not none and w < 40 -%}
+    {%- set ns.reden = ('droge lucht, ' if droog else 'vochtig, ') ~ g ~ '%' -%}
+    {%- set ns.advies = 'bevochtigen' if droog else 'ventileren, anders schimmelrisico' -%}
+  {%- endif -%}
+
+  {%- set uit.lijst = uit.lijst + [{
+        'slug': k.slug, 'naam': k.naam, 'icoon': k.icoon,
+        'verdieping': k.verdieping, 'soort': soort,
+        'status': status, 'score': m.ergst,
+        'reden': ns.reden, 'advies': ns.advies,
+        'metingen': m.lijst, 'aantal_metingen': m.aantal,
+        'beweging': {'gemeten': bw.aantal > 0, 'actief': bw.actief,
+                     'minuten': (bw.jongste | round | int) if bw.jongste is not none else none},
+        'contacten': {'gemeten': ct.totaal > 0, 'open': ct.open,
+                      'totaal': ct.totaal, 'namen': ct.namen},
+      }] -%}
+{%- endfor -%}
+
+{{- {'kamers': uit.lijst} | to_json -}}
+{%- endmacro -%}

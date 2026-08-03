@@ -1,0 +1,58 @@
+#############################################################################
+## Kamerstatus - één sensor die het hele huis beschrijft
+#############################################################################
+#
+# De inhoud komt uit `custom_templates/kamers.jinja`; hier staat alleen hoe
+# vaak er gemeten wordt en hoe het naar buiten komt. Zie ook
+# `dashboards/home/kamers.yaml`, dat is de enige afnemer.
+#
+# WAAROM ÉÉN SENSOR EN NIET ÉÉN PER KAMER
+# Twee redenen, allebei geleerd in dit huis:
+#   1. Een button-card rendert alleen opnieuw als zijn `entity` verandert. Met
+#      één sensor kan elke tegel `entity: sensor.kamers` gebruiken en ververst
+#      het hele raster tegelijk. Met zeventien sensoren zou elke tegel op zijn
+#      eigen entiteit moeten wachten en zou de samenvattingsbalk bovenaan
+#      helemaal niet meer bijwerken.
+#   2. De macro doet één ronde langs alle areas. Zeventien losse sensoren
+#      zouden die ronde zeventien keer doen.
+#
+# WAAROM ELKE MINUUT EN NIET BIJ ELKE WIJZIGING
+# Een gewone (state-based) template sensor zou hertekenen bij élke wijziging
+# van élke sensor die hij aanraakt - inclusief alle bewegingsmelders, die
+# tientallen keren per minuut kunnen schakelen. Dit is een overzichtspagina,
+# geen alarm: één keer per minuut is ruim genoeg en veel voorspelbaarder.
+# De prijs is dat de bewegingsstip tot 60 seconden achterloopt.
+#
+# LET OP: dit bestand is nieuw, dus het vraagt een volledige herstart van Home
+# Assistant om geladen te worden - een template-reload is niet genoeg. Hetzelfde
+# geldt voor wijzigingen in kamers.jinja.
+#
+# `sensor.kamers` staat bewust in de recorder-uitsluiting in
+# configuration.yaml: het attribuut is een blok van zo'n 10 kB en zou anders
+# elke minuut opnieuw worden weggeschreven.
+
+template:
+  - trigger:
+      - trigger: time_pattern
+        minutes: "/1"
+      # Zonder deze staat de tegelmuur na een herstart een minuut leeg.
+      - trigger: homeassistant
+        event: start
+
+    sensor:
+      # De state is het aantal ruimtes dat aandacht vraagt, zodat je er een
+      # melding of een badge op kunt hangen zonder in de attributen te graven.
+      - name: Kamers
+        unique_id: kamers
+        icon: mdi:home-search-outline
+        state: >
+          {% from 'kamers.jinja' import kamers_json %}
+          {{ (kamers_json() | trim | from_json).kamers
+             | selectattr('score', 'ge', 1) | list | count }}
+        attributes:
+          # De macro draait hier een tweede keer: attributen worden los van de
+          # state gerenderd. Dat is bewust geaccepteerd - twee rondes per minuut
+          # is goedkoper dan de omweg via een extra hulpsensor.
+          kamers: >
+            {% from 'kamers.jinja' import kamers_json %}
+            {{ (kamers_json() | trim | from_json).kamers }}
