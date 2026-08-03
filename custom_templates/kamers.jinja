@@ -26,14 +26,21 @@
   dan eerst naar `area` en pas daarna naar de rest.
 
   Per kamer kun je bijsturen zonder de automatiek te verlaten:
-    voorkeur  entiteiten die vóór de area-vondsten worden geprobeerd. Nodig als
-              een ruimte meerdere sensoren van hetzelfde soort heeft en de
-              volgorde uit de registry willekeurig is. Voor temperatuur staat
-              hier overal de echte kamerthermometer ingevuld: zonder dat won
-              een willekeurig Zigbee-apparaat met zijn printplaattemperatuur.
-              Zie NEGEER_PATRONEN verderop voor het verhaal.
+    klimaat   ÉÉN entiteit van het apparaat dat deze kamer echt meet, meestal
+              de thermometer. Alles wat verder aan datzelfde apparaat hangt
+              (luchtvochtigheid, en bij de woonkamer-multisensor ook CO2,
+              fijnstof en lux) wordt via `device_entities()` automatisch
+              meegenomen en gaat vóór de rest van de ruimte. Dit is het veld dat
+              je in de praktijk invult - zie NEGEER_PATRONEN verderop voor
+              waarom het nodig is.
+    voorkeur  losse entiteiten die zelfs vóór `klimaat` gaan. Alleen nodig als
+              één kamer twee apparaten heeft en je per meetwaarde wil kiezen.
     extra     entiteiten die buiten de area vallen maar er wel bij horen.
     negeer    entiteiten die in de area zitten maar niet meetellen.
+
+  Ontbreekt `klimaat` bij een kamer, dan staat daar (voor zover bekend) geen
+  eigen thermometer en valt de tegel terug op wat de area oplevert. Dat is
+  bewust: liever een streepje dan het cijfer van een willekeurig apparaat.
 
   Waarom niet gewoon een vaste tabel met entity-ids, zoals ZONES in
   klimaat.jinja? Omdat die tabel over ACTIES gaat (welke cover stuur ik aan) en
@@ -50,11 +57,12 @@
   verdieping  kop waaronder de tegel valt (bepaalt de kolom op het dashboard)
   area        naam of id van de area in Home Assistant
   soort       leef | slaap | nat | techniek | buiten, bepaalt de comfortgrenzen
+  klimaat     één entiteit van het apparaat dat de kamer meet (optioneel)
 -#}
 {%- set KAMERS = [
       {'slug': 'woonkamer', 'naam': 'Woonkamer', 'icoon': 'mdi:sofa-outline',
        'verdieping': 'Begane grond', 'area': 'Woonkamer', 'soort': 'leef',
-       'voorkeur': ['sensor.woonkamer_woonkamer_multisensor_temperatuur']},
+       'klimaat': 'sensor.woonkamer_woonkamer_multisensor_temperatuur'},
       {'slug': 'keuken', 'naam': 'Keuken', 'icoon': 'mdi:countertop',
        'verdieping': 'Begane grond', 'area': 'Keuken', 'soort': 'leef'},
       {'slug': 'entree', 'naam': 'Entree', 'icoon': 'mdi:coat-rack',
@@ -63,38 +71,38 @@
        'verdieping': 'Begane grond', 'area': 'Toilet', 'soort': 'nat'},
       {'slug': 'speelkamer', 'naam': 'Speelkamer', 'icoon': 'mdi:teddy-bear',
        'verdieping': 'Begane grond', 'area': 'Speelkamer', 'soort': 'leef',
-       'voorkeur': ['sensor.speelkamer_speelkamer_temperatuur_temperatuur']},
+       'klimaat': 'sensor.speelkamer_speelkamer_temperatuur_temperatuur'},
       {'slug': 'garage', 'naam': 'Garage', 'icoon': 'mdi:garage-variant',
        'verdieping': 'Begane grond', 'area': 'Garage', 'soort': 'techniek',
-       'voorkeur': ['sensor.garage_garage_temperatuur_temperatuur']},
+       'klimaat': 'sensor.garage_garage_temperatuur_temperatuur'},
       {'slug': 'meterkast', 'naam': 'Meterkast', 'icoon': 'mdi:flash-outline',
        'verdieping': 'Begane grond', 'area': 'Meterkast', 'soort': 'techniek',
-       'voorkeur': ['sensor.meterkast_temperatuur_temperature']},
+       'klimaat': 'sensor.meterkast_temperatuur_temperature'},
 
       {'slug': 'slaapkamer', 'naam': 'Slaapkamer', 'icoon': 'mdi:bed-king-outline',
        'verdieping': 'Eerste verdieping', 'area': 'Slaapkamer', 'soort': 'slaap',
-       'voorkeur': ['sensor.slaapkamer_slaapkamer_temperatuur_temperatuur']},
+       'klimaat': 'sensor.slaapkamer_slaapkamer_temperatuur_temperatuur'},
       {'slug': 'slaapkamer_logan', 'naam': 'Slaapkamer Logan', 'icoon': 'mdi:bed-single-outline',
        'verdieping': 'Eerste verdieping', 'area': 'Slaapkamer Logan', 'soort': 'slaap',
-       'voorkeur': ['sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur']},
+       'klimaat': 'sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur'},
       {'slug': 'badkamer', 'naam': 'Badkamer', 'icoon': 'mdi:shower',
        'verdieping': 'Eerste verdieping', 'area': 'Badkamer', 'soort': 'nat',
-       'voorkeur': ['sensor.badkamer_badkamer_temperatuur_temperatuur']},
+       'klimaat': 'sensor.badkamer_badkamer_temperatuur_temperatuur'},
       {'slug': 'kantoor', 'naam': 'Kantoor', 'icoon': 'mdi:desk',
        'verdieping': 'Eerste verdieping', 'area': 'Kantoor', 'soort': 'leef',
-       'voorkeur': ['sensor.kantoor_kantoor_temperatuur_temperatuur']},
+       'klimaat': 'sensor.kantoor_kantoor_temperatuur_temperatuur'},
       {'slug': 'overloop', 'naam': 'Overloop', 'icoon': 'mdi:stairs',
        'verdieping': 'Eerste verdieping', 'area': 'Overloop', 'soort': 'leef'},
 
       {'slug': 'slaapkamer_emma', 'naam': 'Slaapkamer Emma', 'icoon': 'mdi:bed-single-outline',
        'verdieping': 'Tweede verdieping', 'area': 'Slaapkamer Emma', 'soort': 'slaap',
-       'voorkeur': ['sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur']},
+       'klimaat': 'sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur'},
       {'slug': 'zolder', 'naam': 'Zolder', 'icoon': 'mdi:home-roof',
        'verdieping': 'Tweede verdieping', 'area': 'Zolder', 'soort': 'techniek'},
 
       {'slug': 'schuur', 'naam': 'Schuur', 'icoon': 'mdi:home-outline',
        'verdieping': 'Buiten', 'area': 'Schuur', 'soort': 'techniek',
-       'voorkeur': ['sensor.achtertuin_schuur_temperatuur_temperature']},
+       'klimaat': 'sensor.achtertuin_schuur_temperatuur_temperature'},
       {'slug': 'achtertuin', 'naam': 'Achtertuin', 'icoon': 'mdi:tree-outline',
        'verdieping': 'Buiten', 'area': 'Achtertuin', 'soort': 'buiten'},
       {'slug': 'voortuin', 'naam': 'Voortuin', 'icoon': 'mdi:home-city-outline',
@@ -197,6 +205,13 @@
 
 {#- ============================== HELPERS ================================= -#}
 
+{#- Staat deze entiteit op de uitsluitlijst? Geeft '1' of leeg terug. -#}
+{%- macro _verdacht(e) -%}
+{%- set ns = namespace(v='') -%}
+{%- for p in NEGEER_PATRONEN if p in e -%}{%- set ns.v = '1' -%}{%- endfor -%}
+{{- ns.v -}}
+{%- endmacro -%}
+
 {#- Eerste bruikbare meting uit een lijst kandidaten. `unavailable` telt niet
     als meting maar ook niet als storing: de volgende kandidaat mag het
     overnemen. Zo valt een kamer met twee thermometers niet uit als er één
@@ -253,24 +268,43 @@
   {%- set soort = k.soort -%}
   {%- set negeer = k.get('negeer', []) -%}
 
-  {#- Kandidaten ophalen. Volgorde: eerst wat de tabel voorschrijft, dan de
-      sensoren uit de area, dan pas climate-entiteiten - een airco kent zijn
-      kamertemperatuur, maar een echte thermometer is nauwkeuriger. -#}
-  {%- set c = namespace(sens=[], clim=[], bin=[]) -%}
+  {#- Kandidaten ophalen, in volgorde van vertrouwen:
+        1. voorkeur  met de hand aangewezen, wint altijd
+        2. klimaat    álles van het klimaatapparaat van deze kamer
+        3. area      de rest van de ruimte
+        4. climate   een airco kent zijn kamertemperatuur, bij gebrek aan beter
+
+      Stap 2 is de belangrijkste. Een slaapkamer heeft hier vijf sensoren met
+      device_class temperature, waarvan er vier de printplaat van een deur- of
+      raamcontact meten. Maar ze horen bij verschillende APPARATEN, en er is er
+      precies één dat de kamer meet. Door dat ene apparaat aan te wijzen en
+      `device_entities()` te laten uitzoeken wat er verder aan hangt, koppel je
+      per kamer één entiteit in plaats van één per meetwaarde - de
+      luchtvochtigheid van dezelfde melder komt vanzelf mee, en bij de
+      woonkamer-multisensor ook CO2, fijnstof en lux.
+      De uitsluitlijst geldt hier óók: een thermometer die daarnaast zijn eigen
+      printplaattemperatuur meldt, zou anders alsnog zichzelf kunnen kiezen. -#}
+  {%- set c = namespace(klim=[], sens=[], clim=[], bin=[]) -%}
+  {%- set bron = k.get('klimaat') -%}
+  {%- set bron_dev = device_id(bron) if bron else none -%}
+  {%- set bron_ids = device_entities(bron_dev) if bron_dev
+                     else ([bron] if bron else []) -%}
+  {%- for e in bron_ids if e[:7] == 'sensor.' and e not in negeer -%}
+    {%- if _verdacht(e) | trim == '' -%}{%- set c.klim = c.klim + [e] -%}{%- endif -%}
+  {%- endfor -%}
+
   {%- for e in area_entities(k.area) if e not in negeer -%}
     {#- De uitsluitlijst geldt alleen voor meetsensoren. Binaire sensoren gaan
         er buiten om: een deurcontact op de koelkast is nog steeds een
         deurcontact. -#}
-    {%- set v = namespace(verdacht=false) -%}
-    {%- for p in NEGEER_PATRONEN if p in e -%}
-      {%- set v.verdacht = true -%}
-    {%- endfor -%}
-    {%- if e[:7] == 'sensor.' and not v.verdacht -%}{%- set c.sens = c.sens + [e] -%}
+    {%- if e[:7] == 'sensor.' -%}
+      {%- if _verdacht(e) | trim == '' -%}{%- set c.sens = c.sens + [e] -%}{%- endif -%}
     {%- elif e[:8] == 'climate.' -%}{%- set c.clim = c.clim + [e] -%}
     {%- elif e[:14] == 'binary_sensor.' -%}{%- set c.bin = c.bin + [e] -%}
     {%- endif -%}
   {%- endfor -%}
-  {%- set kandidaten = k.get('voorkeur', []) + c.sens + k.get('extra', []) + c.clim -%}
+  {%- set kandidaten = k.get('voorkeur', []) + c.klim + c.sens
+                       + k.get('extra', []) + c.clim -%}
 
   {#- --- de meetwaarden --- -#}
   {%- set m = namespace(lijst=[], ergst=-1, prio=99, ergste_k='', ergste_w=none,

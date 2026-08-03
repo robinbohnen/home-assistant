@@ -21,6 +21,7 @@ CONFIG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATES = {}
 AREAS = {}
 LEEFTIJD = {}  # entity_id -> minuten geleden veranderd
+DEVICES = {}   # entity_id -> device_id
 NOW = dt.datetime(2026, 8, 3, 14, 0, 0)
 
 
@@ -56,6 +57,14 @@ def ha_area_entities(area):
     return list(AREAS.get(area, []))
 
 
+def ha_device_id(entity_id):
+    return DEVICES.get(entity_id)
+
+
+def ha_device_entities(device):
+    return [e for e, d in DEVICES.items() if d == device]
+
+
 def f_float(value, default=0.0):
     try:
         return float(value)
@@ -76,7 +85,8 @@ env.filters["as_datetime"] = f_as_datetime
 env.filters["to_json"] = lambda v, **k: json.dumps(v)
 env.filters["from_json"] = json.loads
 env.globals.update(states=_States(), state_attr=ha_state_attr, is_state=ha_is_state,
-                   area_entities=ha_area_entities, now=lambda: NOW)
+                   area_entities=ha_area_entities, device_id=ha_device_id,
+                   device_entities=ha_device_entities, now=lambda: NOW)
 
 MOD = env.get_template("kamers.jinja").module
 
@@ -89,19 +99,23 @@ def kamers():
 # Wereldopbouw
 # ---------------------------------------------------------------------------
 
-def sensor(eid, waarde, device_class, area, naam=None, minuten=0):
+def sensor(eid, waarde, device_class, area, naam=None, minuten=0, apparaat=None):
     STATES[eid] = str(waarde)
     STATES[f"{eid}.device_class"] = device_class
     STATES[f"{eid}.friendly_name"] = naam or eid
     LEEFTIJD[eid] = minuten
+    if apparaat:
+        DEVICES[eid] = apparaat
     AREAS.setdefault(area, []).append(eid)
 
 
-def binair(eid, aan, device_class, area, naam=None, minuten=0):
+def binair(eid, aan, device_class, area, naam=None, minuten=0, apparaat=None):
     STATES[eid] = "on" if aan else "off"
     STATES[f"{eid}.device_class"] = device_class
     STATES[f"{eid}.friendly_name"] = naam or eid
     LEEFTIJD[eid] = minuten
+    if apparaat:
+        DEVICES[eid] = apparaat
     AREAS.setdefault(area, []).append(eid)
 
 
@@ -110,6 +124,7 @@ def wereld(**kw):
     STATES.clear()
     AREAS.clear()
     LEEFTIJD.clear()
+    DEVICES.clear()
     STATES.update({
         "sensor.knmi_temperatuur": "21",
         "sensor.home_assistant_gestart": (NOW - dt.timedelta(days=1)).isoformat(),
@@ -237,7 +252,41 @@ check("en de kamer is dus gewoon goed", "kantoor", "status", "goed")
 wereld()
 sensor("sensor.badkamer_badkamer_temperatuur_temperatuur", 23.1, "temperature", "Badkamer")
 sensor("sensor.badkamer_iets_anders", 31, "temperature", "Badkamer")
-check("voorkeur wint van volgorde", "badkamer", "metingen.temp.w", 23.1)
+check("aangewezen apparaat wint van volgorde", "badkamer", "metingen.temp.w", 23.1)
+
+# Slaapkamer Logan zoals hij op 2026-08-03 in de pop-up stond: vijf sensoren met
+# device_class temperature, waarvan vier de printplaat van een deur- of
+# raamcontact. De tegel stond op 27,0° terwijl de kamer 23,5° was.
+#
+# Let op de volgorde: de printplaten staan hier expres vóór de echte melder,
+# want zo kwam het uit de registry.
+wereld()
+for deel, graden in [("deur", 27), ("raam_links", 25), ("raam_rechts", 27)]:
+    sensor(f"sensor.slaapkamer_maxi_{deel}_device_temperature", graden, "temperature",
+           "Slaapkamer Logan", apparaat=f"dev_{deel}")
+sensor("sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur", 23.5,
+       "temperature", "Slaapkamer Logan", apparaat="dev_melder")
+sensor("sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_luchtvochtigheid", 50.37,
+       "humidity", "Slaapkamer Logan", apparaat="dev_melder")
+check("de kamer, niet de deurprintplaat", "slaapkamer_logan", "metingen.temp.w", 23.5)
+# 23,5° valt boven de slaapband (goed tot 21°) maar onder de alarmgrens: warm
+# voor een kinderkamer, niet alarmerend. Precies het verschil dat de vier
+# printplaten van 27° verborgen hielden.
+check("warm voor een slaapkamer, niet alarmerend", "slaapkamer_logan", "status", "let op")
+# De luchtvochtigheid staat nergens in de tabel; hij komt mee omdat hij aan
+# hetzelfde apparaat hangt als de aangewezen thermometer.
+check("zelfde apparaat levert ook de RV", "slaapkamer_logan", "metingen.rv.w", 50.37)
+check("en die bron klopt", "slaapkamer_logan", "metingen.rv.id",
+      "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_luchtvochtigheid")
+
+# Meet de aangewezen melder óók zijn eigen printplaat, dan mag die niet alsnog
+# via de apparaatlijst binnenglippen.
+wereld()
+sensor("sensor.kantoor_kantoor_temperatuur_device_temperature", 39, "temperature",
+       "Kantoor", apparaat="dev_kantoor")
+sensor("sensor.kantoor_kantoor_temperatuur_temperatuur", 22.8, "temperature",
+       "Kantoor", apparaat="dev_kantoor")
+check("eigen printplaat telt ook niet mee", "kantoor", "metingen.temp.w", 22.8)
 
 wereld()
 sensor("sensor.woonkamer_aquarium_temp", 26, "temperature", "Woonkamer")
