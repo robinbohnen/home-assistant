@@ -19,8 +19,14 @@
 # LET OP bij het bewerken van de auto-entities-filters: `device_class` is geen
 # filtersleutel, die hoort onder `attributes:`. Met device_class op het hoogste
 # niveau gaf elke pop-up "Configuratiefout".
+#
+# DRIE KOLOMMEN, NIET VIER (2026-08-03)
+# Met vier kolommen paste de reden-en-advies-regel van een tegel niet meer en
+# werd hij afgekapt met een beletselteken - precies de regel waarvoor je naar
+# deze pagina kijkt. De eerste en tweede verdieping delen daarom één kolom, met
+# twee koppen onder elkaar: samen zeven tegels, evenveel als de begane grond.
 type: sections
-max_columns: 4
+max_columns: 3
 title: Kamers
 path: kamers
 icon: mdi:home-heart
@@ -32,7 +38,7 @@ sections:
   # Staat los boven de kolommen zodat je bij binnenkomst niet zeventien tegels
   # hoeft af te lezen om te zien of er iets aan de hand is.
   - type: grid
-    column_span: 4
+    column_span: 3
     cards:
       - type: custom:button-card
         template: kamer_samenvatting
@@ -97,8 +103,10 @@ sections:
           navigation_path: "#kamer-meterkast"
 
   #############################################################################
-  ## Eerste verdieping
+  ## Eerste en tweede verdieping
   #############################################################################
+  # Eén kolom met twee koppen: de tweede verdieping is twee tegels groot en zou
+  # als eigen kolom vooral witruimte zijn.
   - type: grid
     cards:
       - type: heading
@@ -141,11 +149,6 @@ sections:
           action: navigate
           navigation_path: "#kamer-overloop"
 
-  #############################################################################
-  ## Tweede verdieping
-  #############################################################################
-  - type: grid
-    cards:
       - type: heading
         heading: Tweede verdieping
         heading_style: title
@@ -222,7 +225,7 @@ sections:
   # staat onderaan deze weergave. Historie zie je via hold op een tegel
   # (more-info) of op de Klimaat-weergave.
   - type: grid
-    column_span: 4
+    column_span: 3
     cards:
       - type: custom:bubble-card
         card_type: pop-up
@@ -1111,20 +1114,26 @@ sections:
   # aangewezen. Staat hier iets dat er hoort, zet het dan bij `klimaat` of
   # `voorkeur` in custom_templates/kamers.jinja; staat er iets dat er nooit bij
   # hoort (koelkast, espressomachine), zet het dan in `negeer` bij die kamer.
+  #
+  # Sinds 2026-08-03 één regel met een pop-up erachter in plaats van een
+  # uitgeklapte markdown-lijst: met negenenveertig entiteiten was dat het
+  # langste blok van de pagina, terwijl je er hooguit een paar keer per jaar
+  # iets mee doet. De inhoud staat in `kamer_onderhoud_lijst`; die rekent in de
+  # browser en houdt dus geen `render_template`-abonnement op de server aan.
   - type: grid
-    column_span: 4
+    column_span: 3
     cards:
-      - type: markdown
-        content: |
-          {% set L = state_attr('sensor.kamers_niet_gekoppeld', 'sensoren') or [] %}
-          {% if L | count == 0 %}
-          **Alle meetsensoren zijn gekoppeld.**
-          {% else %}
-          ### {{ L | count }} sensor{{ 'en' if L | count > 1 else '' }} niet gekoppeld
-          Deze hangen in een ruimte van dit overzicht maar leveren er geen waarde
-          voor. Bewust? Zet ze in `negeer`. Anders in `klimaat` of `voorkeur`.
-
-          {% for kamer, items in L | groupby('kamer') %}
-          **{{ kamer }}** — {% for s in items %}`{{ s.id }}`{{ ", " if not loop.last else "" }}{% endfor %}
-          {% endfor %}
-          {% endif %}
+      - type: custom:button-card
+        template: kamer_onderhoud_knop
+        tap_action:
+          action: navigate
+          navigation_path: "#kamers-onderhoud"
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#kamers-onderhoud"
+        name: Niet gekoppelde sensoren
+        icon: mdi:link-variant-off
+        styles: *kamer_popup
+        cards:
+          - type: custom:button-card
+            template: kamer_onderhoud_lijst

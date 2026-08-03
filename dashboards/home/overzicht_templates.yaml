@@ -419,6 +419,27 @@ ov_sonos:
 #   goed #4ade80 · let op #f59e0b · slecht #ef4444 · geen meting wit op 32%
 
 # --- Kamertegel -------------------------------------------------------------
+# Eén sjabloon, twee maten. Een kamer met een aangewezen sensor krijgt de volle
+# tegel: temperatuur groot, de overige metingen klein eronder, en een voetregel
+# met beweging en contacten. Een kamer waar niets is aangewezen (`gekoppeld`
+# is 0) krijgt een platte regel van twee tekstregels hoog, met beweging en
+# contacten rechts in plaats van in een eigen voetregel.
+#
+# WAT HIER OP 2026-08-03 UIT IS GEHAALD, EN WAAROM
+# Elke tegel had een strip van vier vaste kolommen (RV, CO2, PM2.5, licht),
+# met een streepje in de vakjes zonder meting. De redenering was dat zo'n leeg
+# vakje informatie is: daar hangt geen sensor. Dat klopt bij één ontbrekende
+# meting, maar in dit huis meet precies één kamer CO2 en meet er geen enkele
+# licht - dus stonden er over de hele muur drie streepjes per tegel en één
+# getal, en was een tegel 146 pixels hoog waar 94 volstaat. Wat er níét gemeten
+# wordt staat nu op de plek waar je die vraag ook echt stelt: in de pop-up,
+# waar `kamer_detail` per waarde de bron noemt, en in de onderhoudsregel
+# onderaan de weergave.
+#
+# De slimme/volle keuze hangt aan `gekoppeld === 0` en bewust niet aan
+# `aantal_metingen === 0`: een kamer met een aangewezen sensor die niets
+# doorgeeft (lege batterij) hoort juist een volle tegel te houden, anders
+# verdwijnt een storing in de kleine regels.
 kamer_tegel:
   entity: sensor.kamers
   show_icon: false
@@ -432,8 +453,8 @@ kamer_tegel:
     card:
       - background: rgba(255,255,255,0.04)
       - border: 1px solid rgba(255,255,255,0.07)
-      - border-radius: 18px
-      - padding: 15px 16px 13px 16px
+      - border-radius: 16px
+      - padding: 12px 15px 11px 15px
       - height: 100%
       # Smalle gekleurde rand links, zodat je van een meter afstand ziet welke
       # kamer eruit springt zonder de cijfers te lezen.
@@ -446,10 +467,20 @@ kamer_tegel:
             return 'inset 3px 0 0 ' + c;
           ]]]
     grid:
-      - grid-template-areas: '"ic naam waarde" "ic sub waarde" "strip strip strip" "voet voet voet"'
-      - grid-template-columns: 46px 1fr auto
+      # De voetrij staat er altijd in. Bij een platte tegel is hij leeg en
+      # halen de stijlen hieronder zijn marge, padding en scheidingslijn weg,
+      # zodat de rij op nul pixels uitkomt. Zou het gebied uit deze opsomming
+      # verdwijnen, dan plaatst de browser dat lege blok alsnog in een eigen
+      # impliciete rij - inclusief streep.
+      - grid-template-areas: '"ic naam waarde" "ic sub waarde" "voet voet voet"'
+      - grid-template-columns: |
+          [[[
+            var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
+            var k = L.find(function(x){ return x.slug === variables.slug; });
+            return (k && k.gekoppeld === 0) ? '34px 1fr auto' : '44px 1fr auto';
+          ]]]
       - align-items: center
-      - column-gap: 13px
+      - column-gap: 12px
     custom_fields:
       ic:
         - grid-area: ic
@@ -469,16 +500,29 @@ kamer_tegel:
       waarde:
         - grid-area: waarde
         - justify-self: end
-      strip:
-        - grid-area: strip
-        - width: 100%
-        - margin-top: 15px
+        - align-self: center
+        - text-align: right
       voet:
         - grid-area: voet
         - width: 100%
-        - margin-top: 12px
-        - padding-top: 10px
-        - border-top: 1px solid rgba(255,255,255,0.06)
+        - margin-top: |
+            [[[
+              var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
+              var k = L.find(function(x){ return x.slug === variables.slug; });
+              return (k && k.gekoppeld === 0) ? '0' : '9px';
+            ]]]
+        - padding-top: |
+            [[[
+              var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
+              var k = L.find(function(x){ return x.slug === variables.slug; });
+              return (k && k.gekoppeld === 0) ? '0' : '8px';
+            ]]]
+        - border-top: |
+            [[[
+              var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
+              var k = L.find(function(x){ return x.slug === variables.slug; });
+              return (k && k.gekoppeld === 0) ? 'none' : '1px solid rgba(255,255,255,0.06)';
+            ]]]
   custom_fields:
     ic: |
       [[[
@@ -489,7 +533,10 @@ kamer_tegel:
                  'let op':['#f59e0b','rgba(245,158,11,0.14)'],
                  'slecht':['#ef4444','rgba(239,68,68,0.14)']};
         var c = C[k.status] || ['rgba(255,255,255,0.32)','rgba(255,255,255,0.05)'];
-        return `<div style="width:46px;height:46px;border-radius:15px;background:${c[1]};display:flex;align-items:center;justify-content:center"><ha-icon icon="${k.icoon}" style="--mdc-icon-size:24px;color:${c[0]}"></ha-icon></div>`;
+        // Platte tegel krijgt een kleiner vlak; icoon en ronding schalen mee,
+        // zodat de twee maten dezelfde verhouding houden (52% en een derde).
+        var vlak = k.gekoppeld === 0 ? 34 : 44;
+        return `<div style="width:${vlak}px;height:${vlak}px;border-radius:${Math.round(vlak / 3)}px;background:${c[1]};display:flex;align-items:center;justify-content:center"><ha-icon icon="${k.icoon}" style="--mdc-icon-size:${Math.round(vlak * 0.52)}px;color:${c[0]}"></ha-icon></div>`;
       ]]]
     naam: |
       [[[
@@ -514,44 +561,68 @@ kamer_tegel:
         var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
         var k = L.find(function(x){ return x.slug === variables.slug; });
         if(!k) return '';
-        var t = (k.metingen || []).find(function(m){ return m.k === 'temp'; });
-        if(!t || t.w === null) return `<span style="font-size:17px;color:rgba(255,255,255,0.18)">–</span>`;
-        // Alleen de uitschieters kleuren; anders is de hele muur bont.
-        var c = t.score >= 2 ? '#ef4444' : (t.score === 1 ? '#f59e0b' : 'white');
-        var v = t.w.toFixed(1).replace('.', ',');
-        return `<span style="font-size:26px;font-weight:600;letter-spacing:-0.5px;color:${c}${t.oud ? ';opacity:0.45' : ''}">${v}<span style="font-size:16px;opacity:0.5">°</span></span>`;
-      ]]]
-    strip: |
-      [[[
-        var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
-        var k = L.find(function(x){ return x.slug === variables.slug; });
-        if(!k) return '';
-        // Vier vaste kolommen, ook als er niets gemeten wordt. Een leeg vakje
-        // met een streepje is informatie: daar hangt geen sensor. Zouden de
-        // vakjes wegvallen, dan zou elke tegel er anders uitzien en zou je een
-        // ontbrekende meting aanzien voor een kamer zonder problemen.
-        var orde = ['rv', 'co2', 'pm25', 'lux'];
-        var cellen = orde.map(function(key){
-          var m = (k.metingen || []).find(function(x){ return x.k === key; }) || {w: null, label: key, score: -1};
-          var c = m.score >= 2 ? '#ef4444'
-                : (m.score === 1 ? '#f59e0b'
-                : (m.w === null ? 'rgba(255,255,255,0.20)' : 'rgba(255,255,255,0.88)'));
-          var v = '–';
-          if(m.w !== null){
-            if(key === 'rv') v = Math.round(m.w) + '%';
-            else if(key === 'co2') v = Math.round(m.w);
-            else if(key === 'lux') v = Math.round(m.w) + ' lx';
-            else v = (Math.round(m.w * 10) / 10).toString().replace('.', ',');
-          }
-          return `<div style="text-align:center;${m.oud ? 'opacity:0.45' : ''}"><div style="font-size:14px;font-weight:600;color:${c};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v}</div><div style="font-size:9.5px;letter-spacing:0.6px;text-transform:uppercase;color:rgba(255,255,255,0.36);margin-top:2px">${m.label}</div></div>`;
-        }).join('');
-        return `<div style="display:grid;grid-template-columns:repeat(4,1fr);width:100%">${cellen}</div>`;
+        var stil = 'rgba(255,255,255,0.20)';
+        var grijs = 'rgba(255,255,255,0.45)';
+        function ic(naam, kleur, maat){
+          return `<ha-icon icon="${naam}" style="--mdc-icon-size:${maat}px;vertical-align:-3px;color:${kleur}"></ha-icon> `;
+        }
+        // Beweging en contacten in tekstvorm; de volle tegel zet ze naast
+        // elkaar in de voetregel, de platte tegel onder elkaar hier rechts.
+        var b = k.beweging || {};
+        var bew;
+        if(!b.gemeten) bew = ic('mdi:motion-sensor-off', stil, 13) + `<span style="color:${stil}">geen melder</span>`;
+        else if(b.actief) bew = ic('mdi:motion-sensor', '#4ade80', 13) + `<span style="color:#4ade80">nu aanwezig</span>`;
+        else {
+          var mi = b.minuten;
+          var t = mi === null ? 'onbekend'
+                : (mi < 1 ? 'net nog'
+                : (mi < 60 ? mi + ' min' : (mi < 1440 ? Math.round(mi / 60) + ' uur' : Math.round(mi / 1440) + ' dagen')));
+          bew = ic('mdi:motion-sensor', grijs, 13) + `<span style="color:${grijs}">${t}</span>`;
+        }
+        var ct = k.contacten || {};
+        var con;
+        if(!ct.gemeten) con = `<span style="color:${stil}">geen contact</span>`;
+        else if(ct.open === 0) con = `<span style="color:${grijs}">alles dicht</span>`;
+        else con = `<span style="color:#38bdf8">${ct.open} open</span> ` + ic('mdi:window-open-variant', '#38bdf8', 13);
+        if(k.gekoppeld === 0){
+          return `<div style="font-size:11.5px;line-height:1.55;white-space:nowrap">${bew}<br>${con}</div>`;
+        }
+        var t2 = (k.metingen || []).find(function(m){ return m.k === 'temp'; });
+        var kop;
+        if(!t2 || t2.w === null) kop = `<span style="font-size:17px;color:rgba(255,255,255,0.18)">–</span>`;
+        else {
+          // Alleen de uitschieters kleuren; anders is de hele muur bont.
+          var c = t2.score >= 2 ? '#ef4444' : (t2.score === 1 ? '#f59e0b' : 'white');
+          var v = t2.w.toFixed(1).replace('.', ',');
+          kop = `<span style="font-size:24px;font-weight:600;letter-spacing:-0.5px;color:${c}${t2.oud ? ';opacity:0.45' : ''}">${v}<span style="font-size:15px;opacity:0.5">°</span></span>`;
+        }
+        // Alleen wat er écht gemeten wordt, in de volgorde waarin het ertoe
+        // doet: lucht voor comfort. Zit er niets bij, dan blijft deze regel
+        // helemaal weg in plaats van vier streepjes te tonen.
+        var orde = ['co2', 'pm25', 'rv', 'lux'];
+        var delen = orde.map(function(key){
+          var m = (k.metingen || []).find(function(x){ return x.k === key; });
+          if(!m || m.w === null) return '';
+          var c2 = m.score >= 2 ? '#ef4444' : (m.score === 1 ? '#f59e0b' : 'rgba(255,255,255,0.72)');
+          var v2, lab;
+          if(key === 'rv'){ v2 = Math.round(m.w) + '%'; lab = 'RV'; }
+          else if(key === 'co2'){ v2 = Math.round(m.w); lab = 'CO₂'; }
+          else if(key === 'lux'){ v2 = Math.round(m.w); lab = 'lx'; }
+          else { v2 = (Math.round(m.w * 10) / 10).toString().replace('.', ','); lab = 'PM2.5'; }
+          return `<span style="color:${c2}${m.oud ? ';opacity:0.45' : ''}">${v2}</span><span style="color:rgba(255,255,255,0.34)"> ${lab}</span>`;
+        }).filter(function(x){ return x !== ''; });
+        var strip = delen.length
+          ? `<div style="font-size:11.5px;margin-top:1px;white-space:nowrap">${delen.join('<span style="color:rgba(255,255,255,0.18)"> · </span>')}</div>`
+          : '';
+        return kop + strip;
       ]]]
     voet: |
       [[[
         var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
         var k = L.find(function(x){ return x.slug === variables.slug; });
-        if(!k) return '';
+        // Bij een platte tegel staan beweging en contacten al rechtsboven; de
+        // stijlen hierboven vouwen deze rij dan tot nul pixels dicht.
+        if(!k || k.gekoppeld === 0) return '';
         var stil = 'rgba(255,255,255,0.20)';
         var grijs = 'rgba(255,255,255,0.45)';
         function ic(naam, kleur){
@@ -598,9 +669,18 @@ kamer_samenvatting:
       kop:
         - grid-area: kop
         - justify-self: start
+        - width: 100%
+        - text-align: left
       lijst:
         - grid-area: lijst
         - justify-self: start
+        # Zonder deze breedte krijgt het gebied de breedte van zijn inhoud in
+        # plaats van die van de kaart, en lopen de chips dus door de rand heen
+        # in plaats van af te breken - op het paneel stond er letterlijk
+        # "Slaapkamer Em" met de rest onzichtbaar. Dit is niet hetzelfde
+        # probleem als `column_span`: dat bepaalt hoe breed de kaart is, dit
+        # bepaalt of de inhoud die breedte ook gebruikt.
+        - width: 100%
         - text-align: left
   custom_fields:
     kop: |
@@ -710,6 +790,123 @@ kamer_detail:
             + `<div style="font-size:14px;font-weight:600;color:${c}${x.oud ? ';opacity:0.45' : ''}">${v}${x.oud ? ' ·&nbsp;oud' : ''}</div>`
             + `<div style="font-size:11px;color:rgba(255,255,255,0.30);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right">${x.id}</div>`
             + `</div>`;
+        }).join('');
+        // De tegel toont sinds 2026-08-03 alleen de metingen die er zijn. Wat
+        // er niet is, is daarmee niet onbelangrijk geworden - het staat hier,
+        // op de plek waar je die vraag ook echt stelt. Zonder deze regel zou
+        // "geen CO2 in de slaapkamer" nergens meer op het dashboard staan.
+        var mist = (k.metingen || []).filter(function(x){ return x.w === null; })
+                                     .map(function(x){ return x.label; });
+        var staart = mist.length
+          ? `<div style="font-size:11.5px;color:rgba(255,255,255,0.28);padding:7px 0 0 0;border-top:1px solid rgba(255,255,255,0.05)">niet gemeten: ${mist.join(', ')}</div>`
+          : '';
+        return `<div style="width:100%">${r}${staart}</div>`;
+      ]]]
+
+#############################################################################
+## Kamers - onderhoud: wat hangt er wél, maar is nergens gekoppeld
+#############################################################################
+# De keerzijde van aanwijzen in plaats van zoeken: een nieuwe sensor verschijnt
+# niet vanzelf op een tegel. `sensor.kamers_niet_gekoppeld` loopt daarom één
+# keer per uur de areas af (zie packages/9 - Other/Kamers.yaml).
+#
+# Dat is onderhoud en geen overzicht, dus het staat onderaan de weergave als
+# één regel die een pop-up opent. Uitgeklapt was het een blok van tien regels
+# onder een muur die juist korter moest.
+#
+# Bewust button-card en geen markdown: een markdown-kaart is een
+# `render_template`-abonnement op de server, en deze staat permanent (verborgen)
+# in de weergave. Dezelfde afweging als bij `kamer_detail` hierboven.
+
+# --- De regel die de pop-up opent ------------------------------------------
+kamer_onderhoud_knop:
+  entity: sensor.kamers_niet_gekoppeld
+  show_icon: false
+  show_name: false
+  show_state: false
+  styles:
+    card:
+      - background: rgba(255,255,255,0.03)
+      - border: 1px solid rgba(255,255,255,0.06)
+      - border-radius: 14px
+      - padding: 11px 16px
+    grid:
+      - grid-template-areas: '"regel"'
+    custom_fields:
+      regel:
+        - grid-area: regel
+        - width: 100%
+        - text-align: left
+  custom_fields:
+    regel: |
+      [[[
+        var s = states['sensor.kamers_niet_gekoppeld'];
+        var n = s ? ((s.attributes.sensoren || []).length) : 0;
+        var grijs = 'rgba(255,255,255,0.45)';
+        function ic(naam, kleur){
+          return `<ha-icon icon="${naam}" style="--mdc-icon-size:15px;vertical-align:-3px;color:${kleur}"></ha-icon> `;
+        }
+        if(!s) return `<span style="font-size:13px;color:#f59e0b">${ic('mdi:help-circle-outline','#f59e0b')}sensor.kamers_niet_gekoppeld bestaat nog niet</span>`;
+        if(n === 0) return `<span style="font-size:13px;color:${grijs}">${ic('mdi:check', '#4ade80')}Alle meetsensoren zijn gekoppeld</span>`;
+        return `<div style="display:grid;grid-template-columns:1fr auto;align-items:center;font-size:13px">`
+          + `<div style="text-align:left;color:${grijs}">${ic('mdi:link-variant-off', grijs)}${n} sensor${n > 1 ? 'en' : ''} niet gekoppeld</div>`
+          + `<div style="text-align:right;color:rgba(255,255,255,0.28)">bekijken ›</div></div>`;
+      ]]]
+
+# --- De lijst in de pop-up --------------------------------------------------
+kamer_onderhoud_lijst:
+  entity: sensor.kamers_niet_gekoppeld
+  show_icon: false
+  show_name: false
+  show_state: false
+  tap_action:
+    action: none
+  styles:
+    card:
+      - background: rgba(255,255,255,0.04)
+      - border: 1px solid rgba(255,255,255,0.07)
+      - border-radius: 16px
+      - padding: 16px 18px
+    grid:
+      - grid-template-areas: '"uitleg" "lijst"'
+      - row-gap: 10px
+    custom_fields:
+      uitleg:
+        - grid-area: uitleg
+        - width: 100%
+        - text-align: left
+      lijst:
+        - grid-area: lijst
+        - width: 100%
+        - text-align: left
+  custom_fields:
+    uitleg: |
+      [[[
+        var s = states['sensor.kamers_niet_gekoppeld'];
+        var L = s ? (s.attributes.sensoren || []) : [];
+        if(!L.length) return `<div style="font-size:14px;color:#4ade80">Alle meetsensoren zijn gekoppeld.</div>`;
+        return `<div style="font-size:13px;color:rgba(255,255,255,0.50);line-height:1.55">`
+          + `Deze hangen in een ruimte van dit overzicht maar leveren er geen waarde voor. `
+          + `Bewust? Zet ze in <code>negeer</code>. Anders in <code>klimaat</code> of <code>voorkeur</code>, `
+          + `in <code>custom_templates/kamers.jinja</code>.</div>`;
+      ]]]
+    lijst: |
+      [[[
+        var s = states['sensor.kamers_niet_gekoppeld'];
+        var L = s ? (s.attributes.sensoren || []) : [];
+        if(!L.length) return '';
+        var per = {};
+        L.forEach(function(x){
+          if(!per[x.kamer]) per[x.kamer] = [];
+          per[x.kamer].push(x.id);
+        });
+        var r = Object.keys(per).sort().map(function(kamer){
+          var ids = per[kamer].sort().map(function(id){
+            return `<div style="font-family:monospace;font-size:11px;color:rgba(255,255,255,0.32);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${id}</div>`;
+          }).join('');
+          return `<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,0.05)">`
+            + `<div style="font-size:13px;font-weight:600;color:white;margin-bottom:3px">${kamer} <span style="font-weight:400;color:rgba(255,255,255,0.30)">· ${per[kamer].length}</span></div>`
+            + `${ids}</div>`;
         }).join('');
         return `<div style="width:100%">${r}</div>`;
       ]]]
