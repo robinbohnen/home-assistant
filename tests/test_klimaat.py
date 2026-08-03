@@ -188,7 +188,9 @@ scenario("zomernacht, buiten flink koeler", "21:30",
             "sensor.knmi_temperatuur": "19",
             "sensor.kantoor_kantoor_temperatuur_temperatuur": "25"})
 check("nachtspui kantoor", "kantoor_rechts", "kier")
-check("kind slaapt op hittedag -> kier", "slaapkamer_logan", "kier")
+# Een kinderkamer gaat met bedtijd helemaal omlaag en blijft dat, ook op een
+# hittedag: donker weegt hier zwaarder dan die paar graden.
+check("kind slaapt op hittedag -> toch dicht", "slaapkamer_logan", "dicht")
 
 scenario("zomernacht binnen stille uren, warme kamer", "23:30",
          **{"input_select.klimaat_regime": "Koelen",
@@ -196,9 +198,13 @@ scenario("zomernacht binnen stille uren, warme kamer", "23:30",
             "sun.sun.elevation": -20.0,
             "sensor.knmi_temperatuur": "19",
             "sensor.slaapkamer_slaapkamer_temperatuur_temperatuur": "25",
+            "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur": "25",
             "sensor.badkamer_badkamer_temperatuur_temperatuur": "20"})
 check("stille uren: spuien mag nog wel", "slaapkamer", "kier", True)
 check("stille uren: koele kamer blijft met rust", "badkamer", "rust", False)
+# De spui-kier geldt niet in een kinderkamer: die is met bedtijd dichtgegaan en
+# gaat er 's nachts niet alsnog een stukje uit.
+check("kinderkamer spuit niet, blijft dicht", "slaapkamer_logan", "rust", False)
 
 scenario("nacht, nachtspui uit", "23:30",
          **{"input_select.klimaat_regime": "Koelen",

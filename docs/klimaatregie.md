@@ -152,10 +152,14 @@ De beslistabel, van hoog naar laag:
    volgende ochtend niet alsnog opent. Drukt niemand, dan gaat het slot er om
    10:00 alsnog af. Ventileren
    blijft ondertussen gewoon toegestaan: de spui-kier valt niet onder deze
-   rem, alleen omhóóg gaan.
-2. **Slaapvenster kinderkamer** (vanaf 19:00): dicht. Op een hittedag een kier,
-   en dat staat de hele dag vast, zodat het niet midden in de nacht alsnog van
-   gedachten verandert.
+   rem, alleen omhóóg gaan. Behalve in een kinderkamer: die blijft tijdens het
+   slaapvenster helemaal omlaag, zie punt 2.
+2. **Slaapvenster kinderkamer** (vanaf 19:00): helemaal dicht, zonder
+   uitzonderingen. Er stond hier een kier op hittedagen, maar in juni is het om
+   19:00 nog volop licht en daar blijven ze wakker van; donker weegt hier
+   zwaarder dan die paar graden. Dat geldt ook 's nachts: de spui-kier van punt
+   1 slaat een kinderkamer over. Koelen gebeurt in deze kamers dus overdag
+   (vóór bedtijd) en met de airco.
 3. **Nacht**: dicht, of een kier bij nachtspui in het koelregime.
 4. **Overdag per regime**:
    - *Koelen*: zon op de gevel → dicht. Niemand thuis op een warme dag → dicht.

@@ -288,9 +288,13 @@
 
 {%- set ns = namespace(a='open', r='') -%}
 
-{#- 1. Stille uren: alleen een kier om te spuien mag nog, verder niets. -#}
+{#- 1. Stille uren: alleen een kier om te spuien mag nog, verder niets.
+      Behalve in een kinderkamer: die blijft tijdens het slaapvenster helemaal
+      omlaag, ook op een warme nacht. Zonder die uitzondering ging het rolluik
+      dat om 19:00 dicht was om 22:00 alsnog een kier open. -#}
 {%- if stil_nu -%}
-  {%- if regime == 'koelen' and nachtspui and spui_ok and heet -%}
+  {%- if regime == 'koelen' and nachtspui and spui_ok and heet
+         and not kind_slaapt -%}
     {%- set ns.a = 'kier' -%}
     {%- set ns.r = 'warme nacht: kier om koelte binnen te laten (' ~ b_txt ~ ' binnen, ' ~ u_txt ~ ' buiten)' -%}
   {%- elif nog_slapen -%}
@@ -301,17 +305,14 @@
     {%- set ns.r = 'stille uren (' ~ STIL_VAN ~ '-' ~ STIL_TOT ~ '), niet bewegen' -%}
   {%- endif -%}
 
-{#- 2. Kinderkamer in het slaapvenster: donker, en op hittedagen op een kier.
-      De hittedag staat de hele dag vast, dus dit wisselt niet midden in de
-      nacht van gedachten. -#}
+{#- 2. Kinderkamer in het slaapvenster: helemaal dicht, zonder uitzonderingen.
+      Er stond hier een kier op hittedagen, maar in juni is het om 19:00 nog
+      volop licht en daar blijven ze wakker van; donker weegt hier zwaarder dan
+      die paar graden. Koelen gebeurt in deze kamers dus overdag (voor bedtijd)
+      en met de airco, niet met een kier tijdens het slapen. -#}
 {%- elif kind_slaapt -%}
-  {%- if regime == 'koelen' and hittedag -%}
-    {%- set ns.a = 'kier' -%}
-    {%- set ns.r = 'hittedag: kier tijdens het slapen' -%}
-  {%- else -%}
-    {%- set ns.a = 'dicht' -%}
-    {%- set ns.r = 'slaapvenster kinderkamer' -%}
-  {%- endif -%}
+  {%- set ns.a = 'dicht' -%}
+  {%- set ns.r = 'slaapvenster kinderkamer' -%}
 
 {#- 3. Nacht. -#}
 {%- elif nacht -%}
