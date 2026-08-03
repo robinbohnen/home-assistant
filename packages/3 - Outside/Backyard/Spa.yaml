@@ -248,17 +248,20 @@ backyard_spa_package:
             seconds: 0
           above: 0
           id: no_overcapacity
-        # SlimHuys bepaalt zelf of de prijs negatief is, per kwartier. Zelf op
-        # < 0 rekenen ging op het uurgemiddelde en miste dus losse kwartieren.
-        - trigger: state
-          entity_id:
-            - binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu
-          to: "on"
+        # Op het TOTAALtarief, niet op binary_sensor ..._negatieve_prijs_nu:
+        # die kijkt naar de kale marktprijs, terwijl we bij verbruik het hele
+        # tarief betalen (markt + inkoop + energiebelasting + btw). Bij een
+        # licht negatieve marktprijs kost opwarmen dus nog gewoon geld. Pas
+        # onder een negatief totaaltarief krijgen we betaald om te stoken.
+        # `huidige_prijs` volgt de kwartieren, dus losse kwartieren blijven
+        # meetellen - daar was de binary sensor eerder voor gekozen.
+        - trigger: numeric_state
+          entity_id: sensor.slimhuys_zonneplan_huidige_prijs
+          below: 0
           id: negative_price
-        - trigger: state
-          entity_id:
-            - binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu
-          to: "off"
+        - trigger: numeric_state
+          entity_id: sensor.slimhuys_zonneplan_huidige_prijs
+          above: 0
           id: positive_price
       conditions:
         - condition: not

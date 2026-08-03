@@ -54,9 +54,14 @@ battery_package:
           entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
           below: input_number.batterij_min_soc
           id: soc_leeg
-        - trigger: state
-          entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu
-          to: "on"
+        # Op het TOTAALtarief, niet op binary_sensor ..._negatieve_prijs_nu:
+        # die kijkt naar de kale marktprijs, terwijl teruglevering het hele
+        # tarief oplevert (markt + inkoop + energiebelasting + btw). Bij een
+        # licht negatieve marktprijs krijgen we nog gewoon geld terug; pas
+        # onder nul totaal kost ontladen ons geld.
+        - trigger: numeric_state
+          entity_id: sensor.slimhuys_zonneplan_huidige_prijs
+          below: 0
           id: prijs_negatief
         - trigger: state
           entity_id: sensor.slimhuys_zonneplan_tariefniveau_nu
@@ -142,12 +147,14 @@ battery_package:
                 - condition: numeric_state
                   entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
                   above: input_number.batterij_min_soc
-                # Bij een negatieve prijs kost teruglevering geld. "Hoog tarief"
-                # en "negatieve prijs" kunnen tegelijk voorkomen doordat het
-                # niveau over de dag wordt bepaald en de prijs per kwartier.
-                - condition: state
-                  entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu
-                  state: "off"
+                # Bij een negatief totaaltarief kost teruglevering geld. "Hoog
+                # tarief" en "negatieve prijs" kunnen tegelijk voorkomen doordat
+                # het niveau over de dag wordt bepaald en de prijs per kwartier.
+                # Valt de prijssensor weg, dan ontladen we niet - net als eerder
+                # met de binary sensor.
+                - condition: numeric_state
+                  entity_id: sensor.slimhuys_zonneplan_huidige_prijs
+                  above: 0
               sequence:
                 - action: select.select_option
                   metadata: {}
