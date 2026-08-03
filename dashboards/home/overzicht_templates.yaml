@@ -621,6 +621,10 @@ kamer_samenvatting:
       [[[
         var s = states['sensor.kamers'];
         var L = (s && s.attributes.kamers) || [];
+        // Zonder deze regel stond hier "alles binnen de grenzen" terwijl de kop
+        // meldde dat er nog niets gemeten was - twee tegenstrijdige zinnen boven
+        // elkaar, precies op het moment dat je uitleg nodig hebt.
+        if(!L.length) return `<span style="font-size:13px;color:rgba(255,255,255,0.45)">Bestaat <code>sensor.kamers</code> al? Nieuwe packages en wijzigingen in <code>kamers.jinja</code> laden pas na een volledige herstart.</span>`;
         var slecht = L.filter(function(k){ return k.score >= 1; })
                       .sort(function(a, b){ return b.score - a.score; });
         if(!slecht.length) return `<span style="font-size:13px;color:rgba(255,255,255,0.45)">Alle gemeten ruimtes zitten binnen hun grenzen.</span>`;
