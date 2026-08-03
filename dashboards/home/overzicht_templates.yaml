@@ -634,3 +634,82 @@ kamer_samenvatting:
         }).join('');
         return `<div style="display:block">${r}</div>`;
       ]]]
+
+# --- Detailkaart in de pop-up ----------------------------------------------
+# Vervangt sinds 2026-08-03 de markdown-kaart die hier stond. Reden is niet de
+# opmaak maar de kosten: een markdown-kaart is een `render_template`-abonnement
+# op de server, en met zeventien pop-ups in één weergave zijn dat zeventien
+# abonnementen die állemaal opnieuw renderen zodra `sensor.kamers` verandert -
+# elke minuut. Een button-card rekent in de browser en leest dezelfde entiteit
+# die de tegels toch al lezen.
+#
+# Deze kaart is de enige plek waar je ziet WELKE entiteit een waarde geleverd
+# heeft. Klopt een cijfer niet, dan hoort de juiste sensor als `klimaat` of
+# `voorkeur` in de tabel in custom_templates/kamers.jinja.
+kamer_detail:
+  entity: sensor.kamers
+  show_icon: false
+  show_name: false
+  show_state: false
+  tap_action:
+    action: none
+  variables:
+    slug: ""
+  styles:
+    card:
+      - background: rgba(255,255,255,0.04)
+      - border: 1px solid rgba(255,255,255,0.07)
+      - border-radius: 16px
+      - padding: 16px 18px
+    grid:
+      - grid-template-areas: '"kop" "bronnen"'
+      - row-gap: 10px
+    custom_fields:
+      kop:
+        - grid-area: kop
+        - justify-self: start
+        - text-align: left
+      bronnen:
+        - grid-area: bronnen
+        - justify-self: start
+        - width: 100%
+        - text-align: left
+  custom_fields:
+    kop: |
+      [[[
+        var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
+        var k = L.find(function(x){ return x.slug === variables.slug; });
+        if(!k) return `<span style="font-size:14px;color:#f59e0b">sensor.kamers heeft nog geen waarde</span>`;
+        var C = {'goed':'#4ade80','let op':'#f59e0b','slecht':'#ef4444'};
+        var c = C[k.status] || 'rgba(255,255,255,0.45)';
+        var r = `<div style="font-size:16px;font-weight:600;color:${c}">${k.status} — ${k.reden}</div>`;
+        if(k.advies) r += `<div style="font-size:13px;color:rgba(255,255,255,0.55);margin-top:3px">${k.advies}</div>`;
+        return r;
+      ]]]
+    bronnen: |
+      [[[
+        var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
+        var k = L.find(function(x){ return x.slug === variables.slug; });
+        if(!k) return '';
+        var m = (k.metingen || []).filter(function(x){ return x.w !== null; });
+        if(!m.length){
+          // Geen cijfer heeft twee heel verschillende oorzaken en die moeten
+          // hier uit elkaar te houden zijn, anders ga je de verkeerde kant op
+          // zoeken.
+          var t = k.gekoppeld === 0
+            ? 'Aan deze ruimte is geen sensor gekoppeld. Wijs er één aan bij <code>klimaat</code> in <code>custom_templates/kamers.jinja</code>.'
+            : 'De aangewezen sensor geeft geen waarde door — batterij of verbinding.';
+          return `<div style="font-size:13px;color:rgba(255,255,255,0.45);line-height:1.5">${t}</div>`;
+        }
+        var r = m.map(function(x){
+          var C = {2:'#ef4444', 1:'#f59e0b'};
+          var c = C[x.score] || 'rgba(255,255,255,0.88)';
+          var v = (Math.round(x.w * 10) / 10).toString().replace('.', ',') + x.eenheid;
+          return `<div style="display:grid;grid-template-columns:56px auto 1fr;align-items:baseline;column-gap:10px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.05)">`
+            + `<div style="font-size:10px;letter-spacing:0.6px;text-transform:uppercase;color:rgba(255,255,255,0.36)">${x.label}</div>`
+            + `<div style="font-size:14px;font-weight:600;color:${c}${x.oud ? ';opacity:0.45' : ''}">${v}${x.oud ? ' ·&nbsp;oud' : ''}</div>`
+            + `<div style="font-size:11px;color:rgba(255,255,255,0.30);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right">${x.id}</div>`
+            + `</div>`;
+        }).join('');
+        return `<div style="width:100%">${r}</div>`;
+      ]]]

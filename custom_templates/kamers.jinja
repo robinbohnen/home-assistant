@@ -3,9 +3,10 @@
   KAMERSTATUS - hoe staat het ervoor in elke ruimte
 ==============================================================================
 
-  Dit bestand is de enige plek waar staat WANNEER een kamer goed is. De sensor
-  in `packages/9 - Other/Kamers.yaml` doet alleen het meten en het uitserveren;
-  `dashboards/home/kamers.yaml` tekent alleen wat hier uit komt.
+  Dit bestand is de enige plek waar staat WELKE sensor een kamer meet en
+  WANNEER die kamer goed is. De sensor in `packages/9 - Other/Kamers.yaml` doet
+  alleen het meten en het uitserveren; `dashboards/home/kamers.yaml` tekent
+  alleen wat hier uit komt.
 
   Gebruik:
 
@@ -16,37 +17,54 @@
   Assistant (custom_templates worden alleen bij het opstarten ingelezen).
 
   ---------------------------------------------------------------------------
-  CONTROLEER DIT EERST: de area-namen in de tabel hieronder
+  WAAROM DE MEETWAARDEN AANGEWEZEN WORDEN EN NIET GEZOCHT
   ---------------------------------------------------------------------------
-  De metingen worden niet met de hand gekoppeld maar opgehaald met
-  `area_entities()`, gefilterd op device_class. Dat betekent dat een nieuwe
-  sensor vanzelf in het overzicht verschijnt zodra hij in de juiste area zit -
-  maar ook dat een kamer leeg blijft als de area anders heet dan hier staat.
-  Blijft een tegel op "geen meting" staan terwijl er wel sensoren hangen, kijk
-  dan eerst naar `area` en pas daarna naar de rest.
+  Tot 3 augustus 2026 zocht dit bestand zijn eigen sensoren: alles in de area
+  met de juiste device_class telde mee, met een uitsluitlijst van veertig
+  patronen om de rommel eruit te houden. Dat is twee keer op één dag misgegaan:
 
-  Per kamer kun je bijsturen zonder de automatiek te verlaten:
-    klimaat   ÉÉN entiteit van het apparaat dat deze kamer echt meet, meestal
-              de thermometer. Alles wat verder aan datzelfde apparaat hangt
+    - zigbee2mqtt geeft vrijwel elk apparaat een `device_temperature` (de
+      printplaat). Het halve huis stond op 27 tot 40 graden.
+    - de achtertuin heeft geen thermometer, dus viel hij terug op het enige
+      klimaatapparaat in die area: `climate.intex_purespa`. De tegel toonde de
+      watertemperatuur van de spa als buitentemperatuur.
+
+  De oude opzet verdedigde zichzelf met "een sensor die je vergeet toe te
+  voegen is een gat dat je niet ziet". Dat argument klopt niet: automatisch
+  koppelen levert geen zichtbaar gat op maar een ONZICHTBAAR FOUT GETAL, en dat
+  is erger - een lege tegel valt op, 38° in de tuin geloof je gewoon. En een
+  uitsluitlijst is per definitie onbegrensd: elk nieuw apparaat in huis is een
+  nieuwe kandidaat voor een fout cijfer, en de lijst matchte op substring, dus
+  hij faalde twee kanten op ('oven' sloot ook alles met "boven" uit).
+
+  Daarom geldt nu: EEN KAMER MEET ALLEEN WAT HIER IS AANGEWEZEN. Staat er niets
+  aangewezen, dan toont de tegel geen cijfer en meldt hij dat er niets gekoppeld
+  is. Dat gat blijft zichtbaar - de samenvattingsbalk bovenaan het dashboard
+  telt de ruimtes zonder sensor apart op.
+
+  Beweging, ramen en deuren gaan wél nog per area. Daar is een misser geen fout
+  getal maar hoogstens een extra regel, en een vergeten deurcontact is juist wat
+  je wil zien. Hoort er toch iets niet bij (een deurcontact op de koelkast),
+  zet het dan in `negeer` bij die kamer.
+
+  ---------------------------------------------------------------------------
+  PER KAMER INVULLEN
+  ---------------------------------------------------------------------------
+    klimaat   ÉÉN entiteit van het apparaat dat deze kamer meet, meestal de
+              thermometer. Alles wat verder aan datzelfde APPARAAT hangt
               (luchtvochtigheid, en bij de woonkamer-multisensor ook CO2,
-              fijnstof en lux) wordt via `device_entities()` automatisch
-              meegenomen en gaat vóór de rest van de ruimte. Dit is het veld dat
-              je in de praktijk invult - zie NEGEER_PATRONEN verderop voor
-              waarom het nodig is.
-    voorkeur  losse entiteiten die zelfs vóór `klimaat` gaan. Alleen nodig als
-              één kamer twee apparaten heeft en je per meetwaarde wil kiezen.
-    extra     entiteiten die buiten de area vallen maar er wel bij horen.
-    negeer    entiteiten die in de area zitten maar niet meetellen.
+              fijnstof en lux) komt via `device_entities()` mee. Zo wijs je per
+              kamer één ding aan in plaats van één per meetwaarde.
+    voorkeur  losse entiteiten die vóór `klimaat` gaan. Alleen nodig als één
+              kamer twee apparaten heeft en je per meetwaarde wil kiezen.
+    extra     losse entiteiten die erbij horen maar niet aan dat apparaat
+              hangen. De achtertuin gebruikt dit voor de KNMI-buitentemperatuur.
+    negeer    entiteiten die niet meetellen - werkt op de apparaatlijst én op de
+              beweging/contacten uit de area.
 
-  Ontbreekt `klimaat` bij een kamer, dan staat daar (voor zover bekend) geen
-  eigen thermometer en valt de tegel terug op wat de area oplevert. Dat is
-  bewust: liever een streepje dan het cijfer van een willekeurig apparaat.
-
-  Waarom niet gewoon een vaste tabel met entity-ids, zoals ZONES in
-  klimaat.jinja? Omdat die tabel over ACTIES gaat (welke cover stuur ik aan) en
-  deze over WAARNEMINGEN. Bij een actie is een expliciete koppeling precies wat
-  je wil; bij een waarneming is elke sensor die je vergeet toe te voegen een
-  gat dat je niet ziet - en dit overzicht bestaat juist om gaten te tonen.
+  Een `climate.`-entiteit mag in `voorkeur` of `extra` staan; dan wordt zijn
+  `current_temperature` gebruikt. Dat gebeurt alleen als je hem zelf opschrijft,
+  nooit als terugval - dat was precies de spa-bug.
 -#}
 
 {#- ========================== DE KAMERS ==================================== -#}
@@ -55,9 +73,17 @@
   naam        label op de tegel
   icoon       mdi-icoon
   verdieping  kop waaronder de tegel valt (bepaalt de kolom op het dashboard)
-  area        naam of id van de area in Home Assistant
+  area        naam of id van de area in HA (alleen nog voor beweging/contacten)
   soort       leef | slaap | nat | techniek | buiten, bepaalt de comfortgrenzen
   klimaat     één entiteit van het apparaat dat de kamer meet (optioneel)
+
+  Keuken, entree, toilet, overloop, zolder en voortuin hebben geen thermometer;
+  die tonen daarom geen cijfer. De achtertuin ook niet, en die leest via `extra`
+  de KNMI-buitentemperatuur - het is echt de buitentemperatuur, alleen niet uit
+  deze tuin. Daar stond tot 2026-08-03 de watertemperatuur van de spa.
+
+  Let op: een entiteit die je in `voorkeur` of `extra` zet wordt op zijn
+  device_class ingedeeld. Heeft hij er geen, dan komt hij nergens terecht.
 -#}
 {%- set KAMERS = [
       {'slug': 'woonkamer', 'naam': 'Woonkamer', 'icoon': 'mdi:sofa-outline',
@@ -104,7 +130,8 @@
        'verdieping': 'Buiten', 'area': 'Schuur', 'soort': 'techniek',
        'klimaat': 'sensor.achtertuin_schuur_temperatuur_temperature'},
       {'slug': 'achtertuin', 'naam': 'Achtertuin', 'icoon': 'mdi:tree-outline',
-       'verdieping': 'Buiten', 'area': 'Achtertuin', 'soort': 'buiten'},
+       'verdieping': 'Buiten', 'area': 'Achtertuin', 'soort': 'buiten',
+       'extra': ['sensor.knmi_temperatuur']},
       {'slug': 'voortuin', 'naam': 'Voortuin', 'icoon': 'mdi:home-city-outline',
        'verdieping': 'Buiten', 'area': 'Voortuin', 'soort': 'buiten'},
     ] -%}
@@ -162,39 +189,20 @@
         'temp': none, 'rv': none, 'co2': none, 'pm25': none },
     } -%}
 
-{#- ==================== WAT GEEN KAMERMETING IS ========================== -#}
+{#- ==================== HET APPARAAT MEET ZICHZELF ======================== -#}
 {#-
-  Een device_class alleen is niet genoeg om te weten of een sensor de RUIMTE
-  meet of ZICHZELF. Op 3 augustus 2026 stond hierdoor het halve huis op 27 tot
-  40 graden terwijl het buiten 22 was: zigbee2mqtt geeft vrijwel elk apparaat
-  een `device_temperature` (de printplaat) met `device_class: temperature`, en
-  die won van de echte thermometer omdat de volgorde uit de registry
-  willekeurig is. Het verraad zat in de cijfers: elke tegel stond op een rond
-  getal, want die printplaattemperatuur is een integer.
+  De enige uitsluiting die overblijft, en dit is een GESLOTEN lijst: een
+  thermometer meldt naast de kamertemperatuur vaak ook zijn eigen printplaat, en
+  die hangt aan hetzelfde apparaat. Dit zijn de namen die HA en zigbee2mqtt
+  daarvoor gebruiken, niet een open lijst van "wat is geen kamer".
 
-  Alles wat hieronder in een entity-id voorkomt telt daarom niet mee als
-  kamermeting. Twee soorten:
-    - apparaten die hun eigen temperatuur melden (printplaat, chip, omvormer)
-    - apparaten die iets ánders dan de kamer meten (koelkast, aquarium,
-      espressomachine, jacuzzi)
-
-  Dit is dezelfde soort uitsluiting als bij de veelgebruikers op Overzicht
-  (filteren op naam, niet op device_class) en bij de batterijkaart. Staat er
-  straks een tegel op een raar getal, dan is dit de lijst die je uitbreidt.
-
-  Let op de volgorde in het geheel: `voorkeur` per kamer gaat hier nog vóór.
-  Weet je welke sensor het moet zijn, zet hem dan daar neer - dan maakt deze
-  lijst niet meer uit.
+  Hij geldt alleen voor entiteiten die via `device_entities()` binnenkomen. Wat
+  je zelf in `voorkeur` of `extra` opschrijft blijft altijd staan - jij hebt het
+  er neergezet.
 -#}
-{%- set NEGEER_PATRONEN = [
-      'apparaattemperatuur', 'apparaat_temperatuur', 'device_temperature',
-      'internal_temp', 'cpu', 'chip', 'board', 'processor',
-      'omvormer', 'inverter', 'thuisbatterij', 'accu', 'marstek', 'goodwe',
-      'sems', 'laadpaal', 'zonnepane',
-      'koelkast', 'vriezer', 'diepvries', 'oven', 'vaatwasser', 'wasmachine',
-      'droger', 'aquarium', 'jacuzzi', 'purespa', 'boiler',
-      'linea', 'micra', 'espresso', 'koffie',
-      'knmi', 'dauwpunt', 'gevoelstemperatuur', 'forecast',
+{%- set APPARAAT_EIGEN = [
+      'device_temperature', 'apparaattemperatuur', 'apparaat_temperatuur',
+      'internal_temp',
     ] -%}
 
 {#- Binaire sensoren worden op device_class herkend, met de naamgeving van dit
@@ -205,29 +213,33 @@
 
 {#- ============================== HELPERS ================================= -#}
 
-{#- Staat deze entiteit op de uitsluitlijst? Geeft '1' of leeg terug. -#}
-{%- macro _verdacht(e) -%}
+{#- Meet deze entiteit het apparaat in plaats van de kamer? '1' of leeg. -#}
+{%- macro _eigen(e) -%}
 {%- set ns = namespace(v='') -%}
-{%- for p in NEGEER_PATRONEN if p in e -%}{%- set ns.v = '1' -%}{%- endfor -%}
+{%- for p in APPARAAT_EIGEN if p in e -%}{%- set ns.v = '1' -%}{%- endfor -%}
 {{- ns.v -}}
 {%- endmacro -%}
 
-{#- Eerste bruikbare meting uit een lijst kandidaten. `unavailable` telt niet
-    als meting maar ook niet als storing: de volgende kandidaat mag het
-    overnemen. Zo valt een kamer met twee thermometers niet uit als er één
-    batterij leeg is. -#}
-{%- macro _meting(kandidaten, dc) -%}
-{%- set ns = namespace(id='', w=none) -%}
-{%- for e in kandidaten if ns.w is none -%}
-  {%- if e[:7] == 'sensor.' and state_attr(e, 'device_class') == dc -%}
-    {%- set w = states(e) | float(none) -%}
-    {%- if w is not none -%}{%- set ns.id = e -%}{%- set ns.w = w -%}{%- endif -%}
-  {%- elif e[:8] == 'climate.' and dc == 'temperature' -%}
-    {%- set w = state_attr(e, 'current_temperature') | float(none) -%}
-    {%- if w is not none -%}{%- set ns.id = e -%}{%- set ns.w = w -%}{%- endif -%}
-  {%- endif -%}
-{%- endfor -%}
-{{- {'id': ns.id, 'w': ns.w} | to_json -}}
+{#- Welke entiteiten meten deze kamer? Uitsluitend wat is aangewezen: het
+    apparaat achter `klimaat` levert al zijn meetwaarden mee, zodat één regel
+    per kamer genoeg is. Geeft een JSON-lijst terug. -#}
+{%- macro _gekoppeld(k) -%}
+{%- set negeer = k.get('negeer', []) -%}
+{%- set bron = k.get('klimaat') -%}
+{%- set dev = device_id(bron) if bron else none -%}
+{%- set a = namespace(lijst=[]) -%}
+{%- if dev -%}
+  {%- for e in device_entities(dev) if e not in negeer -%}
+    {%- if (e[:7] == 'sensor.' or e[:8] == 'climate.') and _eigen(e) | trim == '' -%}
+      {%- set a.lijst = a.lijst + [e] -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- elif bron -%}
+  {#- Geen apparaat gevonden (bijvoorbeeld een template-sensor zonder device):
+      dan gebruiken we de entiteit zelf. -#}
+  {%- set a.lijst = [bron] -%}
+{%- endif -%}
+{{- (k.get('voorkeur', []) + a.lijst + k.get('extra', [])) | to_json -}}
 {%- endmacro -%}
 
 {#- 0 goed, 1 let op, 2 slecht, -1 niet gemeten of niet beoordeeld. -#}
@@ -251,11 +263,15 @@
     reden      wat er aan de hand is, of wat er goed gaat
     advies     wat je eraan kunt doen (leeg als er niets te doen is)
     metingen   lijst met {k, label, w, eenheid, score, id, oud}
+    gekoppeld  hoeveel entiteiten er aan deze kamer zijn aangewezen. 0 betekent
+               "hier hangt niets", meer dan 0 zonder waarde betekent "de sensor
+               doet het niet" - twee heel verschillende problemen
     beweging   {gemeten, actief, minuten}
     contacten  {gemeten, open, totaal, namen}
 -#}
 {%- macro kamers_json() -%}
 {%- set buiten = states('sensor.knmi_temperatuur') | float(none) -%}
+{%- set DC_METING = METINGEN | map(attribute='dc') | list -%}
 {#- Leeftijden zijn na een herstart allemaal even oud, dus dan zegt "al 3 uur
     niets gehoord" niets. Pas als HA zelf lang genoeg draait mag een meting
     'oud' heten. Zelfde redenering als de tijdlijn op het overzicht. -#}
@@ -268,76 +284,69 @@
   {%- set soort = k.soort -%}
   {%- set negeer = k.get('negeer', []) -%}
 
-  {#- Kandidaten ophalen, in volgorde van vertrouwen:
-        1. voorkeur  met de hand aangewezen, wint altijd
-        2. klimaat    álles van het klimaatapparaat van deze kamer
-        3. area      de rest van de ruimte
-        4. climate   een airco kent zijn kamertemperatuur, bij gebrek aan beter
+  {%- set gekoppeld = _gekoppeld(k) | trim | from_json -%}
 
-      Stap 2 is de belangrijkste. Een slaapkamer heeft hier vijf sensoren met
-      device_class temperature, waarvan er vier de printplaat van een deur- of
-      raamcontact meten. Maar ze horen bij verschillende APPARATEN, en er is er
-      precies één dat de kamer meet. Door dat ene apparaat aan te wijzen en
-      `device_entities()` te laten uitzoeken wat er verder aan hangt, koppel je
-      per kamer één entiteit in plaats van één per meetwaarde - de
-      luchtvochtigheid van dezelfde melder komt vanzelf mee, en bij de
-      woonkamer-multisensor ook CO2, fijnstof en lux.
-      De uitsluitlijst geldt hier óók: een thermometer die daarnaast zijn eigen
-      printplaattemperatuur meldt, zou anders alsnog zichzelf kunnen kiezen. -#}
-  {%- set c = namespace(klim=[], sens=[], clim=[], bin=[]) -%}
-  {%- set bron = k.get('klimaat') -%}
-  {%- set bron_dev = device_id(bron) if bron else none -%}
-  {%- set bron_ids = device_entities(bron_dev) if bron_dev
-                     else ([bron] if bron else []) -%}
-  {%- for e in bron_ids if e[:7] == 'sensor.' and e not in negeer -%}
-    {%- if _verdacht(e) | trim == '' -%}{%- set c.klim = c.klim + [e] -%}{%- endif -%}
-  {%- endfor -%}
-
-  {%- for e in area_entities(k.area) if e not in negeer -%}
-    {#- De uitsluitlijst geldt alleen voor meetsensoren. Binaire sensoren gaan
-        er buiten om: een deurcontact op de koelkast is nog steeds een
-        deurcontact. -#}
+  {#- --- één ronde langs die entiteiten, eerste bruikbare waarde per soort ---
+      `unavailable` telt niet als waarde, dus een tweede thermometer in
+      `voorkeur` mag het overnemen als de eerste stuk is. -#}
+  {%- set g = namespace(dcs=[], bronnen=[]) -%}
+  {%- for e in gekoppeld -%}
     {%- if e[:7] == 'sensor.' -%}
-      {%- if _verdacht(e) | trim == '' -%}{%- set c.sens = c.sens + [e] -%}{%- endif -%}
-    {%- elif e[:8] == 'climate.' -%}{%- set c.clim = c.clim + [e] -%}
-    {%- elif e[:14] == 'binary_sensor.' -%}{%- set c.bin = c.bin + [e] -%}
+      {%- set dc = state_attr(e, 'device_class') -%}
+      {%- if dc in DC_METING and dc not in g.dcs -%}
+        {%- set w = states(e) | float(none) -%}
+        {%- if w is not none -%}
+          {%- set g.dcs = g.dcs + [dc] -%}
+          {%- set g.bronnen = g.bronnen + [{'dc': dc, 'id': e, 'w': w}] -%}
+        {%- endif -%}
+      {%- endif -%}
+    {%- elif e[:8] == 'climate.' and 'temperature' not in g.dcs -%}
+      {%- set w = state_attr(e, 'current_temperature') | float(none) -%}
+      {%- if w is not none -%}
+        {%- set g.dcs = g.dcs + ['temperature'] -%}
+        {%- set g.bronnen = g.bronnen + [{'dc': 'temperature', 'id': e, 'w': w}] -%}
+      {%- endif -%}
     {%- endif -%}
   {%- endfor -%}
-  {%- set kandidaten = k.get('voorkeur', []) + c.klim + c.sens
-                       + k.get('extra', []) + c.clim -%}
 
   {#- --- de meetwaarden --- -#}
   {%- set m = namespace(lijst=[], ergst=-1, prio=99, ergste_k='', ergste_w=none,
                         aantal=0, labels=[]) -%}
   {%- for meting in METINGEN -%}
-    {%- set v = _meting(kandidaten, meting.dc) | trim | from_json -%}
+    {%- set v = (g.bronnen | selectattr('dc', 'eq', meting.dc) | list | first)
+                | default(none) -%}
+    {%- set w = v.w if v else none -%}
+    {%- set id = v.id if v else '' -%}
     {%- set band = AFWIJKEND.get(soort, {}).get(meting.k, BASIS[meting.k]) -%}
-    {%- set score = _score(v.w, band) | int -%}
+    {%- set score = _score(w, band) | int -%}
     {#- Een sensor die uren stil staat is geen meting meer maar een aanname.
         Hij blijft staan (met een merkteken), want een leeg vakje zou suggereren
         dat er geen sensor hángt - en dat is een heel ander probleem. -#}
-    {%- set oud = mag_verouderen and v.id != ''
-                  and (now() - states[v.id].last_updated).total_seconds() > 7200 -%}
-    {%- if v.w is not none -%}
+    {%- set oud = mag_verouderen and id != ''
+                  and (now() - states[id].last_updated).total_seconds() > 7200 -%}
+    {%- if w is not none -%}
       {%- set m.aantal = m.aantal + 1 -%}
       {%- set m.labels = m.labels + [meting.label | lower] -%}
     {%- endif -%}
     {%- if score > m.ergst or (score == m.ergst and meting.prio < m.prio and score > 0) -%}
       {%- if score > 0 -%}
         {%- set m.ergst = score -%}{%- set m.prio = meting.prio -%}
-        {%- set m.ergste_k = meting.k -%}{%- set m.ergste_w = v.w -%}
+        {%- set m.ergste_k = meting.k -%}{%- set m.ergste_w = w -%}
       {%- elif m.ergst < 0 -%}
         {%- set m.ergst = score -%}
       {%- endif -%}
     {%- endif -%}
     {%- set m.lijst = m.lijst + [{'k': meting.k, 'label': meting.label,
-                                  'w': v.w, 'eenheid': meting.eenheid,
-                                  'score': score, 'id': v.id, 'oud': oud}] -%}
+                                  'w': w, 'eenheid': meting.eenheid,
+                                  'score': score, 'id': id, 'oud': oud}] -%}
   {%- endfor -%}
 
-  {#- --- beweging --- -#}
+  {#- --- beweging, ramen en deuren --- -#}
+  {#- Eén ronde langs de binaire sensoren van de area; twee lussen scheelden
+      niets in leesbaarheid en kostten wel een tweede `state_attr` per sensor. -#}
   {%- set bw = namespace(aantal=0, actief=false, jongste=none) -%}
-  {%- for e in c.bin -%}
+  {%- set ct = namespace(totaal=0, open=0, namen=[]) -%}
+  {%- for e in area_entities(k.area) if e[:14] == 'binary_sensor.' and e not in negeer -%}
     {%- set dc = state_attr(e, 'device_class') -%}
     {%- if dc in DC_BEWEGING or 'beweging' in e or e.endswith('_occupancy') -%}
       {%- set bw.aantal = bw.aantal + 1 -%}
@@ -346,14 +355,7 @@
       {%- if bw.jongste is none or leeftijd < bw.jongste -%}
         {%- set bw.jongste = leeftijd -%}
       {%- endif -%}
-    {%- endif -%}
-  {%- endfor -%}
-
-  {#- --- ramen en deuren --- -#}
-  {%- set ct = namespace(totaal=0, open=0, namen=[]) -%}
-  {%- for e in c.bin -%}
-    {%- set dc = state_attr(e, 'device_class') -%}
-    {%- if dc in DC_CONTACT or e.endswith('_contact') -%}
+    {%- elif dc in DC_CONTACT or e.endswith('_contact') -%}
       {%- set ct.totaal = ct.totaal + 1 -%}
       {%- if is_state(e, 'on') -%}
         {%- set ct.open = ct.open + 1 -%}
@@ -365,22 +367,23 @@
   {#- --- oordeel --- -#}
   {%- set status = {2: 'slecht', 1: 'let op', 0: 'goed'}.get(m.ergst, 'geen meting') -%}
   {%- set w = m.ergste_w -%}
-  {%- set g = (w | round(1) | string | replace('.0', '') | replace('.', ',')) if w is not none else '?' -%}
+  {%- set g_ = (w | round(1) | string | replace('.0', '') | replace('.', ',')) if w is not none else '?' -%}
 
   {%- set ns = namespace(reden='', advies='') -%}
   {%- if m.ergst < 0 -%}
-    {#- Niet beoordeeld is niet hetzelfde als niet gemeten. Buiten meten we wel
-        maar oordelen we niet, en een ruimte waar alleen een lichtsensor hangt
-        heeft ook geen oordeel - maar wel een sensor. Die twee door elkaar halen
-        zou het overzicht juist blind maken voor echte gaten. -#}
-    {%- if m.aantal == 0 -%}
-      {%- set ns.reden = 'geen sensoren in deze ruimte' -%}
+    {#- Drie heel verschillende dingen die alle drie "geen cijfer" opleveren, en
+        die uit elkaar houden is het halve nut van deze pagina:
+          niets aangewezen  -> hier hangt (voor ons) geen thermometer
+          wel aangewezen, geen waarde -> de sensor doet het niet
+          wel waardes, geen oordeel   -> buiten, of alleen een lichtsensor -#}
+    {%- if m.aantal == 0 and gekoppeld | count == 0 -%}
+      {%- set ns.reden = 'geen sensor gekoppeld' -%}
+    {%- elif m.aantal == 0 -%}
+      {%- set ns.reden = 'sensor geeft niets door' -%}
+      {%- set ns.advies = 'batterij of verbinding controleren' -%}
     {%- elif soort == 'buiten' -%}
       {%- set ns.reden = 'buitenwaarden, niet beoordeeld' -%}
     {%- else -%}
-      {#- Wél sensoren, maar niets dat een oordeel oplevert - meestal een
-          ruimte met alleen een lichtsensor in een bewegingsmelder. Noem op wat
-          er dan wél is, anders lijkt het op een storing. -#}
       {%- set ns.reden = 'alleen ' ~ (m.labels | join(' en ')) ~ ', geen thermometer' -%}
     {%- endif -%}
   {%- elif m.ergst == 0 -%}
@@ -392,12 +395,12 @@
     {%- set ns.advies = 'raam staat al open, even geduld' if ct.open > 0
                         else ('zet een raam open' if ct.totaal > 0 else 'ventileren') -%}
   {%- elif m.ergste_k == 'pm25' -%}
-    {%- set ns.reden = 'fijnstof ' ~ g ~ ' µg/m³' -%}
+    {%- set ns.reden = 'fijnstof ' ~ g_ ~ ' µg/m³' -%}
     {%- set ns.advies = 'luchtreiniger aan, ramen dicht' -%}
   {%- elif m.ergste_k == 'temp' -%}
     {%- set koud = m.lijst | selectattr('k', 'eq', 'temp') | map(attribute='w') | first -%}
     {%- set te_koud = koud is not none and koud < 18 -%}
-    {%- set ns.reden = ('koud, ' if te_koud else 'warm, ') ~ g ~ '°' -%}
+    {%- set ns.reden = ('koud, ' if te_koud else 'warm, ') ~ g_ ~ '°' -%}
     {%- if te_koud -%}
       {%- set ns.advies = 'verwarming of zonwering omhoog' -%}
     {%- elif buiten is not none and w is not none and buiten < (w - 1) -%}
@@ -407,7 +410,7 @@
     {%- endif -%}
   {%- elif m.ergste_k == 'rv' -%}
     {%- set droog = w is not none and w < 40 -%}
-    {%- set ns.reden = ('droge lucht, ' if droog else 'vochtig, ') ~ g ~ '%' -%}
+    {%- set ns.reden = ('droge lucht, ' if droog else 'vochtig, ') ~ g_ ~ '%' -%}
     {%- set ns.advies = 'bevochtigen' if droog else 'ventileren, anders schimmelrisico' -%}
   {%- endif -%}
 
@@ -417,6 +420,7 @@
         'status': status, 'score': m.ergst,
         'reden': ns.reden, 'advies': ns.advies,
         'metingen': m.lijst, 'aantal_metingen': m.aantal,
+        'gekoppeld': gekoppeld | count,
         'beweging': {'gemeten': bw.aantal > 0, 'actief': bw.actief,
                      'minuten': (bw.jongste | round | int) if bw.jongste is not none else none},
         'contacten': {'gemeten': ct.totaal > 0, 'open': ct.open,
@@ -425,4 +429,40 @@
 {%- endfor -%}
 
 {{- {'kamers': uit.lijst} | to_json -}}
+{%- endmacro -%}
+
+{#- ==================== WAT ER NOG NIET IN ZIT ============================= -#}
+{#-
+  De keerzijde van aanwijzen in plaats van zoeken: een nieuwe sensor verschijnt
+  niet vanzelf op het dashboard. Deze macro maakt dat zichtbaar - hij loopt de
+  areas van de kamers hierboven af en meldt elke meetsensor die NIET gekoppeld
+  is.
+
+  Draait bewust maar één keer per uur (zie Kamers.yaml): dit is onderhoud, geen
+  meting. En wat hier permanent tussen staat maar er niet in hoort (koelkast,
+  espressomachine, aquarium) zet je in `negeer` bij die kamer. Dat is opnieuw
+  een uitsluitlijst, maar nu een ongevaarlijke: een misser levert hier hoogstens
+  een regel te veel in een onderhoudslijst op, nooit een fout cijfer op een
+  tegel. Dat verschil is de hele reden dat de koppeling zelf een lijst is van
+  wat er WEL in hoort.
+
+  Geeft JSON terug: {'sensoren': [{kamer, id, naam, dc}]}
+-#}
+{%- macro ongekoppeld_json() -%}
+{%- set DC_METING = METINGEN | map(attribute='dc') | list -%}
+{%- set uit = namespace(lijst=[]) -%}
+{%- for k in KAMERS -%}
+  {%- set gekoppeld = _gekoppeld(k) | trim | from_json -%}
+  {%- set negeer = k.get('negeer', []) -%}
+  {%- for e in area_entities(k.area)
+        if e[:7] == 'sensor.' and e not in gekoppeld and e not in negeer -%}
+    {%- set dc = state_attr(e, 'device_class') -%}
+    {%- if dc in DC_METING and _eigen(e) | trim == '' -%}
+      {%- set uit.lijst = uit.lijst + [{
+            'kamer': k.naam, 'id': e, 'dc': dc,
+            'naam': state_attr(e, 'friendly_name') or e }] -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endfor -%}
+{{- {'sensoren': uit.lijst} | to_json -}}
 {%- endmacro -%}

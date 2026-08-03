@@ -21,7 +21,7 @@
 #      het hele raster tegelijk. Met zeventien sensoren zou elke tegel op zijn
 #      eigen entiteit moeten wachten en zou de samenvattingsbalk bovenaan
 #      helemaal niet meer bijwerken.
-#   2. De macro doet één ronde langs alle areas. Zeventien losse sensoren
+#   2. De macro doet één ronde langs alle kamers. Zeventien losse sensoren
 #      zouden die ronde zeventien keer doen.
 #
 # WAAROM ELKE MINUUT EN NIET BIJ ELKE WIJZIGING
@@ -31,9 +31,16 @@
 # geen alarm: één keer per minuut is ruim genoeg en veel voorspelbaarder.
 # De prijs is dat de bewegingsstip tot 60 seconden achterloopt.
 #
-# LET OP: dit bestand is nieuw, dus het vraagt een volledige herstart van Home
-# Assistant om geladen te worden - een template-reload is niet genoeg. Hetzelfde
-# geldt voor wijzigingen in kamers.jinja.
+# WAAROM DE MACRO IN `action:` STAAT EN NIET IN DE TEMPLATES ZELF
+# State en attributen worden apart gerenderd, dus met de macro in allebei liep
+# hij twee keer per minuut. Een variabele uit de `action:`-sectie is beschikbaar
+# in de templates van álle entiteiten in dit blok, dus nu draait hij één keer.
+# (Vereist HA 2024.10 of nieuwer - dezelfde versie die ook de `trigger:`-sleutel
+# hieronder introduceerde. Blijft `sensor.kamers` na een herstart leeg, kijk dan
+# eerst in het log of dit blok wel geladen is.)
+#
+# LET OP: wijzigingen in kamers.jinja vragen een volledige herstart van Home
+# Assistant - een template-reload is niet genoeg.
 #
 # `sensor.kamers` staat bewust in de recorder-uitsluiting in
 # configuration.yaml: het attribuut is een blok van zo'n 10 kB en zou anders
@@ -48,6 +55,12 @@ kamers_package:
         - trigger: homeassistant
           event: start
 
+      action:
+        - variables:
+            kamerlijst: >
+              {% from 'kamers.jinja' import kamers_json %}
+              {{ (kamers_json() | trim | from_json).kamers }}
+
       sensor:
         # De state is het aantal ruimtes dat aandacht vraagt, zodat je er een
         # melding of een badge op kunt hangen zonder in de attributen te graven.
@@ -55,13 +68,36 @@ kamers_package:
           unique_id: kamers
           icon: mdi:home-search-outline
           state: >
-            {% from 'kamers.jinja' import kamers_json %}
-            {{ (kamers_json() | trim | from_json).kamers
-               | selectattr('score', 'ge', 1) | list | count }}
+            {{ kamerlijst | selectattr('score', 'ge', 1) | list | count }}
           attributes:
-            # De macro draait hier een tweede keer: attributen worden los van de
-            # state gerenderd. Dat is bewust geaccepteerd - twee rondes per
-            # minuut is goedkoper dan de omweg via een extra hulpsensor.
-            kamers: >
-              {% from 'kamers.jinja' import kamers_json %}
-              {{ (kamers_json() | trim | from_json).kamers }}
+            kamers: "{{ kamerlijst }}"
+
+    #########################################################################
+    ## De onderhoudslijst: wat hangt er wél, maar is niet gekoppeld
+    #########################################################################
+    # Sinds de kamers hun sensoren aangewezen krijgen in plaats van zoeken, komt
+    # een nieuw apparaat niet meer vanzelf op het dashboard. Deze sensor maakt
+    # dat zichtbaar, zodat "aanwijzen" geen "vergeten" wordt.
+    #
+    # Eén keer per uur is genoeg: dit verandert alleen als je een apparaat
+    # toevoegt of verplaatst. Elke minuut zou een area-scan over het hele huis
+    # betekenen, en dat is precies de kost die uit `sensor.kamers` is gehaald.
+    - trigger:
+        - trigger: time_pattern
+          hours: "/1"
+        - trigger: homeassistant
+          event: start
+
+      action:
+        - variables:
+            los: >
+              {% from 'kamers.jinja' import ongekoppeld_json %}
+              {{ (ongekoppeld_json() | trim | from_json).sensoren }}
+
+      sensor:
+        - name: Kamers niet gekoppeld
+          unique_id: kamers_niet_gekoppeld
+          icon: mdi:link-variant-off
+          state: "{{ los | count }}"
+          attributes:
+            sensoren: "{{ los }}"

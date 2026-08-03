@@ -3,12 +3,15 @@
 Draaien:  python3 -m venv .venv && .venv/bin/pip install jinja2
           .venv/bin/python tests/test_kamers.py
 
-Net als test_klimaat.py: de stubs hieronder doen de Home Assistant-functies na
-zodat de grenzen te testen zijn zonder te herstarten. Extra ten opzichte van dat
-bestand zijn `area_entities` (de kamers worden per area opgehaald, niet met de
-hand gekoppeld) en een `states` die zowel aanroepbaar als indexeerbaar is,
-omdat de macro `states[id].last_updated` gebruikt om verouderde metingen te
-herkennen.
+Net als test_klimaat.py doen de stubs hieronder de Home Assistant-functies na
+zodat de grenzen te testen zijn zonder te herstarten.
+
+Sinds 2026-08-03 meet een kamer alleen nog wat in de tabel in kamers.jinja is
+AANGEWEZEN (het apparaat achter `klimaat`, plus wat in `voorkeur`/`extra`
+staat). De area wordt alleen nog gebruikt voor beweging, ramen en deuren. De
+tests hieronder gebruiken daarom de echte entity-id's uit die tabel: een sensor
+met de juiste device_class in de juiste area is niet meer genoeg, en dat is
+precies wat een paar van deze scenario's bewaken.
 """
 import json
 import datetime as dt
@@ -23,6 +26,22 @@ AREAS = {}
 LEEFTIJD = {}  # entity_id -> minuten geleden veranderd
 DEVICES = {}   # entity_id -> device_id
 NOW = dt.datetime(2026, 8, 3, 14, 0, 0)
+
+# De aangewezen thermometers uit KAMERS in kamers.jinja. Wijzigt die tabel, dan
+# wijzigt deze mee - de tests draaien tegen de echte koppeling, niet tegen een
+# eigen fantasie ervan.
+ANKER = {
+    "woonkamer": "sensor.woonkamer_woonkamer_multisensor_temperatuur",
+    "speelkamer": "sensor.speelkamer_speelkamer_temperatuur_temperatuur",
+    "garage": "sensor.garage_garage_temperatuur_temperatuur",
+    "meterkast": "sensor.meterkast_temperatuur_temperature",
+    "slaapkamer": "sensor.slaapkamer_slaapkamer_temperatuur_temperatuur",
+    "slaapkamer_logan": "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur",
+    "badkamer": "sensor.badkamer_badkamer_temperatuur_temperatuur",
+    "kantoor": "sensor.kantoor_kantoor_temperatuur_temperatuur",
+    "slaapkamer_emma": "sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur",
+    "schuur": "sensor.achtertuin_schuur_temperatuur_temperature",
+}
 
 
 class _Entity:
@@ -95,18 +114,34 @@ def kamers():
     return {k["slug"]: k for k in json.loads(MOD.kamers_json().strip())["kamers"]}
 
 
+def ongekoppeld():
+    return json.loads(MOD.ongekoppeld_json().strip())["sensoren"]
+
+
 # ---------------------------------------------------------------------------
 # Wereldopbouw
 # ---------------------------------------------------------------------------
 
-def sensor(eid, waarde, device_class, area, naam=None, minuten=0, apparaat=None):
+def sensor(eid, waarde, device_class, area=None, naam=None, minuten=0, apparaat=None):
+    """Een sensor die bestaat. `area` is alleen nog decor voor meetsensoren."""
     STATES[eid] = str(waarde)
     STATES[f"{eid}.device_class"] = device_class
     STATES[f"{eid}.friendly_name"] = naam or eid
     LEEFTIJD[eid] = minuten
     if apparaat:
         DEVICES[eid] = apparaat
-    AREAS.setdefault(area, []).append(eid)
+    if area:
+        AREAS.setdefault(area, []).append(eid)
+
+
+def meet(slug, waarde, device_class="temperature", **kw):
+    """De aangewezen thermometer van een kamer, of iets aan hetzelfde apparaat.
+
+    Voor een tweede meetwaarde (RV, CO2) geef je hetzelfde `apparaat` mee als de
+    thermometer; zo komt hij via `device_entities()` mee, precies zoals in huis.
+    """
+    eid = kw.pop("eid", None) or ANKER[slug]
+    sensor(eid, waarde, device_class, **kw)
 
 
 def binair(eid, aan, device_class, area, naam=None, minuten=0, apparaat=None):
@@ -127,12 +162,24 @@ def wereld(**kw):
     DEVICES.clear()
     STATES.update({
         "sensor.knmi_temperatuur": "21",
+        # De achtertuin leest deze sensor via `extra`, en dat werkt alleen als
+        # hij een device_class heeft - hand-aangewezen entiteiten worden op
+        # device_class ingedeeld, net als de rest.
+        "sensor.knmi_temperatuur.device_class": "temperature",
         "sensor.home_assistant_gestart": (NOW - dt.timedelta(days=1)).isoformat(),
     })
     STATES.update(kw)
 
 
 FOUTEN = []
+
+
+def gelijk(naam, gekregen, verwacht):
+    """Voor wat niet uit `kamers()` komt, zoals de onderhoudslijst."""
+    ok = gekregen == verwacht
+    print(f"{'PASS' if ok else 'FAIL'}  {naam:52} {'':28} -> {gekregen}")
+    if not ok:
+        FOUTEN.append(f"{naam}: kreeg {gekregen!r}, verwachtte {verwacht!r}")
 
 
 def check(naam, slug, veld, verwacht):
@@ -153,18 +200,95 @@ def check(naam, slug, veld, verwacht):
 
 
 # ---------------------------------------------------------------------------
+# Alleen wat is aangewezen telt mee
+#
+# Dit is de kern van de omzetting van 2026-08-03. Alle drie de scenario's
+# hieronder gaven vóór die datum een fout getal op de tegel, en alle drie
+# zagen ze er op het dashboard volkomen normaal uit.
+# ---------------------------------------------------------------------------
+
+# 1. De spa. De achtertuin heeft geen thermometer; er stond een climate-entiteit
+#    in de area en die werd de "buitentemperatuur" - 38 graden in de tuin.
+wereld()
+STATES["climate.intex_purespa.current_temperature"] = 38
+AREAS.setdefault("Achtertuin", []).append("climate.intex_purespa")
+check("de spa is de achtertuin niet", "achtertuin", "metingen.temp.id",
+      "sensor.knmi_temperatuur")
+check("en KNMI staat er wel", "achtertuin", "metingen.temp.w", 21.0)
+check("buiten wordt niet beoordeeld", "achtertuin", "reden",
+      "buitenwaarden, niet beoordeeld")
+
+# 2. Een willekeurige sensor met de juiste device_class in de juiste area komt
+#    er niet meer in. Vroeger hield een uitsluitlijst van veertig patronen dit
+#    tegen; wat er niet op stond werd stilzwijgend een kamermeting.
+wereld()
+sensor("sensor.keuken_koelkast_temp", 4, "temperature", "Keuken")
+sensor("sensor.keuken_espresso_temp", 93, "temperature", "Keuken")
+sensor("sensor.keuken_zomaar_iets", 31, "temperature", "Keuken")
+check("niet aangewezen telt niet mee", "keuken", "aantal_metingen", 0)
+check("en dat wordt zo genoemd", "keuken", "reden", "geen sensor gekoppeld")
+
+# 3. De printplaat van het aangewezen apparaat zelf. Die hangt aan hetzelfde
+#    device en is dus het enige dat nog uitgesloten moet worden.
+wereld()
+sensor("sensor.kantoor_kantoor_temperatuur_device_temperature", 39, "temperature",
+       apparaat="dev_kantoor")
+meet("kantoor", 22.8, apparaat="dev_kantoor")
+check("eigen printplaat telt niet mee", "kantoor", "metingen.temp.w", 22.8)
+check("en de kamer is dus gewoon goed", "kantoor", "status", "goed")
+
+# ---------------------------------------------------------------------------
+# ...maar wat er niet in zit moet je wél kunnen zien
+#
+# Dit is de tegenhanger van hierboven en de reden dat aanwijzen mag: een sensor
+# die nergens gekoppeld is verdwijnt niet stilletjes, hij komt op de
+# onderhoudslijst onderaan het dashboard.
+# ---------------------------------------------------------------------------
+wereld()
+meet("badkamer", 22.4, apparaat="dev_bad", area="Badkamer")
+meet("badkamer", 55, "humidity", apparaat="dev_bad", area="Badkamer",
+     eid="sensor.badkamer_badkamer_temperatuur_luchtvochtigheid")
+sensor("sensor.badkamer_vloer_temperatuur", 24, "temperature", "Badkamer",
+       "Vloerverwarming badkamer")
+sensor("sensor.badkamer_raam_device_temperature", 31, "temperature", "Badkamer")
+sensor("sensor.badkamer_raam_batterij", 88, "battery", "Badkamer")
+los = ongekoppeld()
+# De vloersensor is de enige die overblijft: de twee van het aangewezen apparaat
+# zitten er al in, de printplaat telt niet mee en een batterijpercentage is geen
+# meetwaarde voor dit overzicht.
+gelijk("niet-gekoppelde meetsensor wordt gemeld",
+       [s["id"] for s in los], ["sensor.badkamer_vloer_temperatuur"])
+gelijk("en met kamer erbij", [s["kamer"] for s in los], ["Badkamer"])
+
+# ---------------------------------------------------------------------------
+# Eén apparaat levert meerdere meetwaarden
+# ---------------------------------------------------------------------------
+wereld()
+meet("slaapkamer_logan", 23.5, apparaat="dev_melder")
+meet("slaapkamer_logan", 50.37, "humidity", apparaat="dev_melder",
+     eid="sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_luchtvochtigheid")
+# 23,5° valt boven de slaapband (goed tot 21°) maar onder de alarmgrens.
+check("warm voor een slaapkamer, niet alarmerend", "slaapkamer_logan", "status", "let op")
+# De luchtvochtigheid staat nergens in de tabel; hij komt mee omdat hij aan
+# hetzelfde apparaat hangt als de aangewezen thermometer.
+check("zelfde apparaat levert ook de RV", "slaapkamer_logan", "metingen.rv.w", 50.37)
+check("en die bron klopt", "slaapkamer_logan", "metingen.rv.id",
+      "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_luchtvochtigheid")
+
+# ---------------------------------------------------------------------------
 # CO2 weegt zwaarder dan comfort, en het advies kijkt naar de ramen
 # ---------------------------------------------------------------------------
 wereld()
-sensor("sensor.kantoor_temp", 26, "temperature", "Kantoor")
-sensor("sensor.kantoor_co2", 1340, "carbon_dioxide", "Kantoor")
+meet("kantoor", 26, apparaat="dev_kantoor")
+meet("kantoor", 1340, "carbon_dioxide", apparaat="dev_kantoor",
+     eid="sensor.kantoor_co2")
 binair("binary_sensor.kantoor_raam", False, "window", "Kantoor", "Raam links")
 check("CO2 boven 1200 is slecht", "kantoor", "status", "slecht")
 check("lucht gaat voor temperatuur", "kantoor", "reden", "CO₂ 1340 ppm")
 check("er is een raam, dus zet het open", "kantoor", "advies", "zet een raam open")
 
 wereld()
-sensor("sensor.kantoor_co2", 1340, "carbon_dioxide", "Kantoor")
+meet("kantoor", 1340, "carbon_dioxide")
 binair("binary_sensor.kantoor_raam", True, "window", "Kantoor", "Raam links")
 check("raam staat al open", "kantoor", "advies", "raam staat al open, even geduld")
 check("open contact wordt geteld", "kantoor", "contacten.open", 1)
@@ -173,20 +297,20 @@ check("open contact wordt geteld", "kantoor", "contacten.open", 1)
 # Dezelfde meting, ander soort ruimte, ander oordeel
 # ---------------------------------------------------------------------------
 wereld()
-sensor("sensor.slaapkamer_temp", 17, "temperature", "Slaapkamer")
-sensor("sensor.woonkamer_temp", 17, "temperature", "Woonkamer")
+meet("slaapkamer", 17)
+meet("woonkamer", 17)
 check("17 graden is prima in een slaapkamer", "slaapkamer", "status", "goed")
 check("17 graden is fris in de woonkamer", "woonkamer", "status", "let op")
 
 wereld()
-sensor("sensor.badkamer_rv", 72, "humidity", "Badkamer")
-sensor("sensor.woonkamer_rv", 72, "humidity", "Woonkamer")
+meet("badkamer", 72, "humidity")
+meet("woonkamer", 72, "humidity")
 check("badkamer mag vochtig zijn", "badkamer", "status", "goed")
 check("woonkamer van 72% is te vochtig", "woonkamer", "status", "let op")
 
 wereld()
-sensor("sensor.garage_temp", 3, "temperature", "Garage")
-sensor("sensor.woonkamer_temp", 3, "temperature", "Woonkamer")
+meet("garage", 3)
+meet("woonkamer", 3)
 check("3 graden in de garage: bijna vorst", "garage", "status", "let op")
 check("3 graden in de woonkamer: mis", "woonkamer", "status", "slecht")
 
@@ -194,112 +318,54 @@ check("3 graden in de woonkamer: mis", "woonkamer", "status", "slecht")
 # Warm, met en zonder koelte buiten: het advies moet meebewegen
 # ---------------------------------------------------------------------------
 wereld(**{"sensor.knmi_temperatuur": "19"})
-sensor("sensor.woonkamer_temp", 26, "temperature", "Woonkamer")
+meet("woonkamer", 26)
 check("warm binnen, koeler buiten", "woonkamer", "advies", "buiten is 19°, spuien kan")
 
 wereld(**{"sensor.knmi_temperatuur": "33"})
-sensor("sensor.woonkamer_temp", 26, "temperature", "Woonkamer")
+meet("woonkamer", 26)
 check("warm binnen, heter buiten", "woonkamer", "advies", "zonwering dicht houden")
 
 # ---------------------------------------------------------------------------
-# Gaten zichtbaar maken: geen sensor is iets anders dan geen oordeel
+# Drie manieren om "geen cijfer" te zijn, en ze moeten uit elkaar te houden zijn
 # ---------------------------------------------------------------------------
 wereld()
-check("kamer zonder sensoren", "keuken", "status", "geen meting")
-check("en dat wordt ook zo genoemd", "keuken", "reden", "geen sensoren in deze ruimte")
+check("keuken heeft geen thermometer", "keuken", "status", "geen meting")
+check("en dat is geen storing", "keuken", "reden", "geen sensor gekoppeld")
 
+# Wél aangewezen, maar de sensor doet het niet. Dat is een storing, en die zag
+# je vroeger niet: dan nam een willekeurige andere sensor uit de area het over.
 wereld()
-sensor("sensor.voortuin_lux", 12000, "illuminance", "Voortuin")
-check("buiten wordt gemeten", "voortuin", "aantal_metingen", 1)
-check("maar niet beoordeeld", "voortuin", "reden", "buitenwaarden, niet beoordeeld")
+meet("badkamer", "unavailable")
+check("kapotte thermometer valt op", "badkamer", "reden", "sensor geeft niets door")
+check("met iets om te doen", "badkamer", "advies", "batterij of verbinding controleren")
 
-# ---------------------------------------------------------------------------
-# Een kapotte sensor mag de kamer niet meenemen
-# ---------------------------------------------------------------------------
-wereld(**{"sensor.woonkamer_woonkamer_multisensor_temperatuur": "unavailable"})
-STATES["sensor.woonkamer_woonkamer_multisensor_temperatuur.device_class"] = "temperature"
-AREAS.setdefault("Woonkamer", []).append("sensor.woonkamer_woonkamer_multisensor_temperatuur")
-sensor("sensor.woonkamer_reserve_temp", 21, "temperature", "Woonkamer")
-check("valt terug op de tweede thermometer", "woonkamer", "status", "goed")
+# Eén stukke meetwaarde neemt de rest van het apparaat niet mee: de RV van
+# dezelfde melder blijft gewoon staan.
+wereld()
+meet("woonkamer", "unknown", apparaat="dev_multi")
+meet("woonkamer", 45.5, "humidity", apparaat="dev_multi",
+     eid="sensor.woonkamer_woonkamer_multisensor_luchtvochtigheid")
+check("lege temperatuur telt niet als meting", "woonkamer", "metingen.temp.w", None)
+check("maar de RV van hetzelfde apparaat wel", "woonkamer", "metingen.rv.w", 45.5)
+
+# Alleen een lichtsensor is wél een sensor, maar geen oordeel.
+wereld()
+meet("woonkamer", 53, "illuminance")
+check("alleen licht", "woonkamer", "reden", "alleen licht, geen thermometer")
 
 # ---------------------------------------------------------------------------
 # Verouderde meting: wel tonen, maar gemerkt - en niet vlak na een herstart
 # ---------------------------------------------------------------------------
 wereld()
-sensor("sensor.zolder_temp", 22, "temperature", "Zolder", minuten=300)
-check("5 uur niets gehoord", "zolder", "metingen.temp.oud", True)
+meet("garage", 22, minuten=300)
+check("5 uur niets gehoord", "garage", "metingen.temp.oud", True)
 
 wereld(**{"sensor.home_assistant_gestart": (NOW - dt.timedelta(minutes=20)).isoformat()})
-sensor("sensor.zolder_temp", 22, "temperature", "Zolder", minuten=300)
-check("vlak na herstart telt leeftijd niet", "zolder", "metingen.temp.oud", False)
+meet("garage", 22, minuten=300)
+check("vlak na herstart telt leeftijd niet", "garage", "metingen.temp.oud", False)
 
 # ---------------------------------------------------------------------------
-# Een apparaat dat zichzelf meet is geen kamermeting
-#
-# Dit ging op 2026-08-03 op het dashboard mis: zigbee2mqtt geeft bijna elk
-# apparaat een `device_temperature` met device_class temperature, en die won van
-# de echte thermometer. Het halve huis stond op 27 tot 40 graden terwijl het
-# buiten 22 was.
-# ---------------------------------------------------------------------------
-wereld()
-sensor("sensor.kantoor_stekker_apparaattemperatuur", 38, "temperature", "Kantoor")
-sensor("sensor.kantoor_kantoor_temperatuur_temperatuur", 22.4, "temperature", "Kantoor")
-check("printplaat telt niet mee", "kantoor", "metingen.temp.w", 22.4)
-check("en de kamer is dus gewoon goed", "kantoor", "status", "goed")
-
-# De volgorde uit de registry is willekeurig, dus de echte thermometer mag niet
-# afhangen van wie er toevallig eerst staat.
-wereld()
-sensor("sensor.badkamer_badkamer_temperatuur_temperatuur", 23.1, "temperature", "Badkamer")
-sensor("sensor.badkamer_iets_anders", 31, "temperature", "Badkamer")
-check("aangewezen apparaat wint van volgorde", "badkamer", "metingen.temp.w", 23.1)
-
-# Slaapkamer Logan zoals hij op 2026-08-03 in de pop-up stond: vijf sensoren met
-# device_class temperature, waarvan vier de printplaat van een deur- of
-# raamcontact. De tegel stond op 27,0° terwijl de kamer 23,5° was.
-#
-# Let op de volgorde: de printplaten staan hier expres vóór de echte melder,
-# want zo kwam het uit de registry.
-wereld()
-for deel, graden in [("deur", 27), ("raam_links", 25), ("raam_rechts", 27)]:
-    sensor(f"sensor.slaapkamer_maxi_{deel}_device_temperature", graden, "temperature",
-           "Slaapkamer Logan", apparaat=f"dev_{deel}")
-sensor("sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur", 23.5,
-       "temperature", "Slaapkamer Logan", apparaat="dev_melder")
-sensor("sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_luchtvochtigheid", 50.37,
-       "humidity", "Slaapkamer Logan", apparaat="dev_melder")
-check("de kamer, niet de deurprintplaat", "slaapkamer_logan", "metingen.temp.w", 23.5)
-# 23,5° valt boven de slaapband (goed tot 21°) maar onder de alarmgrens: warm
-# voor een kinderkamer, niet alarmerend. Precies het verschil dat de vier
-# printplaten van 27° verborgen hielden.
-check("warm voor een slaapkamer, niet alarmerend", "slaapkamer_logan", "status", "let op")
-# De luchtvochtigheid staat nergens in de tabel; hij komt mee omdat hij aan
-# hetzelfde apparaat hangt als de aangewezen thermometer.
-check("zelfde apparaat levert ook de RV", "slaapkamer_logan", "metingen.rv.w", 50.37)
-check("en die bron klopt", "slaapkamer_logan", "metingen.rv.id",
-      "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_luchtvochtigheid")
-
-# Meet de aangewezen melder óók zijn eigen printplaat, dan mag die niet alsnog
-# via de apparaatlijst binnenglippen.
-wereld()
-sensor("sensor.kantoor_kantoor_temperatuur_device_temperature", 39, "temperature",
-       "Kantoor", apparaat="dev_kantoor")
-sensor("sensor.kantoor_kantoor_temperatuur_temperatuur", 22.8, "temperature",
-       "Kantoor", apparaat="dev_kantoor")
-check("eigen printplaat telt ook niet mee", "kantoor", "metingen.temp.w", 22.8)
-
-wereld()
-sensor("sensor.woonkamer_aquarium_temp", 26, "temperature", "Woonkamer")
-check("aquarium is de kamer niet", "woonkamer", "aantal_metingen", 0)
-check("en dat is geen meting", "woonkamer", "status", "geen meting")
-
-# Een ruimte met alleen een lichtsensor in de bewegingsmelder is geen storing.
-wereld()
-sensor("sensor.toilet_beweging_lux", 53, "illuminance", "Toilet")
-check("alleen licht", "toilet", "reden", "alleen licht, geen thermometer")
-
-# ---------------------------------------------------------------------------
-# Beweging
+# Beweging, ramen en deuren: die gaan nog wél per area
 # ---------------------------------------------------------------------------
 wereld()
 binair("binary_sensor.toilet_beweging_occupancy", True, "occupancy", "Toilet")
@@ -314,6 +380,14 @@ check("42 minuten geleden", "toilet", "beweging.minuten", 42)
 wereld()
 binair("binary_sensor.entree_beweging_occupancy", True, None, "Entree")
 check("herkend op naam, zonder device_class", "entree", "beweging.gemeten", True)
+
+# Een deurcontact op de koelkast is geen keukendeur. Dat is het enige gat dat de
+# area-aanpak nog heeft, en `negeer` is er het gereedschap voor - zodra er zo'n
+# contact hangt hoort hij daar. Hier alleen getest dat contacten geteld worden.
+wereld()
+binair("binary_sensor.keuken_achterdeur_contact", True, "door", "Keuken", "Achterdeur")
+check("open deur wordt geteld", "keuken", "contacten.open", 1)
+check("en met naam", "keuken", "contacten.namen", ["Achterdeur"])
 
 # ---------------------------------------------------------------------------
 print()

@@ -10,15 +10,15 @@
 # card-mod een keer niet laadt blijft dit gewoon leesbaar. Dat maakt hem ook
 # bruikbaar op de Nest Hub, waar card-mod helemaal niet draait.
 #
-# Elke tegel opent een pop-up. Die begint met een markdown-kaart die WELKE
-# entiteit elke waarde geleverd heeft laat zien - dat is de enige plek waar je
-# ziet of de automatische koppeling de juiste sensor te pakken had. Daaronder
-# staan lijsten van auto-entities op de area. Blijft dat leeg terwijl er wel
-# sensoren hangen, dan klopt de area-naam niet.
+# Elke tegel opent een pop-up met `kamer_detail`: die laat zien WELKE entiteit
+# elke waarde geleverd heeft. Klopt een cijfer niet, dan wijs je in de tabel in
+# custom_templates/kamers.jinja de juiste sensor aan - een kamer meet sinds
+# 2026-08-03 alleen nog wat daar staat. Onderaan deze weergave staat de
+# tegenhanger: sensoren die er wél hangen maar nergens gekoppeld zijn.
 #
-# LET OP bij het bewerken van de filters: `device_class` is geen filtersleutel
-# in auto-entities, die hoort onder `attributes:`. Met device_class op het
-# hoogste niveau gaf elke pop-up drie keer "Configuratiefout".
+# LET OP bij het bewerken van de auto-entities-filters: `device_class` is geen
+# filtersleutel, die hoort onder `attributes:`. Met device_class op het hoogste
+# niveau gaf elke pop-up "Configuratiefout".
 type: sections
 max_columns: 4
 title: Kamers
@@ -202,6 +202,25 @@ sections:
   # Onzichtbaar tot je een tegel aantikt. De opmaak staat één keer bij de
   # eerste pop-up (&kamer_popup) en wordt door de rest hergebruikt; hetzelfde
   # blok als op Overzicht, maar YAML-ankers werken niet over bestanden heen.
+  #
+  # WAT HIER OP 2026-08-03 UIT IS GEHAALD, EN WAAROM
+  # Elke pop-up had een markdown-kaart, twee `auto-entities`-lijsten en een
+  # `history-graph` met 24 uur historie. Die staan alle zeventien ín de weergave
+  # - een pop-up is verborgen, niet afwezig - dus bij het openen van deze pagina
+  # vuurde de browser zeventien historie-queries op de recorder af en hielden
+  # eenenvijftig auto-entities-kaarten hun filter bij over de hele state
+  # machine. De pagina was daardoor traag op het wandpaneel.
+  #
+  # Wat overblijft per pop-up:
+  #   - `kamer_detail`, die uit `sensor.kamers` leest wat er aan de hand is en
+  #     welke entiteit elke waarde geleverd heeft. Rekent in de browser.
+  #   - één auto-entities met beweging, ramen en deuren. Die blijft area-based,
+  #     want dat is de kant waar automatisch zoeken wél mag (zie de kop van
+  #     custom_templates/kamers.jinja).
+  # De lijst "alle metingen in deze ruimte" is niet meer nodig nu de koppeling
+  # vastligt: `kamer_detail` noemt de bron per waarde, en wat er niet in zit
+  # staat onderaan deze weergave. Historie zie je via hold op een tegel
+  # (more-info) of op de Klimaat-weergave.
   - type: grid
     column_span: 4
     cards:
@@ -255,59 +274,11 @@ sections:
           .bubble-close {
             color: rgba(255, 255, 255, 0.85) !important;
           }
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'woonkamer') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Woonkamer**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Woonkamer
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Woonkamer
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Woonkamer
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Woonkamer
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Woonkamer
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: woonkamer
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -344,31 +315,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Woonkamer
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Woonkamer
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Woonkamer
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Woonkamer
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -377,59 +323,11 @@ sections:
         name: Keuken
         icon: mdi:countertop
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'keuken') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Keuken**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Keuken
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Keuken
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Keuken
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Keuken
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Keuken
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: keuken
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -466,31 +364,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Keuken
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Keuken
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Keuken
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Keuken
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -499,59 +372,11 @@ sections:
         name: Entree
         icon: mdi:coat-rack
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'entree') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Entree**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Entree
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Entree
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Entree
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Entree
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Entree
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: entree
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -588,31 +413,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Entree
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Entree
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Entree
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Entree
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -621,59 +421,11 @@ sections:
         name: Toilet
         icon: mdi:toilet
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'toilet') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Toilet**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Toilet
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Toilet
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Toilet
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Toilet
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Toilet
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: toilet
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -710,31 +462,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Toilet
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Toilet
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Toilet
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Toilet
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -743,59 +470,11 @@ sections:
         name: Speelkamer
         icon: mdi:teddy-bear
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'speelkamer') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Speelkamer**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Speelkamer
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Speelkamer
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Speelkamer
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Speelkamer
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Speelkamer
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: speelkamer
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -832,31 +511,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Speelkamer
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Speelkamer
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Speelkamer
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Speelkamer
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -865,59 +519,11 @@ sections:
         name: Garage
         icon: mdi:garage-variant
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'garage') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Garage**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Garage
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Garage
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Garage
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Garage
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Garage
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: garage
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -954,31 +560,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Garage
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Garage
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Garage
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Garage
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -987,59 +568,11 @@ sections:
         name: Meterkast
         icon: mdi:flash-outline
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'meterkast') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Meterkast**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Meterkast
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Meterkast
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Meterkast
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Meterkast
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Meterkast
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: meterkast
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -1076,31 +609,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Meterkast
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Meterkast
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Meterkast
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Meterkast
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1109,59 +617,11 @@ sections:
         name: Slaapkamer
         icon: mdi:bed-king-outline
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'slaapkamer') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Slaapkamer**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Slaapkamer
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Slaapkamer
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Slaapkamer
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Slaapkamer
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Slaapkamer
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: slaapkamer
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -1198,31 +658,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Slaapkamer
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Slaapkamer
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Slaapkamer
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Slaapkamer
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1231,59 +666,11 @@ sections:
         name: Slaapkamer Logan
         icon: mdi:bed-single-outline
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'slaapkamer_logan') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Slaapkamer Logan**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Slaapkamer Logan
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Slaapkamer Logan
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Slaapkamer Logan
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Slaapkamer Logan
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Slaapkamer Logan
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: slaapkamer_logan
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -1320,31 +707,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Slaapkamer Logan
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Slaapkamer Logan
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Slaapkamer Logan
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Slaapkamer Logan
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1353,59 +715,11 @@ sections:
         name: Badkamer
         icon: mdi:shower
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'badkamer') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Badkamer**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Badkamer
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Badkamer
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Badkamer
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Badkamer
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Badkamer
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: badkamer
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -1442,31 +756,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Badkamer
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Badkamer
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Badkamer
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Badkamer
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1475,59 +764,11 @@ sections:
         name: Kantoor
         icon: mdi:desk
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'kantoor') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Kantoor**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Kantoor
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Kantoor
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Kantoor
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Kantoor
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Kantoor
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: kantoor
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -1564,31 +805,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Kantoor
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Kantoor
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Kantoor
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Kantoor
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1597,59 +813,11 @@ sections:
         name: Overloop
         icon: mdi:stairs
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'overloop') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Overloop**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Overloop
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Overloop
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Overloop
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Overloop
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Overloop
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: overloop
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -1686,31 +854,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Overloop
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Overloop
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Overloop
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Overloop
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1719,59 +862,11 @@ sections:
         name: Slaapkamer Emma
         icon: mdi:bed-single-outline
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'slaapkamer_emma') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Slaapkamer Emma**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Slaapkamer Emma
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Slaapkamer Emma
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Slaapkamer Emma
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Slaapkamer Emma
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Slaapkamer Emma
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: slaapkamer_emma
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -1808,31 +903,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Slaapkamer Emma
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Slaapkamer Emma
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Slaapkamer Emma
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Slaapkamer Emma
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1841,59 +911,11 @@ sections:
         name: Zolder
         icon: mdi:home-roof
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'zolder') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Zolder**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Zolder
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Zolder
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Zolder
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Zolder
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Zolder
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: zolder
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -1930,31 +952,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Zolder
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Zolder
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Zolder
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Zolder
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1963,59 +960,11 @@ sections:
         name: Schuur
         icon: mdi:home-outline
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'schuur') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Schuur**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Schuur
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Schuur
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Schuur
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Schuur
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Schuur
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: schuur
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -2052,31 +1001,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Schuur
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Schuur
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Schuur
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Schuur
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -2085,59 +1009,11 @@ sections:
         name: Achtertuin
         icon: mdi:tree-outline
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'achtertuin') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Achtertuin**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Achtertuin
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Achtertuin
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Achtertuin
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Achtertuin
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Achtertuin
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: achtertuin
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -2174,31 +1050,6 @@ sections:
                   domain: binary_sensor
                   attributes:
                     device_class: garage_door
-            sort:
-              method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Achtertuin
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Achtertuin
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Achtertuin
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Achtertuin
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -2207,59 +1058,11 @@ sections:
         name: Voortuin
         icon: mdi:home-city-outline
         styles: *kamer_popup
-
         cards:
-          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
-          # Staat een tegel op een raar getal, dan zie je hier meteen welke
-          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
-          # NEGEER_PATRONEN in kamers.jinja.
-          - type: markdown
-            content: |
-              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
-              {% set k = (K | selectattr('slug', 'eq', 'voortuin') | list | first) | default(none) %}
-              {% if k is none %}
-              `sensor.kamers` heeft nog geen waarde.
-              {% else %}
-              ### {{ k.status }} — {{ k.reden }}
-              {% if k.advies %}*{{ k.advies }}*{% endif %}
-
-              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
-                `{{ m.id }}`
-              {% endif %}{% endfor %}
-
-              {% if k.aantal_metingen == 0 %}
-              Geen enkele meting gevonden in area **Voortuin**. Klopt die naam?
-              {% endif %}
-              {% endif %}
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: entities
-              title: Alle metingen in deze ruimte
-            filter:
-              include:
-                - area: Voortuin
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Voortuin
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Voortuin
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Voortuin
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-                - area: Voortuin
-                  domain: sensor
-                  attributes:
-                    device_class: illuminance
-            sort:
-              method: friendly_name
+          - type: custom:button-card
+            template: kamer_detail
+            variables:
+              slug: voortuin
           - type: custom:auto-entities
             show_empty: false
             card:
@@ -2298,28 +1101,30 @@ sections:
                     device_class: garage_door
             sort:
               method: friendly_name
-          - type: custom:auto-entities
-            show_empty: false
-            card:
-              type: history-graph
-              hours_to_show: 24
-            filter:
-              include:
-                - area: Voortuin
-                  domain: sensor
-                  attributes:
-                    device_class: temperature
-                - area: Voortuin
-                  domain: sensor
-                  attributes:
-                    device_class: humidity
-                - area: Voortuin
-                  domain: sensor
-                  attributes:
-                    device_class: carbon_dioxide
-                - area: Voortuin
-                  domain: sensor
-                  attributes:
-                    device_class: pm25
-            sort:
-              method: friendly_name
+
+  #############################################################################
+  ## Onderhoud: wat hangt er wél, maar is niet gekoppeld
+  #############################################################################
+  # De keerzijde van een vaste koppeling is dat een nieuwe sensor niet vanzelf
+  # verschijnt. Deze lijst is het tegengif: `sensor.kamers_niet_gekoppeld`
+  # loopt één keer per uur de areas af en meldt elke meetsensor die nergens is
+  # aangewezen. Staat hier iets dat er hoort, zet het dan bij `klimaat` of
+  # `voorkeur` in custom_templates/kamers.jinja; staat er iets dat er nooit bij
+  # hoort (koelkast, espressomachine), zet het dan in `negeer` bij die kamer.
+  - type: grid
+    column_span: 4
+    cards:
+      - type: markdown
+        content: |
+          {% set L = state_attr('sensor.kamers_niet_gekoppeld', 'sensoren') or [] %}
+          {% if L | count == 0 %}
+          **Alle meetsensoren zijn gekoppeld.**
+          {% else %}
+          ### {{ L | count }} sensor{{ 'en' if L | count > 1 else '' }} niet gekoppeld
+          Deze hangen in een ruimte van dit overzicht maar leveren er geen waarde
+          voor. Bewust? Zet ze in `negeer`. Anders in `klimaat` of `voorkeur`.
+
+          {% for kamer, items in L | groupby('kamer') %}
+          **{{ kamer }}** — {% for s in items %}`{{ s.id }}`{{ ", " if not loop.last else "" }}{% endfor %}
+          {% endfor %}
+          {% endif %}
