@@ -219,6 +219,37 @@ sensor("sensor.zolder_temp", 22, "temperature", "Zolder", minuten=300)
 check("vlak na herstart telt leeftijd niet", "zolder", "metingen.temp.oud", False)
 
 # ---------------------------------------------------------------------------
+# Een apparaat dat zichzelf meet is geen kamermeting
+#
+# Dit ging op 2026-08-03 op het dashboard mis: zigbee2mqtt geeft bijna elk
+# apparaat een `device_temperature` met device_class temperature, en die won van
+# de echte thermometer. Het halve huis stond op 27 tot 40 graden terwijl het
+# buiten 22 was.
+# ---------------------------------------------------------------------------
+wereld()
+sensor("sensor.kantoor_stekker_apparaattemperatuur", 38, "temperature", "Kantoor")
+sensor("sensor.kantoor_kantoor_temperatuur_temperatuur", 22.4, "temperature", "Kantoor")
+check("printplaat telt niet mee", "kantoor", "metingen.temp.w", 22.4)
+check("en de kamer is dus gewoon goed", "kantoor", "status", "goed")
+
+# De volgorde uit de registry is willekeurig, dus de echte thermometer mag niet
+# afhangen van wie er toevallig eerst staat.
+wereld()
+sensor("sensor.badkamer_badkamer_temperatuur_temperatuur", 23.1, "temperature", "Badkamer")
+sensor("sensor.badkamer_iets_anders", 31, "temperature", "Badkamer")
+check("voorkeur wint van volgorde", "badkamer", "metingen.temp.w", 23.1)
+
+wereld()
+sensor("sensor.woonkamer_aquarium_temp", 26, "temperature", "Woonkamer")
+check("aquarium is de kamer niet", "woonkamer", "aantal_metingen", 0)
+check("en dat is geen meting", "woonkamer", "status", "geen meting")
+
+# Een ruimte met alleen een lichtsensor in de bewegingsmelder is geen storing.
+wereld()
+sensor("sensor.toilet_beweging_lux", 53, "illuminance", "Toilet")
+check("alleen licht", "toilet", "reden", "alleen licht, geen thermometer")
+
+# ---------------------------------------------------------------------------
 # Beweging
 # ---------------------------------------------------------------------------
 wereld()

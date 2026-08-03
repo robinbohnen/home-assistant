@@ -10,10 +10,15 @@
 # card-mod een keer niet laadt blijft dit gewoon leesbaar. Dat maakt hem ook
 # bruikbaar op de Nest Hub, waar card-mod helemaal niet draait.
 #
-# Elke tegel opent een pop-up met alles wat er in die ruimte hangt. Die lijsten
-# zijn niet met de hand opgesomd maar `auto-entities` op de area, precies zoals
-# de macro zijn metingen ophaalt. Hang je er een sensor bij, dan staat hij er
-# vanzelf in. Blijft een pop-up leeg, dan klopt de area-naam niet.
+# Elke tegel opent een pop-up. Die begint met een markdown-kaart die WELKE
+# entiteit elke waarde geleverd heeft laat zien - dat is de enige plek waar je
+# ziet of de automatische koppeling de juiste sensor te pakken had. Daaronder
+# staan lijsten van auto-entities op de area. Blijft dat leeg terwijl er wel
+# sensoren hangen, dan klopt de area-naam niet.
+#
+# LET OP bij het bewerken van de filters: `device_class` is geen filtersleutel
+# in auto-entities, die hoort onder `attributes:`. Met device_class op het
+# hoogste niveau gaf elke pop-up drie keer "Configuratiefout".
 type: sections
 max_columns: 4
 title: Kamers
@@ -252,28 +257,55 @@ sections:
           }
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'woonkamer') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Woonkamer**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Woonkamer
-                domain: sensor
-                device_class: temperature
-              - area: Woonkamer
-                domain: sensor
-                device_class: humidity
-              - area: Woonkamer
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Woonkamer
-                domain: sensor
-                device_class: pm25
-              - area: Woonkamer
-                domain: sensor
-                device_class: illuminance
+                - area: Woonkamer
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Woonkamer
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Woonkamer
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Woonkamer
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Woonkamer
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -284,27 +316,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Woonkamer
-                domain: binary_sensor
-                device_class: motion
-              - area: Woonkamer
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Woonkamer
-                domain: binary_sensor
-                device_class: presence
-              - area: Woonkamer
-                domain: binary_sensor
-                device_class: door
-              - area: Woonkamer
-                domain: binary_sensor
-                device_class: window
-              - area: Woonkamer
-                domain: binary_sensor
-                device_class: opening
-              - area: Woonkamer
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Woonkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Woonkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Woonkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Woonkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Woonkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Woonkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Woonkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -314,18 +353,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Woonkamer
-                domain: sensor
-                device_class: temperature
-              - area: Woonkamer
-                domain: sensor
-                device_class: humidity
-              - area: Woonkamer
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Woonkamer
-                domain: sensor
-                device_class: pm25
+                - area: Woonkamer
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Woonkamer
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Woonkamer
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Woonkamer
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -336,28 +379,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'keuken') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Keuken**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Keuken
-                domain: sensor
-                device_class: temperature
-              - area: Keuken
-                domain: sensor
-                device_class: humidity
-              - area: Keuken
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Keuken
-                domain: sensor
-                device_class: pm25
-              - area: Keuken
-                domain: sensor
-                device_class: illuminance
+                - area: Keuken
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Keuken
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Keuken
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Keuken
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Keuken
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -368,27 +438,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Keuken
-                domain: binary_sensor
-                device_class: motion
-              - area: Keuken
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Keuken
-                domain: binary_sensor
-                device_class: presence
-              - area: Keuken
-                domain: binary_sensor
-                device_class: door
-              - area: Keuken
-                domain: binary_sensor
-                device_class: window
-              - area: Keuken
-                domain: binary_sensor
-                device_class: opening
-              - area: Keuken
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Keuken
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Keuken
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Keuken
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Keuken
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Keuken
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Keuken
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Keuken
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -398,18 +475,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Keuken
-                domain: sensor
-                device_class: temperature
-              - area: Keuken
-                domain: sensor
-                device_class: humidity
-              - area: Keuken
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Keuken
-                domain: sensor
-                device_class: pm25
+                - area: Keuken
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Keuken
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Keuken
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Keuken
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -420,28 +501,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'entree') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Entree**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Entree
-                domain: sensor
-                device_class: temperature
-              - area: Entree
-                domain: sensor
-                device_class: humidity
-              - area: Entree
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Entree
-                domain: sensor
-                device_class: pm25
-              - area: Entree
-                domain: sensor
-                device_class: illuminance
+                - area: Entree
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Entree
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Entree
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Entree
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Entree
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -452,27 +560,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Entree
-                domain: binary_sensor
-                device_class: motion
-              - area: Entree
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Entree
-                domain: binary_sensor
-                device_class: presence
-              - area: Entree
-                domain: binary_sensor
-                device_class: door
-              - area: Entree
-                domain: binary_sensor
-                device_class: window
-              - area: Entree
-                domain: binary_sensor
-                device_class: opening
-              - area: Entree
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Entree
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Entree
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Entree
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Entree
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Entree
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Entree
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Entree
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -482,18 +597,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Entree
-                domain: sensor
-                device_class: temperature
-              - area: Entree
-                domain: sensor
-                device_class: humidity
-              - area: Entree
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Entree
-                domain: sensor
-                device_class: pm25
+                - area: Entree
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Entree
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Entree
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Entree
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -504,28 +623,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'toilet') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Toilet**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Toilet
-                domain: sensor
-                device_class: temperature
-              - area: Toilet
-                domain: sensor
-                device_class: humidity
-              - area: Toilet
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Toilet
-                domain: sensor
-                device_class: pm25
-              - area: Toilet
-                domain: sensor
-                device_class: illuminance
+                - area: Toilet
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Toilet
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Toilet
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Toilet
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Toilet
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -536,27 +682,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Toilet
-                domain: binary_sensor
-                device_class: motion
-              - area: Toilet
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Toilet
-                domain: binary_sensor
-                device_class: presence
-              - area: Toilet
-                domain: binary_sensor
-                device_class: door
-              - area: Toilet
-                domain: binary_sensor
-                device_class: window
-              - area: Toilet
-                domain: binary_sensor
-                device_class: opening
-              - area: Toilet
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Toilet
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Toilet
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Toilet
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Toilet
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Toilet
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Toilet
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Toilet
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -566,18 +719,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Toilet
-                domain: sensor
-                device_class: temperature
-              - area: Toilet
-                domain: sensor
-                device_class: humidity
-              - area: Toilet
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Toilet
-                domain: sensor
-                device_class: pm25
+                - area: Toilet
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Toilet
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Toilet
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Toilet
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -588,28 +745,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'speelkamer') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Speelkamer**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Speelkamer
-                domain: sensor
-                device_class: temperature
-              - area: Speelkamer
-                domain: sensor
-                device_class: humidity
-              - area: Speelkamer
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Speelkamer
-                domain: sensor
-                device_class: pm25
-              - area: Speelkamer
-                domain: sensor
-                device_class: illuminance
+                - area: Speelkamer
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Speelkamer
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Speelkamer
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Speelkamer
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Speelkamer
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -620,27 +804,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Speelkamer
-                domain: binary_sensor
-                device_class: motion
-              - area: Speelkamer
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Speelkamer
-                domain: binary_sensor
-                device_class: presence
-              - area: Speelkamer
-                domain: binary_sensor
-                device_class: door
-              - area: Speelkamer
-                domain: binary_sensor
-                device_class: window
-              - area: Speelkamer
-                domain: binary_sensor
-                device_class: opening
-              - area: Speelkamer
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Speelkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Speelkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Speelkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Speelkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Speelkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Speelkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Speelkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -650,18 +841,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Speelkamer
-                domain: sensor
-                device_class: temperature
-              - area: Speelkamer
-                domain: sensor
-                device_class: humidity
-              - area: Speelkamer
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Speelkamer
-                domain: sensor
-                device_class: pm25
+                - area: Speelkamer
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Speelkamer
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Speelkamer
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Speelkamer
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -672,28 +867,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'garage') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Garage**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Garage
-                domain: sensor
-                device_class: temperature
-              - area: Garage
-                domain: sensor
-                device_class: humidity
-              - area: Garage
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Garage
-                domain: sensor
-                device_class: pm25
-              - area: Garage
-                domain: sensor
-                device_class: illuminance
+                - area: Garage
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Garage
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Garage
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Garage
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Garage
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -704,27 +926,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Garage
-                domain: binary_sensor
-                device_class: motion
-              - area: Garage
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Garage
-                domain: binary_sensor
-                device_class: presence
-              - area: Garage
-                domain: binary_sensor
-                device_class: door
-              - area: Garage
-                domain: binary_sensor
-                device_class: window
-              - area: Garage
-                domain: binary_sensor
-                device_class: opening
-              - area: Garage
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Garage
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Garage
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Garage
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Garage
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Garage
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Garage
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Garage
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -734,18 +963,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Garage
-                domain: sensor
-                device_class: temperature
-              - area: Garage
-                domain: sensor
-                device_class: humidity
-              - area: Garage
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Garage
-                domain: sensor
-                device_class: pm25
+                - area: Garage
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Garage
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Garage
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Garage
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -756,28 +989,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'meterkast') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Meterkast**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Meterkast
-                domain: sensor
-                device_class: temperature
-              - area: Meterkast
-                domain: sensor
-                device_class: humidity
-              - area: Meterkast
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Meterkast
-                domain: sensor
-                device_class: pm25
-              - area: Meterkast
-                domain: sensor
-                device_class: illuminance
+                - area: Meterkast
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Meterkast
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Meterkast
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Meterkast
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Meterkast
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -788,27 +1048,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Meterkast
-                domain: binary_sensor
-                device_class: motion
-              - area: Meterkast
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Meterkast
-                domain: binary_sensor
-                device_class: presence
-              - area: Meterkast
-                domain: binary_sensor
-                device_class: door
-              - area: Meterkast
-                domain: binary_sensor
-                device_class: window
-              - area: Meterkast
-                domain: binary_sensor
-                device_class: opening
-              - area: Meterkast
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Meterkast
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Meterkast
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Meterkast
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Meterkast
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Meterkast
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Meterkast
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Meterkast
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -818,18 +1085,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Meterkast
-                domain: sensor
-                device_class: temperature
-              - area: Meterkast
-                domain: sensor
-                device_class: humidity
-              - area: Meterkast
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Meterkast
-                domain: sensor
-                device_class: pm25
+                - area: Meterkast
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Meterkast
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Meterkast
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Meterkast
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -840,28 +1111,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'slaapkamer') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Slaapkamer**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Slaapkamer
-                domain: sensor
-                device_class: temperature
-              - area: Slaapkamer
-                domain: sensor
-                device_class: humidity
-              - area: Slaapkamer
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Slaapkamer
-                domain: sensor
-                device_class: pm25
-              - area: Slaapkamer
-                domain: sensor
-                device_class: illuminance
+                - area: Slaapkamer
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Slaapkamer
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Slaapkamer
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Slaapkamer
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Slaapkamer
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -872,27 +1170,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Slaapkamer
-                domain: binary_sensor
-                device_class: motion
-              - area: Slaapkamer
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Slaapkamer
-                domain: binary_sensor
-                device_class: presence
-              - area: Slaapkamer
-                domain: binary_sensor
-                device_class: door
-              - area: Slaapkamer
-                domain: binary_sensor
-                device_class: window
-              - area: Slaapkamer
-                domain: binary_sensor
-                device_class: opening
-              - area: Slaapkamer
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Slaapkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Slaapkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Slaapkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Slaapkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Slaapkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Slaapkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Slaapkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -902,18 +1207,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Slaapkamer
-                domain: sensor
-                device_class: temperature
-              - area: Slaapkamer
-                domain: sensor
-                device_class: humidity
-              - area: Slaapkamer
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Slaapkamer
-                domain: sensor
-                device_class: pm25
+                - area: Slaapkamer
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Slaapkamer
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Slaapkamer
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Slaapkamer
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -924,28 +1233,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'slaapkamer_logan') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Slaapkamer Logan**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Slaapkamer Logan
-                domain: sensor
-                device_class: temperature
-              - area: Slaapkamer Logan
-                domain: sensor
-                device_class: humidity
-              - area: Slaapkamer Logan
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Slaapkamer Logan
-                domain: sensor
-                device_class: pm25
-              - area: Slaapkamer Logan
-                domain: sensor
-                device_class: illuminance
+                - area: Slaapkamer Logan
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Slaapkamer Logan
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Slaapkamer Logan
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Slaapkamer Logan
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Slaapkamer Logan
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -956,27 +1292,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Slaapkamer Logan
-                domain: binary_sensor
-                device_class: motion
-              - area: Slaapkamer Logan
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Slaapkamer Logan
-                domain: binary_sensor
-                device_class: presence
-              - area: Slaapkamer Logan
-                domain: binary_sensor
-                device_class: door
-              - area: Slaapkamer Logan
-                domain: binary_sensor
-                device_class: window
-              - area: Slaapkamer Logan
-                domain: binary_sensor
-                device_class: opening
-              - area: Slaapkamer Logan
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Slaapkamer Logan
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Slaapkamer Logan
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Slaapkamer Logan
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Slaapkamer Logan
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Slaapkamer Logan
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Slaapkamer Logan
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Slaapkamer Logan
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -986,18 +1329,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Slaapkamer Logan
-                domain: sensor
-                device_class: temperature
-              - area: Slaapkamer Logan
-                domain: sensor
-                device_class: humidity
-              - area: Slaapkamer Logan
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Slaapkamer Logan
-                domain: sensor
-                device_class: pm25
+                - area: Slaapkamer Logan
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Slaapkamer Logan
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Slaapkamer Logan
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Slaapkamer Logan
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1008,28 +1355,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'badkamer') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Badkamer**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Badkamer
-                domain: sensor
-                device_class: temperature
-              - area: Badkamer
-                domain: sensor
-                device_class: humidity
-              - area: Badkamer
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Badkamer
-                domain: sensor
-                device_class: pm25
-              - area: Badkamer
-                domain: sensor
-                device_class: illuminance
+                - area: Badkamer
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Badkamer
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Badkamer
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Badkamer
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Badkamer
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1040,27 +1414,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Badkamer
-                domain: binary_sensor
-                device_class: motion
-              - area: Badkamer
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Badkamer
-                domain: binary_sensor
-                device_class: presence
-              - area: Badkamer
-                domain: binary_sensor
-                device_class: door
-              - area: Badkamer
-                domain: binary_sensor
-                device_class: window
-              - area: Badkamer
-                domain: binary_sensor
-                device_class: opening
-              - area: Badkamer
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Badkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Badkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Badkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Badkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Badkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Badkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Badkamer
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1070,18 +1451,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Badkamer
-                domain: sensor
-                device_class: temperature
-              - area: Badkamer
-                domain: sensor
-                device_class: humidity
-              - area: Badkamer
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Badkamer
-                domain: sensor
-                device_class: pm25
+                - area: Badkamer
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Badkamer
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Badkamer
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Badkamer
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1092,28 +1477,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'kantoor') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Kantoor**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Kantoor
-                domain: sensor
-                device_class: temperature
-              - area: Kantoor
-                domain: sensor
-                device_class: humidity
-              - area: Kantoor
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Kantoor
-                domain: sensor
-                device_class: pm25
-              - area: Kantoor
-                domain: sensor
-                device_class: illuminance
+                - area: Kantoor
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Kantoor
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Kantoor
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Kantoor
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Kantoor
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1124,27 +1536,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Kantoor
-                domain: binary_sensor
-                device_class: motion
-              - area: Kantoor
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Kantoor
-                domain: binary_sensor
-                device_class: presence
-              - area: Kantoor
-                domain: binary_sensor
-                device_class: door
-              - area: Kantoor
-                domain: binary_sensor
-                device_class: window
-              - area: Kantoor
-                domain: binary_sensor
-                device_class: opening
-              - area: Kantoor
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Kantoor
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Kantoor
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Kantoor
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Kantoor
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Kantoor
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Kantoor
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Kantoor
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1154,18 +1573,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Kantoor
-                domain: sensor
-                device_class: temperature
-              - area: Kantoor
-                domain: sensor
-                device_class: humidity
-              - area: Kantoor
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Kantoor
-                domain: sensor
-                device_class: pm25
+                - area: Kantoor
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Kantoor
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Kantoor
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Kantoor
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1176,28 +1599,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'overloop') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Overloop**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Overloop
-                domain: sensor
-                device_class: temperature
-              - area: Overloop
-                domain: sensor
-                device_class: humidity
-              - area: Overloop
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Overloop
-                domain: sensor
-                device_class: pm25
-              - area: Overloop
-                domain: sensor
-                device_class: illuminance
+                - area: Overloop
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Overloop
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Overloop
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Overloop
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Overloop
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1208,27 +1658,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Overloop
-                domain: binary_sensor
-                device_class: motion
-              - area: Overloop
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Overloop
-                domain: binary_sensor
-                device_class: presence
-              - area: Overloop
-                domain: binary_sensor
-                device_class: door
-              - area: Overloop
-                domain: binary_sensor
-                device_class: window
-              - area: Overloop
-                domain: binary_sensor
-                device_class: opening
-              - area: Overloop
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Overloop
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Overloop
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Overloop
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Overloop
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Overloop
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Overloop
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Overloop
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1238,18 +1695,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Overloop
-                domain: sensor
-                device_class: temperature
-              - area: Overloop
-                domain: sensor
-                device_class: humidity
-              - area: Overloop
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Overloop
-                domain: sensor
-                device_class: pm25
+                - area: Overloop
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Overloop
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Overloop
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Overloop
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1260,28 +1721,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'slaapkamer_emma') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Slaapkamer Emma**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Slaapkamer Emma
-                domain: sensor
-                device_class: temperature
-              - area: Slaapkamer Emma
-                domain: sensor
-                device_class: humidity
-              - area: Slaapkamer Emma
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Slaapkamer Emma
-                domain: sensor
-                device_class: pm25
-              - area: Slaapkamer Emma
-                domain: sensor
-                device_class: illuminance
+                - area: Slaapkamer Emma
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Slaapkamer Emma
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Slaapkamer Emma
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Slaapkamer Emma
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Slaapkamer Emma
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1292,27 +1780,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Slaapkamer Emma
-                domain: binary_sensor
-                device_class: motion
-              - area: Slaapkamer Emma
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Slaapkamer Emma
-                domain: binary_sensor
-                device_class: presence
-              - area: Slaapkamer Emma
-                domain: binary_sensor
-                device_class: door
-              - area: Slaapkamer Emma
-                domain: binary_sensor
-                device_class: window
-              - area: Slaapkamer Emma
-                domain: binary_sensor
-                device_class: opening
-              - area: Slaapkamer Emma
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Slaapkamer Emma
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Slaapkamer Emma
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Slaapkamer Emma
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Slaapkamer Emma
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Slaapkamer Emma
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Slaapkamer Emma
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Slaapkamer Emma
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1322,18 +1817,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Slaapkamer Emma
-                domain: sensor
-                device_class: temperature
-              - area: Slaapkamer Emma
-                domain: sensor
-                device_class: humidity
-              - area: Slaapkamer Emma
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Slaapkamer Emma
-                domain: sensor
-                device_class: pm25
+                - area: Slaapkamer Emma
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Slaapkamer Emma
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Slaapkamer Emma
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Slaapkamer Emma
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1344,28 +1843,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'zolder') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Zolder**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Zolder
-                domain: sensor
-                device_class: temperature
-              - area: Zolder
-                domain: sensor
-                device_class: humidity
-              - area: Zolder
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Zolder
-                domain: sensor
-                device_class: pm25
-              - area: Zolder
-                domain: sensor
-                device_class: illuminance
+                - area: Zolder
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Zolder
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Zolder
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Zolder
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Zolder
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1376,27 +1902,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Zolder
-                domain: binary_sensor
-                device_class: motion
-              - area: Zolder
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Zolder
-                domain: binary_sensor
-                device_class: presence
-              - area: Zolder
-                domain: binary_sensor
-                device_class: door
-              - area: Zolder
-                domain: binary_sensor
-                device_class: window
-              - area: Zolder
-                domain: binary_sensor
-                device_class: opening
-              - area: Zolder
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Zolder
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Zolder
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Zolder
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Zolder
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Zolder
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Zolder
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Zolder
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1406,18 +1939,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Zolder
-                domain: sensor
-                device_class: temperature
-              - area: Zolder
-                domain: sensor
-                device_class: humidity
-              - area: Zolder
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Zolder
-                domain: sensor
-                device_class: pm25
+                - area: Zolder
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Zolder
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Zolder
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Zolder
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1428,28 +1965,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'schuur') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Schuur**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Schuur
-                domain: sensor
-                device_class: temperature
-              - area: Schuur
-                domain: sensor
-                device_class: humidity
-              - area: Schuur
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Schuur
-                domain: sensor
-                device_class: pm25
-              - area: Schuur
-                domain: sensor
-                device_class: illuminance
+                - area: Schuur
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Schuur
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Schuur
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Schuur
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Schuur
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1460,27 +2024,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Schuur
-                domain: binary_sensor
-                device_class: motion
-              - area: Schuur
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Schuur
-                domain: binary_sensor
-                device_class: presence
-              - area: Schuur
-                domain: binary_sensor
-                device_class: door
-              - area: Schuur
-                domain: binary_sensor
-                device_class: window
-              - area: Schuur
-                domain: binary_sensor
-                device_class: opening
-              - area: Schuur
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Schuur
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Schuur
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Schuur
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Schuur
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Schuur
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Schuur
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Schuur
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1490,18 +2061,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Schuur
-                domain: sensor
-                device_class: temperature
-              - area: Schuur
-                domain: sensor
-                device_class: humidity
-              - area: Schuur
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Schuur
-                domain: sensor
-                device_class: pm25
+                - area: Schuur
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Schuur
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Schuur
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Schuur
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1512,28 +2087,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'achtertuin') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Achtertuin**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Achtertuin
-                domain: sensor
-                device_class: temperature
-              - area: Achtertuin
-                domain: sensor
-                device_class: humidity
-              - area: Achtertuin
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Achtertuin
-                domain: sensor
-                device_class: pm25
-              - area: Achtertuin
-                domain: sensor
-                device_class: illuminance
+                - area: Achtertuin
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Achtertuin
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Achtertuin
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Achtertuin
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Achtertuin
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1544,27 +2146,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Achtertuin
-                domain: binary_sensor
-                device_class: motion
-              - area: Achtertuin
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Achtertuin
-                domain: binary_sensor
-                device_class: presence
-              - area: Achtertuin
-                domain: binary_sensor
-                device_class: door
-              - area: Achtertuin
-                domain: binary_sensor
-                device_class: window
-              - area: Achtertuin
-                domain: binary_sensor
-                device_class: opening
-              - area: Achtertuin
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Achtertuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Achtertuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Achtertuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Achtertuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Achtertuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Achtertuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Achtertuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1574,18 +2183,22 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Achtertuin
-                domain: sensor
-                device_class: temperature
-              - area: Achtertuin
-                domain: sensor
-                device_class: humidity
-              - area: Achtertuin
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Achtertuin
-                domain: sensor
-                device_class: pm25
+                - area: Achtertuin
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Achtertuin
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Achtertuin
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Achtertuin
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1596,28 +2209,55 @@ sections:
         styles: *kamer_popup
 
         cards:
+          # Kernkaart: werkt zonder custom cards en noemt per meting de bron.
+          # Staat een tegel op een raar getal, dan zie je hier meteen welke
+          # entiteit gewonnen heeft en hoort die in `voorkeur` of in
+          # NEGEER_PATRONEN in kamers.jinja.
+          - type: markdown
+            content: |
+              {% set K = state_attr('sensor.kamers', 'kamers') or [] %}
+              {% set k = (K | selectattr('slug', 'eq', 'voortuin') | list | first) | default(none) %}
+              {% if k is none %}
+              `sensor.kamers` heeft nog geen waarde.
+              {% else %}
+              ### {{ k.status }} — {{ k.reden }}
+              {% if k.advies %}*{{ k.advies }}*{% endif %}
+
+              {% for m in k.metingen %}{% if m.w is not none %}- **{{ m.label }}** {{ m.w }}{{ m.eenheid }}{% if m.oud %} · al uren niet bijgewerkt{% endif %}
+                `{{ m.id }}`
+              {% endif %}{% endfor %}
+
+              {% if k.aantal_metingen == 0 %}
+              Geen enkele meting gevonden in area **Voortuin**. Klopt die naam?
+              {% endif %}
+              {% endif %}
           - type: custom:auto-entities
             show_empty: false
             card:
               type: entities
-              title: Metingen
+              title: Alle metingen in deze ruimte
             filter:
               include:
-              - area: Voortuin
-                domain: sensor
-                device_class: temperature
-              - area: Voortuin
-                domain: sensor
-                device_class: humidity
-              - area: Voortuin
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Voortuin
-                domain: sensor
-                device_class: pm25
-              - area: Voortuin
-                domain: sensor
-                device_class: illuminance
+                - area: Voortuin
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Voortuin
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Voortuin
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Voortuin
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
+                - area: Voortuin
+                  domain: sensor
+                  attributes:
+                    device_class: illuminance
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1628,27 +2268,34 @@ sections:
               state_color: true
             filter:
               include:
-              - area: Voortuin
-                domain: binary_sensor
-                device_class: motion
-              - area: Voortuin
-                domain: binary_sensor
-                device_class: occupancy
-              - area: Voortuin
-                domain: binary_sensor
-                device_class: presence
-              - area: Voortuin
-                domain: binary_sensor
-                device_class: door
-              - area: Voortuin
-                domain: binary_sensor
-                device_class: window
-              - area: Voortuin
-                domain: binary_sensor
-                device_class: opening
-              - area: Voortuin
-                domain: binary_sensor
-                device_class: garage_door
+                - area: Voortuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: motion
+                - area: Voortuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: occupancy
+                - area: Voortuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: presence
+                - area: Voortuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: door
+                - area: Voortuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: window
+                - area: Voortuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: opening
+                - area: Voortuin
+                  domain: binary_sensor
+                  attributes:
+                    device_class: garage_door
             sort:
               method: friendly_name
           - type: custom:auto-entities
@@ -1658,17 +2305,21 @@ sections:
               hours_to_show: 24
             filter:
               include:
-              - area: Voortuin
-                domain: sensor
-                device_class: temperature
-              - area: Voortuin
-                domain: sensor
-                device_class: humidity
-              - area: Voortuin
-                domain: sensor
-                device_class: carbon_dioxide
-              - area: Voortuin
-                domain: sensor
-                device_class: pm25
+                - area: Voortuin
+                  domain: sensor
+                  attributes:
+                    device_class: temperature
+                - area: Voortuin
+                  domain: sensor
+                  attributes:
+                    device_class: humidity
+                - area: Voortuin
+                  domain: sensor
+                  attributes:
+                    device_class: carbon_dioxide
+                - area: Voortuin
+                  domain: sensor
+                  attributes:
+                    device_class: pm25
             sort:
               method: friendly_name

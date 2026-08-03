@@ -28,7 +28,10 @@
   Per kamer kun je bijsturen zonder de automatiek te verlaten:
     voorkeur  entiteiten die vóór de area-vondsten worden geprobeerd. Nodig als
               een ruimte meerdere sensoren van hetzelfde soort heeft en de
-              volgorde uit de registry willekeurig is (woonkamer heeft er drie).
+              volgorde uit de registry willekeurig is. Voor temperatuur staat
+              hier overal de echte kamerthermometer ingevuld: zonder dat won
+              een willekeurig Zigbee-apparaat met zijn printplaattemperatuur.
+              Zie NEGEER_PATRONEN verderop voor het verhaal.
     extra     entiteiten die buiten de area vallen maar er wel bij horen.
     negeer    entiteiten die in de area zitten maar niet meetellen.
 
@@ -59,30 +62,39 @@
       {'slug': 'toilet', 'naam': 'Toilet', 'icoon': 'mdi:toilet',
        'verdieping': 'Begane grond', 'area': 'Toilet', 'soort': 'nat'},
       {'slug': 'speelkamer', 'naam': 'Speelkamer', 'icoon': 'mdi:teddy-bear',
-       'verdieping': 'Begane grond', 'area': 'Speelkamer', 'soort': 'leef'},
+       'verdieping': 'Begane grond', 'area': 'Speelkamer', 'soort': 'leef',
+       'voorkeur': ['sensor.speelkamer_speelkamer_temperatuur_temperatuur']},
       {'slug': 'garage', 'naam': 'Garage', 'icoon': 'mdi:garage-variant',
-       'verdieping': 'Begane grond', 'area': 'Garage', 'soort': 'techniek'},
+       'verdieping': 'Begane grond', 'area': 'Garage', 'soort': 'techniek',
+       'voorkeur': ['sensor.garage_garage_temperatuur_temperatuur']},
       {'slug': 'meterkast', 'naam': 'Meterkast', 'icoon': 'mdi:flash-outline',
-       'verdieping': 'Begane grond', 'area': 'Meterkast', 'soort': 'techniek'},
+       'verdieping': 'Begane grond', 'area': 'Meterkast', 'soort': 'techniek',
+       'voorkeur': ['sensor.meterkast_temperatuur_temperature']},
 
       {'slug': 'slaapkamer', 'naam': 'Slaapkamer', 'icoon': 'mdi:bed-king-outline',
-       'verdieping': 'Eerste verdieping', 'area': 'Slaapkamer', 'soort': 'slaap'},
+       'verdieping': 'Eerste verdieping', 'area': 'Slaapkamer', 'soort': 'slaap',
+       'voorkeur': ['sensor.slaapkamer_slaapkamer_temperatuur_temperatuur']},
       {'slug': 'slaapkamer_logan', 'naam': 'Slaapkamer Logan', 'icoon': 'mdi:bed-single-outline',
-       'verdieping': 'Eerste verdieping', 'area': 'Slaapkamer Logan', 'soort': 'slaap'},
+       'verdieping': 'Eerste verdieping', 'area': 'Slaapkamer Logan', 'soort': 'slaap',
+       'voorkeur': ['sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur']},
       {'slug': 'badkamer', 'naam': 'Badkamer', 'icoon': 'mdi:shower',
-       'verdieping': 'Eerste verdieping', 'area': 'Badkamer', 'soort': 'nat'},
+       'verdieping': 'Eerste verdieping', 'area': 'Badkamer', 'soort': 'nat',
+       'voorkeur': ['sensor.badkamer_badkamer_temperatuur_temperatuur']},
       {'slug': 'kantoor', 'naam': 'Kantoor', 'icoon': 'mdi:desk',
-       'verdieping': 'Eerste verdieping', 'area': 'Kantoor', 'soort': 'leef'},
+       'verdieping': 'Eerste verdieping', 'area': 'Kantoor', 'soort': 'leef',
+       'voorkeur': ['sensor.kantoor_kantoor_temperatuur_temperatuur']},
       {'slug': 'overloop', 'naam': 'Overloop', 'icoon': 'mdi:stairs',
        'verdieping': 'Eerste verdieping', 'area': 'Overloop', 'soort': 'leef'},
 
       {'slug': 'slaapkamer_emma', 'naam': 'Slaapkamer Emma', 'icoon': 'mdi:bed-single-outline',
-       'verdieping': 'Tweede verdieping', 'area': 'Slaapkamer Emma', 'soort': 'slaap'},
+       'verdieping': 'Tweede verdieping', 'area': 'Slaapkamer Emma', 'soort': 'slaap',
+       'voorkeur': ['sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur']},
       {'slug': 'zolder', 'naam': 'Zolder', 'icoon': 'mdi:home-roof',
        'verdieping': 'Tweede verdieping', 'area': 'Zolder', 'soort': 'techniek'},
 
       {'slug': 'schuur', 'naam': 'Schuur', 'icoon': 'mdi:home-outline',
-       'verdieping': 'Buiten', 'area': 'Schuur', 'soort': 'techniek'},
+       'verdieping': 'Buiten', 'area': 'Schuur', 'soort': 'techniek',
+       'voorkeur': ['sensor.achtertuin_schuur_temperatuur_temperature']},
       {'slug': 'achtertuin', 'naam': 'Achtertuin', 'icoon': 'mdi:tree-outline',
        'verdieping': 'Buiten', 'area': 'Achtertuin', 'soort': 'buiten'},
       {'slug': 'voortuin', 'naam': 'Voortuin', 'icoon': 'mdi:home-city-outline',
@@ -141,6 +153,41 @@
       'buiten': {
         'temp': none, 'rv': none, 'co2': none, 'pm25': none },
     } -%}
+
+{#- ==================== WAT GEEN KAMERMETING IS ========================== -#}
+{#-
+  Een device_class alleen is niet genoeg om te weten of een sensor de RUIMTE
+  meet of ZICHZELF. Op 3 augustus 2026 stond hierdoor het halve huis op 27 tot
+  40 graden terwijl het buiten 22 was: zigbee2mqtt geeft vrijwel elk apparaat
+  een `device_temperature` (de printplaat) met `device_class: temperature`, en
+  die won van de echte thermometer omdat de volgorde uit de registry
+  willekeurig is. Het verraad zat in de cijfers: elke tegel stond op een rond
+  getal, want die printplaattemperatuur is een integer.
+
+  Alles wat hieronder in een entity-id voorkomt telt daarom niet mee als
+  kamermeting. Twee soorten:
+    - apparaten die hun eigen temperatuur melden (printplaat, chip, omvormer)
+    - apparaten die iets ánders dan de kamer meten (koelkast, aquarium,
+      espressomachine, jacuzzi)
+
+  Dit is dezelfde soort uitsluiting als bij de veelgebruikers op Overzicht
+  (filteren op naam, niet op device_class) en bij de batterijkaart. Staat er
+  straks een tegel op een raar getal, dan is dit de lijst die je uitbreidt.
+
+  Let op de volgorde in het geheel: `voorkeur` per kamer gaat hier nog vóór.
+  Weet je welke sensor het moet zijn, zet hem dan daar neer - dan maakt deze
+  lijst niet meer uit.
+-#}
+{%- set NEGEER_PATRONEN = [
+      'apparaattemperatuur', 'apparaat_temperatuur', 'device_temperature',
+      'internal_temp', 'cpu', 'chip', 'board', 'processor',
+      'omvormer', 'inverter', 'thuisbatterij', 'accu', 'marstek', 'goodwe',
+      'sems', 'laadpaal', 'zonnepane',
+      'koelkast', 'vriezer', 'diepvries', 'oven', 'vaatwasser', 'wasmachine',
+      'droger', 'aquarium', 'jacuzzi', 'purespa', 'boiler',
+      'linea', 'micra', 'espresso', 'koffie',
+      'knmi', 'dauwpunt', 'gevoelstemperatuur', 'forecast',
+    ] -%}
 
 {#- Binaire sensoren worden op device_class herkend, met de naamgeving van dit
     huis als vangnet: zigbee2mqtt levert `_occupancy` en `_contact` en niet elke
@@ -211,7 +258,14 @@
       kamertemperatuur, maar een echte thermometer is nauwkeuriger. -#}
   {%- set c = namespace(sens=[], clim=[], bin=[]) -%}
   {%- for e in area_entities(k.area) if e not in negeer -%}
-    {%- if e[:7] == 'sensor.' -%}{%- set c.sens = c.sens + [e] -%}
+    {#- De uitsluitlijst geldt alleen voor meetsensoren. Binaire sensoren gaan
+        er buiten om: een deurcontact op de koelkast is nog steeds een
+        deurcontact. -#}
+    {%- set v = namespace(verdacht=false) -%}
+    {%- for p in NEGEER_PATRONEN if p in e -%}
+      {%- set v.verdacht = true -%}
+    {%- endfor -%}
+    {%- if e[:7] == 'sensor.' and not v.verdacht -%}{%- set c.sens = c.sens + [e] -%}
     {%- elif e[:8] == 'climate.' -%}{%- set c.clim = c.clim + [e] -%}
     {%- elif e[:14] == 'binary_sensor.' -%}{%- set c.bin = c.bin + [e] -%}
     {%- endif -%}
@@ -220,7 +274,7 @@
 
   {#- --- de meetwaarden --- -#}
   {%- set m = namespace(lijst=[], ergst=-1, prio=99, ergste_k='', ergste_w=none,
-                        aantal=0) -%}
+                        aantal=0, labels=[]) -%}
   {%- for meting in METINGEN -%}
     {%- set v = _meting(kandidaten, meting.dc) | trim | from_json -%}
     {%- set band = AFWIJKEND.get(soort, {}).get(meting.k, BASIS[meting.k]) -%}
@@ -230,7 +284,10 @@
         dat er geen sensor hángt - en dat is een heel ander probleem. -#}
     {%- set oud = mag_verouderen and v.id != ''
                   and (now() - states[v.id].last_updated).total_seconds() > 7200 -%}
-    {%- if v.w is not none -%}{%- set m.aantal = m.aantal + 1 -%}{%- endif -%}
+    {%- if v.w is not none -%}
+      {%- set m.aantal = m.aantal + 1 -%}
+      {%- set m.labels = m.labels + [meting.label | lower] -%}
+    {%- endif -%}
     {%- if score > m.ergst or (score == m.ergst and meting.prio < m.prio and score > 0) -%}
       {%- if score > 0 -%}
         {%- set m.ergst = score -%}{%- set m.prio = meting.prio -%}
@@ -287,7 +344,10 @@
     {%- elif soort == 'buiten' -%}
       {%- set ns.reden = 'buitenwaarden, niet beoordeeld' -%}
     {%- else -%}
-      {%- set ns.reden = 'gemeten, maar niet beoordeeld' -%}
+      {#- Wél sensoren, maar niets dat een oordeel oplevert - meestal een
+          ruimte met alleen een lichtsensor in een bewegingsmelder. Noem op wat
+          er dan wél is, anders lijkt het op een storing. -#}
+      {%- set ns.reden = 'alleen ' ~ (m.labels | join(' en ')) ~ ', geen thermometer' -%}
     {%- endif -%}
   {%- elif m.ergst == 0 -%}
     {#- Ook bij groen iets zeggen: een tegel die alleen "goed" meldt is een tegel
