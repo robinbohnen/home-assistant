@@ -130,9 +130,6 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 
 | Device  | Quantity | Connection | Home Assistant | Notes |
 | ------------- | :---: | ------------- | ------------- | ------------- |
-| [Tado Gateway](https://amzn.to/3ApEIY5) | 1 | Ethernet | [Tado](https://www.home-assistant.io/integrations/tado/) | Wi-Fi bridge for Tado thermostat |
-| [Tado Thermostaat](https://amzn.to/40AsCG5) | 1 | Wi-Fi | [Tado](https://www.home-assistant.io/integrations/tado/) | Thermostat for Tado ecosystem |
-| [Tado Radiator Thermostat](https://amzn.to/3CmZAj6) | 1 | Wi-Fi | [Tado](https://www.home-assistant.io/integrations/tado/) | Radiator thermostat for Tado ecosystem |
 | [Mitsubishi Electric MSZ-EF50VGKB](https://aircoplazazwolle.nl/airconditioners/msz-ef50vgkb-serie-black-50kw18000btu-r32-coolheat-wifi-a) | 1 | Wi-Fi | [Melcloud](https://www.home-assistant.io/integrations/melcloud) | Airconditioning Unit for the livingroom; cooling / heating downstairs |
 | [Mitsubishi Heavy Indusries 80ZR-S](https://www.klimaatshop.nl/mitsubishi-srk80zr-singlesplit-airco-8-0kw.html) | 1 | Wi-Fi | [IntesisHome](https://www.home-assistant.io/integrations/intesishome/) | Airconditioning Unit on our Stairways to the Attic; cools upper floors |
 
@@ -241,7 +238,6 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Speedtest.net | [Link](https://www.home-assistant.io/integrations/speedtestdotnet) | Monitor local network |
 | Spotify | [Link](https://www.home-assistant.io/integrations/spotify) | The Spotify media player integration lets you control your Spotify account playback and browse the Spotify media library |
 | System Monitor | [Link](https://www.home-assistant.io/integrations/systemmonitor) | Check all sensors of the system |
-| Tado | [Link](https://www.home-assistant.io/integrations/tado) | Control the temperature inside |
 | Thread | [Link](https://www.home-assistant.io/integrations/thread) | Not used yet |
 | UniFi Network | [Link](https://www.home-assistant.io/integrations/unifi) | Monitor network devices |
 | UniFi Protect | [Link](https://www.home-assistant.io/integrations/unifiprotect) | Integrate cameras to Home Assistant |
