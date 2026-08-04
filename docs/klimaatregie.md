@@ -151,8 +151,9 @@ De beslistabel, van hoog naar laag:
    Datzelfde venster staat op de kaart "Slaapkamer knop" in
    `dashboards/home/overzicht.yaml`; die twee horen gelijk te blijven. Om 22:00
    valt de vlag sowieso terug, zodat een vergeten avonddruk de rolluiken de
-   volgende ochtend niet alsnog opent. Drukt niemand, dan gaat het slot er om
-   10:00 alsnog af. Ventileren
+   volgende ochtend niet alsnog opent. Drukt niemand, dan zet de automatisering
+   de vlag om 10:00 zelf aan (`WAKKER_UITERLIJK` in `klimaat.jinja` en de
+   trigger van 10:00 horen gelijk te blijven). Ventileren
    blijft ondertussen gewoon toegestaan: de spui-kier valt niet onder deze
    rem, alleen omhóóg gaan. Behalve in een kinderkamer: die blijft tijdens het
    slaapvenster helemaal omlaag, zie punt 2.
@@ -162,6 +163,11 @@ De beslistabel, van hoog naar laag:
    zwaarder dan die paar graden. Dat geldt ook 's nachts: de spui-kier van punt
    1 slaat een kinderkamer over. Koelen gebeurt in deze kamers dus overdag
    (vóór bedtijd) en met de airco.
+   Het venster stopt niet om 07:00 maar loopt door zolang het huis niet wakker
+   is gemeld (dus uiterlijk tot 10:00). Anders viel de spui-uitzondering van
+   punt 1 daar 's ochtends weer aan en gingen de kinderrolluiken op een warme
+   ochtend alsnog een stukje open. Zolang niemand wakker is, verandert er in een
+   kinderkamer dus níéts: dicht blijft dicht, een kier blijft een kier.
 3. **Nacht**: dicht, of een kier bij nachtspui in het koelregime.
 4. **Overdag per regime**:
    - *Koelen*: zon op de gevel → dicht. Niemand thuis op een warme dag → dicht.

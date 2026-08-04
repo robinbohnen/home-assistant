@@ -532,8 +532,41 @@ scenario("warme ochtend, nog niemand op, spuien mag", "08:00",
             "input_number.klimaat_verwachte_max": "31",
             "sensor.knmi_temperatuur": "19",
             "sensor.slaapkamer_slaapkamer_temperatuur_temperatuur": "25",
+            "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur": "25",
+            "sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur": "25",
             "input_boolean.klimaat_wakker": "off"})
 check("ventileren mag wel, omhoog niet", "slaapkamer", "kier")
+# ...maar niet in een kinderkamer. `kind_slaapt` liep tot 07:00, dus daarna
+# gold de spui-uitzondering ook daar en gingen de rolluiken op 1 augustus 2026
+# 's ochtends alsnog een stukje open terwijl de kinderen sliepen. Wat er staat
+# blijft staan tot het huis wakker is: dicht blijft dicht, kier blijft kier.
+check("kinderkamer ventileert niet mee (Logan)", "slaapkamer_logan", "rust", False)
+check("kinderkamer ventileert niet mee (Emma)", "slaapkamer_emma", "rust", False)
+
+scenario("zelfde warme ochtend, maar het huis is wakker", "08:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "19",
+            "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur": "25",
+            "input_boolean.klimaat_wakker": "on"})
+check("na het wakker-signaal mag de kinderkamer weer", "slaapkamer_logan", "kier")
+
+scenario("warme ochtend, niemand drukte, na de noodrem", "10:30",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "19",
+            "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur": "25",
+            "input_boolean.klimaat_wakker": "off"})
+check("na 10:00 doet de kinderkamer weer mee", "slaapkamer_logan", "kier")
+
+scenario("kinderkamer, nacht met warme kamer", "02:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "19",
+            "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur": "25",
+            "sun.sun.elevation": -20.0,
+            "input_boolean.klimaat_wakker": "off"})
+check("blijft 's nachts gewoon dicht", "slaapkamer_logan", "rust", False)
 
 scenario("winterochtend, nog donker", "07:30",
          **{"input_select.klimaat_regime": "Verwarmen",

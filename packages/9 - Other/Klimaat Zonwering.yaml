@@ -323,8 +323,10 @@ klimaat_zonwering_package:
       description: >-
         Een druk op de slaapkamerknop tussen 06:00 en 17:00 is de opstaan-
         routine en meldt het huis wakker; daarbuiten is het de naar-bed-routine
-        en gaat de vlag juist uit. Om 22:00 valt hij sowieso terug, zodat een
-        vergeten avonddruk de rolluiken morgenochtend niet alsnog opent.
+        en gaat de vlag juist uit. Drukt niemand, dan gaat de vlag om 10:00
+        vanzelf aan - anders zit je op een vrije dag tot de avond in het donker.
+        Om 22:00 valt hij sowieso terug, zodat een vergeten avonddruk de
+        rolluiken morgenochtend niet alsnog opent.
       mode: single
       triggers:
         # Zelfde knoppen als packages/3 - Outside/Backyard/Sunscreen.yaml.
@@ -347,6 +349,13 @@ klimaat_zonwering_package:
             button: bedroom_buttons
             action: single
           id: knop
+        # Noodrem aan de ochtendkant: drukt niemand op de knop, dan is het huis
+        # om 10:00 wakker verklaard en mag alles weer automatisch. Zelfde
+        # tijdstip als WAKKER_UITERLIJK in klimaat.jinja; die twee horen gelijk
+        # te blijven.
+        - trigger: time
+          at: "10:00:00"
+          id: wakker_uiterlijk
         # Vangnet: wordt er 's avonds niet gedrukt, dan mag de vlag niet blijven
         # staan - anders gaan de rolluiken morgenochtend om 07:00 open terwijl
         # er nog geslapen wordt. Zelfde tijdstip als STIL_VAN in klimaat.jinja.
@@ -365,6 +374,13 @@ klimaat_zonwering_package:
                 - condition: time
                   after: "06:00:00"
                   before: "17:00:00"
+              sequence:
+                - action: input_boolean.turn_on
+                  target:
+                    entity_id: input_boolean.klimaat_wakker
+            - conditions:
+                - condition: trigger
+                  id: wakker_uiterlijk
               sequence:
                 - action: input_boolean.turn_on
                   target:

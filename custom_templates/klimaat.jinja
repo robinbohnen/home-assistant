@@ -347,8 +347,17 @@
 {%- set nog_slapen = not wakker and now() >= today_at(STIL_TOT)
                      and now() < today_at(WAKKER_UITERLIJK) -%}
 {%- set stil_nu = z.stil and (in_stille_uren or nog_slapen) -%}
+{#- Het slaapvenster van een kinderkamer loopt van `slaap_van` tot STIL_TOT,
+    maar 07:00 is een klok en geen kind. Zolang het huis niet wakker is gemeld
+    slaapt de kinderkamer dus door (`nog_slapen`, dus uiterlijk tot
+    WAKKER_UITERLIJK). Zonder die verlenging viel de kier-uitzondering
+    hieronder om 07:00 weer aan: op een warme ochtend gingen de kinderrolluiken
+    dan alsnog op een kier terwijl er nog geslapen werd. Bij de badkamer en de
+    ouderslaapkamer mag die spui-kier wél gewoon doorlopen. -#}
 {%- set kind_slaapt = z.slaap == 'kind' and z.slaap_van is not none
-                      and (now() >= today_at(z.slaap_van) or now() < today_at(STIL_TOT)) -%}
+                      and (now() >= today_at(z.slaap_van)
+                           or now() < today_at(STIL_TOT)
+                           or nog_slapen) -%}
 
 {%- set ns = namespace(a='open', r='') -%}
 
