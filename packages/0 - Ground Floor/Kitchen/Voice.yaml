@@ -130,15 +130,38 @@ keuken_voice_package:
             entity_id: timer.spraak_antwoordvenster
           data:
             duration: "{{ venster * 60 }}"
-        # continue_on_error: praat er iemand doorheen of is de satelliet net
-        # bezig, dan is de vraag hooguit niet gesteld. De melding op de
-        # telefoon staat er los van en is al verstuurd.
-        - action: assist_satellite.start_conversation
-          target:
-            entity_id: "{{ sat }}"
-          data:
-            start_message: "{{ tekst }}"
-          continue_on_error: true
+        # `start_conversation` stelt de vraag én laat de satelliet meteen
+        # luisteren, zonder wakewoord. Niet elke satelliet kan dat: het zit in
+        # `supported_features` als bit 2 (bit 1 is `announce`, alleen zeggen).
+        # Kan hij het niet, dan zegt hij het gewoon. De vraag blijft het hele
+        # antwoordvenster open staan, dus "Okay Nabu, ja" doet daarna precies
+        # hetzelfde - je hebt alleen het wakewoord nodig.
+        #
+        # Zonder deze splitsing zou een satelliet die het niet kan een fout
+        # geven die door `continue_on_error` wordt opgeslikt: melding op de
+        # telefoon, stilte in de keuken, niets in het log.
+        - if:
+            - alias: Satelliet kan een gesprek beginnen
+              condition: template
+              value_template: >-
+                {{ state_attr(sat, 'supported_features') | int(0) | bitwise_and(2) > 0 }}
+          then:
+            # continue_on_error: praat er iemand doorheen of is de satelliet
+            # net bezig, dan is de vraag hooguit niet gesteld. De melding op de
+            # telefoon staat er los van en is al verstuurd.
+            - action: assist_satellite.start_conversation
+              target:
+                entity_id: "{{ sat }}"
+              data:
+                start_message: "{{ tekst }}"
+              continue_on_error: true
+          else:
+            - action: assist_satellite.announce
+              target:
+                entity_id: "{{ sat }}"
+              data:
+                message: "{{ tekst }}"
+              continue_on_error: true
 
     spraak_vraag_sluiten:
       alias: Spraak - Vraag sluiten
