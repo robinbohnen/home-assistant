@@ -31,12 +31,13 @@
 # hieronder, in de woorden die je in de tuin gebruikt.
 #
 # WAAROM EEN "OPENSTAANDE VRAAG"
-# `assist_satellite.start_conversation` laat het huis beginnen en luistert
-# daarna naar je antwoord. Maar "ja" is een zin als alle andere: zonder
-# context zou hij ook om drie uur 's nachts ergens op slaan. Daarom onthoudt
-# `input_text.spraak_openstaande_vraag` wélke vraag open staat en bewaakt
-# `timer.spraak_antwoordvenster` hoe lang een antwoord nog telt. Staat er
-# niets open, dan zegt het huis dat gewoon.
+# `assist_satellite.ask_question` stelt de vraag en wacht daarna één keer op
+# antwoord. Zeg je niets, of iets dat er niet op lijkt, dan is dat moment weg -
+# en dat is precies wanneer je twee minuten later alsnog "ja" roept. Daarom
+# onthoudt `input_text.spraak_openstaande_vraag` wélke vraag open staat en
+# bewaakt `timer.spraak_antwoordvenster` hoe lang dat late antwoord nog telt.
+# Binnen dat venster doet "Okay Nabu, ja" precies hetzelfde als meteen
+# antwoorden; staat er niets open, dan zegt het huis dat gewoon.
 #
 # Het antwoord komt naar buiten als event `spraak_antwoord`, met `vraag` en
 # `antwoord` in de data - dezelfde opzet als het `virtual_button`-event in
@@ -48,16 +49,6 @@
 # allebei een volledige herstart van Home Assistant.
 
 keuken_voice_package:
-  input_boolean:
-    spraak_gesprek_starten:
-      name: "Spraak - Gesprek starten"
-      icon: mdi:comment-processing-outline
-      # Uit = de satelliet zegt de vraag en je antwoordt met het wakewoord erbij.
-      # Aan = hij luistert er meteen achteraan. Dat laatste kan alleen met een
-      # gespreksagent die een gesprek kan voortzetten (een taalmodel); met de
-      # ingebouwde agent weigert `assist_satellite.start_conversation`. Zie de
-      # toelichting bij `spraak_vraag_stellen`.
-
   input_text:
     spraak_openstaande_vraag:
       name: "Spraak - Openstaande vraag"
@@ -140,45 +131,60 @@ keuken_voice_package:
             entity_id: timer.spraak_antwoordvenster
           data:
             duration: "{{ venster * 60 }}"
-        # ZEGGEN OF VRAGEN-EN-LUISTEREN
-        # `start_conversation` stelt de vraag én laat de satelliet meteen
-        # luisteren, zonder wakewoord. Dat hangt niet aan het apparaat maar aan
-        # de GESPREKSAGENT in de pipeline: de ingebouwde agent weigert het met
+        # WAAROM `ask_question` EN NIET `start_conversation`
+        # `start_conversation` laat de satelliet een gesprek beginnen, en dát
+        # mag alleen een gespreksagent die een gesprek kan voortzetten. De
+        # ingebouwde agent weigert het:
         #
         #   Built-in conversation agent does not support starting conversations
         #
         # (gemeten 2026-08-05; `supported_features` van de satelliet stond op 3,
-        # dus die kan het wél - kijken naar dat attribuut helpt hier niet).
-        # Alleen een agent die een gesprek kan voortzetten, zoals een taalmodel,
-        # mag beginnen.
+        # dus het apparaat kon het wél - naar dat attribuut kijken helpt niet.)
         #
-        # Daarom deze schakelaar in plaats van een automatische test: zolang hij
-        # uit staat zégt de satelliet de vraag gewoon. De vraag blijft het hele
-        # antwoordvenster open staan, dus "Okay Nabu, ja" doet daarna precies
-        # hetzelfde - je hebt alleen het wakewoord nodig. Hangt er een taalmodel
-        # in de pipeline, zet hem dan aan en vervalt dat wakewoord.
+        # `ask_question` stelt de vraag én luistert, maar gáát langs de
+        # gespreksagent heen: Home Assistant matcht het antwoord zelf tegen de
+        # zinnen hieronder. Daarom werkt het met de ingebouwde agent, en is er
+        # voor een ja/nee-vraag geen taalmodel nodig.
+        #
+        # Deze zinnen staan bewust hier en niet in custom_sentences: ze gelden
+        # alleen zolang deze vraag gesteld wordt. Buiten dit moment is "ja" een
+        # zin die nergens op slaat, en dat hoort hij dan ook te zeggen.
+        #
+        # continue_on_error: praat er iemand doorheen of is de satelliet net
+        # bezig, dan is de vraag hooguit niet gesteld. De melding op de telefoon
+        # staat daar los van en is al verstuurd.
+        - action: assist_satellite.ask_question
+          target:
+            entity_id: "{{ sat }}"
+          data:
+            question: "{{ tekst }}"
+            answers:
+              - id: ja
+                sentences:
+                  - "ja [graag|hoor|prima|doe maar]"
+                  - "doe maar [wel]"
+                  - "(oke|oké)"
+              - id: nee
+                sentences:
+                  - "nee [hoor|dank je|bedankt|laat maar]"
+                  - "laat maar [zitten]"
+                  - "niet doen"
+                  - "liever niet"
+          response_variable: gehoord
+          continue_on_error: true
+        # Antwoord binnen? Dan meteen doorgeven en de vraag sluiten. Kwam er
+        # niets bruikbaar uit (niet verstaan, of iets heel anders gezegd), dan
+        # blijft de vraag het hele antwoordvenster open staan en kan "Okay Nabu,
+        # ja" hem alsnog beantwoorden via AntwoordJa/AntwoordNee.
         - if:
-            - alias: Mag de satelliet zelf een gesprek beginnen
-              condition: state
-              entity_id: input_boolean.spraak_gesprek_starten
-              state: "on"
+            - condition: template
+              value_template: "{{ (gehoord.id | default('')) in ['ja', 'nee'] }}"
           then:
-            # continue_on_error: praat er iemand doorheen of is de satelliet
-            # net bezig, dan is de vraag hooguit niet gesteld. De melding op de
-            # telefoon staat er los van en is al verstuurd.
-            - action: assist_satellite.start_conversation
-              target:
-                entity_id: "{{ sat }}"
-              data:
-                start_message: "{{ tekst }}"
-              continue_on_error: true
-          else:
-            - action: assist_satellite.announce
-              target:
-                entity_id: "{{ sat }}"
-              data:
-                message: "{{ tekst }}"
-              continue_on_error: true
+            - event: spraak_antwoord
+              event_data:
+                vraag: "{{ vraag }}"
+                antwoord: "{{ gehoord.id }}"
+            - action: script.spraak_vraag_sluiten
 
     spraak_vraag_sluiten:
       alias: Spraak - Vraag sluiten
@@ -202,13 +208,15 @@ keuken_voice_package:
     # niet voor een mededeling aan het hele huis. Vandaar het veld `sonos`:
     # dezelfde tekst gaat dan ook over een speaker naar keuze.
     #
-    # WAAROM GOOGLE EN NIET DE AZURE-STEM
-    # De Azure-stem staat als klassiek `tts:`-platform in configuration.yaml en
-    # zulke platforms leveren geen entiteit, alleen de dienst
-    # `tts.microsoft_say`. `tts.speak` heeft juist wél een entiteit nodig, en de
-    # enige die dit huis heeft is `tts.google_translate_nl_nl` - dezelfde die
-    # het alarm en de brandweermelding al gebruiken. Komt Azure ooit als
-    # integratie binnen, dan is het veld `stem` hieronder de plek.
+    # WAAROM GOOGLE ALS DEFAULT
+    # `tts.speak` heeft een `tts.`-ENTITEIT nodig. De Azure-stem is als
+    # klassiek `tts:`-platform in configuration.yaml wél kiesbaar in een
+    # pipeline (de satelliet praat er ook mee), maar zo'n platform levert
+    # alleen de dienst `tts.microsoft_say`. De entiteit waarvan zeker is dat
+    # hij bestaat is `tts.google_translate_nl_nl` - dezelfde die het alarm en
+    # de brandweermelding al gebruiken. Staat de Microsoft-stem óók als
+    # `tts.`-entiteit in Toestanden, zet hem dan hieronder bij `stem`; dan
+    # klinkt een omroep hetzelfde als de satelliet.
     spraak_omroepen:
       alias: Spraak - Omroepen
       description: Zegt een zin op de satelliet, en desgewenst ook op de Sonos.

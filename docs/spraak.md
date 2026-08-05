@@ -20,18 +20,21 @@ het hele huis — vandaar het veld `sonos` op `script.spraak_omroepen`.
 ## De ketting
 
 ```
-wakewoord (op het apparaat)  →  Whisper (Wyoming)  →  conversation  →  Piper (Wyoming)
+wakewoord (op het apparaat)  →  Microsoft STT  →  conversation  →  Microsoft TTS
 ```
 
-Whisper en Piper draaien al als Wyoming-dienst; deze installatie draait in een
-container, dus die staan náást Home Assistant en niet als add-on.
+Zo staat de pipeline "Home Assistant" ingesteld (peildatum 2026-08-05). Whisper
+en Piper draaien er als Wyoming-dienst naast en zijn de lokale alternatieven;
+deze installatie draait in een container, dus die staan náást Home Assistant en
+niet als add-on.
 
-**De Azure-stem kun je hier niet voor gebruiken.** Die staat als klassiek
-`tts:`-platform in `configuration.yaml`, en zulke platforms leveren alleen de
-dienst `tts.microsoft_say` — geen entiteit. Een pipeline en `tts.speak` willen
-juist een entiteit. Voor spraak is de keuze dus Piper (lokaal, en het past bij
-de rest van de keten) of `tts.google_translate_nl_nl`, de stem die het alarm en
-de brandweermelding al gebruiken.
+De Azure-stem is dus gewoon te kiezen in een pipeline. Of `tts.speak` hem ook
+kan aansturen is een andere vraag: dat vraagt een `tts.`-entiteit, en een
+klassiek `tts:`-platform uit `configuration.yaml` levert alleen de dienst
+`tts.microsoft_say`. Kijk in Toestanden welke `tts.`-entiteiten er zijn; staat
+de Microsoft-stem er tussen, dan is dat de betere default voor het veld `stem`
+van `script.spraak_omroepen` (nu `tts.google_translate_nl_nl`, de stem die het
+alarm en de brandweermelding al gebruiken).
 
 ## Na het koppelen
 
@@ -41,8 +44,11 @@ de brandweermelding al gebruiken.
    `script.spraak_vraag_stellen` en `script.spraak_omroepen`. Hernoem je het
    apparaat later (het wordt dan `assist_satellite.<nieuwe naam>`), dan zijn dat
    de enige twee regels die mee moeten.
-2. Maak een pipeline (Instellingen → Spraakassistenten) met Whisper als STT en
-   Piper als TTS, en hang die aan de satelliet.
+2. Controleer welke pipeline het apparaat gebruikt (Instellingen → Apparaten →
+   het apparaat → **Assistent**) en zet in díe pipeline de conversatieagent.
+   Staat het apparaat op "Voorkeur", dan pakt hij de standaard-pipeline en niet
+   per se degene die je net hebt aangepast — dat is de makkelijkste manier om
+   een uur te zoeken naar niets.
 3. Stel entiteiten **expliciet** bloot aan Assist. Net als op de dashboards
    geldt hier: aanwijzen wat er wél in hoort, geen alles-behalve-lijst. Een
    verkeerd blootgestelde entiteit is hier vervelender dan op een dashboard,
@@ -75,31 +81,37 @@ die je jezelf twee keer hoort gebruiken hoort er dus gewoon bij.
 
 ## Het huis dat zelf begint
 
-De satelliet kan een vraag stellen en daarna luisteren, maar **niet met de
-ingebouwde gespreksagent**. `assist_satellite.start_conversation` weigert dan
-met:
+Het huis vraagt met **`assist_satellite.ask_question`**: die stelt de vraag,
+luistert, en matcht je antwoord tegen een lijstje zinnen dat je in dezelfde
+aanroep meegeeft. Het antwoord komt terug in een `response_variable`.
+
+**Niet met `start_conversation`** — dat is de voor de hand liggende keuze en hij
+werkt hier niet:
 
 ```
 Built-in conversation agent does not support starting conversations
 ```
 
-Dat hangt níet aan het apparaat — `supported_features` van de Voice PE stond op
-3, dus die kan het prima. Alleen een agent die een gesprek kan vóórtzetten (een
-taalmodel) mag er een beginnen. Vandaar `input_boolean.spraak_gesprek_starten`:
+Dat ligt niet aan het apparaat (`supported_features` van de Voice PE stond op 3,
+dus die kan het prima), maar aan de gespreksagent: alleen een agent die een
+gesprek kan vóórtzetten — een taalmodel — mag er een beginnen. `ask_question`
+gaat om de agent heen en werkt daarom ook met de ingebouwde. Voor een
+ja/nee-vraag is dat bovendien beter: geen model, geen kosten, geen wachttijd.
 
-- **uit** (nu) → de satelliet *zegt* de vraag (`announce`). Je antwoordt met het
-  wakewoord erbij: "Okay Nabu, ja". De vraag staat het hele antwoordvenster
-  open, dus dat mag ook vijf minuten later.
-- **aan** → `start_conversation`, en dan luistert hij er meteen achteraan.
-  Zinvol zodra er een taalmodel in de pipeline hangt.
+Die fout kwam nergens terecht: de spreek-actie staat op `continue_on_error`, dus
+de automatisering meldde "met succes uitgevoerd" en de keuken bleef stil. Zoiets
+zie je alleen in de trace van het script zelf, niet in die van de automatisering
+die hem aanroept.
 
-De fout kwam eerst nergens terecht: de spreek-actie staat op
-`continue_on_error`, dus de automatisering meldde "met succes uitgevoerd" en de
-keuken bleef stil. Zoiets zie je alleen in de trace van het script zelf, niet in
-die van de automatisering die hem aanroept.
+**Een aanroeper die op het antwoord wacht, moet het script met `script.turn_on`
+starten.** Een gewone scriptaanroep wacht tot het script klaar is — en dat
+script staat te wachten op jouw antwoord. Het `spraak_antwoord`-event zou dan
+gevuurd zijn vóór de `wait_for_trigger` begint te luisteren, en spoorloos
+verdwijnen. Met `script.turn_on` loopt het script ernaast.
 
-Verder is "ja" een zin als alle andere en zou hij zonder context ook
-morgenochtend nog ergens op slaan. Daarom:
+`ask_question` luistert één keer. Zeg je niets, of iets dat er niet op lijkt,
+dan is dat moment weg — precies wanneer je twee minuten later alsnog "ja" roept.
+Daarom blijft de vraag daarna nog even open staan:
 
 - `input_text.spraak_openstaande_vraag` bevat de **sleutel** van de vraag die
   open staat (`zonnescherm`), niet de vraagtekst — dan mag de tekst veranderen
@@ -116,18 +128,21 @@ Zo hangt het zonnescherm eraan:
 ```
 Klimaat - Zonnescherm vragen
   ├── notify.mobile_devices_adults      (knoppen Ja / Nee)
-  └── script.spraak_vraag_stellen       (alleen als er iemand thuis is)
-        └── event spraak_antwoord       ← AntwoordJa / AntwoordNee
-              → wait_for_trigger in dezelfde automation, trigger-id ja / nee
+  └── script.turn_on → spraak_vraag_stellen   (alleen als er iemand thuis is)
+        ├── ask_question: vraagt en luistert  → event spraak_antwoord
+        └── geen bruikbaar antwoord? vraag blijft open
+              → "Okay Nabu, ja"  → AntwoordJa / AntwoordNee → hetzelfde event
+                    → wait_for_trigger in dezelfde automation, trigger-id ja / nee
 ```
 
-Wie het eerst antwoordt wint; daarna sluit de automation de openstaande vraag.
-Antwoordt niemand, dan gebeurt er niets — precies zoals het al werkte.
+Wie het eerst antwoordt wint — de satelliet, de telefoon of een laat "ja";
+daarna sluit de automation de openstaande vraag. Antwoordt niemand, dan gebeurt
+er niets — precies zoals het al werkte.
 
 Een nieuwe vraag toevoegen:
 
-1. Roep `script.spraak_vraag_stellen` aan met een eigen `vraag`-sleutel en de
-   tekst die de satelliet moet stellen.
+1. Start `script.spraak_vraag_stellen` (via `script.turn_on`, zie hierboven) met
+   een eigen `vraag`-sleutel en de tekst die de satelliet moet stellen.
 2. Zet in de automation die de vraag stelt twee event-triggers op
    `spraak_antwoord` met die sleutel, met dezelfde trigger-id's als de knoppen
    van je notificatie.
@@ -155,8 +170,8 @@ anders geruisloos uit elkaar.
 - **Een taalmodel als vangnet.** De laag hierboven: alles wat niet in de
   zinnenlijst staat naar een LLM, met "probeer eerst lokale intents" aan. Dan
   blijft dit bestand de baas over wat het huis over zichzelf zegt en vangt het
-  model de rest ("zet het wat gezelliger hier"). Dat is meteen het moment om
-  `input_boolean.spraak_gesprek_starten` aan te zetten.
+  model de rest ("zet het wat gezelliger hier"). Voor de ja/nee-vragen is het
+  niet nodig — `ask_question` doet dat zonder model.
 - **De LED-ring als statuslamp.** De ring is een gewone light-entity; als er
   niet gepraat wordt kan hij het tariefniveau, het alarm of de bezetting op de
   kazerne laten zien.

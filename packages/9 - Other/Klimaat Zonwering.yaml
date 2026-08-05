@@ -671,11 +671,20 @@ klimaat_zonwering_package:
               entity_id: group.all_adults
               state: home
           then:
-            - action: script.spraak_vraag_stellen
+            # `script.turn_on` en niet `script.spraak_vraag_stellen`: bij een
+            # gewone scriptaanroep wacht deze automatisering tot het script
+            # klaar is, en dat script stáát te wachten op je antwoord. Het
+            # `spraak_antwoord`-event zou dan al gevuurd zijn vóórdat de
+            # `wait_for_trigger` hieronder begint te luisteren, en het antwoord
+            # zou in het niets verdwijnen. Met turn_on loopt het script ernaast.
+            - action: script.turn_on
+              target:
+                entity_id: script.spraak_vraag_stellen
               data:
-                vraag: zonnescherm
-                tekst: "{{ vraagtekst }}"
-                minuten: 30
+                variables:
+                  vraag: zonnescherm
+                  tekst: "{{ vraagtekst }}"
+                  minuten: 30
               continue_on_error: true
         - wait_for_trigger:
             - trigger: event
