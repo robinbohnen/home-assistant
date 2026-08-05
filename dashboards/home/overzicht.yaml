@@ -68,8 +68,20 @@ cards:
         hash: "#ov-personen"
         name: Personen
         icon: mdi:account-group
+        # BREEDTE VAN ALLE POPUPS
+        # Bubble-card doet standaard 540px op desktop. Dat is smal voor een
+        # wandpaneel: de verdiepingspopups werden er zo lang van dat je moest
+        # scrollen om bij de rolluiken te komen. Op 1000px passen er drie
+        # mushroom-kaarten naast elkaar en past een verdieping vrijwel in beeld.
+        # Eén anker, zodat de veertien andere popups niet uit de pas gaan lopen.
+        # Op mobiel doet bubble-card sowieso volle breedte; `width_desktop`
+        # geldt alleen boven zijn eigen breekpunt. De `max-width: 94vw` in de
+        # styles hieronder is het vangnet voor een scherm dat smaller is dan
+        # 1000px maar door bubble-card nog als desktop wordt gezien.
+        width_desktop: &ov_popup_width 1000px
         styles: &ov_popup |
           .bubble-pop-up {
+            max-width: 94vw !important;
             background: rgba(13, 15, 20, 0.98) !important;
             backdrop-filter: blur(18px) !important;
             border: 1px solid rgba(255, 255, 255, 0.06) !important;
@@ -169,6 +181,7 @@ cards:
         hash: "#ov-energie"
         name: Energie
         icon: mdi:flash
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           - type: custom:apexcharts-card
@@ -265,6 +278,7 @@ cards:
         hash: "#ov-auto"
         name: Auto
         icon: mdi:car-electric
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           - type: grid
@@ -341,6 +355,7 @@ cards:
         hash: "#ov-vandaag"
         name: Vandaag
         icon: mdi:calendar-check
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           - type: custom:mushroom-title-card
@@ -402,6 +417,7 @@ cards:
         hash: "#ov-klimaat"
         name: Klimaat
         icon: mdi:thermometer
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           - type: custom:mushroom-climate-card
@@ -450,6 +466,7 @@ cards:
         hash: "#ov-lucht"
         name: Lucht woonkamer
         icon: mdi:air-filter
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           - type: grid
@@ -621,6 +638,7 @@ cards:
         hash: "#ov-brandweer"
         name: Brandweer
         icon: mdi:fire-truck
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           - type: custom:mushroom-template-card
@@ -746,6 +764,7 @@ cards:
         hash: "#ov-deurbel"
         name: Deurbel
         icon: mdi:doorbell-video
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           # Zelfde cameraparen als de #doorbell-popup op het oude dashboard:
@@ -806,6 +825,7 @@ cards:
         hash: "#ov-deuren"
         name: Deuren & ramen
         icon: mdi:door-open
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           - type: custom:mushroom-template-card
@@ -945,11 +965,19 @@ cards:
       #
       # De kleurschaal is overal gelijk: <18 blauw, 18-23 groen, 23-26 oranje,
       # daarboven rood. Geen meting = grijs.
+      #
+      # KOLOMMEN
+      # `columns` = het aantal kaarten in dat raster, met een maximum van drie.
+      # Dus twee kaarten -> twee kolommen, één kaart -> volle breedte. Met een
+      # vast getal wordt een verdieping met één rolluik een smal kaartje in een
+      # verder lege rij. Uitzondering: het omhoog/omlaag-paar staat altijd op
+      # twee, want dat is een paar en hoort er ook als een paar uit te zien.
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-groundfloor"
         name: Begane grond
         icon: mdi:home-floor-0
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           # ----- 1. Temperatuur -----
@@ -960,7 +988,7 @@ cards:
           - type: custom:mushroom-title-card
             subtitle: Temperatuur
           - type: grid
-            columns: 2
+            columns: 3
             square: false
             cards:
               - type: custom:mushroom-template-card
@@ -1031,7 +1059,7 @@ cards:
                   - light.entree_lampen
                   - light.trapkast_lampen
           - type: grid
-            columns: 2
+            columns: 3
             square: false
             cards:
               - type: custom:mushroom-light-card
@@ -1093,21 +1121,18 @@ cards:
                     entity_id:
                       - cover.covers_kitchen_screens
                       - cover.covers_kitchen_rollerblinds
-          # De twee rolgordijnen heten in Zigbee `rollerblind_0001`/`0002` en er
-          # is uit de config niet af te leiden welke waar hangt, dus die staan
-          # hier als hun groep. De screens hebben wél een links/rechts-naam.
+          # Eén bediening per kamer: de twee keukenscreens zitten samen in
+          # `cover.covers_kitchen_screens` en de twee rolgordijnen in
+          # `cover.covers_kitchen_rollerblinds` (allebei cover-groups uit
+          # packages/0 - Ground Floor/Kitchen/Covers.yaml). Los per raam kan via
+          # more-info op de groep; dat hoort niet op een wandpaneel.
           - type: grid
             columns: 2
             square: false
             cards:
               - type: custom:mushroom-cover-card
-                entity: cover.keuken_screen_links
-                name: Keuken screen links
-                show_buttons_control: true
-                show_position_control: true
-              - type: custom:mushroom-cover-card
-                entity: cover.keuken_screen_rechts
-                name: Keuken screen rechts
+                entity: cover.covers_kitchen_screens
+                name: Keuken screens
                 show_buttons_control: true
                 show_position_control: true
               - type: custom:mushroom-cover-card
@@ -1135,6 +1160,7 @@ cards:
         hash: "#ov-firstfloor"
         name: Eerste verdieping
         icon: mdi:home-floor-1
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           # ----- 1. Temperatuur -----
@@ -1142,7 +1168,7 @@ cards:
           - type: custom:mushroom-title-card
             subtitle: Temperatuur
           - type: grid
-            columns: 2
+            columns: 3
             square: false
             cards:
               - type: custom:mushroom-template-card
@@ -1213,7 +1239,7 @@ cards:
                   - light.kantoor_lampen
                   - light.overloop_lampen
           - type: grid
-            columns: 2
+            columns: 3
             square: false
             cards:
               - type: custom:mushroom-light-card
@@ -1285,8 +1311,15 @@ cards:
                       - cover.slaapkamer_rolluik_low_speed
                       - cover.slaapkamer_maxi_links_low_speed
                       - cover.slaapkamer_maxi_rechts_low_speed
+          # Eén bediening per kamer. Logan en het kantoor hebben allebei twee
+          # rolluiken; die gaan via hun bestaande cover-group, zodat een tik
+          # altijd de hele kamer doet en de twee helften niet uit elkaar kunnen
+          # lopen. Beide groepen bevatten de low_speed-varianten, dus dat blijft
+          # kloppen met de rest van het huis.
+          #   cover.covers_bedroom_maxi -> packages/1 - First Floor/Bedroom Maxi/Covers.yaml
+          #   cover.covers_office       -> packages/1 - First Floor/Office/Covers.yaml
           - type: grid
-            columns: 2
+            columns: 3
             square: false
             cards:
               - type: custom:mushroom-cover-card
@@ -1300,23 +1333,13 @@ cards:
                 show_buttons_control: true
                 show_position_control: true
               - type: custom:mushroom-cover-card
-                entity: cover.slaapkamer_maxi_links_low_speed
-                name: Logan links
+                entity: cover.covers_bedroom_maxi
+                name: Slaapkamer Logan
                 show_buttons_control: true
                 show_position_control: true
               - type: custom:mushroom-cover-card
-                entity: cover.slaapkamer_maxi_rechts_low_speed
-                name: Logan rechts
-                show_buttons_control: true
-                show_position_control: true
-              - type: custom:mushroom-cover-card
-                entity: cover.kantoor_links_low_speed
-                name: Kantoor links
-                show_buttons_control: true
-                show_position_control: true
-              - type: custom:mushroom-cover-card
-                entity: cover.kantoor_rechts_low_speed
-                name: Kantoor rechts
+                entity: cover.covers_office
+                name: Kantoor
                 show_buttons_control: true
                 show_position_control: true
 
@@ -1372,6 +1395,7 @@ cards:
         hash: "#ov-secondfloor"
         name: Tweede verdieping
         icon: mdi:home-floor-2
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           # ----- 1. Temperatuur -----
@@ -1381,7 +1405,7 @@ cards:
           - type: custom:mushroom-title-card
             subtitle: Temperatuur
           - type: grid
-            columns: 2
+            columns: 1
             square: false
             cards:
               - type: custom:mushroom-template-card
@@ -1460,7 +1484,7 @@ cards:
                     entity_id:
                       - cover.slaapkamer_mini
           - type: grid
-            columns: 2
+            columns: 1
             square: false
             cards:
               - type: custom:mushroom-cover-card
@@ -1488,6 +1512,7 @@ cards:
         hash: "#ov-garage"
         name: Garage / speelkamer
         icon: mdi:garage
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           # ----- 1. Temperatuur -----
@@ -1581,6 +1606,7 @@ cards:
         hash: "#ov-outside"
         name: Buiten
         icon: mdi:flower-tulip-outline
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           # ----- 1. Temperatuur -----
@@ -1636,7 +1662,7 @@ cards:
                   - light.achtertuin_lampen
                   - light.carport_lampen
           - type: grid
-            columns: 2
+            columns: 3
             square: false
             cards:
               - type: custom:mushroom-light-card
@@ -1675,6 +1701,7 @@ cards:
         hash: "#ov-media"
         name: Media
         icon: mdi:music
+        width_desktop: *ov_popup_width
         styles: *ov_popup
         cards:
           - type: grid
