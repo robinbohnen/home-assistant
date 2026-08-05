@@ -653,6 +653,23 @@ klimaat_zonwering_package:
                   title: Ja
                 - action: "{{ actie_nee }}"
                   title: Nee
+        # Tweede kanaal, dezelfde vraag. Is er iemand thuis, dan vraagt de
+        # keuken-satelliet het ook hardop en luistert hij naar het antwoord.
+        # Het venster is even lang als de timeout hieronder, zodat een "ja" op
+        # de satelliet precies zo lang geldig is als de knop op de telefoon.
+        # Het script stopt vanzelf als de satelliet er niet is; de melding op
+        # de telefoon is dan nog steeds verstuurd.
+        - if:
+            - condition: state
+              entity_id: group.all_adults
+              state: home
+          then:
+            - action: script.spraak_vraag_stellen
+              data:
+                vraag: zonnescherm
+                tekst: "{{ reden | capitalize }}. Zal ik het zonnescherm uitzetten?"
+                minuten: 30
+              continue_on_error: true
         - wait_for_trigger:
             - trigger: event
               event_type: mobile_app_notification_action
@@ -664,9 +681,29 @@ klimaat_zonwering_package:
               event_data:
                 action: "{{ actie_nee }}"
               id: nee
+            # Zelfde opzet als het `virtual_button`-event: één generiek event
+            # met hetzelfde trigger-id, zodat de afhandeling hieronder niet
+            # hoeft te weten of het antwoord van de telefoon of uit de keuken
+            # kwam. Zie packages/0 - Ground Floor/Kitchen/Voice.yaml.
+            - trigger: event
+              event_type: spraak_antwoord
+              event_data:
+                vraag: zonnescherm
+                antwoord: ja
+              id: ja
+            - trigger: event
+              event_type: spraak_antwoord
+              event_data:
+                vraag: zonnescherm
+                antwoord: nee
+              id: nee
           timeout:
             minutes: 30
           continue_on_timeout: false
+        # Beantwoord op de telefoon? Dan hoeft de satelliet er niet meer op te
+        # wachten. Andersom heeft het antwoord-intent de vraag zelf al gesloten
+        # en doet deze aanroep niets.
+        - action: script.spraak_vraag_sluiten
         - choose:
             - conditions:
                 - condition: template

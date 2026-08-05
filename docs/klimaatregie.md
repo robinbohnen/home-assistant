@@ -275,7 +275,10 @@ zonwering waar je in de tuin tegenaan loopt en het enige dat kapot waait als je
 het vergeet, dus daar hoort een mens aan te pas te komen.
 `automation.klimaat_zonnescherm_vragen` stuurt in plaats van een beweging een
 melding naar de telefoons van de volwassenen — met de reden erbij, dus je weet
-waarom hij het vraagt:
+waarom hij het vraagt. Is er iemand thuis, dan stelt de spraaksatelliet in de
+keuken dezelfde vraag hardop (`script.spraak_vraag_stellen`); "ja" en "nee"
+komen binnen als het event `spraak_antwoord` en doen precies hetzelfde als de
+knoppen op de telefoon. Zie [spraak.md](spraak.md).
 
 - **Ja** → het scherm rolt uit.
 - **Nee** → `timer.override_zonnescherm` gaat lopen en de klimaatregie laat het

@@ -1,0 +1,526 @@
+#############################################################################
+## Spraak - de satelliet in de keuken
+#############################################################################
+#
+# Home Assistant Voice PE in de keuken. Wat hier staat is het huis-eigen deel
+# van Assist: vragen die alleen dit huis kan beantwoorden, en het mechanisme
+# waarmee het huis zélf een vraag kan stellen en op het antwoord kan wachten.
+#
+# HET APPARAAT
+# De satelliet is `assist_satellite.home_assistant_voice_09a3f2_assist_satellite`
+# - de naam die ESPHome zelf meegeeft, met het serienummer erin. Hij staat als
+# `default` bij het veld `satelliet` van `spraak_vraag_stellen` en
+# `spraak_omroepen`, en nergens anders: dat zijn de twee regels die je aanpast
+# als je het apparaat hernoemt (dan wordt het `assist_satellite.<nieuwe naam>`).
+# Alle aanroepen geven het veld bewust niet mee, zodat er één plek blijft.
+#
+# WAAROM EIGEN INTENTS EN NIET METEEN EEN TAALMODEL
+# De vragen hieronder gaan over dingen waar het huis het antwoord al op weet
+# (`sensor.brandweer_bezetting`, `sensor.kamers`, het zonweringsadvies). Een
+# intent is dan sneller, gratis, werkt zonder internet en geeft elke keer
+# hetzelfde antwoord. Een taalmodel is de laag die híer overheen komt, voor de
+# zinnen die niet in `custom_sentences/nl/huis.yaml` staan; zet het in de
+# pipeline op "probeer eerst lokale intents", dan blijft dit bestand de baas
+# over wat het huis over zichzelf zegt. Zie docs/spraak.md.
+#
+# WAAROM HET ZONNESCHERM EIGEN COMMANDO'S HEEFT
+# `cover.achtertuin_zonnescherm` is omgekeerd bedraad: HA-stand `open` is het
+# scherm UITGESCHOVEN. Zou je die cover aan Assist blootstellen, dan doet "doe
+# het zonnescherm dicht" precies het omgekeerde van wat je bedoelt. Daarom
+# staat hij níet blootgesteld en gaat het via `ZonneschermUit`/`ZonneschermIn`
+# hieronder, in de woorden die je in de tuin gebruikt.
+#
+# WAAROM EEN "OPENSTAANDE VRAAG"
+# `assist_satellite.start_conversation` laat het huis beginnen en luistert
+# daarna naar je antwoord. Maar "ja" is een zin als alle andere: zonder
+# context zou hij ook om drie uur 's nachts ergens op slaan. Daarom onthoudt
+# `input_text.spraak_openstaande_vraag` wélke vraag open staat en bewaakt
+# `timer.spraak_antwoordvenster` hoe lang een antwoord nog telt. Staat er
+# niets open, dan zegt het huis dat gewoon.
+#
+# Het antwoord komt naar buiten als event `spraak_antwoord`, met `vraag` en
+# `antwoord` in de data - dezelfde opzet als het `virtual_button`-event in
+# packages/9 - Other/Virtual Buttons.yaml. De vragensteller (nu alleen
+# "Klimaat - Zonnescherm vragen") hoeft daardoor niets van spraak te weten en
+# blijft werken als deze satelliet er niet is.
+#
+# LET OP: nieuwe pakketbestanden en nieuwe zinnen in custom_sentences vragen
+# allebei een volledige herstart van Home Assistant.
+
+keuken_voice_package:
+  input_text:
+    spraak_openstaande_vraag:
+      name: "Spraak - Openstaande vraag"
+      icon: mdi:comment-question-outline
+      min: 0
+      max: 50
+      # Leeg = er staat niets open. De waarde is de sleutel van de vraag
+      # ('zonnescherm'), niet de vraag zelf: de tekst mag veranderen zonder
+      # dat de afhandeling meeverandert.
+
+  timer:
+    spraak_antwoordvenster:
+      name: "Spraak - Antwoordvenster"
+      icon: mdi:timer-sand
+      duration: "00:10:00"
+      # Zonder venster blijft "ja" uren geldig en beantwoord je 's avonds nog
+      # de vraag van vanmiddag. Loopt hij af, dan ruimt de automation onderaan
+      # de openstaande vraag op.
+
+  script:
+    ###########################################################################
+    ## Het huis stelt een vraag
+    ###########################################################################
+    spraak_vraag_stellen:
+      alias: Spraak - Vraag stellen
+      description: >-
+        Laat de satelliet een vraag stellen en daarna luisteren. Het antwoord
+        komt terug als event `spraak_antwoord`.
+      icon: mdi:comment-question-outline
+      mode: single
+      max_exceeded: silent
+      fields:
+        vraag:
+          name: Vraag
+          description: Sleutel van de vraag, komt terug in het event
+          required: true
+          example: zonnescherm
+          selector:
+            text:
+        tekst:
+          name: Tekst
+          description: Wat de satelliet hardop vraagt
+          required: true
+          example: Zal ik het zonnescherm uitzetten?
+          selector:
+            text:
+        minuten:
+          name: Antwoordvenster
+          description: Hoe lang "ja" nog telt
+          default: 10
+          selector:
+            number:
+              min: 1
+              max: 60
+              unit_of_measurement: minuten
+        satelliet:
+          name: Satelliet
+          description: Welke satelliet het vraagt
+          default: assist_satellite.home_assistant_voice_09a3f2_assist_satellite
+          selector:
+            entity:
+              domain: assist_satellite
+      sequence:
+        - variables:
+            sat: "{{ satelliet | default('assist_satellite.home_assistant_voice_09a3f2_assist_satellite', true) }}"
+            venster: "{{ minuten | default(10, true) | int(10) }}"
+        # Eerst kijken of er iets te vragen valt. Anders zou er een vraag open
+        # komen te staan die niemand gehoord heeft, en zou "ja" een uur later
+        # alsnog het zonnescherm uitzetten.
+        - alias: Satelliet bestaat en doet het
+          condition: template
+          value_template: "{{ has_value(sat) and states(sat) not in ['unavailable', 'unknown'] }}"
+        - action: input_text.set_value
+          target:
+            entity_id: input_text.spraak_openstaande_vraag
+          data:
+            value: "{{ vraag }}"
+        - action: timer.start
+          target:
+            entity_id: timer.spraak_antwoordvenster
+          data:
+            duration: "{{ venster * 60 }}"
+        # continue_on_error: praat er iemand doorheen of is de satelliet net
+        # bezig, dan is de vraag hooguit niet gesteld. De melding op de
+        # telefoon staat er los van en is al verstuurd.
+        - action: assist_satellite.start_conversation
+          target:
+            entity_id: "{{ sat }}"
+          data:
+            start_message: "{{ tekst }}"
+          continue_on_error: true
+
+    spraak_vraag_sluiten:
+      alias: Spraak - Vraag sluiten
+      description: Zet de openstaande vraag terug op niets.
+      icon: mdi:comment-check-outline
+      mode: single
+      sequence:
+        - action: timer.cancel
+          target:
+            entity_id: timer.spraak_antwoordvenster
+        - action: input_text.set_value
+          target:
+            entity_id: input_text.spraak_openstaande_vraag
+          data:
+            value: ""
+
+    ###########################################################################
+    ## Het huis zegt iets, zonder te vragen
+    ###########################################################################
+    # De satelliet heeft een klein speakertje: prima voor één zin in de keuken,
+    # niet voor een mededeling aan het hele huis. Vandaar het veld `sonos`:
+    # dezelfde tekst gaat dan ook over een speaker naar keuze.
+    #
+    # WAAROM GOOGLE EN NIET DE AZURE-STEM
+    # De Azure-stem staat als klassiek `tts:`-platform in configuration.yaml en
+    # zulke platforms leveren geen entiteit, alleen de dienst
+    # `tts.microsoft_say`. `tts.speak` heeft juist wél een entiteit nodig, en de
+    # enige die dit huis heeft is `tts.google_translate_nl_nl` - dezelfde die
+    # het alarm en de brandweermelding al gebruiken. Komt Azure ooit als
+    # integratie binnen, dan is het veld `stem` hieronder de plek.
+    spraak_omroepen:
+      alias: Spraak - Omroepen
+      description: Zegt een zin op de satelliet, en desgewenst ook op de Sonos.
+      icon: mdi:bullhorn
+      mode: queued
+      max: 5
+      fields:
+        tekst:
+          name: Tekst
+          required: true
+          example: Het eten is klaar.
+          selector:
+            text:
+        satelliet:
+          name: Satelliet
+          default: assist_satellite.home_assistant_voice_09a3f2_assist_satellite
+          selector:
+            entity:
+              domain: assist_satellite
+        sonos:
+          name: Ook op de Sonos
+          description: Speaker die het mee moet omroepen (leeg = alleen de satelliet)
+          default: ""
+          selector:
+            entity:
+              domain: media_player
+        stem:
+          name: Stem
+          default: tts.google_translate_nl_nl
+          selector:
+            entity:
+              domain: tts
+      sequence:
+        - variables:
+            sat: "{{ satelliet | default('assist_satellite.home_assistant_voice_09a3f2_assist_satellite', true) }}"
+            speaker: "{{ sonos | default('', true) }}"
+            engine: "{{ stem | default('tts.google_translate_nl_nl', true) }}"
+        - if:
+            - condition: template
+              value_template: "{{ has_value(sat) and states(sat) not in ['unavailable', 'unknown'] }}"
+          then:
+            - action: assist_satellite.announce
+              target:
+                entity_id: "{{ sat }}"
+              data:
+                message: "{{ tekst }}"
+              continue_on_error: true
+        - if:
+            - condition: template
+              value_template: "{{ speaker != '' and has_value(speaker) }}"
+          then:
+            - action: tts.speak
+              target:
+                entity_id: "{{ engine }}"
+              data:
+                media_player_entity_id: "{{ speaker }}"
+                message: "{{ tekst }}"
+              continue_on_error: true
+
+  ###########################################################################
+  ## De vragen die alleen dit huis kan beantwoorden
+  ##
+  ## De zinnen staan in custom_sentences/nl/huis.yaml; hier staat wat het
+  ## antwoord is. tests/test_spraak.py rendert elke `speech`-tekst offline,
+  ## dus een fout in een template hoeft niet op een herstart te wachten.
+  ###########################################################################
+  intent_script:
+    #########################################################################
+    ## Kazerne
+    #########################################################################
+    BrandweerBezetting:
+      description: Hoe staat de bezetting van de dienstdoende ploeg ervoor.
+      speech:
+        text: >-
+          {%- set s = 'sensor.brandweer_bezetting' -%}
+          {%- set dienst = is_state('binary_sensor.brandweer_ik_heb_dienst', 'on') -%}
+          {%- set mijn = ' Jij hebt deze week dienst.' if dienst else '' -%}
+          {%- if not has_value(s) -%}
+            {#- De webhook vuurt alleen bij een statuswissel; na een verse
+                installatie kan die sensor dagen leeg zijn. Dan de REST-sensor,
+                die elke vijf minuten ververst. -#}
+            {%- set ploeg = states('input_select.brandweer_dienstdoende_ploeg') -%}
+            {%- set letter = ploeg[0] | lower -%}
+            {%- set aantal = states('sensor.bezetting_ploeg_' ~ letter) -%}
+            {%- if aantal not in ['unknown', 'unavailable'] -%}
+              Er staan {{ aantal }} man op bij de {{ ploeg }}. Meer weet ik nog niet,
+              er is sinds de herstart geen bezettingsmelding binnengekomen.{{ mijn }}
+            {%- else -%}
+              Ik heb nog geen bezetting binnengekregen.
+            {%- endif -%}
+          {%- else -%}
+            {%- set type = states(s) -%}
+            {%- set ploeg = state_attr(s, 'ploeg') -%}
+            {%- set aantal = state_attr(s, 'aantal') | int(0) -%}
+            {%- set tekort = state_attr(s, 'tekort') | int(0) -%}
+            {%- set kort = (state_attr(s, 'samenvatting') or '') | replace(' · ', ', ') -%}
+            {%- if type == 'onderbezet' -%}
+              De {{ ploeg }}-ploeg is onderbezet: {{ aantal }} man, {{ tekort }}
+              {{ 'persoon' if tekort == 1 else 'personen' }} tekort. {{ kort }}.{{ mijn }}
+            {%- elif type == 'krap' -%}
+              De {{ ploeg }}-ploeg staat krap met {{ aantal }} man. {{ kort }}.{{ mijn }}
+            {%- else -%}
+              De {{ ploeg }}-ploeg is op orde met {{ aantal }} man.{{ mijn }}
+            {%- endif -%}
+          {%- endif -%}
+
+    #########################################################################
+    ## Stroom
+    #########################################################################
+    StroomprijsNu:
+      description: Wat kost de stroom nu, en wordt het beter of slechter.
+      speech:
+        text: >-
+          {%- set p = states('sensor.slimhuys_zonneplan_huidige_prijs') | float(none) -%}
+          {%- set nu = states('sensor.slimhuys_zonneplan_tariefniveau_nu') -%}
+          {%- set straks = states('sensor.stroomprijs_niveau_volgend_uur') -%}
+          {%- if p is none -%}
+            Ik krijg de stroomprijs even niet binnen.
+          {%- else -%}
+            {%- set cent = (p * 100) | round(1) | string | replace('.', ',') -%}
+            {#- Vijf niveaus (very_low tot very_high), dus testen op het woord
+                'low' en niet op de hele waarde: komt er ooit een zesde bij,
+                dan blijft dit kloppen. Zie packages/9 - Other/Stroomprijs.yaml. -#}
+            {%- set goedkoop = 'low' in nu -%}
+            {%- set duur = 'high' in nu -%}
+            {{ cent }} cent per kilowattuur, dat is
+            {{ 'goedkoop' if goedkoop else ('duur' if duur else 'gemiddeld') }}.
+            {#- De sensor van het volgende uur kent bewust maar drie standen. -#}
+            {%- if straks == 'low' and not goedkoop %} Het volgende uur is goedkoper.
+            {%- elif straks == 'high' and not duur %} Het volgende uur wordt duurder.
+            {%- endif -%}
+          {%- endif -%}
+
+    #########################################################################
+    ## Zonwering
+    #########################################################################
+    ZonneschermAdvies:
+      description: Wat vindt de klimaatregie op dit moment van het zonnescherm.
+      speech:
+        text: >-
+          {%- set s = 'sensor.zonwering_advies_zonnescherm' -%}
+          {%- set c = 'cover.achtertuin_zonnescherm' -%}
+          {%- if not has_value(s) -%}
+            Ik kan het zonweringsadvies even niet lezen.
+          {%- else -%}
+            {#- Omgekeerde cover: HA-stand `open` is het scherm uitgeschoven.
+                Advies 'dicht' betekent zonwering dicht, dus scherm eruit. -#}
+            {%- set uit = is_state(c, 'open') -%}
+            {%- set wil_uit = states(s) == 'dicht' -%}
+            {%- set reden = state_attr(s, 'reden') or '' -%}
+            {%- set blokkade = state_attr(s, 'blokkade') or '' -%}
+            Het scherm staat {{ 'uit' if uit else 'ingetrokken' }}.
+            {%- if wil_uit and not uit %} {{ reden | capitalize }}, dus het mag eruit.
+              {%- if blokkade %} Alleen: {{ blokkade }}.{% endif %}
+              {%- if not blokkade %} Zeg "zet het zonnescherm uit" als je wil.{% endif %}
+            {%- elif not wil_uit and uit %} {{ reden | capitalize }}, het mag terug naar binnen.
+            {%- else %} {{ reden | capitalize }}.
+            {%- endif -%}
+          {%- endif -%}
+
+    ZonneschermUit:
+      description: Schuift het zonnescherm uit (HA-stand open).
+      action:
+        - action: cover.open_cover
+          target:
+            entity_id: cover.achtertuin_zonnescherm
+          continue_on_error: true
+      speech:
+        text: >-
+          {%- set s = 'sensor.zonwering_advies_zonnescherm' -%}
+          {%- set reden = state_attr(s, 'reden') or '' -%}
+          {#- Uitvoeren doen we altijd: wie het vraagt staat in de tuin en ziet
+              meer dan de sensoren. Maar wél zeggen wat de regie ervan vindt.
+              Het scherm blijft daarna met rust: "Klimaat - Handbediening
+              herkennen" ziet binnen anderhalve minuut dat het ergens anders
+              staat dan geadviseerd en start de override zelf. -#}
+          Het scherm gaat eruit.
+          {%- if states(s) == 'open' %} Let op: {{ reden }}.{% endif -%}
+
+    ZonneschermIn:
+      description: Trekt het zonnescherm in (HA-stand closed).
+      action:
+        - action: cover.close_cover
+          target:
+            entity_id: cover.achtertuin_zonnescherm
+          continue_on_error: true
+      speech:
+        text: "Ik haal het zonnescherm binnen."
+
+    #########################################################################
+    ## Het huis
+    #########################################################################
+    HuisOpen:
+      description: Staat er nog een raam of deur open.
+      speech:
+        text: >-
+          {%- set kamers = state_attr('sensor.kamers', 'kamers') or [] -%}
+          {%- if kamers | count == 0 -%}
+            Ik kan de kamerstatus even niet lezen.
+          {%- else -%}
+            {%- set ns = namespace(namen=[]) -%}
+            {%- for k in kamers if k.contacten.open > 0 -%}
+              {%- set ns.namen = ns.namen + k.contacten.namen -%}
+            {%- endfor -%}
+            {%- if ns.namen | count == 0 -%}
+              Alles is dicht.
+            {%- elif ns.namen | count == 1 -%}
+              Er staat er één open: {{ ns.namen | first }}.
+            {%- else -%}
+              Er staan er {{ ns.namen | count }} open:
+              {{ ns.namen[:-1] | join(', ') }} en {{ ns.namen | last }}.
+            {%- endif -%}
+          {%- endif -%}
+
+    HuisAandacht:
+      description: Welke ruimtes vragen aandacht (te warm, CO2, vocht).
+      speech:
+        text: >-
+          {%- set kamers = state_attr('sensor.kamers', 'kamers') or [] -%}
+          {%- if kamers | count == 0 -%}
+            Ik kan de kamerstatus even niet lezen.
+          {%- else -%}
+            {#- Score 2 is 'slecht', 1 is 'let op'. Alleen de ergste drie
+                noemen: een opsomming van zeven kamers onthoudt niemand. -#}
+            {%- set let_op = kamers | selectattr('score', 'ge', 1)
+                             | sort(attribute='score', reverse=true) | list -%}
+            {%- if let_op | count == 0 -%}
+              Alles staat goed.
+            {%- else -%}
+              {%- set ns = namespace(regels=[]) -%}
+              {%- for k in let_op[:3] -%}
+                {%- set ns.regels = ns.regels + [k.naam ~ ': ' ~ k.reden] -%}
+              {%- endfor -%}
+              {{ ns.regels | join('. ') }}.
+              {%- if let_op | count > 3 %} En nog {{ let_op | count - 3 }} andere.{% endif -%}
+            {%- endif -%}
+          {%- endif -%}
+
+    LichtenUit:
+      description: Doet de lichten beneden en op de overloop uit.
+      action:
+        # Dezelfde lampgroepen als "Lights - Auto turn off all" in
+        # packages/9 - Other/Lights.yaml. Staat daar een groep bij, dan hoort
+        # hij hier ook: dit is de handmatige versie van dezelfde ronde.
+        - action: light.turn_off
+          target:
+            entity_id:
+              - light.woonkamer_lampen
+              - light.garage_lampen
+              - light.speelkamer_lampen
+              - light.keuken_lampen
+              - light.eettafel_lampen
+              - light.entree_lampen
+              - light.toilet_lampen
+              - light.trapkast_lampen
+              - light.overloop_lampen
+              - light.overloop_zolder_lampen
+          continue_on_error: true
+      speech:
+        text: "Doe ik, de lichten gaan uit."
+
+    #########################################################################
+    ## Antwoorden op een vraag die het huis zelf gesteld heeft
+    #########################################################################
+    # Waarom de tekst uit `action` komt en niet uit de state: `speech` wordt
+    # gerenderd NA `action`, en die heeft de openstaande vraag dan net
+    # opgeruimd. De variabelen worden daarom vóór het opruimen vastgelegd en
+    # als antwoord teruggegeven. Kent deze Home Assistant `action_response`
+    # niet, dan valt de zin terug op "Oké" - nooit op een fout.
+    AntwoordJa:
+      description: Bevestigt de vraag die het huis zelf gesteld heeft.
+      action:
+        - variables:
+            vraag: "{{ states('input_text.spraak_openstaande_vraag') }}"
+            staat_open: >-
+              {{ states('input_text.spraak_openstaande_vraag')
+                 not in ['', 'unknown', 'unavailable']
+                 and is_state('timer.spraak_antwoordvenster', 'active') }}
+        - if:
+            - condition: template
+              value_template: "{{ staat_open }}"
+          then:
+            - event: spraak_antwoord
+              event_data:
+                vraag: "{{ vraag }}"
+                antwoord: ja
+            - action: script.spraak_vraag_sluiten
+        - variables:
+            resultaat:
+              tekst: >-
+                {%- set bevestiging = {
+                      'zonnescherm': 'Doe ik, het zonnescherm gaat eruit.'
+                    } -%}
+                {{ bevestiging.get(vraag, 'Doe ik.') if staat_open
+                   else 'Er staat op dit moment geen vraag open.' }}
+        - stop: "Antwoord verwerkt"
+          response_variable: resultaat
+      speech:
+        text: "{{ action_response.tekst if action_response is defined else 'Oké.' }}"
+
+    AntwoordNee:
+      description: Wijst de vraag af die het huis zelf gesteld heeft.
+      action:
+        - variables:
+            vraag: "{{ states('input_text.spraak_openstaande_vraag') }}"
+            staat_open: >-
+              {{ states('input_text.spraak_openstaande_vraag')
+                 not in ['', 'unknown', 'unavailable']
+                 and is_state('timer.spraak_antwoordvenster', 'active') }}
+        - if:
+            - condition: template
+              value_template: "{{ staat_open }}"
+          then:
+            - event: spraak_antwoord
+              event_data:
+                vraag: "{{ vraag }}"
+                antwoord: nee
+            - action: script.spraak_vraag_sluiten
+        - variables:
+            resultaat:
+              tekst: >-
+                {%- set afwijzing = {
+                      'zonnescherm': 'Goed, dan laat ik het scherm een paar uur met rust.'
+                    } -%}
+                {{ afwijzing.get(vraag, 'Goed, dan doe ik niks.') if staat_open
+                   else 'Er staat op dit moment geen vraag open.' }}
+        - stop: "Antwoord verwerkt"
+          response_variable: resultaat
+      speech:
+        text: "{{ action_response.tekst if action_response is defined else 'Oké.' }}"
+
+  automation:
+    ###########################################################################
+    ## Een vraag die niemand beantwoordt, blijft niet openstaan
+    ###########################################################################
+    # De timer loopt af (of wordt door `spraak_vraag_sluiten` gestopt) en komt
+    # dan op `idle`. Dat is het moment om de vraag te vergeten, zodat een "ja"
+    # van een uur later nergens meer op slaat.
+    - id: spraak_vraag_opruimen
+      alias: Spraak - Openstaande vraag opruimen
+      description: Vergeet de openstaande vraag zodra het antwoordvenster dicht is.
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: timer.spraak_antwoordvenster
+          to: idle
+      conditions:
+        - condition: template
+          value_template: "{{ states('input_text.spraak_openstaande_vraag') != '' }}"
+      actions:
+        - action: input_text.set_value
+          target:
+            entity_id: input_text.spraak_openstaande_vraag
+          data:
+            value: ""

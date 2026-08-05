@@ -37,13 +37,14 @@ UI editors happy. Everything is YAML, split per room.
 | `blueprints/automation/robin/` | Own blueprints. `motion_light.yaml` drives the motion lighting in eight rooms; a room package only supplies the sensor, the lamp and its exceptions. |
 | `custom_templates/` | Jinja macro libraries. `klimaat.jinja` is the single decision table for all sun shading — the one place to change behaviour; `brandweer.jinja` is the single place where the quirks of the PreCom staffing webhook are handled. Note: edits here need a **full restart**, a YAML reload is not enough. |
 | `dashboards/` | Lovelace in YAML mode. `overzicht/` is the wall panel (split per column), plus separate views for Woning, Klimaat, Systeem, Camera's, Kalender and a Nest Hub cast target. |
-| `docs/` | Design notes. `klimaatregie.md` explains the four layers of the climate control and why each rule exists. |
+| `custom_sentences/nl/` | The sentences behind the house's own Assist intents. Matched literally — what isn't in there isn't understood. Needs a **full restart** as well. |
+| `docs/` | Design notes. `klimaatregie.md` explains the four layers of the climate control and why each rule exists; `spraak.md` does the same for the voice satellite. |
 | `tests/` | Offline tests that run without Home Assistant. |
 
 Run the tests before restarting after a climate change:
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install jinja2
+python3 -m venv .venv && .venv/bin/pip install jinja2 pyyaml
 .venv/bin/python tests/test_klimaat.py
 ```
 
@@ -55,6 +56,12 @@ entry in the executor's trigger lists and a row on the Klimaat view.
 the real payload from the API spec through `custom_templates/brandweer.jinja` and checks
 the notification text, the shortfall counting and the edge cases (a team missing because
 PreCom was unreachable, names with double spaces, "reserve A" not being a person).
+
+`tests/test_spraak.py` renders every spoken answer of the voice satellite against
+stubbed sensors — including the cases you would otherwise only hear when they go wrong
+(a staffing webhook that has been silent since the restart, `very_low` as a tariff
+level, the reverse-wired sun screen) — and checks that every sentence still has an
+intent and every intent still has a sentence. This one needs `pyyaml` too.
 
 ## <a name="hubs">Hubs</a>
 
