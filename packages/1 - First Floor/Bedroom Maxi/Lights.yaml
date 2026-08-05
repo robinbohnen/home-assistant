@@ -1,3 +1,27 @@
+##############################################################################
+## SLAAPKAMER LOGAN - licht en de knop ernaast
+##
+## De knop kwam vroeger binnen als MQTT device-trigger op device_id
+## da8a3717f58a3ec7516c6064bd5812b8, met een aparte trigger per gebaar
+## (single/double/hold). Zigbee2mqtt levert hem nu als event-entiteiten:
+##
+##   event.slaapkamer_logan_slaapkamer_maxi_knop_knop_1
+##   event.slaapkamer_logan_slaapkamer_maxi_knop_knop_2
+##
+## Twee entiteiten, want het is een knop met twee wippen. Dezelfde omzetting
+## als bij de overkapping-knoppen in packages/3 - Outside/Backyard/Buttons.yaml;
+## dat bestand legt het patroon uit.
+##
+## WAAROM HIER GEEN `actie`-VARIABELE STAAT EN DAAR WEL
+## Bij de overkapping doet elk gebaar iets anders, dus daar moet het
+## event_type-attribuut uitgelezen worden. Hier deden single, double én hold
+## allemaal hetzelfde - het licht togglen - en dat is zo gebleven. Eén
+## state-trigger per entiteit is dus genoeg en het gebaar doet er niet toe.
+## Wil je de twee wippen uit elkaar trekken (bijvoorbeeld knop 1 aan, knop 2
+## uit), dan is dát het moment om het overkapping-patroon met `actie` over te
+## nemen.
+##############################################################################
+
 bedroom_maxi_lights_package:
   automation:
     - id: bedroom_maxi_lights
@@ -5,43 +29,28 @@ bedroom_maxi_lights_package:
       description: Switch the lights in maxis bedroom
       mode: single
       triggers:
-        - domain: mqtt
-          device_id: da8a3717f58a3ec7516c6064bd5812b8
-          type: action
-          subtype: single
-          trigger: device
-          id: button_single
-        - domain: mqtt
-          device_id: da8a3717f58a3ec7516c6064bd5812b8
-          type: action
-          subtype: double
-          trigger: device
-          id: button_double
-        - domain: mqtt
-          device_id: da8a3717f58a3ec7516c6064bd5812b8
-          type: action
-          subtype: hold
-          trigger: device
-          id: button_hold
-        # Virtuele druk, zie packages/9 - Other/Virtual Buttons.yaml
+        # unknown/unavailable in beide richtingen uitsluiten: bij een herstart
+        # of als het zigbee-netwerk terugkomt verandert de state ook, en dat
+        # zou het laatste gebaar nog een keer afspelen.
+        - trigger: state
+          entity_id:
+            - event.slaapkamer_logan_slaapkamer_maxi_knop_knop_1
+            - event.slaapkamer_logan_slaapkamer_maxi_knop_knop_2
+          not_from:
+            - unknown
+            - unavailable
+          not_to:
+            - unknown
+            - unavailable
+          id: knop
+        # Virtuele druk, zie packages/9 - Other/Virtual Buttons.yaml. Geen
+        # `action:`-filter: elk gebaar doet hier hetzelfde, dus elke virtuele
+        # druk hoort ook te werken.
         - trigger: event
           event_type: virtual_button
           event_data:
             button: bedroom_maxi_button
-            action: single
-          id: button_single
-        - trigger: event
-          event_type: virtual_button
-          event_data:
-            button: bedroom_maxi_button
-            action: double
-          id: button_double
-        - trigger: event
-          event_type: virtual_button
-          event_data:
-            button: bedroom_maxi_button
-            action: hold
-          id: button_hold
+          id: knop
         - trigger: state
           entity_id:
             - alarm_control_panel.alarmo
@@ -66,10 +75,7 @@ bedroom_maxi_lights_package:
         - choose:
             - conditions:
                 - condition: trigger
-                  id:
-                    - button_single
-                    - button_double
-                    - button_hold
+                  id: knop
               sequence:
                 - action: light.toggle
                   metadata: {}
