@@ -1,0 +1,108 @@
+##############################################################################
+## SLAAPKAMER LOGAN - knop ingedrukt tijdens bedtijd
+##
+## De knop blijft gewoon werken; het licht gaat aan zoals altijd (dat gebeurt
+## in Lights.yaml, deze automatisering bemoeit zich daar niet mee). Dit is
+## alleen een seintje naar boven, mét een knop in de melding om het licht
+## alsnog uit te doen. Bewust in die volgorde: een kind dat 's nachts licht
+## nodig heeft moet dat kunnen krijgen, en jij beslist daarna.
+##
+## Zelfde bedtijdvenster als Door Opened During Bedtime Maxi.yaml - na
+## `input_datetime.bedtime_maxi_1h_off` tot 09:30. Er is ook een
+## `binary_sensor.bedtime_kids` (Bedtime.yaml), maar die geldt voor beide
+## kinderen tegelijk; voor een knop in Logans kamer is het venster van Logan
+## zelf preciezer.
+##
+## EERSTE ACTIONABLE NOTIFICATIE IN DEZE CONFIG
+## De melding stuurt een `actions:`-blok mee. Tik je daarop, dan vuurt de app
+## een `mobile_app_notification_action`-event met de opgegeven action-key, en
+## dáár hangt de tweede automatisering hieronder aan. Die key is dus de lijm
+## tussen de twee: verander je hem, verander hem op beide plekken.
+##
+## LET OP: dit is een nieuw packagebestand; het laadt pas na een volledige
+## herstart van Home Assistant, een YAML-reload is niet genoeg.
+##############################################################################
+
+maxi_button_bedtime_package:
+
+  automation:
+    - id: maxi_button_bedtime_notify
+      alias: Bedroom Maxi - Knop ingedrukt tijdens bedtijd
+      description: >-
+        Meldt dat Logan tijdens bedtijd op de knop naast zijn bed heeft gedrukt,
+        met een knop in de melding om het licht alsnog uit te doen.
+      mode: single
+      # Blijft hij drukken, dan hoef je dat niet tien keer te weten. `single`
+      # plus de rustperiode onderaan maakt er hooguit één melding per vijf
+      # minuten van.
+      max_exceeded: silent
+      triggers:
+        # Zelfde twee entiteiten en dezelfde uitsluitingen als in Lights.yaml:
+        # bij een herstart of als het zigbee-netwerk terugkomt verandert de
+        # state ook, en dat zou hier een melding uit het niets opleveren.
+        - trigger: state
+          entity_id:
+            - event.slaapkamer_logan_slaapkamer_maxi_knop_knop_1
+            - event.slaapkamer_logan_slaapkamer_maxi_knop_knop_2
+          not_from:
+            - unknown
+            - unavailable
+          not_to:
+            - unknown
+            - unavailable
+      conditions:
+        - condition: time
+          after: input_datetime.bedtime_maxi_1h_off
+          before: "09:30:00"
+      actions:
+        # Even wachten voor we de lampstand uitlezen. Lights.yaml reageert op
+        # dezelfde knopdruk en de volgorde tussen die twee automatiseringen
+        # ligt niet vast; zonder deze pauze staat er in de melding regelmatig
+        # nog de stand van vóór de druk.
+        - delay: "00:00:02"
+
+        - action: notify.mobile_devices_adults
+          data:
+            title: Knop Logan ingedrukt
+            message: >-
+              Logan heeft tijdens bedtijd op de knop gedrukt. Het licht staat nu
+              {{ 'aan' if is_state('light.slaapkamer_maxi_lampen', 'on') else 'uit' }}.
+            data:
+              # Met een tag vervangt een volgende melding de vorige in plaats
+              # van eronder te stapelen, en kan hij hieronder weggehaald worden
+              # zodra iemand op de knop heeft getikt.
+              tag: maxi_knop_bedtijd
+              actions:
+                - action: MAXI_LICHT_UIT
+                  title: Licht uit
+
+        # Rustperiode, zie `mode: single` hierboven. Staat bewust ná de melding:
+        # de eerste druk meldt meteen, pas daarna gaat de rem erop.
+        - delay: "00:05:00"
+
+    - id: maxi_button_bedtime_licht_uit
+      alias: Bedroom Maxi - Licht uit via de melding
+      description: >-
+        Doet het licht bij Logan uit als iemand op "Licht uit" tikt in de
+        melding van hierboven.
+      mode: single
+      triggers:
+        - trigger: event
+          event_type: mobile_app_notification_action
+          event_data:
+            action: MAXI_LICHT_UIT
+      conditions: []
+      actions:
+        - action: light.turn_off
+          target:
+            entity_id: light.slaapkamer_maxi_lampen
+          data:
+            transition: "{{ states('input_number.lights_transition_seconds') | int(1) }}"
+
+        # De melding staat ook op de telefoon van de ander. Zonder dit blijft
+        # daar een knop staan die al ingedrukt is.
+        - action: notify.mobile_devices_adults
+          data:
+            message: clear_notification
+            data:
+              tag: maxi_knop_bedtijd
