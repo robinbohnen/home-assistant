@@ -1,0 +1,256 @@
+##############################################################################
+## THREAD - merken dat de border router eruit ligt, en hem terugzetten
+##############################################################################
+##
+## WAT ER OP 5 AUGUSTUS 2026 GEBEURDE
+## De radio van de OpenThread Border Router zit niet in de HA-machine maar op
+## het netwerk: een SLZB-MR3 op 192.168.2.207, waar de add-on via socat mee
+## praat op poort 6638. Om 18:01 gaf de RCP het op ("Too many rcp failures,
+## exiting"), waarna s6 de container stopte. Daarna bleef de add-on herstarten,
+## maar die host was op dat moment onbereikbaar ("No route to host"), dus kwam
+## hij niet meer op. Resultaat: van 18:02 tot de volgende ochtend was élk
+## Matter-over-Thread apparaat weg. De automatiseringen liepen gewoon door -
+## `light.turn_on` en `switch.turn_off` werden netjes aangeroepen en verdwenen
+## in het niets. Dat is het venijnige: in de trace is niets te zien.
+##
+## WAT HET UITEINDELIJK OPLOSTE, EN IN WELKE VOLGORDE
+## Alleen de add-on herstarten was niet genoeg - dat had de Supervisor de hele
+## nacht al gedaan. Wat wél werkte:
+##
+##   1. `button.slzb_mr3_core_restart` indrukken (de coördinator zelf herstarten)
+##   2. daarna pas de OTBR-add-on opnieuw starten
+##   3. een paar minuten wachten tot de apparaten zich weer melden
+##
+## Die volgorde is de kern: de add-on kan niets zolang de radio aan de andere
+## kant van die TCP-verbinding hangt te wezen. Vandaar dat de automatisering
+## hieronder eerst de SLZB reset en pas daarna de add-on aanraakt.
+##
+## Wat er ONDER lag: de mesh was die dag al ziek (uren NoAck en
+## ChannelAccessFailure, partitiewissels om 11:21 en 11:25) en om 11:33 stond
+## er `MultiAilDetect: BRs on multi AIL detected` in het log - meerdere border
+## routers op verschillende netwerksegmenten. Dít bestand lost dat niet op; het
+## zorgt er alleen voor dat je het merkt en dat de boel zichzelf terugzet.
+## De echte oorzaak zit in het netwerk, niet in de config.
+##
+## WAAROM DE MATER-ENTITEITEN DE MELDER ZIJN EN NIET DE ADD-ON
+## De Supervisor maakt per add-on wél een `binary_sensor.*_running`, maar die
+## staat standaard uit en moet per hand aangezet worden. Bovendien zegt "de
+## add-on draait" niet dat de mesh het doet: gisteren draaide hij prima terwijl
+## de helft van de pakketten geen ack kreeg. Onbereikbare apparaten zijn het
+## symptoom dat telt. Zet je die binary_sensor alsnog aan, dan is hij een
+## prima extra trigger onder `triggers:` hieronder.
+##
+## HIER WORDT WÉL AUTOMATISCH GEDETECTEERD
+## Overal elders in deze config wijzen we aan wat er in hoort in plaats van een
+## lijst op te bouwen met een uitsluitlijst. Hier niet: een nieuw Matter-
+## apparaat hoort meteen meegewogen te worden zonder dat iemand eraan denkt dit
+## bestand bij te werken. Een waakhond die alleen let op wat je hem in 2026 hebt
+## verteld, is over een jaar geen waakhond meer.
+##
+## LET OP: dit is een nieuw packagebestand; het laadt pas na een volledige
+## herstart van Home Assistant, een YAML-reload is niet genoeg.
+##############################################################################
+
+thread_package:
+
+  template:
+    - sensor:
+        # Hoeveel Matter-entiteiten er onbereikbaar zijn. `integration_entities`
+        # geeft alles wat aan de Matter-config-entry hangt, dus ook Matter-
+        # over-wifi. Dat is met opzet: die blijven bij een Thread-storing juist
+        # wél bereikbaar en houden zo het percentage laag, wat een prima rem is
+        # op vals alarm.
+        - name: "Thread Matter onbereikbaar"
+          unique_id: thread_matter_onbereikbaar
+          icon: mdi:access-point-network
+          unit_of_measurement: "entiteiten"
+          state_class: measurement
+          state: >
+            {% set ns = namespace(n=0) %}
+            {% for e in integration_entities('matter') %}
+              {% if states(e) in ['unknown', 'unavailable', 'none', ''] %}
+                {% set ns.n = ns.n + 1 %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.n }}
+          attributes:
+            totaal: "{{ integration_entities('matter') | count }}"
+            aandeel: >
+              {% set alle = integration_entities('matter') %}
+              {% set ns = namespace(n=0) %}
+              {% for e in alle %}
+                {% if states(e) in ['unknown', 'unavailable', 'none', ''] %}
+                  {% set ns.n = ns.n + 1 %}
+                {% endif %}
+              {% endfor %}
+              {{ 0 if alle | count == 0 else (100 * ns.n / (alle | count)) | round(0) }}
+            namen: >
+              {% set ns = namespace(namen=[]) %}
+              {% for e in integration_entities('matter') %}
+                {% if states(e) in ['unknown', 'unavailable', 'none', ''] %}
+                  {% set ns.namen = ns.namen + [state_attr(e, 'friendly_name') or e] %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.namen | join(', ') }}
+
+    - binary_sensor:
+        # De drempel: minstens drie Matter-entiteiten in totaal (anders zegt een
+        # percentage niets) én minstens 70% ervan weg. Eén apparaat met een lege
+        # batterij haalt dat niet; een dode border router wel.
+        #
+        # `delay_on` van tien minuten vangt het normale beeld na een herstart
+        # van HA op: dan is álles even onbereikbaar. Tien minuten is ruim langer
+        # dan een Matter-integratie nodig heeft om zijn apparaten terug te
+        # vinden, en kort genoeg om 's ochtends niet voor niets naast een dood
+        # huis te staan.
+        - name: "Thread netwerk stuk"
+          unique_id: thread_netwerk_stuk
+          device_class: problem
+          icon: mdi:lan-disconnect
+          delay_on: "00:10:00"
+          delay_off: "00:01:00"
+          state: >
+            {% set alles = state_attr('sensor.thread_matter_onbereikbaar', 'totaal')
+                           | int(0) %}
+            {% set aandeel = state_attr('sensor.thread_matter_onbereikbaar', 'aandeel')
+                             | float(0) %}
+            {{ alles >= 3 and aandeel >= 70 }}
+
+  automation:
+    ###########################################################################
+    ## Border router herstarten als de mesh weg is
+    ###########################################################################
+    #
+    # DE ADD-ON-SLUG HIERONDER MOET JE ÉÉN KEER CONTROLEREN.
+    # `core_openthread_border_router` is de slug van de officiële add-on. Draai
+    # je hem uit een andere repository (het log zegt "Beta mode enabled", dus
+    # dat kan), dan heet hij anders. Je vindt de juiste in de URL als je de
+    # add-on opent: /hassio/addon/<slug>/info. Klopt hij niet, dan faalt de
+    # actie met "Addon ... does not exist" en zie je dat in het log terug -
+    # de melding hieronder gaat dan alsnog de deur uit.
+    - id: thread_border_router_herstart
+      alias: Thread - Border router herstarten
+      description: >-
+        Herstart de OpenThread Border Router als vrijwel alle Matter-apparaten
+        tien minuten onbereikbaar zijn, en meldt of dat geholpen heeft.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.thread_netwerk_stuk
+          to: "on"
+      conditions:
+        # Niet meteen na een herstart van HA aan de gang: dan is de Matter-
+        # integratie soms nog aan het opstarten en is `delay_on` alleen niet
+        # genoeg (de teller begint namelijk pas te lopen ná de start).
+        - condition: template
+          value_template: >-
+            {% set start = states('sensor.home_assistant_gestart') | as_datetime %}
+            {{ start is none or (now() - start) > timedelta(minutes=20) }}
+        # Hooguit één herstartpoging per uur. Zonder deze rem zou een radio die
+        # écht stuk is de hele nacht herstart worden - en dat is precies het
+        # gedrag dat de add-on gisteren al vertoonde.
+        - condition: template
+          value_template: >-
+            {{ this.attributes.last_triggered is none
+               or now() - this.attributes.last_triggered > timedelta(hours=1) }}
+      actions:
+        # Kan de SLZB zelf niet bereikt worden, dan valt er niets te herstarten:
+        # zijn entiteiten staan dan op `unavailable`, precies zoals vannacht
+        # toen socat "No route to host" gaf. Dan meteen aan de bel trekken in
+        # plaats van een kwartier lang niets doen - dit is het geval waarin er
+        # iemand naar het kastje toe moet.
+        - if:
+            - condition: state
+              entity_id: button.slzb_mr3_core_restart
+              state:
+                - unavailable
+                - unknown
+          then:
+            - action: notify.mobile_devices_adults
+              data:
+                title: Thread weg, radio onbereikbaar
+                message: >-
+                  De Matter-apparaten zijn weg en de SLZB-MR3 op 192.168.2.207
+                  reageert zelf ook niet. Herstarten heeft geen zin; controleer
+                  of het kastje aan staat en op het netwerk zit.
+                data:
+                  push:
+                    sound:
+                      name: default
+                      critical: 1
+                      volume: 0.7
+            - stop: "Radio onbereikbaar, handmatig nakijken"
+
+        - action: notify.mobile_devices_adults
+          data:
+            title: Thread ligt eruit
+            message: >-
+              {{ states('sensor.thread_matter_onbereikbaar') }} van de
+              {{ state_attr('sensor.thread_matter_onbereikbaar', 'totaal') }}
+              Matter-entiteiten zijn onbereikbaar. Ik reset de SLZB en start de
+              border router opnieuw.
+
+        # Stap 1: de coördinator zelf. Alleen de add-on herstarten hielp op
+        # 5 augustus niet - de Supervisor had dat de hele nacht al geprobeerd.
+        - action: button.press
+          target:
+            entity_id: button.slzb_mr3_core_restart
+
+        # De SLZB moet opkomen en zijn TCP-poort weer openzetten voordat de
+        # add-on er iets mee kan. Twee minuten is ruim voor een core-restart;
+        # te vroeg beginnen levert precies de crashlus op die we willen mijden.
+        - delay: "00:02:00"
+
+        # Stap 2: pas nu de add-on.
+        #
+        # DE SLUG HIERONDER MOET JE ÉÉN KEER CONTROLEREN - zie de toelichting
+        # boven deze automatisering.
+        - action: hassio.addon_restart
+          data:
+            addon: core_openthread_border_router
+          # Bestaat de slug niet, dan stopt de automatisering hier normaal
+          # gesproken. Dat is precies het geval waarin je een melding wílt, dus
+          # loopt hij door naar de controle hieronder.
+          continue_on_error: true
+
+        # Terugkomen duurt even: de add-on start, de RCP moet aanhaken en de
+        # apparaten moeten zich melden. Bij de handmatige reddingsactie duurde
+        # dat "enkele minuten"; een kwartier is dus ruim.
+        - wait_for_trigger:
+            - trigger: state
+              entity_id: binary_sensor.thread_netwerk_stuk
+              to: "off"
+          timeout: "00:15:00"
+          continue_on_timeout: true
+
+        - choose:
+            - conditions:
+                - condition: template
+                  value_template: "{{ wait.trigger is not none }}"
+              sequence:
+                - action: notify.mobile_devices_adults
+                  data:
+                    title: Thread is terug
+                    message: >-
+                      SLZB gereset en border router herstart; de Matter-
+                      apparaten zijn weer bereikbaar.
+          default:
+            # De hele volgorde doorlopen en het is nog steeds stuk. Dan zit het
+            # dieper dan een vastgelopen radio - denk aan de multi-AIL-situatie
+            # uit de kop van dit bestand. Critical, want zonder Thread doen de
+            # lampen en de luchtreinigers beneden niets en zie je dat verder
+            # nergens aan.
+            - action: notify.mobile_devices_adults
+              data:
+                title: Thread blijft weg
+                message: >-
+                  SLZB gereset én border router herstart, maar
+                  {{ states('sensor.thread_matter_onbereikbaar') }} entiteiten
+                  zijn nog steeds onbereikbaar. Dit lost zichzelf niet op.
+                data:
+                  push:
+                    sound:
+                      name: default
+                      critical: 1
+                      volume: 0.7
