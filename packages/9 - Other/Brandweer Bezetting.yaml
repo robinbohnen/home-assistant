@@ -3,11 +3,13 @@ brandweer_bezetting_package:
   # BEZETTING VAN DE DIENSTDOENDE PLOEG
   # ===========================================================================
   #
-  # De cron op brandweeruden.112radar.nl POST bij elke statuswissel
-  # (ok <-> krap <-> onderbezet) een volledige stand naar de webhook in
-  # `Brandweer Automations.yaml`. Die automatisering vuurt het event
+  # De cron op brandweeruden.112radar.nl POST bij elke wijziging een volledige
+  # stand naar de webhook in `Brandweer Automations.yaml`: een statuswissel
+  # (ok <-> krap <-> onderbezet) of alleen een personele wijziging in PreCom.
+  # Die automatisering vuurt bij ELKE binnenkomst het event
   # `brandweer_bezetting` met de rauwe payload; dit bestand zet er entiteiten
-  # van.
+  # van. De melding op de telefoon wordt daar afgeknepen tot de statuswissels,
+  # deze sensoren juist niet: het dashboard mag nooit achterlopen.
   #
   # WAAROM VIA EEN EVENT EN NIET RECHTSTREEKS OP DE WEBHOOK
   # Een webhook-id kan maar één keer geregistreerd worden. Zou deze sensor ook
@@ -25,8 +27,8 @@ brandweer_bezetting_package:
   # sensor nog nooit gevuld is.
   #
   # De sensoren zijn trigger-based en herstellen daarom hun state én attributen
-  # na een herstart. Dat is hier essentieel: er komt pas nieuwe data bij de
-  # eerstvolgende statuswissel, en dat kan dagen duren.
+  # na een herstart. Dat blijft nodig: bij een rustige dienst kan het uren
+  # duren voor PreCom iets te melden heeft.
   #
   # LET OP: `sensor.brandweer_bezetting` draagt de hele stand in attributen
   # (enkele kB). Die staat daarom in de recorder-uitsluitlijst van
@@ -54,6 +56,8 @@ brandweer_bezetting_package:
             kwartier: "{{ v.kwartier }}"
             tijdstip: "{{ v.tijdstip }}"
             vorige_status: "{{ v.vorige_status }}"
+            status_veranderd: "{{ v.status_veranderd }}"
+            sinds: "{{ v.sinds }}"
             was_sinds: "{{ v.was_sinds }}"
             aantal: "{{ v.aantal }}"
             tekort: "{{ v.tekort }}"

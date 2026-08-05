@@ -9,9 +9,11 @@ zodat de randgevallen te testen zijn zonder te herstarten.
 PAYLOAD is letterlijk het voorbeeld uit de spec van de webhook: kwartier 16:15,
 A-ploeg onderbezet, met alle rommel die er in het echt in zit ("reserve A" is
 geen persoon, "Daan van der  Zanden" heeft een dubbele spatie, iemand staat in
-meerdere functies tegelijk). De varianten daaronder dekken wat in dat voorbeeld
-juist NIET zat: krap (andere sleutelnaam voor de ondergrens), herstel met
-was_sinds, en een ploeg die ontbreekt omdat PreCom onbereikbaar was.
+meerdere functies tegelijk), aangevuld met de wijzigingen zoals PreCom die sinds
+augustus 2026 stuurt: genest per dag en per ploeg, met periodes in plaats van
+kwartieren. De varianten daaronder dekken wat in dat voorbeeld juist NIET zat:
+krap (andere sleutelnaam voor de ondergrens), herstel met was_sinds, de oude
+vorm van `wijzigingen`, en een ploeg die ontbreekt omdat PreCom onbereikbaar was.
 """
 import copy
 import json
@@ -37,9 +39,20 @@ def ha_as_timestamp(value, default=None):
     return default
 
 
+def ha_bool(value, default=None):
+    if isinstance(value, bool):
+        return value
+    if str(value).lower() in ("true", "yes", "on", "1"):
+        return True
+    if str(value).lower() in ("false", "no", "off", "0"):
+        return False
+    return default
+
+
 env = Environment(loader=FileSystemLoader(f"{CONFIG}/custom_templates"))
 env.filters["to_json"] = lambda v, **k: json.dumps(v)
 env.filters["from_json"] = json.loads
+env.filters["bool"] = ha_bool
 env.globals.update(now=lambda: NOW, strptime=ha_strptime, as_timestamp=ha_as_timestamp)
 
 MOD = env.get_template("brandweer.jinja").module
@@ -123,7 +136,40 @@ PAYLOAD = {
         },
     },
     "functies": [{"functie": "Manschap", "beschikbaar": 3, "nodig": 4}],
-    "wijzigingen": {"Manschap": {"erbij": ["Nick Hermans"], "eraf": ["Ben Paalman"]}},
+    # Sinds augustus 2026 stuurt PreCom bij ELKE wijziging, en zijn de
+    # wijzigingen genest per dag en per ploeg met de periodes erbij.
+    "status_veranderd": True,
+    "sinds": "2026-02-14 16:20",
+    "wijzigingen": {
+        "vandaag": {
+            "datum": "2026-02-14",
+            "ploegen": {
+                "A": [
+                    {"persoon": "Nick Hermans",
+                     "functies": ["Bediener RV", "Bevelvoerder", "Manschap"],
+                     "eraf": ["18:00-22:00"]},
+                    {"persoon": "Ben  Paalman",
+                     "functies": ["Manschap"],
+                     "erbij": ["20:00-24:00"]},
+                ],
+                "B": [
+                    {"persoon": "Robin Bohnen",
+                     "functies": ["Manschap"],
+                     "eraf": ["09:00-12:00", "13:00-17:00"]},
+                ],
+            },
+        },
+        "morgen": {
+            "datum": "2026-02-15",
+            "ploegen": {
+                "A": [
+                    {"persoon": "Henry de Kock",
+                     "functies": ["Chauffeur"],
+                     "eraf": ["23:45-24:00"]},
+                ],
+            },
+        },
+    },
 }
 
 FOUTEN = []
@@ -164,16 +210,70 @@ check("aantal komt van de ploeg, niet uit de functies", v["aantal"], 3)
 check("alle drie de ploegen", [p["ploeg"] for p in v["ploegen"]], ["A", "B", "C"])
 check("ploeg kent zijn dienst", v["ploegen"][1]["dienst"], "volgende_week")
 check("aspiranten meegenomen", v["ploegen"][0]["aspiranten"], ["Giel Smits"])
-check("wijzigingen als lijst", v["wijzigingen"],
-      [{"functie": "Manschap", "erbij": ["Nick Hermans"], "eraf": ["Ben Paalman"]}])
 check("geen was_sinds bij een verslechtering", v["was_sinds"], None)
+check("statuswissel als bool", v["status_veranderd"], True)
+
+# ---------------------------------------------------------------------------
+print("\nWijzigingen: dag -> ploeg -> persoon wordt één platte lijst")
+
+check("alle vier de wijzigingen, beide dagen", len(v["wijzigingen"]), 4)
+check("vandaag vóór morgen, daarbinnen op ploeg",
+      [(w["dag"], w["ploeg"], w["persoon"]) for w in v["wijzigingen"]],
+      [("vandaag", "A", "Nick Hermans"), ("vandaag", "A", "Ben Paalman"),
+       ("vandaag", "B", "Robin Bohnen"), ("morgen", "A", "Henry de Kock")])
+check("datum van de dag hangt aan elke regel",
+      v["wijzigingen"][0]["datum"], "2026-02-14")
+check("dubbele spatie ook hier weggepoetst",
+      v["wijzigingen"][1]["persoon"], "Ben Paalman")
+check("functies blijven staan",
+      v["wijzigingen"][0]["functies"], ["Bediener RV", "Bevelvoerder", "Manschap"])
+check("periodes, geen namen, in eraf", v["wijzigingen"][0]["eraf"], ["18:00-22:00"])
+check("kort leest als een regel",
+      v["wijzigingen"][0]["kort"], "Nick Hermans − 18:00-22:00")
+check("meerdere periodes op één regel",
+      v["wijzigingen"][2]["kort"], "Robin Bohnen − 09:00-12:00, 13:00-17:00")
+check("erbij krijgt een plus", v["wijzigingen"][1]["kort"], "Ben Paalman + 20:00-24:00")
+
+# De oude payloadvorm (wijzigingen per functie) mag geen onzin opleveren.
+oud = copy.deepcopy(PAYLOAD)
+oud["wijzigingen"] = {"Manschap": {"erbij": ["Nick Hermans"], "eraf": ["Ben Paalman"]}}
+check("oude vorm levert een lege lijst, geen rommel", bezetting(oud)["wijzigingen"], [])
+
+leeg_w = copy.deepcopy(PAYLOAD)
+leeg_w["wijzigingen"] = {"vandaag": {"datum": "2026-02-14", "ploegen": {}},
+                         "morgen": {"datum": "2026-02-15", "ploegen": {}}}
+check("niets veranderd is een lege lijst", bezetting(leeg_w)["wijzigingen"], [])
+
+zonder = copy.deepcopy(PAYLOAD)
+del zonder["wijzigingen"]
+del zonder["status_veranderd"]
+v_zonder = bezetting(zonder)
+check("payload zonder wijzigingen is geen fout", v_zonder["wijzigingen"], [])
+check("ontbrekend status_veranderd telt als wissel",
+      v_zonder["status_veranderd"], True)
+
+v = bezetting(PAYLOAD)
 
 m = melding(PAYLOAD)
 check("titel zegt meteen wat er mis is", m["titel"], "Onderbezet · A-ploeg — Manschap 3/4")
 check("eerste regel is het gat", m["tekst"].split("\n")[0], "Manschap 3/4 (gewenst 6)")
 check("beschikbaar in de tekst", "3 beschikbaar in A-ploeg · kwartier 16:15" in m["tekst"], True)
 check("pager uit met naam", "Pager uit: Twan van der Velden" in m["tekst"], True)
-check("wijziging in de tekst", "Manschap: + Nick Hermans · - Ben Paalman" in m["tekst"], True)
+
+# In de melding alleen vandaag én alleen de dienstdoende ploeg: morgen en de
+# ploegen die geen dienst hebben zijn dashboardwerk.
+check("wijziging van vandaag in de tekst", "Nick Hermans − 18:00-22:00" in m["tekst"], True)
+check("andere ploeg blijft eruit", "Robin Bohnen" in m["tekst"], False)
+check("morgen blijft eruit", "Henry de Kock − 23:45-24:00" in m["tekst"], False)
+
+veel = copy.deepcopy(PAYLOAD)
+veel["wijzigingen"]["vandaag"]["ploegen"]["A"] = [
+    {"persoon": f"Persoon {n}", "functies": ["Manschap"], "eraf": ["18:00-22:00"]}
+    for n in range(1, 8)
+]
+tekst = melding(veel)["tekst"]
+check("lange lijst wordt afgekapt", "Persoon 5" in tekst, False)
+check("en zegt hoeveel er wegvielen", "en nog 3 wijzigingen" in tekst, True)
 
 # ---------------------------------------------------------------------------
 print("\nKrap: de ondergrens is dan de wens, niet het minimum")

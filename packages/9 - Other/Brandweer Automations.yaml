@@ -1103,8 +1103,16 @@ brandweer_package:
             entity_id: scene.hue_taffellamp_nu
           data: {}
 
-    # De PreCom-cron POST hier alleen bij een STATUSWISSEL (ok <-> krap <->
-    # onderbezet), niet elke 5 minuten. Elke binnenkomst is dus nieuws.
+    # De PreCom-cron POST hier bij ELKE wijziging: een statuswissel (ok <->
+    # krap <-> onderbezet) óf alleen een personele wijziging in PreCom bij een
+    # gelijkblijvende status, voor vandaag én morgen. Dat is een stuk vaker dan
+    # de statuswissels van vroeger.
+    #
+    # DAAROM: alles doorgeven, maar alleen púshen bij een statuswissel.
+    # `trigger.json.status_veranderd` zegt welke van de twee het is. De
+    # sensoren, het dashboard, de dienstdoende ploeg en de status-input_select
+    # lopen dus bij elke binnenkomst bij; de telefoon gaat alleen af als de
+    # bezetting daadwerkelijk van kleur verandert - net zo vaak als voorheen.
     #
     # De payload is een volledige stand: per functie wie er beschikbaar is, wie
     # zijn pager uit heeft en wie zich heeft afgemeld, plus alle drie de
@@ -1113,14 +1121,16 @@ brandweer_package:
     # packages/9 - Other/Brandweer Bezetting.yaml. Deze automatisering doet
     # alleen de doorgifte en de melding.
     #
-    # `queued` en niet `single`: twee wissels kort na elkaar (iemand meldt zich
+    # `queued` en niet `single`: twee standen kort na elkaar (iemand meldt zich
     # af en er komt iemand bij) zouden bij `single` de tweede laten vallen, en
-    # dan klopt de opgeslagen stand niet meer met PreCom.
+    # dan klopt de opgeslagen stand niet meer met PreCom. Met de hogere
+    # frequentie is de wachtrij ruimer: een reeks wijzigingen achter elkaar mag
+    # niet stilletjes afgekapt worden.
     - id: brandweer_bezetting_webhook
       alias: Brandweer - (Onder)bezetting bericht
       description: Webhook voor bezettingswijzigingen brandweer
       mode: queued
-      max: 5
+      max: 10
       triggers:
         - trigger: webhook
           allowed_methods:
@@ -1133,14 +1143,17 @@ brandweer_package:
         - variables:
             status: "{{ trigger.json.type }}"
             ploeg_optie: "{{ trigger.json.ploeg }} Ploeg"
-            # Titel en tekst van de melding; zie de macro voor de opbouw.
-            melding: >
-              {% from 'brandweer.jinja' import melding_json %}
-              {{ melding_json(trigger.json) | trim | from_json }}
+            # Wisselde de status, of veranderde alleen de personele stand?
+            # Ontbreekt het veld (cron van vóór augustus 2026), dan gaan we uit
+            # van een wissel: liever een melding te veel dan stilletjes geen
+            # enkele meer.
+            status_veranderd: "{{ trigger.json.get('status_veranderd', true) | bool(true) }}"
             # Hoe hard de melding mag: alleen onderbezetting in mijn eigen
             # dienstweek is een reden voor geluid. De rest is informatie, en
             # tussen 23:00 en 06:30 is informatie geen melding waard - de
-            # sensoren en het dashboard lopen dan wel gewoon bij.
+            # sensoren en het dashboard lopen dan wel gewoon bij. Hetzelfde
+            # geldt voor een stand zonder statuswissel: wel verwerken, niet
+            # pushen.
             ik_dienst: "{{ ploeg_optie == states('input_select.brandweer_mijn_huidige_ploeg') }}"
             urgent: "{{ status == 'onderbezet' and ik_dienst }}"
             nachtrust: "{{ now() >= today_at('23:00') or now() < today_at('06:30') }}"
@@ -1178,8 +1191,14 @@ brandweer_package:
         - alias: Melding naar mijn telefoon
           if:
             - condition: template
-              value_template: "{{ urgent or not nachtrust }}"
+              value_template: "{{ status_veranderd and (urgent or not nachtrust) }}"
           then:
+            # Titel en tekst pas hier opbouwen: bij verreweg de meeste standen
+            # wordt er niet gepusht en hoeft de macro niet te draaien.
+            - variables:
+                melding: >
+                  {% from 'brandweer.jinja' import melding_json %}
+                  {{ melding_json(trigger.json) | trim | from_json }}
             - action: notify.mobile_devices_robin
               data:
                 title: "{{ melding.titel }}"

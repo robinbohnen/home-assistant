@@ -56,6 +56,9 @@ entry in the executor's trigger lists and a row on the Klimaat view.
 the real payload from the API spec through `custom_templates/brandweer.jinja` and checks
 the notification text, the shortfall counting and the edge cases (a team missing because
 PreCom was unreachable, names with double spaces, "reserve A" not being a person).
+That webhook now fires on every PreCom change, not just on a status switch, so the
+sensors and dashboards follow every change while the phone is only pushed when the
+status itself flips — `status_veranderd` in the payload is what makes that distinction.
 
 `tests/test_spraak.py` renders every spoken answer of the voice satellite against
 stubbed sensors — including the cases you would otherwise only hear when they go wrong

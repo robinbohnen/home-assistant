@@ -3,9 +3,13 @@
   BRANDWEERBEZETTING - de PreCom-webhook omzetten naar iets bruikbaars
 ==============================================================================
 
-  De cron op brandweeruden.112radar.nl POST bij ELKE statuswissel
-  (ok <-> krap <-> onderbezet) een volledige stand naar de webhook van
-  `packages/9 - Other/Brandweer Automations.yaml`. Die payload is rijk maar
+  De cron op brandweeruden.112radar.nl POST bij ELKE wijziging een volledige
+  stand naar de webhook van `packages/9 - Other/Brandweer Automations.yaml`:
+  een statuswissel (ok <-> krap <-> onderbezet) óf alleen een personele
+  wijziging in PreCom (iemand meldt zich af, iemand komt erbij), voor vandaag
+  én morgen. `status_veranderd` zegt welk van de twee het is; wie daar
+  onderscheid in wil maken (de melding, bijvoorbeeld) kijkt daarnaar. Die
+  payload is rijk maar
   ongemakkelijk: functienamen met spaties en een punt, velden die ontbreken
   zodra hun conditie er niet is, twee verschillende sleutelnamen voor de
   ondergrens (`nodig` bij onderbezet, `gewenst` bij krap), en namen die rauw uit
@@ -28,10 +32,13 @@
   WAT `bezetting_json()` OPLEVERT
   ---------------------------------------------------------------------------
     type            ok | krap | onderbezet
+    status_veranderd  of dit een statuswissel is, of alleen een personele
+                    wijziging bij gelijkblijvende status
     vorige_status   status vóór deze wissel
     ploeg           letter van de dienstdoende ploeg
     tijdstip        cron-tijd (Y-m-d H:i)
     kwartier        tijdslot waar de cijfers vandaan komen (H:i)
+    sinds           sinds wanneer de HUIDIGE status geldt, of null
     was_sinds       bij herstel: sinds wanneer het mis was, anders null
     aantal          unieke beschikbaren in de dienstdoende ploeg (zelfde getal
                     als de website toont; per functie optellen mag NIET, want
@@ -47,7 +54,13 @@
     pager_uit       unieke, opgeschoonde namen met pager uit (tellen niet mee
                     als beschikbaar - dit is dus wie het gat kan dichten)
     afwezig         unieke, opgeschoonde namen die zich hebben afgemeld
-    wijzigingen     [{functie, erbij: [], eraf: []}] sinds de vorige stand
+    wijzigingen     platte lijst van personele wijzigingen sinds de vorige
+                    stand, elk {dag, datum, ploeg, persoon, functies, erbij,
+                    eraf, kort}. `dag` is 'vandaag' of 'morgen', `erbij`/`eraf`
+                    zijn periodes ("18:00-22:00"), `kort` is de regel
+                    "Nick Hermans − 18:00-22:00". Filteren op dag of ploeg doe
+                    je met `selectattr` - de lijst gaat over alle drie de
+                    ploegen en over beide dagen.
     ploegen         LIJST (geen dict) van {ploeg, dienst, status, aantal,
                     personen, aspiranten}, gesorteerd op letter. Een ploeg
                     waarvan PreCom niets wist ontbreekt gewoon, dus reken niet
@@ -110,11 +123,38 @@
     {%- endfor -%}
   {%- endfor -%}
 
-  {%- for functie, w in (p.get('wijzigingen', {})).items() -%}
-    {%- set ns.wijzigingen = ns.wijzigingen + [{
-        'functie': functie,
-        'erbij': namen_json(w.get('erbij', [])) | trim | from_json,
-        'eraf': namen_json(w.get('eraf', [])) | trim | from_json }] -%}
+  {#- Wijzigingen zijn genest: dag ('vandaag'/'morgen') -> ploeg -> per persoon
+      de periodes waarin hij erbij kwam of eraf ging. PreCom levert dat al
+      samengevouwen aan (één afmelding is één periode, niet zestien kwartieren),
+      dus hier alleen platslaan tot één lijst waar consumenten op kunnen
+      filteren. De volgorde van de payload is vandaag-dan-morgen en blijft
+      daarom staan; de ploegen wél sorteren, want daar is de volgorde toeval.
+
+      De `is mapping`-check vangt de oude payloadvorm (wijzigingen per functie)
+      af: die levert nu een lege lijst op in plaats van onzin-regels. -#}
+  {%- for dag, d in (p.get('wijzigingen', {})).items() -%}
+    {%- if d is mapping and d.get('ploegen') -%}
+      {%- for letter, personen in (d.get('ploegen', {})).items() | sort -%}
+        {%- for w in (personen or []) -%}
+          {%- set naam = (w.get('persoon', '') or '').split() | join(' ') -%}
+          {%- set erbij = w.get('erbij', []) or [] -%}
+          {%- set eraf = w.get('eraf', []) or [] -%}
+          {%- if naam and (erbij or eraf) -%}
+            {%- set ns.wijzigingen = ns.wijzigingen + [{
+                'dag': dag,
+                'datum': d.get('datum', ''),
+                'ploeg': letter,
+                'persoon': naam,
+                'functies': w.get('functies', []) or [],
+                'erbij': erbij,
+                'eraf': eraf,
+                'kort': naam
+                  ~ (' + ' ~ erbij | join(', ') if erbij else '')
+                  ~ (' − ' ~ eraf | join(', ') if eraf else '') }] -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endfor -%}
+    {%- endif -%}
   {%- endfor -%}
 
   {#- Ploegen als lijst: een ploeg met een PreCom-storing ontbreekt in de
@@ -135,10 +175,12 @@
 
   {{- {
     'type': p.get('type', 'onbekend'),
+    'status_veranderd': p.get('status_veranderd', true) | bool(true),
     'vorige_status': p.get('vorige_status', 'onbekend'),
     'ploeg': p.get('ploeg', '?'),
     'tijdstip': p.get('tijdstip', ''),
     'kwartier': p.get('kwartier', ''),
+    'sinds': p.get('sinds', none),
     'was_sinds': p.get('was_sinds', none),
     'aantal': ns.aantal,
     'tekort': ns.tekort,
@@ -202,13 +244,18 @@
     {%- set ns.regels = ns.regels + ['Pager uit: ' ~ v.pager_uit | join(', ')] -%}
   {%- endif -%}
 
-  {%- for w in v.wijzigingen -%}
-    {%- set ns.regels = ns.regels + [
-      w.functie ~ ': '
-      ~ (('+ ' ~ w.erbij | join(', ')) if w.erbij else '')
-      ~ (' · ' if w.erbij and w.eraf else '')
-      ~ (('- ' ~ w.eraf | join(', ')) if w.eraf else '')] -%}
+  {#- Wijzigingen: alleen die van vandaag in de dienstdoende ploeg. De rest
+      (morgen, de andere twee ploegen) staat op het dashboard en heeft op een
+      vergrendelscherm geen betekenis. Ook afgekapt: bij een grote schuif is
+      "en 7 meer" bruikbaarder dan een melding van drie schermen hoog. -#}
+  {%- set eigen = v.wijzigingen | selectattr('dag', 'eq', 'vandaag')
+                                | selectattr('ploeg', 'eq', v.ploeg) | list -%}
+  {%- for w in eigen[:4] -%}
+    {%- set ns.regels = ns.regels + [w.kort] -%}
   {%- endfor -%}
+  {%- if eigen | count > 4 -%}
+    {%- set ns.regels = ns.regels + ['en nog ' ~ (eigen | count - 4) ~ ' wijzigingen'] -%}
+  {%- endif -%}
 
   {{- {
     'titel': ({
