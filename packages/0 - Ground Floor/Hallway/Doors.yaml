@@ -1,0 +1,117 @@
+##############################################################################
+## VOORDEUR - het magneetcontact op de belangrijkste buitendeur
+##
+## Het slot (lock.kroon18voordeur) zegt of de deur op slot zit, niet of hij
+## dicht is: met de klink open blijft het slot gewoon "unlocked" melden. Sinds
+## er een contact op de deur zit is dat verschil meetbaar, en dat is precies
+## waar deze twee automatiseringen over gaan.
+##
+## Wat er NIET in staat en waarom:
+##  - Licht in de hal: dat loopt via de bewegingslicht-blueprint, waar de
+##    voordeur nu als deurcontact aan hangt (Hallway/Lights.yaml).
+##  - Alarm: Alarmo bewaakt de deurcontacten zelf. Zijn sensorlijst staat in
+##    de UI, niet in deze repo - het nieuwe contact moet daar handmatig bij.
+##  - Alles-dicht-overzicht: het contact zit in binary_sensor.all_doors
+##    (packages/9 - Other/Firealarm.yaml) en daarmee op de dashboards.
+##
+## LET OP: dit is een nieuw packagebestand; het laadt pas na een volledige
+## herstart van Home Assistant, een YAML-reload is niet genoeg.
+##############################################################################
+
+hallway_doors_package:
+
+  automation:
+    # -----------------------------------------------------------------------
+    # Vergeten dicht te doen. In de winter is een openstaande voordeur puur
+    # warmteverlies (de "Ramen advies"-automatiseringen in Temperature
+    # Control.yaml kijken alleen naar ramen en tuindeuren), en 's avonds is
+    # het een open huis. Twee drempels: na 5 minuten een gewone melding, na
+    # 20 minuten een die door de stille modus heen komt - dan is het geen
+    # boodschappen-uitladen meer.
+    # -----------------------------------------------------------------------
+    - id: hallway_frontdoor_open_too_long
+      alias: Hallway - Voordeur staat open
+      description: >-
+        Meldt een voordeur die open blijft staan; na 20 minuten met een
+        critical push, want dan gaat het niet meer per ongeluk goed.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.entree_entree_voordeur_deur
+          to: "on"
+          for: "00:05:00"
+          id: kort
+        - trigger: state
+          entity_id: binary_sensor.entree_entree_voordeur_deur
+          to: "on"
+          for: "00:20:00"
+          id: lang
+      conditions: []
+      actions:
+        - variables:
+            hoelang: >-
+              {{ relative_time(states.binary_sensor.entree_entree_voordeur_deur.last_changed) }}
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id: lang
+              sequence:
+                - action: notify.mobile_devices_adults
+                  data:
+                    title: Voordeur staat nog steeds open
+                    message: >-
+                      De voordeur staat al {{ hoelang }} open.
+                    data:
+                      push:
+                        sound:
+                          name: default
+                          critical: 1
+                          volume: 0.7
+          default:
+            - action: notify.mobile_devices_adults
+              data:
+                title: Voordeur staat open
+                message: >-
+                  De voordeur staat {{ hoelang }} open.
+
+    # -----------------------------------------------------------------------
+    # Deur open terwijl er niemand thuis is en het alarm uit staat. Staat het
+    # alarm aan, dan doet Alarmo dit al (inclusief de hele afschrikking); dit
+    # is het gat daaronder: handmatig uitgezet alarm, of iedereen weg terwijl
+    # het huis nog op disarmed staat. Beeld erbij, want de vraag is meteen
+    # "wie is dat" - snapshot naar een bestand omdat /api/camera_proxy in de
+    # app regelmatig een 404 geeft (zelfde reden als in 9 - Other/Alarm.yaml).
+    # -----------------------------------------------------------------------
+    - id: hallway_frontdoor_opened_while_away
+      alias: Hallway - Voordeur open terwijl niemand thuis
+      description: >-
+        Stuurt een melding met camerabeeld als de voordeur opengaat terwijl
+        iedereen weg is en het alarm niet ingeschakeld staat.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.entree_entree_voordeur_deur
+          to: "on"
+      conditions:
+        - condition: state
+          entity_id: group.all_adults
+          state: not_home
+        - condition: state
+          entity_id: alarm_control_panel.alarmo
+          state: disarmed
+      actions:
+        - action: camera.snapshot
+          target:
+            entity_id: camera.g4_doorbell_pro_high_resolution_channel
+          data:
+            filename: /config/www/voordeur_open.jpg
+        - action: notify.mobile_devices_adults
+          data:
+            title: Voordeur geopend
+            message: >-
+              De voordeur is om {{ now().strftime('%H:%M') }} geopend terwijl
+              er niemand thuis is en het alarm uit staat.
+            data:
+              image: /local/voordeur_open.jpg
