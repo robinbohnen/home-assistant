@@ -231,27 +231,31 @@ De beslistabel, van hoog naar laag:
    Buiten het dagvenster adviseert deze zone `rust`. Dat venster begint bij het
    wakker-signaal en eindigt bij de vroegste van deze twee:
 
-   - **de bedtijd van de kinderen.** Een rolgordijn is door het hele huis te
-     horen en de kinderkamers liggen erboven. In juni staat de zon om 20:00 nog
-     ruim boven `AVOND_ELEVATIE` en de stille uren beginnen pas om 22:00, dus
-     lag daar een gat van een paar uur waarin de klimaatregie ze op een warme
-     avond alsnog omhoog stuurde — precies tijdens het in slaap vallen. De tijd
-     komt uit `input_datetime.bedtime_maxi` en `…_mini` (`BEDTIJDEN`), dezelfde
-     helpers als de overloopverlichting gebruikt; de vroegste van de twee telt
-     en de rust schuift dus mee met een latere weekendbedtijd. Geeft geen van
-     beide een bruikbare avondtijd, dan geldt `BEDTIJD_TERUGVAL` (19:00, het uur
-     van `slaap_van` in de kinderkamers). Een tijd vóór `BEDTIJD_VROEGST`
+   - **het begin van de naar-bed-routine van de kinderen.** Een rolgordijn is
+     door het hele huis te horen en de kinderkamers liggen erboven. In juni
+     staat de zon om 20:00 nog ruim boven `AVOND_ELEVATIE` en de stille uren
+     beginnen pas om 22:00, dus lag daar een gat van een paar uur waarin de
+     klimaatregie ze op een warme avond alsnog omhoog stuurde — precies tijdens
+     het in slaap vallen. De tijd komt uit
+     `input_datetime.bedtime_maxi_1h_off` en `…_mini_1h_off` (`BEDTIJDEN`),
+     dezelfde helpers als de rest van het huis gebruikt; de vroegste van de twee
+     telt en de rust schuift dus mee met een latere weekendbedtijd. Geeft geen
+     van beide een bruikbare avondtijd, dan geldt `BEDTIJD_TERUGVAL` (18:00, een
+     uur voor `slaap_van` in de kinderkamers). Een tijd vóór `BEDTIJD_VROEGST`
      (17:00) wordt genegeerd — anders zou een verkeerd gezette helper de zone de
      hele dag platleggen;
-   - **een half uur voor zonsondergang** (`AVOND_ELEVATIE`, 5°). Vanaf dat
-     moment zijn de rolgordijnen van `kitchen_covers_close` en
-     `covers_lock_alarm_events`: die gaan over inkijk en niet over warmte. Zou
-     de klimaatregie daar doorheen blijven adviseren, dan trok de uitvoerder ze
-     een kwartier na zonsondergang weer omhoog.
+   - **een half uur voor zonsondergang** (`AVOND_ELEVATIE`, 5°).
 
-   In de zomer komt de bedtijd ruim eerst, in de winter de zonsondergang. Aan de
-   ochtendkant is er niets bijzonders nodig: dat venster loopt al tot het huis
-   wakker is gemeld (`nog_slapen`, uiterlijk `WAKKER_UITERLIJK`).
+   Vanaf dat moment zijn de rolgordijnen van `kitchen_covers_close` en
+   `covers_lock_alarm_events`: die gaan over inkijk en niet over warmte. Zou de
+   klimaatregie daar doorheen blijven adviseren, dan trok de uitvoerder ze een
+   kwartier later weer omhoog. In de zomer komt de bedtijd ruim eerst, in de
+   winter de zonsondergang — en `kitchen_covers_close` gebruikt precies
+   diezelfde twee momenten, zodat er geen gat tussen kan vallen. Er is een
+   consistentiecheck in `tests/test_klimaat.py` die dat bewaakt.
+
+   Aan de ochtendkant is er niets bijzonders nodig: dat venster loopt al tot het
+   huis wakker is gemeld (`nog_slapen`, uiterlijk `WAKKER_UITERLIJK`).
 
    Om dezelfde reden gaat er **niets omhoog als het alarm scherp staat
    (`armed_*`) of er niemand thuis is**: dan heeft de inkijk-routine ze net
@@ -349,10 +353,22 @@ netjes afvangt: de knop-automatiseringen (slaapkamer, kantoor, badkamer) en het
 sluiten van de rolluiken door `script_attic_ac` voordat de airco aangaat.
 
 Ook ongemoeid, maar om een andere reden: `kitchen_covers_close` (rolgordijnen
-dicht om zonsondergang −30 min) en `covers_lock_alarm_events` (open bij
-ontgrendelen, dicht bij inschakelen van het alarm). Die gaan over inkijk en niet
-over warmte, en de klimaatregie houdt zich daar bewust buiten: buiten het
-dagvenster adviseert ze `rust` voor de rolgordijnen. Zie stap 7 hierboven.
+dicht voor de avond) en `covers_lock_alarm_events` (open bij ontgrendelen, dicht
+bij inschakelen van het alarm). Die gaan over inkijk en niet over warmte, en de
+klimaatregie houdt zich daar bewust buiten: buiten het dagvenster adviseert ze
+`rust` voor de rolgordijnen. Zie stap 7 hierboven.
+
+`kitchen_covers_close` is wel op twee punten aangepast, allebei omdat hij het
+enige was dat zich er niet aan hield:
+
+- hij liep op zonsondergang −30 min, in juni dus 21:35 — twee uur nadat de
+  kinderen naar bed waren. Hij sluit nu op wat het eerst komt: die zonsondergang
+  of het begin van de naar-bed-routine, precies de twee momenten waarop de
+  klimaatregie deze zone loslaat;
+- hij sloot de rolgordijnengroep zonder naar de raamcontacten te kijken en rolde
+  dus tegen een openstaand keukenraam aan. Hij gaat nu per rolgordijn en slaat er
+  een over waarvan het contact niet aantoonbaar dicht is — dezelfde regel als in
+  `covers_lock_alarm_events` en in de klimaatregie zelf.
 
 ## Uitrollen
 

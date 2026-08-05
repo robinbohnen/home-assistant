@@ -56,21 +56,30 @@
     en de stille uren beginnen pas om 22:00, dus lag er een gat van een paar uur
     waarin de klimaatregie ze op een warme avond alsnog omhoog stuurde - precies
     tijdens het in slaap vallen. Voor de binnenzonwering begint de rust daarom
-    niet om STIL_VAN maar bij de bedtijd van de kinderen. Aan de ochtendkant
-    verandert er niets: die kant loopt al tot het huis wakker is gemeld
-    (`nog_slapen`, uiterlijk WAKKER_UITERLIJK).
+    niet om STIL_VAN maar zodra de naar-bed-routine van de kinderen begint. Aan
+    de ochtendkant verandert er niets: die kant loopt al tot het huis wakker is
+    gemeld (`nog_slapen`, uiterlijk WAKKER_UITERLIJK).
 
-    Welke bedtijd dat is komt uit dezelfde helpers als de rest van het huis
+    Dat moment komt uit de bedtijd-helpers van de kinderkamers
     (packages/1 - First Floor/Bedroom Maxi/Bedtime.yaml en
     packages/2 - Second Floor/Bedroom Mini/Bedtime.yaml, net zoals de overloop-
     verlichting ze gebruikt); de vroegste van de twee telt, want vanaf dat
-    moment ligt er een kind in bed. Zijn ze niet uit te lezen, dan geldt
-    BEDTIJD_TERUGVAL - hetzelfde uur als `slaap_van` in de kinderkamers.
-    Een tijd vóór BEDTIJD_VROEGST wordt genegeerd: staat zo'n helper per ongeluk
-    op een ochtenduur, dan zou dit anders de hele dag 'rust' worden en bewogen
-    de rolgordijnen nooit meer. -#}
-{%- set BEDTIJDEN = ['input_datetime.bedtime_maxi', 'input_datetime.bedtime_mini'] -%}
-{%- set BEDTIJD_TERUGVAL = '19:00' -%}
+    moment gaat er een kind naar boven.
+
+    Let op de `_1h_off`-variant: dat is een uur vóór lichten uit, en op datzelfde
+    tijdstip laat `automation.kitchen_covers_close` de rolgordijnen zakken voor
+    de avond. Die twee horen exact gelijk te lopen. Zou de klimaatregie hier nog
+    'open' adviseren, dan trok de uitvoerder ze een kwartier later weer omhoog
+    en zette hij er ook nog vier uur handbediening op omdat hij zijn eigen
+    tegenwerking als handbediening herkent.
+
+    Zijn de helpers niet uit te lezen, dan geldt BEDTIJD_TERUGVAL - een uur voor
+    `slaap_van` in de kinderkamers. Een tijd vóór BEDTIJD_VROEGST wordt
+    genegeerd: staat zo'n helper per ongeluk op een ochtenduur, dan zou dit
+    anders de hele dag 'rust' worden en bewogen de rolgordijnen nooit meer. -#}
+{%- set BEDTIJDEN = ['input_datetime.bedtime_maxi_1h_off',
+                     'input_datetime.bedtime_mini_1h_off'] -%}
+{%- set BEDTIJD_TERUGVAL = '18:00' -%}
 {%- set BEDTIJD_VROEGST = '17:00' -%}
 
 {#- ========================== ZONECONFIGURATIE ============================ -#}
@@ -380,9 +389,9 @@
                       and (now() >= today_at(z.slaap_van)
                            or now() < today_at(STIL_TOT)
                            or nog_slapen) -%}
-{#- De vroegste kinderbedtijd van vandaag; zie BEDTIJDEN bovenaan. De lus staat
-    hier en niet in blok 5b, zodat Home Assistant deze helpers altijd volgt -
-    ook voor de zones die er niets mee doen. -#}
+{#- Het begin van de vroegste naar-bed-routine van vandaag; zie BEDTIJDEN
+    bovenaan. De lus staat hier en niet in blok 5b, zodat Home Assistant deze
+    helpers altijd volgt - ook voor de zones die er niets mee doen. -#}
 {%- set bed = namespace(t=none) -%}
 {%- for e in BEDTIJDEN -%}
   {%- set v = states(e) -%}
@@ -538,16 +547,17 @@
       Buiten het dagvenster adviseert deze zone 'rust'. Dat venster loopt van
       het wakker-signaal tot de vroegste van deze twee:
 
-        - de bedtijd van de kinderen (zie BEDTIJDEN bovenaan). Dit ding is door
-          het hele huis te horen en de kinderkamers liggen erboven.
-        - een half uur voor zonsondergang (AVOND_ELEVATIE). Vanaf dat moment is
-          het rolgordijn van `kitchen_covers_close` en
-          `covers_lock_alarm_events`; die gaan over inkijk en niet over warmte,
-          en daar hoort de klimaatregie niet doorheen te fietsen. Zou ze dat wel
-          doen, dan trok de uitvoerder de rolgordijnen een kwartier na
-          zonsondergang weer omhoog.
+        - het begin van de naar-bed-routine van de kinderen (zie BEDTIJDEN
+          bovenaan). Dit ding is door het hele huis te horen en de kinderkamers
+          liggen erboven.
+        - een half uur voor zonsondergang (AVOND_ELEVATIE).
 
-      In de zomer komt de bedtijd ruim eerst, in de winter de zonsondergang.
+      Vanaf dat moment is het rolgordijn van `kitchen_covers_close` en
+      `covers_lock_alarm_events`; die gaan over inkijk en niet over warmte, en
+      daar hoort de klimaatregie niet doorheen te fietsen. Zou ze dat wel doen,
+      dan trok de uitvoerder de rolgordijnen een kwartier later weer omhoog.
+      In de zomer komt de bedtijd ruim eerst, in de winter de zonsondergang -
+      en `kitchen_covers_close` gebruikt precies diezelfde twee momenten.
 -#}
 {%- if z.get('binnen') -%}
   {%- set screen_id = z.get('buitenzonwering') -%}
@@ -572,7 +582,7 @@
     {%- set ns.r = 'avond en nacht gaan over inkijk, niet over warmte' -%}
   {%- elif na_bedtijd -%}
     {%- set ns.a = 'rust' -%}
-    {%- set ns.r = 'de kinderen liggen in bed, een rolgordijn maakt te veel herrie' -%}
+    {%- set ns.r = 'de kinderen gaan naar bed, rolgordijn is nu van de avondroutine' -%}
   {%- elif regime == 'verwarmen' -%}
     {%- set ns.a = 'open' -%}
     {%- set ns.r = 'zon is welkom vandaag' -%}
