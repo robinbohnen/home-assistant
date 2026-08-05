@@ -643,10 +643,17 @@ klimaat_zonwering_package:
             actie_ja: "{{ 'ZONNESCHERM_JA_' ~ context.id }}"
             actie_nee: "{{ 'ZONNESCHERM_NEE_' ~ context.id }}"
             reden: "{{ state_attr('sensor.zonwering_advies_zonnescherm', 'reden') }}"
+        # De reden is leeg als je de automatisering met de hand draait, en dan
+        # begon zowel de melding als de gesproken vraag met ". Zal ik het
+        # zonnescherm uitzetten?". Eén keer opbouwen, allebei dezelfde zin.
+        - variables:
+            vraagtekst: >-
+              {{ ((reden | capitalize) ~ '. ') if reden else '' }}Zal ik het
+              zonnescherm uitzetten?
         - action: notify.mobile_devices_adults
           data:
             title: Zonnescherm uitzetten?
-            message: "{{ reden | capitalize }}. Zal ik het zonnescherm uitzetten?"
+            message: "{{ vraagtekst }}"
             data:
               actions:
                 - action: "{{ actie_ja }}"
@@ -667,7 +674,7 @@ klimaat_zonwering_package:
             - action: script.spraak_vraag_stellen
               data:
                 vraag: zonnescherm
-                tekst: "{{ reden | capitalize }}. Zal ik het zonnescherm uitzetten?"
+                tekst: "{{ vraagtekst }}"
                 minuten: 30
               continue_on_error: true
         - wait_for_trigger:

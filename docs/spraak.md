@@ -75,9 +75,31 @@ die je jezelf twee keer hoort gebruiken hoort er dus gewoon bij.
 
 ## Het huis dat zelf begint
 
-`assist_satellite.start_conversation` laat de satelliet een vraag stellen en
-daarna luisteren. Alleen: "ja" is een zin als alle andere en zou zonder context
-ook morgenochtend nog ergens op slaan. Daarom:
+De satelliet kan een vraag stellen en daarna luisteren, maar **niet met de
+ingebouwde gespreksagent**. `assist_satellite.start_conversation` weigert dan
+met:
+
+```
+Built-in conversation agent does not support starting conversations
+```
+
+Dat hangt níet aan het apparaat — `supported_features` van de Voice PE stond op
+3, dus die kan het prima. Alleen een agent die een gesprek kan vóórtzetten (een
+taalmodel) mag er een beginnen. Vandaar `input_boolean.spraak_gesprek_starten`:
+
+- **uit** (nu) → de satelliet *zegt* de vraag (`announce`). Je antwoordt met het
+  wakewoord erbij: "Okay Nabu, ja". De vraag staat het hele antwoordvenster
+  open, dus dat mag ook vijf minuten later.
+- **aan** → `start_conversation`, en dan luistert hij er meteen achteraan.
+  Zinvol zodra er een taalmodel in de pipeline hangt.
+
+De fout kwam eerst nergens terecht: de spreek-actie staat op
+`continue_on_error`, dus de automatisering meldde "met succes uitgevoerd" en de
+keuken bleef stil. Zoiets zie je alleen in de trace van het script zelf, niet in
+die van de automatisering die hem aanroept.
+
+Verder is "ja" een zin als alle andere en zou hij zonder context ook
+morgenochtend nog ergens op slaan. Daarom:
 
 - `input_text.spraak_openstaande_vraag` bevat de **sleutel** van de vraag die
   open staat (`zonnescherm`), niet de vraagtekst — dan mag de tekst veranderen
@@ -133,7 +155,8 @@ anders geruisloos uit elkaar.
 - **Een taalmodel als vangnet.** De laag hierboven: alles wat niet in de
   zinnenlijst staat naar een LLM, met "probeer eerst lokale intents" aan. Dan
   blijft dit bestand de baas over wat het huis over zichzelf zegt en vangt het
-  model de rest ("zet het wat gezelliger hier").
+  model de rest ("zet het wat gezelliger hier"). Dat is meteen het moment om
+  `input_boolean.spraak_gesprek_starten` aan te zetten.
 - **De LED-ring als statuslamp.** De ring is een gewone light-entity; als er
   niet gepraat wordt kan hij het tariefniveau, het alarm of de bezetting op de
   kazerne laten zien.
