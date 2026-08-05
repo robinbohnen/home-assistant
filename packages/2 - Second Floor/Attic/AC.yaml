@@ -18,6 +18,15 @@ attic_ac_package:
         - sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur
         - sensor.kantoor_kantoor_temperatuur_temperatuur
 
+  timer:
+    # Zolang deze loopt is de vraag "wil je de airco aanzetten?" al gesteld en
+    # wordt hij niet opnieuw gesteld. Zelfde opzet als timer.zonnescherm_vraag
+    # in packages/9 - Other/Klimaat Zonwering.yaml.
+    airco_zolder_vraag:
+      name: "Airco zolder - vraag gesteld"
+      duration: "04:00:00"
+      icon: mdi:comment-question-outline
+
   cover:
     - platform: group
       unique_id: covers_upstairs
@@ -48,16 +57,33 @@ attic_ac_package:
           entity_id: sensor.temperatuur_boven_gemiddeld
           above: 24
           for: "00:10:00"
-      conditions: []
+      conditions:
+        # Het gemiddelde over vijf kamers schommelt rond de grens, en een
+        # numeric_state-trigger vuurt bij élke overschrijding. Zonder deze
+        # cooldown krijg je de vraag op een warme dag meerdere keren.
+        - alias: Vandaag al gevraagd? Dan nu even niet
+          condition: state
+          entity_id: timer.airco_zolder_vraag
+          state: idle
       actions:
+        # Hier stond een `not` op het attribuut `fan_mode` (staat hij al op
+        # `high`?). Dat is de verkeerde vraag op twee manieren: een airco die
+        # draait op `medium`, `auto` of `low` - bijvoorbeeld met de hand of via
+        # de afstandsbediening aangezet - telde als uit, en een integratie die
+        # de stand met een hoofdletter teruggeeft (`High`) matcht nooit,
+        # waardoor de vraag élke keer gesteld werd. Wat we willen weten is
+        # simpelweg of hij uit staat.
         - if:
-            - condition: not
-              conditions:
-                - condition: state
-                  entity_id: climate.airco_zolder
-                  attribute: fan_mode
-                  state: high
+            - alias: Airco op zolder staat uit
+              condition: state
+              entity_id: climate.airco_zolder
+              state: "off"
           then:
+            # Timer eerst: gaat er daarna iets mis, dan is de vraag hooguit
+            # blijven liggen in plaats van elk half uur opnieuw gesteld.
+            - action: timer.start
+              target:
+                entity_id: timer.airco_zolder_vraag
             - data: {}
               action: script.script_attic_ac
 
