@@ -917,7 +917,34 @@ cards:
             entity: lock.kroon18voordeur
             name: Voordeur
 
-      # --------- Ruimte-popups (lichtbediening) ---------
+      # =================== RUIMTE-POPUPS ===================
+      #
+      # VASTE OPBOUW - elke verdiepingspopup heeft dezelfde vier blokken in
+      # dezelfde volgorde:
+      #
+      #   1. Temperatuur   mini-kaarten per kamer, alleen lezen (tik = more-info)
+      #   2. Verlichting   "alles uit" + één lamp per kamer
+      #   3. Rolluiken     hele verdieping omhoog/omlaag + elke kamer los
+      #   4. Klimaat       airco of verwarming van deze verdieping
+      #
+      # Bestaat een blok op een verdieping niet (de garage heeft geen rolluik,
+      # buiten heeft geen klimaatbediening), dan valt dát blok weg en schuift de
+      # rest niet op. Zo staat dezelfde knop op elke verdieping op dezelfde
+      # plek - dat is het hele punt van deze structuur, dus voeg hier niets
+      # tussen zonder het op álle popups te doen.
+      #
+      # WELKE THERMOMETER BIJ WELKE KAMER HOORT
+      # Die koppeling staat op één plek: de `KAMERS`-lijst in
+      # `custom_templates/kamers.jinja`, sleutel `klimaat`. Daar staan de
+      # sensoren die écht de kamerlucht meten - zigbee2mqtt hangt aan bijna elk
+      # apparaat óók een `device_temperature` (de printplaat, structureel te
+      # warm) en die mag hier dus niet in. Verandert er iets in die lijst, dan
+      # hier ook. Kamers zonder thermometer (keuken, entree, toilet, overloop,
+      # zolder, voortuin) staan er bewust helemaal niet tussen in plaats van
+      # als kaart met een streepje: een lege kaart ziet eruit als een storing.
+      #
+      # De kleurschaal is overal gelijk: <18 blauw, 18-23 groen, 23-26 oranje,
+      # daarboven rood. Geen meting = grijs.
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-groundfloor"
@@ -925,6 +952,69 @@ cards:
         icon: mdi:home-floor-0
         styles: *ov_popup
         cards:
+          # ----- 1. Temperatuur -----
+          # Speelkamer, garage en meterkast liggen ook op de begane grond, dus
+          # ze horen in dit overzicht. Hun lampen zitten in #ov-garage; die
+          # popup toont dezelfde twee thermometers nog een keer. Dat is bewust:
+          # allebei de ingangen moeten op zichzelf compleet zijn.
+          - type: custom:mushroom-title-card
+            subtitle: Temperatuur
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.woonkamer_woonkamer_multisensor_temperatuur
+                primary: Woonkamer
+                secondary: >-
+                  {% set t = states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:sofa-outline
+                icon_color: >-
+                  {% set t = states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.speelkamer_speelkamer_temperatuur_temperatuur
+                primary: Speelkamer
+                secondary: >-
+                  {% set t = states('sensor.speelkamer_speelkamer_temperatuur_temperatuur') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:teddy-bear
+                icon_color: >-
+                  {% set t = states('sensor.speelkamer_speelkamer_temperatuur_temperatuur') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.garage_garage_temperatuur_temperatuur
+                primary: Garage
+                secondary: >-
+                  {% set t = states('sensor.garage_garage_temperatuur_temperatuur') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:garage-variant
+                icon_color: >-
+                  {% set t = states('sensor.garage_garage_temperatuur_temperatuur') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.meterkast_temperatuur_temperature
+                primary: Meterkast
+                secondary: >-
+                  {% set t = states('sensor.meterkast_temperatuur_temperature') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:flash-outline
+                icon_color: >-
+                  {% set t = states('sensor.meterkast_temperatuur_temperature') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+
+          # ----- 2. Verlichting -----
+          - type: custom:mushroom-title-card
+            subtitle: Verlichting
           - type: custom:mushroom-template-card
             primary: Alles uit
             secondary: Begane grond
@@ -940,35 +1030,6 @@ cards:
                   - light.eettafel_lampen
                   - light.entree_lampen
                   - light.trapkast_lampen
-          # Alle keukenschermen (screens + rolgordijnen) van deze verdieping in één keer.
-          - type: grid
-            columns: 2
-            square: false
-            cards:
-              - type: custom:mushroom-template-card
-                primary: Schermen omhoog
-                secondary: Keuken
-                icon: mdi:window-shutter-open
-                icon_color: blue
-                tap_action:
-                  action: perform-action
-                  perform_action: cover.open_cover
-                  target:
-                    entity_id:
-                      - cover.covers_kitchen_screens
-                      - cover.covers_kitchen_rollerblinds
-              - type: custom:mushroom-template-card
-                primary: Schermen omlaag
-                secondary: Keuken
-                icon: mdi:window-shutter
-                icon_color: grey
-                tap_action:
-                  action: perform-action
-                  perform_action: cover.close_cover
-                  target:
-                    entity_id:
-                      - cover.covers_kitchen_screens
-                      - cover.covers_kitchen_rollerblinds
           - type: grid
             columns: 2
             square: false
@@ -998,6 +1059,66 @@ cards:
                 name: Trapkast
                 show_brightness_control: true
                 use_light_color: true
+
+          # ----- 3. Rolluiken en schermen -----
+          # De keuken is de enige ruimte op deze verdieping met covers; het
+          # knoppenpaar pakt daarom screens én rolgordijnen tegelijk.
+          - type: custom:mushroom-title-card
+            subtitle: Rolluiken en schermen
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Schermen omhoog
+                secondary: Hele verdieping
+                icon: mdi:window-shutter-open
+                icon_color: blue
+                tap_action:
+                  action: perform-action
+                  perform_action: cover.open_cover
+                  target:
+                    entity_id:
+                      - cover.covers_kitchen_screens
+                      - cover.covers_kitchen_rollerblinds
+              - type: custom:mushroom-template-card
+                primary: Schermen omlaag
+                secondary: Hele verdieping
+                icon: mdi:window-shutter
+                icon_color: grey
+                tap_action:
+                  action: perform-action
+                  perform_action: cover.close_cover
+                  target:
+                    entity_id:
+                      - cover.covers_kitchen_screens
+                      - cover.covers_kitchen_rollerblinds
+          # De twee rolgordijnen heten in Zigbee `rollerblind_0001`/`0002` en er
+          # is uit de config niet af te leiden welke waar hangt, dus die staan
+          # hier als hun groep. De screens hebben wél een links/rechts-naam.
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-cover-card
+                entity: cover.keuken_screen_links
+                name: Keuken screen links
+                show_buttons_control: true
+                show_position_control: true
+              - type: custom:mushroom-cover-card
+                entity: cover.keuken_screen_rechts
+                name: Keuken screen rechts
+                show_buttons_control: true
+                show_position_control: true
+              - type: custom:mushroom-cover-card
+                entity: cover.covers_kitchen_rollerblinds
+                name: Keuken rolgordijnen
+                show_buttons_control: true
+                show_position_control: true
+
+          # ----- 4. Klimaat -----
+          - type: custom:mushroom-title-card
+            subtitle: Klimaat
           - type: custom:mushroom-climate-card
             entity: climate.airco_woonkamer
             name: Airco woonkamer
@@ -1016,6 +1137,66 @@ cards:
         icon: mdi:home-floor-1
         styles: *ov_popup
         cards:
+          # ----- 1. Temperatuur -----
+          # De overloop heeft geen thermometer en staat er daarom niet tussen.
+          - type: custom:mushroom-title-card
+            subtitle: Temperatuur
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.slaapkamer_slaapkamer_temperatuur_temperatuur
+                primary: Slaapkamer
+                secondary: >-
+                  {% set t = states('sensor.slaapkamer_slaapkamer_temperatuur_temperatuur') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:bed-king-outline
+                icon_color: >-
+                  {% set t = states('sensor.slaapkamer_slaapkamer_temperatuur_temperatuur') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur
+                primary: Slaapkamer Logan
+                secondary: >-
+                  {% set t = states('sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:bed-single-outline
+                icon_color: >-
+                  {% set t = states('sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.badkamer_badkamer_temperatuur_temperatuur
+                primary: Badkamer
+                secondary: >-
+                  {% set t = states('sensor.badkamer_badkamer_temperatuur_temperatuur') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:shower
+                icon_color: >-
+                  {% set t = states('sensor.badkamer_badkamer_temperatuur_temperatuur') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.kantoor_kantoor_temperatuur_temperatuur
+                primary: Kantoor
+                secondary: >-
+                  {% set t = states('sensor.kantoor_kantoor_temperatuur_temperatuur') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:desk
+                icon_color: >-
+                  {% set t = states('sensor.kantoor_kantoor_temperatuur_temperatuur') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+
+          # ----- 2. Verlichting -----
+          - type: custom:mushroom-title-card
+            subtitle: Verlichting
           - type: custom:mushroom-template-card
             primary: Alles uit
             secondary: Eerste verdieping
@@ -1031,44 +1212,6 @@ cards:
                   - light.slaapkamer_maxi_lampen
                   - light.kantoor_lampen
                   - light.overloop_lampen
-          # Alle rolluiken van de eerste verdieping; low_speed-varianten omdat de
-          # rest van het huis (packages/9 - Other/Covers.yaml) die ook gebruikt.
-          - type: grid
-            columns: 2
-            square: false
-            cards:
-              - type: custom:mushroom-template-card
-                primary: Rolluiken omhoog
-                secondary: Eerste verdieping
-                icon: mdi:window-shutter-open
-                icon_color: blue
-                tap_action:
-                  action: perform-action
-                  perform_action: cover.open_cover
-                  target:
-                    entity_id:
-                      - cover.kantoor_links_low_speed
-                      - cover.kantoor_rechts_low_speed
-                      - cover.badkamer_rolluik_low_speed
-                      - cover.slaapkamer_rolluik_low_speed
-                      - cover.slaapkamer_maxi_links_low_speed
-                      - cover.slaapkamer_maxi_rechts_low_speed
-              - type: custom:mushroom-template-card
-                primary: Rolluiken omlaag
-                secondary: Eerste verdieping
-                icon: mdi:window-shutter
-                icon_color: grey
-                tap_action:
-                  action: perform-action
-                  perform_action: cover.close_cover
-                  target:
-                    entity_id:
-                      - cover.kantoor_links_low_speed
-                      - cover.kantoor_rechts_low_speed
-                      - cover.badkamer_rolluik_low_speed
-                      - cover.slaapkamer_rolluik_low_speed
-                      - cover.slaapkamer_maxi_links_low_speed
-                      - cover.slaapkamer_maxi_rechts_low_speed
           - type: grid
             columns: 2
             square: false
@@ -1098,7 +1241,89 @@ cards:
                 name: Overloop
                 show_brightness_control: true
                 use_light_color: true
+
+          # ----- 3. Rolluiken -----
+          # Overal de low_speed-varianten, want de rest van het huis
+          # (packages/9 - Other/Covers.yaml) stuurt ze ook zo aan. Door hier de
+          # gewone entiteit te pakken zou dezelfde rolluik op twee snelheden
+          # lopen afhankelijk van waar je hem bedient.
+          - type: custom:mushroom-title-card
+            subtitle: Rolluiken
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Rolluiken omhoog
+                secondary: Hele verdieping
+                icon: mdi:window-shutter-open
+                icon_color: blue
+                tap_action:
+                  action: perform-action
+                  perform_action: cover.open_cover
+                  target:
+                    entity_id:
+                      - cover.kantoor_links_low_speed
+                      - cover.kantoor_rechts_low_speed
+                      - cover.badkamer_rolluik_low_speed
+                      - cover.slaapkamer_rolluik_low_speed
+                      - cover.slaapkamer_maxi_links_low_speed
+                      - cover.slaapkamer_maxi_rechts_low_speed
+              - type: custom:mushroom-template-card
+                primary: Rolluiken omlaag
+                secondary: Hele verdieping
+                icon: mdi:window-shutter
+                icon_color: grey
+                tap_action:
+                  action: perform-action
+                  perform_action: cover.close_cover
+                  target:
+                    entity_id:
+                      - cover.kantoor_links_low_speed
+                      - cover.kantoor_rechts_low_speed
+                      - cover.badkamer_rolluik_low_speed
+                      - cover.slaapkamer_rolluik_low_speed
+                      - cover.slaapkamer_maxi_links_low_speed
+                      - cover.slaapkamer_maxi_rechts_low_speed
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-cover-card
+                entity: cover.slaapkamer_rolluik_low_speed
+                name: Slaapkamer
+                show_buttons_control: true
+                show_position_control: true
+              - type: custom:mushroom-cover-card
+                entity: cover.badkamer_rolluik_low_speed
+                name: Badkamer
+                show_buttons_control: true
+                show_position_control: true
+              - type: custom:mushroom-cover-card
+                entity: cover.slaapkamer_maxi_links_low_speed
+                name: Logan links
+                show_buttons_control: true
+                show_position_control: true
+              - type: custom:mushroom-cover-card
+                entity: cover.slaapkamer_maxi_rechts_low_speed
+                name: Logan rechts
+                show_buttons_control: true
+                show_position_control: true
+              - type: custom:mushroom-cover-card
+                entity: cover.kantoor_links_low_speed
+                name: Kantoor links
+                show_buttons_control: true
+                show_position_control: true
+              - type: custom:mushroom-cover-card
+                entity: cover.kantoor_rechts_low_speed
+                name: Kantoor rechts
+                show_buttons_control: true
+                show_position_control: true
+
+          # ----- 4. Klimaat -----
           # Alleen verwarmen/uit; deze thermostaat kent geen cool/dry/fan_only.
+          - type: custom:mushroom-title-card
+            subtitle: Klimaat
           - type: custom:mushroom-climate-card
             entity: climate.kantoor_verwarming
             name: Verwarming kantoor
@@ -1107,11 +1332,16 @@ cards:
               - heat
             show_temperature_control: true
             collapsible_controls: true
+          # ----- Extra (alleen deze verdieping) -----
           # Bootst een druk op de fysieke slaapkamerknoppen na, zie
           # packages/9 - Other/Virtual Buttons.yaml. Alle 11 automations die op
           # die knop reageren gaan mee, dus ook slot, rolluiken en alarm.
           # Tik/dubbeltik/vasthouden = precies wat de knop zelf ook doet;
           # secondary zegt daarom welke routine een tik nú start.
+          # Staat bewust ná de vier vaste blokken, zodat de vaste volgorde
+          # hierboven op elke verdieping klopt.
+          - type: custom:mushroom-title-card
+            subtitle: Routines
           - type: custom:mushroom-template-card
             primary: Slaapkamer knop
             secondary: >-
@@ -1144,6 +1374,32 @@ cards:
         icon: mdi:home-floor-2
         styles: *ov_popup
         cards:
+          # ----- 1. Temperatuur -----
+          # De zolder zelf heeft geen thermometer; de airco hieronder meet wel,
+          # maar dat is de aanzuigtemperatuur van het apparaat en geen
+          # kamermeting, dus die staat hier niet als kamerkaart.
+          - type: custom:mushroom-title-card
+            subtitle: Temperatuur
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur
+                primary: Slaapkamer Emma
+                secondary: >-
+                  {% set t = states('sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:bed-single-outline
+                icon_color: >-
+                  {% set t = states('sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+
+          # ----- 2. Verlichting -----
+          - type: custom:mushroom-title-card
+            subtitle: Verlichting
           - type: custom:mushroom-template-card
             primary: Alles uit
             secondary: Tweede verdieping
@@ -1156,34 +1412,6 @@ cards:
                 entity_id:
                   - light.overloop_zolder_lampen
                   - light.slaapkamer_mini_lampen
-          # Deze verdieping heeft één rolluik (slaapkamer Emma); zelfde knoppenpaar
-          # als de andere verdiepingen zodat de popups gelijk aanvoelen.
-          - type: grid
-            columns: 2
-            square: false
-            cards:
-              - type: custom:mushroom-template-card
-                primary: Rolluiken omhoog
-                secondary: Tweede verdieping
-                icon: mdi:window-shutter-open
-                icon_color: blue
-                tap_action:
-                  action: perform-action
-                  perform_action: cover.open_cover
-                  target:
-                    entity_id:
-                      - cover.slaapkamer_mini
-              - type: custom:mushroom-template-card
-                primary: Rolluiken omlaag
-                secondary: Tweede verdieping
-                icon: mdi:window-shutter
-                icon_color: grey
-                tap_action:
-                  action: perform-action
-                  perform_action: cover.close_cover
-                  target:
-                    entity_id:
-                      - cover.slaapkamer_mini
           - type: grid
             columns: 2
             square: false
@@ -1198,6 +1426,52 @@ cards:
                 name: Slaapkamer Emma
                 show_brightness_control: true
                 use_light_color: true
+
+          # ----- 3. Rolluiken -----
+          # Deze verdieping heeft één rolluik (slaapkamer Emma). Het knoppenpaar
+          # staat er toch, zodat de popups over de verdiepingen heen gelijk
+          # aanvoelen; hij heeft geen low_speed-variant.
+          - type: custom:mushroom-title-card
+            subtitle: Rolluiken
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Rolluiken omhoog
+                secondary: Hele verdieping
+                icon: mdi:window-shutter-open
+                icon_color: blue
+                tap_action:
+                  action: perform-action
+                  perform_action: cover.open_cover
+                  target:
+                    entity_id:
+                      - cover.slaapkamer_mini
+              - type: custom:mushroom-template-card
+                primary: Rolluiken omlaag
+                secondary: Hele verdieping
+                icon: mdi:window-shutter
+                icon_color: grey
+                tap_action:
+                  action: perform-action
+                  perform_action: cover.close_cover
+                  target:
+                    entity_id:
+                      - cover.slaapkamer_mini
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-cover-card
+                entity: cover.slaapkamer_mini
+                name: Slaapkamer Emma
+                show_buttons_control: true
+                show_position_control: true
+
+          # ----- 4. Klimaat -----
+          - type: custom:mushroom-title-card
+            subtitle: Klimaat
           - type: custom:mushroom-climate-card
             entity: climate.airco_zolder
             name: Airco zolder
@@ -1216,6 +1490,44 @@ cards:
         icon: mdi:garage
         styles: *ov_popup
         cards:
+          # ----- 1. Temperatuur -----
+          # Dezelfde twee thermometers staan ook in #ov-groundfloor (garage en
+          # speelkamer liggen nu eenmaal op de begane grond). Bewuste dubbeling:
+          # wie hier binnenkomt moet niet eerst naar een andere popup hoeven.
+          - type: custom:mushroom-title-card
+            subtitle: Temperatuur
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.speelkamer_speelkamer_temperatuur_temperatuur
+                primary: Speelkamer
+                secondary: >-
+                  {% set t = states('sensor.speelkamer_speelkamer_temperatuur_temperatuur') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:teddy-bear
+                icon_color: >-
+                  {% set t = states('sensor.speelkamer_speelkamer_temperatuur_temperatuur') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.garage_garage_temperatuur_temperatuur
+                primary: Garage
+                secondary: >-
+                  {% set t = states('sensor.garage_garage_temperatuur_temperatuur') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:garage-variant
+                icon_color: >-
+                  {% set t = states('sensor.garage_garage_temperatuur_temperatuur') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+
+          # ----- 2. Verlichting -----
+          - type: custom:mushroom-title-card
+            subtitle: Verlichting
           - type: custom:mushroom-template-card
             primary: Alles uit
             secondary: Garage / speelkamer
@@ -1245,7 +1557,13 @@ cards:
                 name: Speelkamer
                 show_brightness_control: true
                 use_light_color: true
+
+          # ----- 3. Rolluiken: bestaan hier niet, blok valt weg -----
+
+          # ----- 4. Klimaat -----
           # Plafond-verwarmingsplaat speelkamer; verbruik alleen tonen als hij aan staat.
+          - type: custom:mushroom-title-card
+            subtitle: Klimaat
           - type: custom:mushroom-template-card
             entity: switch.speelkamer_stopcontact_verwarming
             primary: Verwarmingsplaat
@@ -1265,6 +1583,45 @@ cards:
         icon: mdi:flower-tulip-outline
         styles: *ov_popup
         cards:
+          # ----- 1. Temperatuur -----
+          # Er hangt geen thermometer in de tuin; `sensor.knmi_temperatuur` is
+          # echt de buitentemperatuur, alleen niet uit deze tuin - zelfde keuze
+          # als in kamers.jinja, waar de achtertuin hem via `extra` leest. De
+          # voortuin heeft niets en staat er dus niet bij.
+          - type: custom:mushroom-title-card
+            subtitle: Temperatuur
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.knmi_temperatuur
+                primary: Buiten
+                secondary: >-
+                  {% set t = states('sensor.knmi_temperatuur') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:tree-outline
+                icon_color: >-
+                  {% set t = states('sensor.knmi_temperatuur') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.achtertuin_schuur_temperatuur_temperature
+                primary: Schuur
+                secondary: >-
+                  {% set t = states('sensor.achtertuin_schuur_temperatuur_temperature') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:home-outline
+                icon_color: >-
+                  {% set t = states('sensor.achtertuin_schuur_temperatuur_temperature') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+
+          # ----- 2. Verlichting -----
+          - type: custom:mushroom-title-card
+            subtitle: Verlichting
           - type: custom:mushroom-template-card
             primary: Alle buitenverlichting uit
             secondary: Buiten
@@ -1297,11 +1654,20 @@ cards:
                 name: Carport
                 show_brightness_control: true
                 use_light_color: true
+
+          # ----- 3. Schermen -----
+          # LET OP bij het maken van knoppen hier: bij dit scherm is `open` =
+          # uitgeschoven en `closed` = ingetrokken, andersom dan bij een rolluik.
+          # Zie packages/3 - Outside/Backyard/Sunscreen.yaml.
+          - type: custom:mushroom-title-card
+            subtitle: Schermen
           - type: custom:mushroom-cover-card
             entity: cover.achtertuin_zonnescherm
             name: Zonnescherm achtertuin
             show_buttons_control: true
             show_position_control: true
+
+          # ----- 4. Klimaat: bestaat hier niet, blok valt weg -----
 
       # --------- Media / multiroom popup ---------
       - type: custom:bubble-card
