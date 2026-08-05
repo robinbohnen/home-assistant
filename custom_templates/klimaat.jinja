@@ -51,6 +51,28 @@
     dan zou de uitvoerder ze een kwartier later weer omhoog trekken. -#}
 {%- set AVOND_ELEVATIE = 5 -%}
 
+{#- De keukenrolgordijnen zijn door het hele huis te horen en de kinderkamers
+    liggen erboven. In juni staat de zon om 20:00 nog ruim boven AVOND_ELEVATIE
+    en de stille uren beginnen pas om 22:00, dus lag er een gat van een paar uur
+    waarin de klimaatregie ze op een warme avond alsnog omhoog stuurde - precies
+    tijdens het in slaap vallen. Voor de binnenzonwering begint de rust daarom
+    niet om STIL_VAN maar bij de bedtijd van de kinderen. Aan de ochtendkant
+    verandert er niets: die kant loopt al tot het huis wakker is gemeld
+    (`nog_slapen`, uiterlijk WAKKER_UITERLIJK).
+
+    Welke bedtijd dat is komt uit dezelfde helpers als de rest van het huis
+    (packages/1 - First Floor/Bedroom Maxi/Bedtime.yaml en
+    packages/2 - Second Floor/Bedroom Mini/Bedtime.yaml, net zoals de overloop-
+    verlichting ze gebruikt); de vroegste van de twee telt, want vanaf dat
+    moment ligt er een kind in bed. Zijn ze niet uit te lezen, dan geldt
+    BEDTIJD_TERUGVAL - hetzelfde uur als `slaap_van` in de kinderkamers.
+    Een tijd vóór BEDTIJD_VROEGST wordt genegeerd: staat zo'n helper per ongeluk
+    op een ochtenduur, dan zou dit anders de hele dag 'rust' worden en bewogen
+    de rolgordijnen nooit meer. -#}
+{%- set BEDTIJDEN = ['input_datetime.bedtime_maxi', 'input_datetime.bedtime_mini'] -%}
+{%- set BEDTIJD_TERUGVAL = '19:00' -%}
+{%- set BEDTIJD_VROEGST = '17:00' -%}
+
 {#- ========================== ZONECONFIGURATIE ============================ -#}
 {#-
   naam       label op het dashboard
@@ -358,6 +380,23 @@
                       and (now() >= today_at(z.slaap_van)
                            or now() < today_at(STIL_TOT)
                            or nog_slapen) -%}
+{#- De vroegste kinderbedtijd van vandaag; zie BEDTIJDEN bovenaan. De lus staat
+    hier en niet in blok 5b, zodat Home Assistant deze helpers altijd volgt -
+    ook voor de zones die er niets mee doen. -#}
+{%- set bed = namespace(t=none) -%}
+{%- for e in BEDTIJDEN -%}
+  {%- set v = states(e) -%}
+  {%- if ':' in v -%}
+    {%- set t = today_at(v) -%}
+    {%- if t >= today_at(BEDTIJD_VROEGST) and (bed.t is none or t < bed.t) -%}
+      {%- set bed.t = t -%}
+    {%- endif -%}
+  {%- endif -%}
+{%- endfor -%}
+{#- De terugval geldt alleen als géén van de helpers een bruikbare avondtijd
+    gaf; een latere bedtijd (weekend) hoort de rust juist op te schuiven. -#}
+{%- set na_bedtijd = now() >= (bed.t if bed.t is not none
+                               else today_at(BEDTIJD_TERUGVAL)) -%}
 
 {%- set ns = namespace(a='open', r='') -%}
 
@@ -496,12 +535,19 @@
       Staat het screen wél omlaag, dan blijft het rolgordijn omhoog: achter een
       screen blijft het glas koel en levert een tweede laag vrijwel niets meer.
 
-      Buiten het dagvenster - voor het huis wakker is, en vanaf een half uur
-      voor zonsondergang - adviseert deze zone 'rust'. Avond en nacht zijn van
-      `kitchen_covers_close` en `covers_lock_alarm_events`; die gaan over inkijk
-      en niet over warmte, en daar hoort de klimaatregie niet doorheen te
-      fietsen. Zou ze dat wel doen, dan trok de uitvoerder de rolgordijnen een
-      kwartier na zonsondergang weer omhoog.
+      Buiten het dagvenster adviseert deze zone 'rust'. Dat venster loopt van
+      het wakker-signaal tot de vroegste van deze twee:
+
+        - de bedtijd van de kinderen (zie BEDTIJDEN bovenaan). Dit ding is door
+          het hele huis te horen en de kinderkamers liggen erboven.
+        - een half uur voor zonsondergang (AVOND_ELEVATIE). Vanaf dat moment is
+          het rolgordijn van `kitchen_covers_close` en
+          `covers_lock_alarm_events`; die gaan over inkijk en niet over warmte,
+          en daar hoort de klimaatregie niet doorheen te fietsen. Zou ze dat wel
+          doen, dan trok de uitvoerder de rolgordijnen een kwartier na
+          zonsondergang weer omhoog.
+
+      In de zomer komt de bedtijd ruim eerst, in de winter de zonsondergang.
 -#}
 {%- if z.get('binnen') -%}
   {%- set screen_id = z.get('buitenzonwering') -%}
@@ -524,6 +570,9 @@
   {%- elif stil_nu or nacht or elevatie < AVOND_ELEVATIE -%}
     {%- set ns.a = 'rust' -%}
     {%- set ns.r = 'avond en nacht gaan over inkijk, niet over warmte' -%}
+  {%- elif na_bedtijd -%}
+    {%- set ns.a = 'rust' -%}
+    {%- set ns.r = 'de kinderen liggen in bed, een rolgordijn maakt te veel herrie' -%}
   {%- elif regime == 'verwarmen' -%}
     {%- set ns.a = 'open' -%}
     {%- set ns.r = 'zon is welkom vandaag' -%}

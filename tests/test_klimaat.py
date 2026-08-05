@@ -102,6 +102,10 @@ def scenario(naam, tijd, **kw):
         "binary_sensor.keuken_raam_klein_contact": "off",
         "cover.covers_kitchen_screens": "open",
         "alarm_control_panel.alarmo": "disarmed",
+        # Bedtijden van de kinderen; de vroegste (19:00) is vanaf wanneer de
+        # keukenrolgordijnen stil moeten blijven.
+        "input_datetime.bedtime_maxi": "20:00:00",
+        "input_datetime.bedtime_mini": "19:00:00",
         # kamertemperaturen
         "sensor.woonkamer_woonkamer_multisensor_temperatuur": "20",
         "sensor.kantoor_kantoor_temperatuur_temperatuur": "20",
@@ -803,6 +807,47 @@ scenario("zomernacht", "02:00",
             "input_number.klimaat_verwachte_max": "30",
             "sun.sun.elevation": -20.0})
 check("nacht: blijft staan waar hij staat", "keuken_rolgordijn_klein", "rust", False)
+
+# In juni staat de zon om 20:00 nog ruim boven AVOND_ELEVATIE en de stille uren
+# beginnen pas om 22:00. Daar zat een gat van een paar uur waarin dit ding op
+# een warme avond alsnog omhoog werd gestuurd - precies tijdens het in slaap
+# vallen. Vanaf de vroegste kinderbedtijd blijft hij nu staan.
+zomeravond = {"input_select.klimaat_regime": "Koelen",
+              "input_number.klimaat_verwachte_max": "30",
+              "sensor.woonkamer_woonkamer_multisensor_temperatuur": "24",
+              "sun.sun.elevation": 12.0}
+
+scenario("zomeravond, kinderen liggen in bed", "20:00", **zomeravond)
+check("na bedtijd geen rolgordijn meer", "keuken_rolgordijn_groot", "rust", False)
+check("na bedtijd geen rolgordijn meer", "keuken_rolgordijn_klein", "rust", False)
+# De screens buiten hangen niet onder een kinderkamer en blijven gewoon meedoen.
+check("de screens gaan wel gewoon door", "keuken_screens", "open")
+
+# Vóór bedtijd is er niets aan de hand: dan mag hij gewoon bewegen.
+scenario("zelfde avond, maar de kinderen zijn nog op", "18:00", **zomeravond)
+check("voor bedtijd gewoon daglicht", "keuken_rolgordijn_groot", "open")
+
+# Het venster hangt aan de bedtijd-helpers, niet aan een vast uur: schuift de
+# bedtijd op, dan schuift de rust mee.
+scenario("late bedtijd in het weekend", "20:00",
+         **dict(zomeravond, **{"input_datetime.bedtime_maxi": "21:30:00",
+                               "input_datetime.bedtime_mini": "21:00:00"}))
+check("bedtijd later: mag nog bewegen", "keuken_rolgordijn_groot", "open")
+
+# Zijn de helpers niet uit te lezen, dan geldt BEDTIJD_TERUGVAL (19:00). Stil
+# blijven is hier de veilige kant.
+scenario("bedtijd-helpers onbereikbaar", "20:00",
+         **dict(zomeravond, **{"input_datetime.bedtime_maxi": "unavailable",
+                               "input_datetime.bedtime_mini": "unknown"}))
+check("terugval op 19:00", "keuken_rolgordijn_groot", "rust", False)
+
+# Een helper die per ongeluk op een ochtenduur staat mag de zone niet de hele
+# dag platleggen. Die wordt genegeerd, en de andere helper (20:00) telt gewoon -
+# dus om 19:30 mag hij nog bewegen. Zou de terugval hier alsnog toeslaan, dan
+# stond hij om 19:00 al stil.
+scenario("bedtijd staat per ongeluk op de ochtend", "19:30",
+         **dict(zomeravond, **{"input_datetime.bedtime_mini": "07:30:00"}))
+check("ochtendtijd telt niet als bedtijd", "keuken_rolgordijn_groot", "open")
 
 # Ze gaan ook niet uit zichzelf omhoog voordat het huis wakker is.
 scenario("vroege zomerochtend, nog niemand op", "07:30",

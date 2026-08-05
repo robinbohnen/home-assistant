@@ -85,7 +85,7 @@ Tien zones, elk met een sensor `sensor.zonwering_advies_<zone>`:
 | Zone (slug) | Cover | Gevels | Bijzonder |
 |---|---|---|---|
 | `keuken_screens` | `cover.covers_kitchen_screens` | voor | screen: geen kier, in bij storm |
-| `keuken_rolgordijn_groot` | `cover.rollerblind_0001` | voor | binnenzonwering; alleen als het screen er niet staat |
+| `keuken_rolgordijn_groot` | `cover.rollerblind_0001` | voor | binnenzonwering; alleen als het screen er niet staat; stil vanaf de kinderbedtijd |
 | `keuken_rolgordijn_klein` | `cover.rollerblind_0002` | voor | idem, eigen raamcontact |
 | `kantoor_links` | `cover.kantoor_links_low_speed` | voor + zij | |
 | `kantoor_rechts` | `cover.kantoor_rechts_low_speed` | voor + zij | |
@@ -228,12 +228,30 @@ De beslistabel, van hoog naar laag:
    Dat geldt ook met de airco aan; een dicht rolgordijn helpt daar een beetje,
    maar niet genoeg om de keuken de hele ochtend donker voor te maken.
 
-   Buiten het dagvenster — vóór het huis wakker is, en vanaf een half uur voor
-   zonsondergang (`AVOND_ELEVATIE`, 5°) — adviseert deze zone `rust`. Avond en
-   nacht blijven van `kitchen_covers_close` en `covers_lock_alarm_events`: die
-   gaan over inkijk en niet over warmte. Zou de klimaatregie daar doorheen
-   blijven adviseren, dan trok de uitvoerder de rolgordijnen een kwartier na
-   zonsondergang weer omhoog.
+   Buiten het dagvenster adviseert deze zone `rust`. Dat venster begint bij het
+   wakker-signaal en eindigt bij de vroegste van deze twee:
+
+   - **de bedtijd van de kinderen.** Een rolgordijn is door het hele huis te
+     horen en de kinderkamers liggen erboven. In juni staat de zon om 20:00 nog
+     ruim boven `AVOND_ELEVATIE` en de stille uren beginnen pas om 22:00, dus
+     lag daar een gat van een paar uur waarin de klimaatregie ze op een warme
+     avond alsnog omhoog stuurde — precies tijdens het in slaap vallen. De tijd
+     komt uit `input_datetime.bedtime_maxi` en `…_mini` (`BEDTIJDEN`), dezelfde
+     helpers als de overloopverlichting gebruikt; de vroegste van de twee telt
+     en de rust schuift dus mee met een latere weekendbedtijd. Geeft geen van
+     beide een bruikbare avondtijd, dan geldt `BEDTIJD_TERUGVAL` (19:00, het uur
+     van `slaap_van` in de kinderkamers). Een tijd vóór `BEDTIJD_VROEGST`
+     (17:00) wordt genegeerd — anders zou een verkeerd gezette helper de zone de
+     hele dag platleggen;
+   - **een half uur voor zonsondergang** (`AVOND_ELEVATIE`, 5°). Vanaf dat
+     moment zijn de rolgordijnen van `kitchen_covers_close` en
+     `covers_lock_alarm_events`: die gaan over inkijk en niet over warmte. Zou
+     de klimaatregie daar doorheen blijven adviseren, dan trok de uitvoerder ze
+     een kwartier na zonsondergang weer omhoog.
+
+   In de zomer komt de bedtijd ruim eerst, in de winter de zonsondergang. Aan de
+   ochtendkant is er niets bijzonders nodig: dat venster loopt al tot het huis
+   wakker is gemeld (`nog_slapen`, uiterlijk `WAKKER_UITERLIJK`).
 
    Om dezelfde reden gaat er **niets omhoog als het alarm scherp staat
    (`armed_*`) of er niemand thuis is**: dan heeft de inkijk-routine ze net
