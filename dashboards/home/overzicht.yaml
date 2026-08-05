@@ -972,11 +972,31 @@ cards:
       # daarboven rood. Geen meting = grijs.
       #
       # KOLOMMEN
-      # `columns` = het aantal kaarten in dat raster, met een maximum van drie.
-      # Dus twee kaarten -> twee kolommen, één kaart -> volle breedte. Met een
-      # vast getal wordt een verdieping met één rolluik een smal kaartje in een
-      # verder lege rij. Uitzondering: het omhoog/omlaag-paar staat altijd op
-      # twee, want dat is een paar en hoort er ook als een paar uit te zien.
+      # Elk raster krijgt zoveel kolommen dat de laatste rij vol is, tot een
+      # maximum dat past bij wat er in de kaart moet passen:
+      #
+      #   temperatuur  max 4   naam + getal, verder niets
+      #   verlichting  max 3   moet een helderheidsschuif kwijt
+      #   rolluiken    max 2   vier knoppen én een positieschuif
+      #   omhoog/omlaag altijd 2 - dat is een paar en hoort er als paar uit te zien
+      #
+      # Zijn er minder kaarten dan het maximum, dan is `columns` gelijk aan het
+      # aantal kaarten. Met een vast getal wordt een verdieping met één rolluik
+      # een smal kaartje in een verder lege rij.
+      #
+      # Eén rij komt er niet vol uit: de begane grond en de eerste verdieping
+      # hebben allebei vijf lampen, dus 3 + 2. Vijf kolommen zou dat oplossen
+      # maar maakt de helderheidsschuif ~165px breed, en dat is op een
+      # touchscreen niet meer te bedienen. Die ene open plek is het waard.
+      #
+      # LOSSE KAARTEN ALTIJD IN EEN RASTER MET ÉÉN KOLOM
+      # Een kaart die rechtstreeks onder `cards:` van de popup hangt, krijgt van
+      # bubble-card maar de halve breedte; een `type: grid` pakt wél de volle
+      # breedte. "Alles uit", de klimaatkaarten en het zonnescherm stonden
+      # daardoor als halve kaart met een gat ernaast. Ze zitten nu allemaal in
+      # een raster met `columns: 1`. Dat is verder een no-op, dus doe het ook bij
+      # een nieuwe losse kaart in plaats van uit te zoeken of hij "breed genoeg"
+      # oogt.
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-groundfloor"
@@ -993,7 +1013,7 @@ cards:
           - type: custom:mushroom-title-card
             subtitle: Temperatuur
           - type: grid
-            columns: 3
+            columns: 4
             square: false
             cards:
               - type: custom:mushroom-template-card
@@ -1048,21 +1068,25 @@ cards:
           # ----- 2. Verlichting -----
           - type: custom:mushroom-title-card
             subtitle: Verlichting
-          - type: custom:mushroom-template-card
-            primary: Alles uit
-            secondary: Begane grond
-            icon: mdi:lightbulb-group-off
-            icon_color: grey
-            tap_action:
-              action: perform-action
-              perform_action: light.turn_off
-              target:
-                entity_id:
-                  - light.woonkamer_lampen
-                  - light.keuken_lampen
-                  - light.eettafel_lampen
-                  - light.entree_lampen
-                  - light.trapkast_lampen
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Alles uit
+                secondary: Begane grond
+                icon: mdi:lightbulb-group-off
+                icon_color: grey
+                tap_action:
+                  action: perform-action
+                  perform_action: light.turn_off
+                  target:
+                    entity_id:
+                      - light.woonkamer_lampen
+                      - light.keuken_lampen
+                      - light.eettafel_lampen
+                      - light.entree_lampen
+                      - light.trapkast_lampen
           - type: grid
             columns: 3
             square: false
@@ -1149,17 +1173,21 @@ cards:
           # ----- 4. Klimaat -----
           - type: custom:mushroom-title-card
             subtitle: Klimaat
-          - type: custom:mushroom-climate-card
-            entity: climate.airco_woonkamer
-            name: Airco woonkamer
-            hvac_modes:
-              - "off"
-              - cool
-              - heat
-              - dry
-              - fan_only
-            show_temperature_control: true
-            collapsible_controls: true
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:mushroom-climate-card
+                entity: climate.airco_woonkamer
+                name: Airco woonkamer
+                hvac_modes:
+                  - "off"
+                  - cool
+                  - heat
+                  - dry
+                  - fan_only
+                show_temperature_control: true
+                collapsible_controls: true
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-firstfloor"
@@ -1173,7 +1201,7 @@ cards:
           - type: custom:mushroom-title-card
             subtitle: Temperatuur
           - type: grid
-            columns: 3
+            columns: 4
             square: false
             cards:
               - type: custom:mushroom-template-card
@@ -1228,21 +1256,25 @@ cards:
           # ----- 2. Verlichting -----
           - type: custom:mushroom-title-card
             subtitle: Verlichting
-          - type: custom:mushroom-template-card
-            primary: Alles uit
-            secondary: Eerste verdieping
-            icon: mdi:lightbulb-group-off
-            icon_color: grey
-            tap_action:
-              action: perform-action
-              perform_action: light.turn_off
-              target:
-                entity_id:
-                  - light.badkamer_lampen
-                  - light.slaapkamer_lampen
-                  - light.slaapkamer_maxi_lampen
-                  - light.kantoor_lampen
-                  - light.overloop_lampen
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Alles uit
+                secondary: Eerste verdieping
+                icon: mdi:lightbulb-group-off
+                icon_color: grey
+                tap_action:
+                  action: perform-action
+                  perform_action: light.turn_off
+                  target:
+                    entity_id:
+                      - light.badkamer_lampen
+                      - light.slaapkamer_lampen
+                      - light.slaapkamer_maxi_lampen
+                      - light.kantoor_lampen
+                      - light.overloop_lampen
           - type: grid
             columns: 3
             square: false
@@ -1324,7 +1356,7 @@ cards:
           #   cover.covers_bedroom_maxi -> packages/1 - First Floor/Bedroom Maxi/Covers.yaml
           #   cover.covers_office       -> packages/1 - First Floor/Office/Covers.yaml
           - type: grid
-            columns: 3
+            columns: 2
             square: false
             cards:
               - type: custom:mushroom-cover-card
@@ -1352,14 +1384,18 @@ cards:
           # Alleen verwarmen/uit; deze thermostaat kent geen cool/dry/fan_only.
           - type: custom:mushroom-title-card
             subtitle: Klimaat
-          - type: custom:mushroom-climate-card
-            entity: climate.kantoor_verwarming
-            name: Verwarming kantoor
-            hvac_modes:
-              - "off"
-              - heat
-            show_temperature_control: true
-            collapsible_controls: true
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:mushroom-climate-card
+                entity: climate.kantoor_verwarming
+                name: Verwarming kantoor
+                hvac_modes:
+                  - "off"
+                  - heat
+                show_temperature_control: true
+                collapsible_controls: true
           # ----- Extra (alleen deze verdieping) -----
           # Bootst een druk op de fysieke slaapkamerknoppen na, zie
           # packages/9 - Other/Virtual Buttons.yaml. Alle 11 automations die op
@@ -1370,31 +1406,35 @@ cards:
           # hierboven op elke verdieping klopt.
           - type: custom:mushroom-title-card
             subtitle: Routines
-          - type: custom:mushroom-template-card
-            primary: Slaapkamer knop
-            secondary: >-
-              {{ 'Tik: opstaan-routine' if 6 <= now().hour < 17 else 'Tik:
-              naar bed-routine' }}
-            icon: mdi:gesture-tap-button
-            icon_color: purple
-            tap_action:
-              action: perform-action
-              perform_action: script.virtual_button_press
-              data:
-                button: bedroom_buttons
-                action: single
-            double_tap_action:
-              action: perform-action
-              perform_action: script.virtual_button_press
-              data:
-                button: bedroom_buttons
-                action: double
-            hold_action:
-              action: perform-action
-              perform_action: script.virtual_button_press
-              data:
-                button: bedroom_buttons
-                action: hold
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Slaapkamer knop
+                secondary: >-
+                  {{ 'Tik: opstaan-routine' if 6 <= now().hour < 17 else 'Tik:
+                  naar bed-routine' }}
+                icon: mdi:gesture-tap-button
+                icon_color: purple
+                tap_action:
+                  action: perform-action
+                  perform_action: script.virtual_button_press
+                  data:
+                    button: bedroom_buttons
+                    action: single
+                double_tap_action:
+                  action: perform-action
+                  perform_action: script.virtual_button_press
+                  data:
+                    button: bedroom_buttons
+                    action: double
+                hold_action:
+                  action: perform-action
+                  perform_action: script.virtual_button_press
+                  data:
+                    button: bedroom_buttons
+                    action: hold
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-secondfloor"
@@ -1429,18 +1469,22 @@ cards:
           # ----- 2. Verlichting -----
           - type: custom:mushroom-title-card
             subtitle: Verlichting
-          - type: custom:mushroom-template-card
-            primary: Alles uit
-            secondary: Tweede verdieping
-            icon: mdi:lightbulb-group-off
-            icon_color: grey
-            tap_action:
-              action: perform-action
-              perform_action: light.turn_off
-              target:
-                entity_id:
-                  - light.overloop_zolder_lampen
-                  - light.slaapkamer_mini_lampen
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Alles uit
+                secondary: Tweede verdieping
+                icon: mdi:lightbulb-group-off
+                icon_color: grey
+                tap_action:
+                  action: perform-action
+                  perform_action: light.turn_off
+                  target:
+                    entity_id:
+                      - light.overloop_zolder_lampen
+                      - light.slaapkamer_mini_lampen
           - type: grid
             columns: 2
             square: false
@@ -1501,9 +1545,13 @@ cards:
           # ----- 4. Klimaat -----
           - type: custom:mushroom-title-card
             subtitle: Klimaat
-          - type: custom:mushroom-climate-card
-            entity: climate.airco_zolder
-            name: Airco zolder
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:mushroom-climate-card
+                entity: climate.airco_zolder
+                name: Airco zolder
             hvac_modes:
               - "off"
               - cool
@@ -1558,21 +1606,25 @@ cards:
           # ----- 2. Verlichting -----
           - type: custom:mushroom-title-card
             subtitle: Verlichting
-          - type: custom:mushroom-template-card
-            primary: Alles uit
-            secondary: Garage / speelkamer
-            icon: mdi:lightbulb-group-off
-            icon_color: grey
-            # homeassistant.turn_off in plaats van light.turn_off, want de
-            # verwarmingsplaat is een switch en moet hier ook mee uit.
-            tap_action:
-              action: perform-action
-              perform_action: homeassistant.turn_off
-              target:
-                entity_id:
-                  - light.garage_lampen
-                  - light.speelkamer_lampen
-                  - switch.speelkamer_stopcontact_verwarming
+          # homeassistant.turn_off in plaats van light.turn_off, want de
+          # verwarmingsplaat is een switch en moet hier ook mee uit.
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Alles uit
+                secondary: Garage / speelkamer
+                icon: mdi:lightbulb-group-off
+                icon_color: grey
+                tap_action:
+                  action: perform-action
+                  perform_action: homeassistant.turn_off
+                  target:
+                    entity_id:
+                      - light.garage_lampen
+                      - light.speelkamer_lampen
+                      - switch.speelkamer_stopcontact_verwarming
           - type: grid
             columns: 2
             square: false
@@ -1594,18 +1646,22 @@ cards:
           # Plafond-verwarmingsplaat speelkamer; verbruik alleen tonen als hij aan staat.
           - type: custom:mushroom-title-card
             subtitle: Klimaat
-          - type: custom:mushroom-template-card
-            entity: switch.speelkamer_stopcontact_verwarming
-            primary: Verwarmingsplaat
-            secondary: >-
-              {% if is_state('switch.speelkamer_stopcontact_verwarming','on') %}Aan{{
-              (' · ' ~ states('sensor.speelkamer_stopcontact_verwarming_power') ~ ' W')
-              if has_value('sensor.speelkamer_stopcontact_verwarming_power') else '' }}{%
-              else %}Uit{% endif %}
-            icon: mdi:heat-wave
-            icon_color: "{{ 'orange' if is_state('switch.speelkamer_stopcontact_verwarming','on') else 'grey' }}"
-            tap_action:
-              action: toggle
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: switch.speelkamer_stopcontact_verwarming
+                primary: Verwarmingsplaat
+                secondary: >-
+                  {% if is_state('switch.speelkamer_stopcontact_verwarming','on') %}Aan{{
+                  (' · ' ~ states('sensor.speelkamer_stopcontact_verwarming_power') ~ ' W')
+                  if has_value('sensor.speelkamer_stopcontact_verwarming_power') else '' }}{%
+                  else %}Uit{% endif %}
+                icon: mdi:heat-wave
+                icon_color: "{{ 'orange' if is_state('switch.speelkamer_stopcontact_verwarming','on') else 'grey' }}"
+                tap_action:
+                  action: toggle
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-outside"
@@ -1653,19 +1709,23 @@ cards:
           # ----- 2. Verlichting -----
           - type: custom:mushroom-title-card
             subtitle: Verlichting
-          - type: custom:mushroom-template-card
-            primary: Alle buitenverlichting uit
-            secondary: Buiten
-            icon: mdi:lightbulb-group-off
-            icon_color: grey
-            tap_action:
-              action: perform-action
-              perform_action: light.turn_off
-              target:
-                entity_id:
-                  - light.voortuin_lampen
-                  - light.achtertuin_lampen
-                  - light.carport_lampen
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Alle buitenverlichting uit
+                secondary: Buiten
+                icon: mdi:lightbulb-group-off
+                icon_color: grey
+                tap_action:
+                  action: perform-action
+                  perform_action: light.turn_off
+                  target:
+                    entity_id:
+                      - light.voortuin_lampen
+                      - light.achtertuin_lampen
+                      - light.carport_lampen
           - type: grid
             columns: 3
             square: false
@@ -1692,11 +1752,15 @@ cards:
           # Zie packages/3 - Outside/Backyard/Sunscreen.yaml.
           - type: custom:mushroom-title-card
             subtitle: Schermen
-          - type: custom:mushroom-cover-card
-            entity: cover.achtertuin_zonnescherm
-            name: Zonnescherm achtertuin
-            show_buttons_control: true
-            show_position_control: true
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:mushroom-cover-card
+                entity: cover.achtertuin_zonnescherm
+                name: Zonnescherm achtertuin
+                show_buttons_control: true
+                show_position_control: true
 
           # ----- 4. Klimaat: bestaat hier niet, blok valt weg -----
 
