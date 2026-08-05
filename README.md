@@ -35,7 +35,7 @@ UI editors happy. Everything is YAML, split per room.
 | `configuration.yaml` | Core config only. All entities and automations come in via `packages/`. |
 | `packages/` | Grouped per floor and room, e.g. `0 - Ground Floor/Livingroom/Lights.yaml`. `9 - Other/` holds the house-wide packages: climate, energy, presence, alarm, ventilation, watchdog. |
 | `blueprints/automation/robin/` | Own blueprints. `motion_light.yaml` drives the motion lighting in eight rooms; a room package only supplies the sensor, the lamp and its exceptions. |
-| `custom_templates/` | Jinja macro libraries. `klimaat.jinja` is the single decision table for all sun shading — the one place to change behaviour. Note: edits here need a **full restart**, a YAML reload is not enough. |
+| `custom_templates/` | Jinja macro libraries. `klimaat.jinja` is the single decision table for all sun shading — the one place to change behaviour; `brandweer.jinja` is the single place where the quirks of the PreCom staffing webhook are handled. Note: edits here need a **full restart**, a YAML reload is not enough. |
 | `dashboards/` | Lovelace in YAML mode. `overzicht/` is the wall panel (split per column), plus separate views for Woning, Klimaat, Systeem, Camera's, Kalender and a Nest Hub cast target. |
 | `docs/` | Design notes. `klimaatregie.md` explains the four layers of the climate control and why each rule exists. |
 | `tests/` | Offline tests that run without Home Assistant. |
@@ -50,6 +50,11 @@ python3 -m venv .venv && .venv/bin/pip install jinja2
 It puts the decision table through 50+ scenarios (summer, winter, night, storm, rain,
 absent, manual override) and checks that every zone has its helpers, its sensors, its
 entry in the executor's trigger lists and a row on the Klimaat view.
+
+`tests/test_brandweer.py` does the same for the fire brigade staffing webhook: it runs
+the real payload from the API spec through `custom_templates/brandweer.jinja` and checks
+the notification text, the shortfall counting and the edge cases (a team missing because
+PreCom was unreachable, names with double spaces, "reserve A" not being a person).
 
 ## <a name="hubs">Hubs</a>
 

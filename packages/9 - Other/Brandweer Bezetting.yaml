@@ -1,0 +1,100 @@
+brandweer_bezetting_package:
+  # ===========================================================================
+  # BEZETTING VAN DE DIENSTDOENDE PLOEG
+  # ===========================================================================
+  #
+  # De cron op brandweeruden.112radar.nl POST bij elke statuswissel
+  # (ok <-> krap <-> onderbezet) een volledige stand naar de webhook in
+  # `Brandweer Automations.yaml`. Die automatisering vuurt het event
+  # `brandweer_bezetting` met de rauwe payload; dit bestand zet er entiteiten
+  # van.
+  #
+  # WAAROM VIA EEN EVENT EN NIET RECHTSTREEKS OP DE WEBHOOK
+  # Een webhook-id kan maar één keer geregistreerd worden. Zou deze sensor ook
+  # op `webhook_id: brandweer-onder-bezetting-...` triggeren, dan wint er één
+  # en valt de ander stil. Nu blijft de bestaande, bewezen automatisering de
+  # enige ontvanger en hangt dit bestand er achter: gaat hier iets stuk, dan
+  # blijft de melding op de telefoon gewoon werken.
+  #
+  # WAAROM NAAST DE REST-SENSOR
+  # `Brandweer Automations.yaml` haalt elke 5 minuten status.php op voor
+  # `sensor.bezetting_ploeg_a/b/c`. Dat blijft staan als vangnet en als bron
+  # voor de drie ploegcijfers ook zonder webhook. Wat hier bij komt is de
+  # detaillering: welke functie het gat veroorzaakt, wie er staan, wie zijn
+  # pager uit heeft. Dashboards vallen terug op de REST-sensor zolang deze
+  # sensor nog nooit gevuld is.
+  #
+  # De sensoren zijn trigger-based en herstellen daarom hun state én attributen
+  # na een herstart. Dat is hier essentieel: er komt pas nieuwe data bij de
+  # eerstvolgende statuswissel, en dat kan dagen duren.
+  #
+  # LET OP: `sensor.brandweer_bezetting` draagt de hele stand in attributen
+  # (enkele kB). Die staat daarom in de recorder-uitsluitlijst van
+  # configuration.yaml; de historie zit in `sensor.brandweer_bezetting_tekort`.
+  template:
+    - triggers:
+        - trigger: event
+          event_type: brandweer_bezetting
+      actions:
+        # Eén keer normaliseren, alle sensoren hieronder lezen uit `v`.
+        # Wat er in zit staat in custom_templates/brandweer.jinja.
+        - variables:
+            v: >
+              {% from 'brandweer.jinja' import bezetting_json %}
+              {{ bezetting_json(trigger.event.data.payload) | trim | from_json }}
+      sensor:
+        - name: Brandweer bezetting
+          unique_id: brandweer_bezetting
+          state: "{{ v.type }}"
+          icon: >-
+            {{ {'onderbezet': 'mdi:account-alert',
+                'krap': 'mdi:account-clock'}.get(v.type, 'mdi:account-check') }}
+          attributes:
+            ploeg: "{{ v.ploeg }}"
+            kwartier: "{{ v.kwartier }}"
+            tijdstip: "{{ v.tijdstip }}"
+            vorige_status: "{{ v.vorige_status }}"
+            was_sinds: "{{ v.was_sinds }}"
+            aantal: "{{ v.aantal }}"
+            tekort: "{{ v.tekort }}"
+            samenvatting: "{{ v.samenvatting }}"
+            functies: "{{ v.functies }}"
+            gaten: "{{ v.gaten }}"
+            pager_uit: "{{ v.pager_uit }}"
+            afwezig: "{{ v.afwezig }}"
+            wijzigingen: "{{ v.wijzigingen }}"
+            ploegen: "{{ v.ploegen }}"
+
+        # Aparte sensor, want dit is het enige getal waarvan de historie iets
+        # zegt ("hoe vaak stonden we in de min, en hoe diep").
+        - name: Brandweer bezetting tekort
+          unique_id: brandweer_bezetting_tekort
+          state: "{{ v.tekort }}"
+          state_class: measurement
+          unit_of_measurement: personen
+          icon: >-
+            {{ 'mdi:account-minus' if v.tekort > 0 else 'mdi:account-check' }}
+          attributes:
+            samenvatting: "{{ v.samenvatting }}"
+
+      binary_sensor:
+        - name: Brandweer bezetting probleem
+          unique_id: brandweer_bezetting_probleem
+          device_class: problem
+          state: "{{ v.type in ['krap', 'onderbezet'] }}"
+          attributes:
+            samenvatting: "{{ v.samenvatting }}"
+
+    # Los van de payload: heb ík deze week dienst. Stond tot nu toe als
+    # letterlijke vergelijking in een stuk of zes automatiseringen; als sensor
+    # is hij ook op een dashboard en in een conditie bruikbaar.
+    - binary_sensor:
+        - name: Brandweer ik heb dienst
+          unique_id: brandweer_ik_heb_dienst
+          icon: mdi:fire-truck
+          state: >-
+            {{ states('input_select.brandweer_dienstdoende_ploeg')
+               == states('input_select.brandweer_mijn_huidige_ploeg') }}
+          availability: >-
+            {{ has_value('input_select.brandweer_dienstdoende_ploeg')
+               and has_value('input_select.brandweer_mijn_huidige_ploeg') }}

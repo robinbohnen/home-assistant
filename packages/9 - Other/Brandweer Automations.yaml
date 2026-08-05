@@ -125,6 +125,10 @@ brandweer_package:
             {% endif %}
 
   automation:
+    # Blind doortellen; de correctie komt uit PreCom. Elke bezettingswebhook
+    # noemt de ploeg die écht dienst heeft en zet die hieronder gelijk (zie
+    # `brandweer_bezetting_webhook`), dus een gemiste maandag of een geruilde
+    # week loopt vanzelf weer recht.
     - id: brandweer_groepswissel
       alias: Brandweer - Groepswissel
       description: "Wissel de dienstdoende ploeg op maandag om 06:00"
@@ -1099,10 +1103,24 @@ brandweer_package:
             entity_id: scene.hue_taffellamp_nu
           data: {}
 
+    # De PreCom-cron POST hier alleen bij een STATUSWISSEL (ok <-> krap <->
+    # onderbezet), niet elke 5 minuten. Elke binnenkomst is dus nieuws.
+    #
+    # De payload is een volledige stand: per functie wie er beschikbaar is, wie
+    # zijn pager uit heeft en wie zich heeft afgemeld, plus alle drie de
+    # ploegen en wat er sinds de vorige stand is veranderd. Het uitpakken
+    # daarvan staat in custom_templates/brandweer.jinja, het bewaren in
+    # packages/9 - Other/Brandweer Bezetting.yaml. Deze automatisering doet
+    # alleen de doorgifte en de melding.
+    #
+    # `queued` en niet `single`: twee wissels kort na elkaar (iemand meldt zich
+    # af en er komt iemand bij) zouden bij `single` de tweede laten vallen, en
+    # dan klopt de opgeslagen stand niet meer met PreCom.
     - id: brandweer_bezetting_webhook
       alias: Brandweer - (Onder)bezetting bericht
       description: Webhook voor bezettingswijzigingen brandweer
-      mode: single
+      mode: queued
+      max: 5
       triggers:
         - trigger: webhook
           allowed_methods:
@@ -1112,36 +1130,78 @@ brandweer_package:
           webhook_id: brandweer-onder-bezetting-bericht-dykzRyg6UOQoTloNGJjCYxlW
       conditions: []
       actions:
+        - variables:
+            status: "{{ trigger.json.type }}"
+            ploeg_optie: "{{ trigger.json.ploeg }} Ploeg"
+            # Titel en tekst van de melding; zie de macro voor de opbouw.
+            melding: >
+              {% from 'brandweer.jinja' import melding_json %}
+              {{ melding_json(trigger.json) | trim | from_json }}
+            # Hoe hard de melding mag: alleen onderbezetting in mijn eigen
+            # dienstweek is een reden voor geluid. De rest is informatie, en
+            # tussen 23:00 en 06:30 is informatie geen melding waard - de
+            # sensoren en het dashboard lopen dan wel gewoon bij.
+            ik_dienst: "{{ ploeg_optie == states('input_select.brandweer_mijn_huidige_ploeg') }}"
+            urgent: "{{ status == 'onderbezet' and ik_dienst }}"
+            nachtrust: "{{ now() >= today_at('23:00') or now() < today_at('06:30') }}"
+        # Eerst doorgeven aan de sensoren: dan staat het dashboard goed, ook
+        # als er hieronder iets misgaat (of er helemaal niet gepusht wordt).
+        - alias: Stand doorgeven aan de bezettingssensoren
+          event: brandweer_bezetting
+          event_data:
+            payload: "{{ trigger.json }}"
         - action: input_select.select_option
           target:
             entity_id: input_select.brandweer_bezetting_status
           data:
-            option: "{{ trigger.json.type }}"
-        - variables:
-            payload: "{{ trigger.json }}"
-            status: "{{ trigger.json.type }}"
-            vorige: "{{ trigger.json.vorige_status }}"
-            ploeg: "{{ trigger.json.ploeg }}"
-            tijdstip: "{{ trigger.json.tijdstip }}"
-            functies: "{{ trigger.json.functies | default([]) }}"
-            ook_krap: "{{ trigger.json.ook_krap | default([]) }}"
-            was_sinds: "{{ trigger.json.was_sinds | default('') }}"
-            wijzigingen: "{{ trigger.json.wijzigingen | default({}) }}"
-        - action: notify.mobile_devices_robin
-          data:
-            title: >-
-              {% if status == 'onderbezet' %}Onderbezet - {{ ploeg }} Ploeg
-              {% elif status == 'krap' %}Krap bezet - {{ ploeg }} Ploeg
-              {% else %}Bezetting OK - {{ ploeg }} Ploeg{% endif %}
-            message: >-
-              {% set functies = payload.functies | default([]) %}
-              {% set ook_krap = payload.ook_krap | default([]) %}
-              {% set wijzigingen = payload.wijzigingen | default({}) %}
-              {% if status == 'onderbezet' %}Bezetting {{ ploeg }} Ploeg is onderbezet (was {{ vorige }}).
-              {% for f in functies %}{{ f.functie }}: {{ f.beschikbaar }}/{{ f.nodig }} beschikbaar. {% endfor %}
-              {% if ook_krap | length > 0 %}Ook krap: {% for f in ook_krap %}{{ f.functie }}: {{ f.beschikbaar }}/{{ f.gewenst }}. {% endfor %}{% endif %}
-              {% elif status == 'krap' %}Bezetting {{ ploeg }} Ploeg is krap (was {{ vorige }}).
-              {% for f in functies %}{{ f.functie }}: {{ f.beschikbaar }}/{{ f.gewenst }} beschikbaar. {% endfor %}
-              {% else %}Bezetting {{ ploeg }} Ploeg is weer op orde (was {{ vorige }}{% if was_sinds %} sinds {{ was_sinds }}{% endif %}).
-              {% endif %}
-              {% if wijzigingen | length > 0 %}Wijzigingen: {% for functie, w in wijzigingen.items() %}{{ functie }}: {% if w.erbij is defined %}+{{ w.erbij | join(', +') }} {% endif %}{% if w.eraf is defined %}-{{ w.eraf | join(', -') }}{% endif %}. {% endfor %}{% endif %}
+            option: "{{ status }}"
+        # PreCom weet zeker welke ploeg dienst heeft; de maandagwissel hierboven
+        # is maar een aanname die na een storing of een geruilde week scheef
+        # staat. Bij verschil wint PreCom. Alleen zetten als het echt een
+        # bestaande optie is, anders faalt de actie.
+        - alias: Dienstdoende ploeg gelijktrekken met PreCom
+          if:
+            - condition: template
+              value_template: >-
+                {{ ploeg_optie != states('input_select.brandweer_dienstdoende_ploeg')
+                   and ploeg_optie in state_attr('input_select.brandweer_dienstdoende_ploeg', 'options') }}
+          then:
+            - action: input_select.select_option
+              target:
+                entity_id: input_select.brandweer_dienstdoende_ploeg
+              data:
+                option: "{{ ploeg_optie }}"
+        # Push met een vaste `tag`, zodat een nieuwe stand de vorige VERVANGT in
+        # plaats van erbovenop te stapelen. Daarom gaat het herstelbericht ook
+        # gewoon mee: dat maakt van een blijvende waarschuwing op het
+        # vergrendelscherm een "weer op orde".
+        - alias: Melding naar mijn telefoon
+          if:
+            - condition: template
+              value_template: "{{ urgent or not nachtrust }}"
+          then:
+            - action: notify.mobile_devices_robin
+              data:
+                title: "{{ melding.titel }}"
+                message: "{{ melding.tekst }}"
+                data:
+                  tag: brandweer-bezetting
+                  group: brandweer-bezetting
+                  notification_icon: mdi:fire-truck
+                  channel: Brandweer bezetting
+                  importance: "{{ 'high' if urgent else 'default' }}"
+                  color: >-
+                    {{ '#ef4444' if status == 'onderbezet'
+                       else ('#f59e0b' if status == 'krap' else '#4ade80') }}
+                  push:
+                    interruption-level: >-
+                      {{ 'time-sensitive' if urgent
+                         else ('active' if status != 'ok' and ik_dienst else 'passive') }}
+                    sound: "{{ 'default' if urgent else 'none' }}"
+                  actions:
+                    - action: URI
+                      title: PreCom
+                      uri: https://brandweeruden.112radar.nl/
+                    - action: URI
+                      title: Bezetting
+                      uri: /lovelace/overzicht#ov-brandweer

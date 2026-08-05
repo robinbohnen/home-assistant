@@ -1,0 +1,221 @@
+{#-
+==============================================================================
+  BRANDWEERBEZETTING - de PreCom-webhook omzetten naar iets bruikbaars
+==============================================================================
+
+  De cron op brandweeruden.112radar.nl POST bij ELKE statuswissel
+  (ok <-> krap <-> onderbezet) een volledige stand naar de webhook van
+  `packages/9 - Other/Brandweer Automations.yaml`. Die payload is rijk maar
+  ongemakkelijk: functienamen met spaties en een punt, velden die ontbreken
+  zodra hun conditie er niet is, twee verschillende sleutelnamen voor de
+  ondergrens (`nodig` bij onderbezet, `gewenst` bij krap), en namen die rauw uit
+  PreCom komen ("reserve A" is geen persoon, "Daan van der  Zanden" heeft een
+  dubbele spatie).
+
+  Dit bestand is de ENIGE plek waar die eigenaardigheden staan. Het levert een
+  platte, altijd-complete structuur op die zowel de sensor, de melding als de
+  dashboardkaarten gebruiken.
+
+  Gebruik:
+
+      {% from 'brandweer.jinja' import bezetting_json %}
+      {% set v = bezetting_json(trigger.json) | trim | from_json %}
+
+  LET OP: wijzigingen in dit bestand vragen een volledige herstart van Home
+  Assistant (custom_templates worden alleen bij het opstarten ingelezen).
+
+  ---------------------------------------------------------------------------
+  WAT `bezetting_json()` OPLEVERT
+  ---------------------------------------------------------------------------
+    type            ok | krap | onderbezet
+    vorige_status   status vóór deze wissel
+    ploeg           letter van de dienstdoende ploeg
+    tijdstip        cron-tijd (Y-m-d H:i)
+    kwartier        tijdslot waar de cijfers vandaan komen (H:i)
+    was_sinds       bij herstel: sinds wanneer het mis was, anders null
+    aantal          unieke beschikbaren in de dienstdoende ploeg (zelfde getal
+                    als de website toont; per functie optellen mag NIET, want
+                    een chauffeur is meestal ook manschap)
+    tekort          som van alle ontbrekende personen over alle functies
+    samenvatting    "Manschap 3/4 · Chauffeur 1/2", of "Op orde"
+    functies        ALLE functies in PreCom-volgorde, elk met
+                    {functie, beschikbaar, nodig, gewenst, status, personen,
+                     kort}. `gewenst` is gelijk aan `nodig` als PreCom geen
+                    aparte wens meegeeft, `kort` is de tekst "Manschap 3/4"
+                    met de juiste noemer voor die status.
+    gaten           dezelfde regels, maar alleen die met status != ok
+    pager_uit       unieke, opgeschoonde namen met pager uit (tellen niet mee
+                    als beschikbaar - dit is dus wie het gat kan dichten)
+    afwezig         unieke, opgeschoonde namen die zich hebben afgemeld
+    wijzigingen     [{functie, erbij: [], eraf: []}] sinds de vorige stand
+    ploegen         LIJST (geen dict) van {ploeg, dienst, status, aantal,
+                    personen, aspiranten}, gesorteerd op letter. Een ploeg
+                    waarvan PreCom niets wist ontbreekt gewoon, dus reken niet
+                    op precies drie.
+
+  Alle lijsten bestaan altijd (leeg als er niets is), alle getallen zijn int.
+  Zo hoeft geen enkele consument nog `.get(..., [])`-werk te doen.
+-#}
+
+{#- Namen opschonen: dubbele spaties eruit, dubbelen eruit, en de rommelregels
+    die PreCom als "persoon" meestuurt ("reserve A") eruit. Levert JSON op,
+    zodat de aanroeper er met `| trim | from_json` een echte lijst van maakt. -#}
+{%- macro namen_json(lijst) -%}
+  {%- set ns = namespace(uit=[]) -%}
+  {%- for naam in (lijst or []) -%}
+    {%- set schoon = naam.split() | join(' ') -%}
+    {%- if schoon and 'reserve' not in schoon | lower and schoon not in ns.uit -%}
+      {%- set ns.uit = ns.uit + [schoon] -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {{- ns.uit | to_json -}}
+{%- endmacro -%}
+
+{%- macro bezetting_json(p) -%}
+  {%- set ns = namespace(functies=[], gaten=[], tekort=0, pager=[], afwezig=[],
+                         wijzigingen=[], ploegen=[], aantal=0) -%}
+
+  {#- Per functie. De volgorde van PreCom is de operationele volgorde
+      (bevelvoerder eerst, aspirant laatst) en blijft daarom staan. -#}
+  {%- for functie, d in (p.get('bezetting', {})).items() -%}
+    {%- set nodig = d.get('nodig', 0) | int(0) -%}
+    {%- set beschikbaar = d.get('beschikbaar', 0) | int(0) -%}
+    {%- set gewenst = d.get('gewenst', nodig) | int(nodig) -%}
+    {%- set status = d.get('status', 'ok') -%}
+    {#- De noemer die erbij hoort: bij een tekort is dat de harde ondergrens,
+        bij krap de wens. Zo klopt "3/4" met wat de status zegt. -#}
+    {%- set noemer = gewenst if status == 'krap' else nodig -%}
+    {%- set regel = {
+        'functie': functie,
+        'beschikbaar': beschikbaar,
+        'nodig': nodig,
+        'gewenst': gewenst,
+        'status': status,
+        'personen': namen_json(d.get('personen', [])) | trim | from_json,
+        'kort': functie ~ ' ' ~ beschikbaar ~ '/' ~ noemer } -%}
+    {%- set ns.functies = ns.functies + [regel] -%}
+    {%- if status != 'ok' -%}
+      {%- set ns.gaten = ns.gaten + [regel] -%}
+    {%- endif -%}
+    {%- if beschikbaar < nodig -%}
+      {%- set ns.tekort = ns.tekort + (nodig - beschikbaar) -%}
+    {%- endif -%}
+    {#- pager_uit en afwezig staan per functie, maar het zijn dezelfde mensen
+        die in meerdere functies terugkomen. Eenmaal noemen is genoeg. -#}
+    {%- for naam in namen_json(d.get('pager_uit', [])) | trim | from_json -%}
+      {%- if naam not in ns.pager -%}{%- set ns.pager = ns.pager + [naam] -%}{%- endif -%}
+    {%- endfor -%}
+    {%- for naam in namen_json(d.get('afwezig', [])) | trim | from_json -%}
+      {%- if naam not in ns.afwezig -%}{%- set ns.afwezig = ns.afwezig + [naam] -%}{%- endif -%}
+    {%- endfor -%}
+  {%- endfor -%}
+
+  {%- for functie, w in (p.get('wijzigingen', {})).items() -%}
+    {%- set ns.wijzigingen = ns.wijzigingen + [{
+        'functie': functie,
+        'erbij': namen_json(w.get('erbij', [])) | trim | from_json,
+        'eraf': namen_json(w.get('eraf', [])) | trim | from_json }] -%}
+  {%- endfor -%}
+
+  {#- Ploegen als lijst: een ploeg met een PreCom-storing ontbreekt in de
+      payload, dus itereren over wat er is en niet over ['A','B','C']. -#}
+  {%- for letter, d in (p.get('ploegen', {})).items() | sort -%}
+    {%- set ploeg = {
+        'ploeg': letter,
+        'dienst': d.get('dienst', ''),
+        'status': d.get('status', ''),
+        'aantal': d.get('aantal', 0) | int(0),
+        'personen': namen_json(d.get('personen', [])) | trim | from_json,
+        'aspiranten': namen_json(d.get('aspiranten', [])) | trim | from_json } -%}
+    {%- set ns.ploegen = ns.ploegen + [ploeg] -%}
+    {%- if letter == p.get('ploeg') -%}
+      {%- set ns.aantal = ploeg.aantal -%}
+    {%- endif -%}
+  {%- endfor -%}
+
+  {{- {
+    'type': p.get('type', 'onbekend'),
+    'vorige_status': p.get('vorige_status', 'onbekend'),
+    'ploeg': p.get('ploeg', '?'),
+    'tijdstip': p.get('tijdstip', ''),
+    'kwartier': p.get('kwartier', ''),
+    'was_sinds': p.get('was_sinds', none),
+    'aantal': ns.aantal,
+    'tekort': ns.tekort,
+    'samenvatting': (ns.gaten | map(attribute='kort') | join(' · ')) if ns.gaten else 'Op orde',
+    'functies': ns.functies,
+    'gaten': ns.gaten,
+    'pager_uit': ns.pager,
+    'afwezig': ns.afwezig,
+    'wijzigingen': ns.wijzigingen,
+    'ploegen': ns.ploegen } | to_json -}}
+{%- endmacro -%}
+
+{#- Duur tussen een PreCom-tijdstip (Y-m-d H:i, Europe/Amsterdam) en nu, als
+    "2 u 35" of "45 min". Leeg als het tijdstip onbruikbaar is ("onbekend"). -#}
+{%- macro duur_sinds(wanneer) -%}
+  {%- set start = strptime(wanneer | default('', true), '%Y-%m-%d %H:%M', none) -%}
+  {%- if start -%}
+    {%- set minuten = ((as_timestamp(now()) - as_timestamp(start)) / 60) | round(0) | int -%}
+    {%- if minuten >= 60 -%}
+      {{- (minuten // 60) ~ ' u ' ~ '%02d' | format(minuten % 60) -}}
+    {%- elif minuten >= 0 -%}
+      {{- minuten ~ ' min' -}}
+    {%- endif -%}
+  {%- endif -%}
+{%- endmacro -%}
+
+{#-
+  De meldingstekst. Apart van `bezetting_json()` omdat hier `now()` in zit (de
+  duur van een storing) en omdat een melding andere keuzes maakt dan een
+  dashboard: alleen wat je op een vergrendeld scherm in één blik moet zien.
+
+  Levert {titel, tekst}. Wie er gepusht wordt en hoe hard dat mag, beslist de
+  automatisering - dat hangt van de dienstdoende ploeg en het tijdstip af.
+-#}
+{%- macro melding_json(p) -%}
+  {%- set v = bezetting_json(p) | trim | from_json -%}
+  {%- set ns = namespace(regels=[]) -%}
+
+  {%- if v.type == 'ok' -%}
+    {%- set duur = duur_sinds(v.was_sinds) | trim -%}
+    {%- set ns.regels = ns.regels + [
+      'Weer op orde, was ' ~ v.vorige_status
+      ~ (' sinds ' ~ v.was_sinds[-5:] if v.was_sinds and v.was_sinds != 'onbekend' else '')
+      ~ (' (' ~ duur ~ ')' if duur else '') ~ '.'] -%}
+  {%- else -%}
+    {%- for g in v.gaten -%}
+      {%- set ns.regels = ns.regels + [
+        g.kort
+        ~ (' (gewenst ' ~ g.gewenst ~ ')' if g.status == 'onderbezet' and g.gewenst > g.nodig else '')
+        ~ (' - nog niemand' if g.beschikbaar == 0 else '')] -%}
+    {%- endfor -%}
+  {%- endif -%}
+
+  {%- set ns.regels = ns.regels + [
+    v.aantal ~ ' beschikbaar in ' ~ v.ploeg ~ '-ploeg · kwartier ' ~ v.kwartier] -%}
+
+  {#- Pager uit is de enige regel waar iets mee te doen valt: die mensen zijn
+      er wel, maar staan niet aan. Daarom staat hij boven de afmeldingen en
+      noemen we de namen. -#}
+  {%- if v.pager_uit -%}
+    {%- set ns.regels = ns.regels + ['Pager uit: ' ~ v.pager_uit | join(', ')] -%}
+  {%- endif -%}
+
+  {%- for w in v.wijzigingen -%}
+    {%- set ns.regels = ns.regels + [
+      w.functie ~ ': '
+      ~ (('+ ' ~ w.erbij | join(', ')) if w.erbij else '')
+      ~ (' · ' if w.erbij and w.eraf else '')
+      ~ (('- ' ~ w.eraf | join(', ')) if w.eraf else '')] -%}
+  {%- endfor -%}
+
+  {{- {
+    'titel': ({
+        'onderbezet': 'Onderbezet',
+        'krap': 'Krap bezet',
+        'ok': 'Bezetting op orde' }.get(v.type, 'Bezetting'))
+      ~ ' · ' ~ v.ploeg ~ '-ploeg'
+      ~ ((' — ' ~ v.samenvatting) if v.gaten else ''),
+    'tekst': ns.regels | join('\n') } | to_json -}}
+{%- endmacro -%}

@@ -675,6 +675,73 @@ cards:
                 secondary: "{{ (states('sensor.robin_reistijd_naar_brandweer_uden') ~ ' min') if has_value('sensor.robin_reistijd_naar_brandweer_uden') else '—' }}"
                 icon: mdi:fire-station
                 icon_color: orange
+          # ---------- Stand van de dienstdoende ploeg ----------
+          # Alles hieronder komt uit de attributen van sensor.brandweer_bezetting;
+          # die wordt gevuld door de PreCom-webhook (zie
+          # packages/9 - Other/Brandweer Bezetting.yaml) en dus alleen bij een
+          # statuswissel. Tot de eerste wissel is hij leeg — vandaar overal een
+          # terugval op de vijfminuten-poll of op '—'.
+          - type: custom:mushroom-title-card
+            title: Bezetting nu
+          - type: custom:mushroom-template-card
+            entity: sensor.brandweer_bezetting
+            primary: >-
+              {% set s = states('sensor.brandweer_bezetting') %}
+              {{ {'ok': 'Op orde', 'krap': 'Krap bezet', 'onderbezet': 'Onderbezet'}.get(s, 'Nog geen stand ontvangen') }}
+              {%- if s in ['ok', 'krap', 'onderbezet'] %} · {{ state_attr('sensor.brandweer_bezetting', 'ploeg') }}-ploeg{% endif %}
+            secondary: >-
+              {% set b = 'sensor.brandweer_bezetting' %}
+              {%- if has_value(b) -%}
+              {{ state_attr(b, 'samenvatting') }} · {{ state_attr(b, 'aantal') }} beschikbaar · kwartier {{ state_attr(b, 'kwartier') }}
+              {%- else -%}
+              Komt binnen bij de eerstvolgende statuswissel
+              {%- endif -%}
+            icon: >-
+              {% set s = states('sensor.brandweer_bezetting') %}
+              {{ {'onderbezet': 'mdi:account-alert', 'krap': 'mdi:account-clock'}.get(s, 'mdi:account-check') }}
+            icon_color: >-
+              {% set s = states('sensor.brandweer_bezetting') %}
+              {{ {'onderbezet': 'red', 'krap': 'orange', 'ok': 'green'}.get(s, 'grey') }}
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+          # Per functie, in de volgorde die PreCom aanhoudt (bevelvoerder eerst).
+          # De namen staan erbij: bij een gat wil je weten wie er al staat en of
+          # jouw functie het probleem is.
+          - type: markdown
+            content: |
+              {% set functies = state_attr('sensor.brandweer_bezetting', 'functies') or [] %}
+              {% if functies %}
+              | Functie | Nu | Wie |
+              | --- | --- | --- |
+              {% for r in functies -%}
+              | {{ {'onderbezet': '🔴', 'krap': '🟠'}.get(r.status, '🟢') }} {{ r.functie }} | **{{ r.beschikbaar }}**{% if r.nodig %}/{{ r.nodig }}{% endif %}{% if r.gewenst > r.nodig %} <sub>(wens {{ r.gewenst }})</sub>{% endif %} | {{ r.personen | join(', ') if r.personen else '—' }} |
+              {% endfor -%}
+              {% else %}
+              Nog geen stand van PreCom ontvangen. Die komt binnen zodra de
+              bezetting van status wisselt; de cijfers hieronder komen uit de
+              poll van elke vijf minuten.
+              {% endif %}
+          # Pager uit staat bewust bovenaan: dat zijn de mensen die er wél zijn
+          # maar niet aanstaan, dus dáár zit de winst als het krap is.
+          - type: markdown
+            content: |
+              {% set b = 'sensor.brandweer_bezetting' %}
+              {% set pager = state_attr(b, 'pager_uit') or [] %}
+              {% set afwezig = state_attr(b, 'afwezig') or [] %}
+              {% set wijz = state_attr(b, 'wijzigingen') or [] %}
+              **Pager uit** ({{ pager | count }}): {{ pager | join(', ') if pager else '—' }}
+
+              **Afgemeld** ({{ afwezig | count }}): {{ afwezig | join(', ') if afwezig else '—' }}
+
+              **Sinds de vorige stand**: {% if wijz %}{% for w in wijz %}{{ w.functie }}
+              {%- if w.erbij %} +{{ w.erbij | join(', +') }}{% endif %}
+              {%- if w.eraf %} −{{ w.eraf | join(', −') }}{% endif %}{{ ' · ' if not loop.last }}
+              {%- endfor %}{% else %}geen wijzigingen{% endif %}
+              {% if state_attr(b, 'tijdstip') %}
+
+              <sub>Stand van {{ state_attr(b, 'tijdstip') }}, kwartier {{ state_attr(b, 'kwartier') }}.</sub>
+              {% endif %}
           - type: custom:mushroom-title-card
             title: Bezetting per ploeg
           - type: grid
@@ -686,13 +753,18 @@ cards:
                 primary: >-
                   {% if states('input_select.brandweer_dienstdoende_ploeg')[0] | lower == 'a' %}A-ploeg · dienst{% else %}A-ploeg{% endif %}
                 secondary: >-
-                  {{ (states('sensor.bezetting_ploeg_a') ~ ' beschikbaar')
-                     if has_value('sensor.bezetting_ploeg_a') else '—' }}
+                  {% set p = (state_attr('sensor.brandweer_bezetting', 'ploegen') or [])
+                             | selectattr('ploeg', 'eq', 'A') | list | first %}
+                  {% if p %}{{ p.aantal }} beschikbaar
+                  {%- elif has_value('sensor.bezetting_ploeg_a') %}{{ states('sensor.bezetting_ploeg_a') }} beschikbaar
+                  {%- else %}—{% endif %}
                 icon: >-
                   {% if states('input_select.brandweer_dienstdoende_ploeg')[0] | lower == 'a' %}mdi:account-multiple-check{% else %}mdi:account-multiple-outline{% endif %}
                 icon_color: >-
-                  {% set n = states('sensor.bezetting_ploeg_a') | int(0) %}
-                  {{ 'red' if n < 4 else ('orange' if n < 6 else 'green') }}
+                  {% set p = (state_attr('sensor.brandweer_bezetting', 'ploegen') or [])
+                             | selectattr('ploeg', 'eq', 'A') | list | first %}
+                  {% if p %}{{ {'onderbezet': 'red', 'krap': 'orange'}.get(p.status, 'green') }}
+                  {%- else %}{% set n = states('sensor.bezetting_ploeg_a') | int(0) %}{{ 'red' if n < 4 else ('orange' if n < 6 else 'green') }}{% endif %}
                 tap_action:
                   action: more-info
               - type: custom:mushroom-template-card
@@ -700,13 +772,18 @@ cards:
                 primary: >-
                   {% if states('input_select.brandweer_dienstdoende_ploeg')[0] | lower == 'b' %}B-ploeg · dienst{% else %}B-ploeg{% endif %}
                 secondary: >-
-                  {{ (states('sensor.bezetting_ploeg_b') ~ ' beschikbaar')
-                     if has_value('sensor.bezetting_ploeg_b') else '—' }}
+                  {% set p = (state_attr('sensor.brandweer_bezetting', 'ploegen') or [])
+                             | selectattr('ploeg', 'eq', 'B') | list | first %}
+                  {% if p %}{{ p.aantal }} beschikbaar
+                  {%- elif has_value('sensor.bezetting_ploeg_b') %}{{ states('sensor.bezetting_ploeg_b') }} beschikbaar
+                  {%- else %}—{% endif %}
                 icon: >-
                   {% if states('input_select.brandweer_dienstdoende_ploeg')[0] | lower == 'b' %}mdi:account-multiple-check{% else %}mdi:account-multiple-outline{% endif %}
                 icon_color: >-
-                  {% set n = states('sensor.bezetting_ploeg_b') | int(0) %}
-                  {{ 'red' if n < 4 else ('orange' if n < 6 else 'green') }}
+                  {% set p = (state_attr('sensor.brandweer_bezetting', 'ploegen') or [])
+                             | selectattr('ploeg', 'eq', 'B') | list | first %}
+                  {% if p %}{{ {'onderbezet': 'red', 'krap': 'orange'}.get(p.status, 'green') }}
+                  {%- else %}{% set n = states('sensor.bezetting_ploeg_b') | int(0) %}{{ 'red' if n < 4 else ('orange' if n < 6 else 'green') }}{% endif %}
                 tap_action:
                   action: more-info
               - type: custom:mushroom-template-card
@@ -714,15 +791,35 @@ cards:
                 primary: >-
                   {% if states('input_select.brandweer_dienstdoende_ploeg')[0] | lower == 'c' %}C-ploeg · dienst{% else %}C-ploeg{% endif %}
                 secondary: >-
-                  {{ (states('sensor.bezetting_ploeg_c') ~ ' beschikbaar')
-                     if has_value('sensor.bezetting_ploeg_c') else '—' }}
+                  {% set p = (state_attr('sensor.brandweer_bezetting', 'ploegen') or [])
+                             | selectattr('ploeg', 'eq', 'C') | list | first %}
+                  {% if p %}{{ p.aantal }} beschikbaar
+                  {%- elif has_value('sensor.bezetting_ploeg_c') %}{{ states('sensor.bezetting_ploeg_c') }} beschikbaar
+                  {%- else %}—{% endif %}
                 icon: >-
                   {% if states('input_select.brandweer_dienstdoende_ploeg')[0] | lower == 'c' %}mdi:account-multiple-check{% else %}mdi:account-multiple-outline{% endif %}
                 icon_color: >-
-                  {% set n = states('sensor.bezetting_ploeg_c') | int(0) %}
-                  {{ 'red' if n < 4 else ('orange' if n < 6 else 'green') }}
+                  {% set p = (state_attr('sensor.brandweer_bezetting', 'ploegen') or [])
+                             | selectattr('ploeg', 'eq', 'C') | list | first %}
+                  {% if p %}{{ {'onderbezet': 'red', 'krap': 'orange'}.get(p.status, 'green') }}
+                  {%- else %}{% set n = states('sensor.bezetting_ploeg_c') | int(0) %}{{ 'red' if n < 4 else ('orange' if n < 6 else 'green') }}{% endif %}
                 tap_action:
                   action: more-info
+          # Wie er in welke ploeg zit. Een ploeg waarvan PreCom niets wist
+          # ontbreekt in de payload, dus dit loopt over wat er ís en niet over
+          # A/B/C.
+          - type: markdown
+            content: |
+              {% set ploegen = state_attr('sensor.brandweer_bezetting', 'ploegen') or [] %}
+              {% if ploegen %}
+              | Ploeg | Nu | Wie |
+              | --- | --- | --- |
+              {% for p in ploegen -%}
+              | **{{ p.ploeg }}** <sub>{{ {'dienstdoend': 'deze week', 'volgende_week': 'volgende week', 'week_erna': 'week erna'}.get(p.dienst, p.dienst) }}</sub> | {{ p.aantal }} | {{ p.personen | join(', ') if p.personen else '—' }}{% if p.aspiranten %} <sub>(asp. {{ p.aspiranten | join(', ') }})</sub>{% endif %} |
+              {% endfor -%}
+              {% else %}
+              Ploegsamenstelling komt binnen bij de eerstvolgende statuswissel.
+              {% endif %}
           - type: custom:mushroom-title-card
             title: Uitrukken
           - type: grid

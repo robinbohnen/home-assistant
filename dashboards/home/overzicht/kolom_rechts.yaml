@@ -481,8 +481,25 @@ cards:
                 return `<span style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;color:#4ade80;background:rgba(52,168,120,0.15)">uitgerukt · ${s}</span>`;
               ]]]
         # Bezetting van alle drie de ploegen; de dienstdoende licht op.
+        #
+        # Twee bronnen, in deze volgorde: sensor.brandweer_bezetting (de
+        # PreCom-webhook, weet per ploeg de status én per functie waar het gat
+        # zit) en anders sensor.bezetting_ploeg_* (de poll van elke vijf
+        # minuten, kent alleen een aantal). De webhook vuurt alleen bij een
+        # statuswissel, dus vlak na het opzetten van deze koppeling is er nog
+        # niets — vandaar de terugval.
+        #
+        # triggers_update: button-card hertekent alleen als zijn eigen `entity`
+        # verandert, en dat is hier de dienstdoende ploeg (wisselt één keer per
+        # week). Zonder deze lijst bleven de cijfers op het wandpaneel staan
+        # waar ze bij de laatste ploegwissel stonden.
         - type: custom:button-card
           entity: input_select.brandweer_dienstdoende_ploeg
+          triggers_update:
+            - sensor.brandweer_bezetting
+            - sensor.bezetting_ploeg_a
+            - sensor.bezetting_ploeg_b
+            - sensor.bezetting_ploeg_c
           show_icon: false
           show_name: false
           show_state: false
@@ -497,7 +514,7 @@ cards:
               - padding: 11px 2px 4px 2px
               - border-top: 1px solid rgba(255,255,255,0.06)
             grid:
-              - grid-template-areas: '"cap" "ploegen"'
+              - grid-template-areas: '"cap" "ploegen" "gat"'
               - row-gap: 7px
             custom_fields:
               cap:
@@ -505,6 +522,9 @@ cards:
                 - justify-self: start
               ploegen:
                 - grid-area: ploegen
+              gat:
+                - grid-area: gat
+                - justify-self: stretch
           custom_fields:
             cap: |
               [[[
@@ -519,11 +539,19 @@ cards:
               [[[
                 var ds = states['input_select.brandweer_dienstdoende_ploeg'];
                 var dienst = ds && ds.state ? ds.state.charAt(0).toUpperCase() : '';
+                var bez = states['sensor.brandweer_bezetting'];
+                var attrs = (bez && bez.attributes) ? bez.attributes : {};
+                var uitWebhook = {};
+                (attrs.ploegen || []).forEach(function(p){ uitWebhook[p.ploeg] = p; });
                 var cellen = ['A','B','C'].map(function(letter){
+                  var w = uitWebhook[letter];
                   var s = states['sensor.bezetting_ploeg_' + letter.toLowerCase()];
-                  var n = s && !isNaN(Number(s.state)) ? Number(s.state) : null;
-                  var col = n === null ? 'rgba(255,255,255,0.35)'
-                          : (n < 4 ? '#ef4444' : (n < 6 ? '#f59e0b' : '#4ade80'));
+                  var n = w ? w.aantal : (s && !isNaN(Number(s.state)) ? Number(s.state) : null);
+                  // Kleur uit de status die PreCom zelf bepaalt; zonder webhook
+                  // terug naar de vuistregel op het aantal.
+                  var col = w ? ({onderbezet:'#ef4444', krap:'#f59e0b'}[w.status] || '#4ade80')
+                          : (n === null ? 'rgba(255,255,255,0.35)'
+                          : (n < 4 ? '#ef4444' : (n < 6 ? '#f59e0b' : '#4ade80')));
                   var aan = letter === dienst;
                   var bg = aan ? 'rgba(56,189,248,0.12)' : 'rgba(255,255,255,0.04)';
                   var rand = aan ? '1px solid rgba(56,189,248,0.35)' : '1px solid rgba(255,255,255,0.06)';
@@ -534,6 +562,25 @@ cards:
                   return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 0 5px 0;border-radius:11px;background:${bg};border:${rand}"><span style="font-size:11px;font-weight:700;letter-spacing:0.8px;color:${aan ? '#38bdf8' : 'rgba(255,255,255,0.5)'}">${letter}</span><span style="font-size:19px;font-weight:700;line-height:1.1;color:${col}">${n === null ? '—' : n}</span>${onder}</div>`;
                 });
                 return `<div style="display:flex;gap:8px">${cellen.join('')}</div>`;
+              ]]]
+            # Welke functie het gat veroorzaakt, en hoeveel mensen hun pager uit
+            # hebben staan — dat laatste is wie het gat nog kan dichten. Leeg
+            # zodra de bezetting op orde is; dan valt de rij weg.
+            gat: |
+              [[[
+                var bez = states['sensor.brandweer_bezetting'];
+                var attrs = (bez && bez.attributes) ? bez.attributes : {};
+                var gaten = attrs.gaten || [];
+                if(!gaten.length) return '';
+                var hard = gaten.some(function(g){ return g.status === 'onderbezet'; });
+                var col = hard ? '#ef4444' : '#f59e0b';
+                var tekst = gaten.map(function(g){ return g.kort; }).join(' · ');
+                var pager = (attrs.pager_uit || []).length;
+                var staart = pager
+                  ? `<span style="color:rgba(255,255,255,0.55)"> · ${pager}× pager uit</span>` : '';
+                return `<div style="display:flex;align-items:center;gap:6px;padding:7px 9px;border-radius:10px;background:${hard ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)'};border:1px solid ${hard ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.3)'}">
+                  <ha-icon icon="mdi:account-alert" style="--mdc-icon-size:15px;color:${col};flex:0 0 auto"></ha-icon>
+                  <span style="font-size:12px;font-weight:600;color:${col};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tekst}${staart}</span></div>`;
               ]]]
         - type: custom:button-card
           tap_action:

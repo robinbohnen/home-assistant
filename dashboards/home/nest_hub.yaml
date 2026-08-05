@@ -191,6 +191,15 @@ cards:
           # ---------- BRANDWEER ----------
           - type: custom:button-card
             entity: input_select.brandweer_dienstdoende_ploeg
+            # De cijfers hieronder komen van andere entiteiten dan de `entity`
+            # van deze kaart (die wisselt één keer per week). Zonder deze lijst
+            # hertekent button-card niet en bevriest de bezetting op de Hub.
+            triggers_update:
+              - sensor.brandweer_bezetting
+              - sensor.bezetting_ploeg_a
+              - sensor.bezetting_ploeg_b
+              - sensor.bezetting_ploeg_c
+              - input_text.brandweer_laatste_melding
             show_icon: false
             show_name: false
             show_state: false
@@ -247,19 +256,47 @@ cards:
                     <span style="font-size:2.5vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.68)">BRANDWEER</span>
                     <span style="font-size:2.5vh">${staart}</span>${kazerne}</span>`;
                 ]]]
+              # Aantal en kleur komen bij voorkeur uit sensor.brandweer_bezetting
+              # (de PreCom-webhook: kent de status die PreCom zelf bepaalt en
+              # weet welke functie het gat veroorzaakt) en anders uit de
+              # vijfminuten-poll sensor.bezetting_ploeg_*.
+              #
+              # De onderregel van elke cel houdt zijn vaste hoogte: hij toont
+              # DIENST, of - als het niet op orde is - waar het aan schort. Zo
+              # verandert er niets aan de HOOGTEBEGROTING bovenaan dit bestand.
               ploegen: |
                 [[[
                   var ds = states['input_select.brandweer_dienstdoende_ploeg'];
                   var dienst = ds && ds.state ? ds.state.charAt(0).toUpperCase() : '';
+                  var bez = states['sensor.brandweer_bezetting'];
+                  var attrs = (bez && bez.attributes) ? bez.attributes : {};
+                  var uitWebhook = {};
+                  (attrs.ploegen || []).forEach(function(p){ uitWebhook[p.ploeg] = p; });
+                  var kleuren = {onderbezet:'#ef4444', krap:'#f59e0b'};
                   var cellen = ['A','B','C'].map(function(letter){
+                    var w = uitWebhook[letter];
                     var s = states['sensor.bezetting_ploeg_' + letter.toLowerCase()];
-                    var n = s && !isNaN(Number(s.state)) ? Number(s.state) : null;
-                    var col = n === null ? 'rgba(255,255,255,0.35)' : (n < 4 ? '#ef4444' : (n < 6 ? '#f59e0b' : '#4ade80'));
+                    var n = w ? w.aantal : (s && !isNaN(Number(s.state)) ? Number(s.state) : null);
+                    var col = w ? (kleuren[w.status] || '#4ade80')
+                            : (n === null ? 'rgba(255,255,255,0.35)' : (n < 4 ? '#ef4444' : (n < 6 ? '#f59e0b' : '#4ade80')));
                     var aan = letter === dienst;
-                    var onder = aan
-                      ? `<span style="font-size:1.7vh;font-weight:700;letter-spacing:0.08vh;color:#38bdf8">DIENST</span>`
-                      : `<span style="font-size:1.7vh">&nbsp;</span>`;
-                    return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.2vh;padding:1vh 0 0.8vh 0;border-radius:1.4vh;background:${aan ? 'rgba(56,189,248,0.12)' : 'rgba(255,255,255,0.04)'};border:1px solid ${aan ? 'rgba(56,189,248,0.35)' : 'rgba(255,255,255,0.06)'}">
+                    // De functiedetails in de payload gaan alleen over de
+                    // dienstdoende ploeg; de andere twee hebben enkel een status.
+                    // Eén regel breed is hier ~12 tekens, dus bij meerdere gaten
+                    // alleen de eerste plus een teller.
+                    var gaten = attrs.gaten || [];
+                    var label = null;
+                    if(w && w.status && w.status !== 'ok'){
+                      label = (aan && gaten.length)
+                        ? gaten[0].kort + (gaten.length > 1 ? ' +' + (gaten.length - 1) : '')
+                        : (w.status === 'onderbezet' ? 'tekort' : w.status);
+                    }
+                    var onder = label
+                      ? `<span style="display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:1.7vh;font-weight:700;letter-spacing:0.08vh;color:${col}">${label.toUpperCase()}</span>`
+                      : (aan
+                        ? `<span style="font-size:1.7vh;font-weight:700;letter-spacing:0.08vh;color:#38bdf8">DIENST</span>`
+                        : `<span style="font-size:1.7vh">&nbsp;</span>`);
+                    return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:0.2vh;padding:1vh 0 0.8vh 0;border-radius:1.4vh;background:${aan ? 'rgba(56,189,248,0.12)' : 'rgba(255,255,255,0.04)'};border:1px solid ${aan ? 'rgba(56,189,248,0.35)' : 'rgba(255,255,255,0.06)'}">
                       <span style="font-size:2.1vh;font-weight:700;letter-spacing:0.1vh;color:${aan ? '#38bdf8' : 'rgba(255,255,255,0.7)'}">${letter}</span>
                       <span style="font-size:4.7vh;font-weight:700;line-height:1.05;color:${col}">${n === null ? '—' : n}</span>${onder}</div>`;
                   });
