@@ -187,6 +187,20 @@ triggers:
     to: "off"
     for: !input uit_na
     id: geen_beweging
+    # Na een herstart komen deze entiteiten uit `unavailable`/`unknown`
+    # tevoorschijn. Zonder deze guard telt dat als een echte overgang: op
+    # 2026-08-06 vuurden om 13:25:42 alle acht kamers tegelijk hun uit-tak,
+    # twee minuten na de herstart van 13:23, met een reeks "Referenced
+    # entities ... are missing or not currently available" tot gevolg omdat de
+    # lampen zelf nog niet gemeld hadden. Erger dan logruis: zat je op dat
+    # moment in de badkamer, dan ging het licht uit.
+    #
+    # Prijs: valt een PIR er tussendoor uit en komt hij terug op `off`, dan
+    # blijft het licht aan tot de volgende echte bewegingscyclus. Dat corrigeert
+    # zichzelf zodra er weer iemand loopt.
+    not_from:
+      - unknown
+      - unavailable
   # Een lege lijst deurcontacten is een geldige trigger die nooit afgaat.
   - trigger: state
     entity_id: !input deur_contacten
@@ -198,11 +212,17 @@ triggers:
       - armed_away
       - armed_home
     id: vertrokken
+    not_from:
+      - unknown
+      - unavailable
   - trigger: state
     entity_id: !input voordeur_slot
     to: locked
     for: "00:01:00"
     id: vertrokken
+    not_from:
+      - unknown
+      - unavailable
   # Genest triggers-blok: zo voeg je een trigger-selector-input samen met de
   # vaste triggers hierboven. De input zelf direct als lijstitem plakken
   # (`- !input ...`) is ongeldig en liet de hele blueprint stuklopen.

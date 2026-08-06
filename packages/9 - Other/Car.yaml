@@ -13,6 +13,13 @@ car_package:
         - name: "Car - Next location"
           state: "{{ state_attr('calendar.auto','location') }}"
           unique_id: car_next_location
+          # Zonder deze guard werd de sensor letterlijk 'None' zodra er geen
+          # agenda-afspraak met locatie was, en dat ging als zoekterm naar de
+          # geocoder hieronder. Die vond er prompt iets bij: de kaart toonde
+          # "Unknown, New Providence, Bahamas" als volgende bestemming.
+          # Zelfde opzet als "Car - Departing in hours" hieronder.
+          availability: >-
+            {{ state_attr('calendar.auto', 'location') not in [none, ''] }}
         - name: "Car - Price additional KM's"
           state: "{{ ((states('sensor.hrh85f_kilometerstand') | int - states('input_number.lease_contract_kms') | int) * 0.12) }}"
           unique_id: car_price_add_kms
@@ -37,7 +44,25 @@ car_package:
   sensor:
     - platform: rest
       name: car_next_location_geo
-      value_template: "{{ value_json.results[0].formatted }}"
+      # EEN DAG, NIET DE STANDAARD DERTIG SECONDEN
+      # Zonder scan_interval pollt een rest-sensor elke 30 seconden: bijna 3.000
+      # Geoapify-aanroepen per dag, en dat voor een adres dat alleen verandert
+      # als er een andere afspraak in de agenda komt. Precies dát moment vangt
+      # `car_next_geolocation_fetch` hieronder al af met een update_entity, dus
+      # dit getal is puur een vangnet.
+      scan_interval: 86400
+      # Twee vangnetten: geen bruikbare zoekterm, of een geocoder die niets
+      # vindt (dan is `results` leeg en klaagde het log met "JSON result was not
+      # a dictionary or list with 0th element a dictionary").
+      value_template: >-
+        {% if states('sensor.car_next_location')
+              in ['unknown', 'unavailable', 'none', 'None', ''] %}
+          {{ none }}
+        {% elif (value_json.results | default([]) | count) > 0 %}
+          {{ value_json.results[0].formatted }}
+        {% else %}
+          {{ none }}
+        {% endif %}
       json_attributes_path: "$.results[0]"
       json_attributes:
         - lat

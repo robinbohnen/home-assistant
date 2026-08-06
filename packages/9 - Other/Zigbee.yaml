@@ -87,11 +87,12 @@ zigbee_package:
 
   template:
     - binary_sensor:
-        # De bridge-entiteit van Zigbee2MQTT zelf is de melder, niet een telling
-        # van weggevallen apparaten. Bij deze storing komt Zigbee2MQTT namelijk
-        # niet eens tot MQTT - hij crasht op de adapter en stopt - dus blijft de
-        # `offline` uit zijn last will staan. Dat is een harder en eerder signaal
-        # dan wachten tot alle apparaten één voor één op `unavailable` vallen.
+        # De bridge-entiteit van Zigbee2MQTT is het snelste signaal: bij de
+        # storing van 5 augustus kwam hij niet eens tot MQTT - hij crasht op de
+        # adapter en stopt - dus bleef de `offline` uit zijn last will staan.
+        # Dat is harder en eerder dan wachten tot apparaten één voor één op
+        # `unavailable` vallen. Alléén hierop kijken bleek op 6 augustus niet
+        # genoeg; zie de uitleg bij `state:` hieronder.
         #
         # De `_3` in de naam is geen typefout maar de entiteit die er staat; die
         # wordt ook al gebruikt in packages/9 - Other/Dashboard Context.yaml.
@@ -108,9 +109,75 @@ zigbee_package:
           icon: mdi:zigbee
           delay_on: "00:10:00"
           delay_off: "00:02:00"
+          # TWEE SIGNALEN, WANT ER ZIJN TWEE MANIEREN OM STUK TE GAAN
+          #
+          # 1. Zigbee2MQTT komt niet meer tot MQTT. Dat was 5 augustus 2026: hij
+          #    crasht op de adapter en stopt, waarna zijn last will `offline`
+          #    blijft staan.
+          #
+          # 2. Zigbee2MQTT draait vrolijk door, maar de radio eronder bereikt
+          #    geen enkel apparaat meer. Dat gebeurde op 6 augustus 2026 en die
+          #    zag deze sensor NIET, want de bridge stond gewoon op `on`. Wat je
+          #    dan wél ziet: alle netgevoede apparaten (lampen, stopcontacten)
+          #    vallen om omdat Zigbee2MQTT ze actief pingt en geen antwoord
+          #    krijgt, terwijl deurcontacten en bewegingsmelders nog "beschikbaar"
+          #    heten - die worden pas na 25 uur passief afgeschreven.
+          #
+          # De drempel van 60% zit ruim tussen beide werelden: normaal staat dit
+          # huis op ~37% onbereikbaar (tientallen spots hangen aan een
+          # wandschakelaar), tijdens de storing van 6 augustus op 70%.
           state: >
-            {{ states('binary_sensor.zigbee2mqtt_bridge_connection_state_3')
-               in ['off', 'unavailable'] }}
+            {% set bridge_weg = states('binary_sensor.zigbee2mqtt_bridge_connection_state_3')
+                                in ['off', 'unavailable'] %}
+            {% set aandeel = state_attr('sensor.zigbee_apparaten_onbereikbaar', 'aandeel')
+                             | float(0) %}
+            {% set totaal = state_attr('sensor.zigbee_apparaten_onbereikbaar', 'totaal')
+                            | int(0) %}
+            {# Vlak na een herstart is vrijwel alles even weg tot MQTT opnieuw
+               is ingelezen; die tien minuten mogen geen storing heten. De
+               bridge-tak hierboven heeft die rem niet nodig, want een lege
+               last will is meteen raak. #}
+            {% set start = states('sensor.home_assistant_gestart') | as_datetime %}
+            {% set lang_genoeg_op = start is none or (now() - start) > timedelta(minutes=15) %}
+            {{ bridge_weg or (lang_genoeg_op and totaal >= 20 and aandeel >= 60) }}
+
+    # Hoeveel Zigbee-entiteiten er onbereikbaar zijn. Zelfde opzet en dezelfde
+    # reden als `sensor.thread_matter_onbereikbaar` in
+    # packages/9 - Other/Thread.yaml: een waakhond die alleen let op wat je hem
+    # ooit hebt opgesomd, mist het apparaat dat je vorige week toevoegde. Daarom
+    # `integration_entities` en geen handmatige lijst.
+    #
+    # TRIGGER-BASED, want dit loopt over honderden entiteiten. Een gewone
+    # template-sensor zou dat bij élke statuswijziging in huis opnieuw doen.
+    # Elke minuut is ruim genoeg voor iets waar tien minuten `delay_on` op zit.
+    - trigger:
+        - trigger: time_pattern
+          minutes: "/1"
+        - trigger: homeassistant
+          event: start
+        - trigger: state
+          entity_id: binary_sensor.zigbee2mqtt_bridge_connection_state_3
+      sensor:
+        - name: "Zigbee apparaten onbereikbaar"
+          unique_id: zigbee_apparaten_onbereikbaar
+          icon: mdi:zigbee
+          unit_of_measurement: "entiteiten"
+          state_class: measurement
+          state: >
+            {% set ns = namespace(n=0) %}
+            {% for e in integration_entities('mqtt') %}
+              {% if states(e) == 'unavailable' %}{% set ns.n = ns.n + 1 %}{% endif %}
+            {% endfor %}
+            {{ ns.n }}
+          attributes:
+            totaal: "{{ integration_entities('mqtt') | count }}"
+            aandeel: >
+              {% set alle = integration_entities('mqtt') %}
+              {% set ns = namespace(n=0) %}
+              {% for e in alle %}
+                {% if states(e) == 'unavailable' %}{% set ns.n = ns.n + 1 %}{% endif %}
+              {% endfor %}
+              {{ 0 if alle | count == 0 else (100 * ns.n / (alle | count)) | round(0) }}
 
   automation:
     ###########################################################################
