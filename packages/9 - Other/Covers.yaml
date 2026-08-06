@@ -141,6 +141,25 @@ covers_package:
                         - condition: time
                           after: "18:45:00"
                           before: "01:00:00"
+                  # DE OVERRIDE-TIMER HOORT HIER METEEN BIJ
+                  # Tussen 18:45 en de bedtijd van de kinderen vindt de
+                  # klimaatregie deze rolgordijnen nog "open - daglicht"; pas
+                  # vanaf die bedtijd laat hij ze met rust (zie BEDTIJDEN in
+                  # custom_templates/klimaat.jinja). In dat gat sluit deze
+                  # automatisering ze wél, en dan draait de uitvoerder ze
+                  # doodleuk weer omhoog.
+                  #
+                  # `klimaat_handbediening_herkennen` zou dat opvangen, maar die
+                  # wacht anderhalve minuut voordat een stand als handbediening
+                  # telt - en de uitvoerder komt elke minuut langs. Op
+                  # 2026-08-06 werd het grote rolgordijn om 19:01:55 net op tijd
+                  # beschermd en ging het kleine er om 19:02:01 weer uit; drie
+                  # seconden verschil.
+                  #
+                  # Dit ís geen handbediening maar wel dezelfde bedoeling: blijf
+                  # van deze zone af. Daarom zetten we de timer hier zelf, op het
+                  # moment van sluiten, in plaats van te hopen dat de herkenning
+                  # er eerder bij is.
                   then:
                     - if:
                         - condition: state
@@ -151,6 +170,9 @@ covers_package:
                           data: {}
                           target:
                             entity_id: cover.rollerblind_0001
+                        - action: timer.start
+                          target:
+                            entity_id: timer.override_keuken_rolgordijn_groot
                     - if:
                         - condition: state
                           entity_id: binary_sensor.keuken_raam_klein_contact
@@ -160,3 +182,6 @@ covers_package:
                           data: {}
                           target:
                             entity_id: cover.rollerblind_0002
+                        - action: timer.start
+                          target:
+                            entity_id: timer.override_keuken_rolgordijn_klein
