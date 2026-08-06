@@ -657,12 +657,29 @@ cards:
                   var pTxt = p && !isNaN(Number(p.state)) ? ` <span style="color:#4ade80">€ ${Number(p.state).toFixed(3).replace('.',',')}</span>` : '';
                   delen.push(`<span>${ico('mdi:clock-check-outline')} goedkoopste blok <span style="color:white">${wanneer(blok)}</span>${pTxt}</span>`);
                 }
-                var nu = states['binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu'];
+                // De binary sensor van SlimHuys kijkt naar de KALE marktprijs.
+                // Bij verbruik betaal je het totaaltarief: markt + inkoop +
+                // energiebelasting + btw. Op 6 augustus 2026 stond EPEX
+                // negatief terwijl het totaaltarief 0,1277 was - "prijs is nu
+                // negatief" was daar gewoon onwaar, en het leek net alsof de
+                // jacuzzi daarop was aangesprongen (dat was zonne-overschot).
+                // Spa.yaml, Battery.yaml en Solarpanels.yaml maken dit
+                // onderscheid al met zoveel woorden; dit is de laatste plek die
+                // nog op de kale prijs keek.
+                var epexNu = states['binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu'];
+                var allin = states['sensor.slimhuys_zonneplan_huidige_prijs'];
+                var allinNum = allin && !isNaN(Number(allin.state)) ? Number(allin.state) : null;
                 var straks = lees('sensor.slimhuys_zonneplan_volgende_negatieve_prijs');
-                if(nu && nu.state === 'on') {
+                if(allinNum !== null && allinNum < 0) {
                   delen.push(`<span style="color:#4ade80">${ico('mdi:flash', 'color:#4ade80')} prijs is nu negatief</span>`);
+                } else if(epexNu && epexNu.state === 'on') {
+                  // Wel het goedkoopste moment van de dag, maar je krijgt er
+                  // niet voor betaald - dus geen groen en geen "negatief".
+                  var nogTxt = allinNum !== null
+                    ? ` · je betaalt nog <span style="color:white">€ ${allinNum.toFixed(3).replace('.', ',')}</span>` : '';
+                  delen.push(`<span>${ico('mdi:flash-outline')} marktprijs negatief${nogTxt}</span>`);
                 } else if(straks) {
-                  delen.push(`<span>${ico('mdi:flash-outline')} negatief vanaf <span style="color:white">${wanneer(straks)}</span></span>`);
+                  delen.push(`<span>${ico('mdi:flash-outline')} marktprijs negatief vanaf <span style="color:white">${wanneer(straks)}</span></span>`);
                 }
                 if(!delen.length) return '';
                 return `<span style="display:flex;align-items:center;gap:10px;font-size:12px;color:rgba(255,255,255,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${delen.join('<span style="opacity:0.25">·</span>')}</span>`;
