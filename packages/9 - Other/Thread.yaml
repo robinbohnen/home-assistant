@@ -189,10 +189,25 @@ thread_package:
       mode: single
       max_exceeded: silent
       triggers:
+        # De gewone flank: Thread valt weg terwijl HA gewoon draait.
         - trigger: state
           entity_id: binary_sensor.thread_netwerk_stuk
           to: "on"
+        # Vangnet voor de storing die een herstart van HA overleeft: de sensor
+        # staat dan al op `on` binnen het venster dat de opstartconditie
+        # wegfiltert, en daarna komt er nooit meer een flank.
+        - trigger: state
+          entity_id: binary_sensor.thread_netwerk_stuk
+          to: "on"
+          for: "00:15:00"
+        # Nieuwe poging zolang het stuk blijft; zonder deze trigger deed de
+        # uurrem hieronder niets.
+        - trigger: time_pattern
+          hours: "/1"
       conditions:
+        - condition: state
+          entity_id: binary_sensor.thread_netwerk_stuk
+          state: "on"
         # Niet meteen na een herstart van HA aan de gang: dan is de Matter-
         # integratie soms nog aan het opstarten en is `delay_on` alleen niet
         # genoeg (de teller begint namelijk pas te lopen ná de start).
@@ -207,6 +222,12 @@ thread_package:
           value_template: >-
             {{ this.attributes.last_triggered is none
                or now() - this.attributes.last_triggered > timedelta(hours=1) }}
+        # Na zes uur lost het zichzelf niet meer op en levert doorgaan alleen
+        # nog een critical melding per uur op over iets dat allang gemeld is.
+        - condition: template
+          value_template: >-
+            {% set sinds = states.binary_sensor.thread_netwerk_stuk.last_changed %}
+            {{ sinds is none or (now() - sinds) < timedelta(hours=6) }}
       actions:
         # Twee wegen, afhankelijk van of de SLZB zelf nog reageert. Zijn
         # entiteiten staan op `unavailable` zodra de integratie hem niet kan
@@ -216,6 +237,18 @@ thread_package:
             slzb_reageert: >-
               {{ states('button.slzb_mr3_core_restart')
                  not in ['unavailable', 'unknown', 'none', ''] }}
+            # De state van een button ís het tijdstip van de laatste druk, dus
+            # dit ziet ook een reset door de Zigbee-waakhond of eentje met de
+            # hand. Zigbee.yaml doet exact hetzelfde de andere kant op; het is
+            # één kastje met twee radio's.
+            recent_gereset: >-
+              {% set laatst = states('button.slzb_mr3_core_restart') | as_datetime %}
+              {{ laatst is not none and (now() - laatst) < timedelta(minutes=30) }}
+            zachte_reset_zinvol: "{{ slzb_reageert and not recent_gereset }}"
+            poe_recent_gecycled: >-
+              {% set laatst = states('button.usw_pro_max_16_poe_meterkast_port_1_power_cycle')
+                              | as_datetime %}
+              {{ laatst is not none and (now() - laatst) < timedelta(minutes=15) }}
 
         - action: notify.mobile_devices_adults
           data:
@@ -224,16 +257,21 @@ thread_package:
               {{ states('sensor.thread_matter_onbereikbaar') }} van de
               {{ state_attr('sensor.thread_matter_onbereikbaar', 'totaal') }}
               Matter-entiteiten zijn onbereikbaar.
-              {{ 'Ik reset de SLZB en start de border router opnieuw.'
-                 if slzb_reageert else
-                 'De SLZB reageert zelf ook niet, dus ik haal de PoE eraf.' }}
+              {% if zachte_reset_zinvol %}
+                Ik reset de SLZB en start de border router opnieuw.
+              {% elif not slzb_reageert %}
+                De SLZB reageert zelf ook niet, dus ik haal de PoE eraf.
+              {% else %}
+                De SLZB is net al herstart en dat hielp niet, dus ik haal de PoE
+                eraf.
+              {% endif %}
 
         #####################################################################
-        ## Poging 1 - zachte reset, alleen als de SLZB nog praat
+        ## Poging 1 - zachte reset, alleen als die iets kan opleveren
         #####################################################################
         - if:
             - condition: template
-              value_template: "{{ slzb_reageert }}"
+              value_template: "{{ zachte_reset_zinvol }}"
           then:
             # De coördinator eerst, dan pas de add-on. Andersom hielp op
             # 5 augustus niet: dat had de Supervisor de hele nacht al gedaan.
@@ -282,12 +320,13 @@ thread_package:
         # apparaat nog praat, en een koude start kost meer tijd. Reageert de
         # SLZB niet meer, dan wordt poging 1 hierboven overgeslagen en komt hij
         # meteen hier terecht.
+        # Alleen `unavailable` betekent onbereikbaar. `unknown` stond hier ook,
+        # maar dat is de normale state van een knop die nog nooit is ingedrukt -
+        # waardoor trede 2 er altijd stopte. Zie Zigbee.yaml, zelfde knop.
         - if:
             - condition: state
               entity_id: button.usw_pro_max_16_poe_meterkast_port_1_power_cycle
-              state:
-                - unavailable
-                - unknown
+              state: unavailable
           then:
             - action: notify.mobile_devices_adults
               data:
@@ -303,6 +342,20 @@ thread_package:
                       critical: 1
                       volume: 0.7
             - stop: "Switch onbereikbaar, handmatig nakijken"
+
+        - if:
+            - condition: template
+              value_template: "{{ poe_recent_gecycled }}"
+          then:
+            - action: notify.mobile_devices_adults
+              data:
+                title: Thread weg, herstel loopt al
+                message: >-
+                  De PoE van de SLZB is net al eraf geweest - vrijwel zeker door
+                  de Zigbee-waakhond, want het is hetzelfde kastje. Ik doe het
+                  niet nog een keer; als Thread over een uur nog weg is, probeer
+                  ik het opnieuw.
+            - stop: "PoE net al gecycled, herstel van de andere radio afwachten"
 
         - action: notify.mobile_devices_adults
           data:

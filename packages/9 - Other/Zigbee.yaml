@@ -128,10 +128,30 @@ zigbee_package:
       mode: single
       max_exceeded: silent
       triggers:
+        # De gewone flank: het netwerk valt weg terwijl HA gewoon draait.
         - trigger: state
           entity_id: binary_sensor.zigbee_netwerk_stuk
           to: "on"
+        # Vangnet voor de storing die een herstart van HA overleeft. De sensor
+        # staat dan na tien minuten uptime al op `on`, dus de flank hierboven
+        # valt precies in het venster dat de opstartconditie wegfiltert - en
+        # daarna komt er nooit meer een flank. Deze vuurt op 25 minuten uptime,
+        # ruim ná dat venster.
+        - trigger: state
+          entity_id: binary_sensor.zigbee_netwerk_stuk
+          to: "on"
+          for: "00:15:00"
+        # Nieuwe poging zolang het stuk blijft. Zonder deze trigger kreeg een
+        # radio die na de eerste ronde nog weg was nooit een tweede kans, en
+        # deed de uurrem hieronder niets.
+        - trigger: time_pattern
+          hours: "/1"
       conditions:
+        # Bij de uurtrigger is dit de eigenlijke toets; bij de flanken een
+        # goedkope zekerheid tegen een sensor die net weer omklapte.
+        - condition: state
+          entity_id: binary_sensor.zigbee_netwerk_stuk
+          state: "on"
         # Niet meteen na een herstart van Home Assistant aan de gang: MQTT is
         # dan soms nog aan het inlezen, en `delay_on` helpt daar niet tegen
         # omdat die teller pas ná de start begint te lopen.
@@ -145,6 +165,13 @@ zigbee_package:
           value_template: >-
             {{ this.attributes.last_triggered is none
                or now() - this.attributes.last_triggered > timedelta(hours=1) }}
+        # Na zes uur is duidelijk dat het zichzelf niet meer oplost. Doorgaan
+        # levert alleen nog een critical melding per uur op, de hele nacht, over
+        # iets dat allang gemeld is.
+        - condition: template
+          value_template: >-
+            {% set sinds = states.binary_sensor.zigbee_netwerk_stuk.last_changed %}
+            {{ sinds is none or (now() - sinds) < timedelta(hours=6) }}
       actions:
         # Twee redenen om de zachte trede over te slaan en meteen de stroom te
         # pakken:
@@ -169,6 +196,14 @@ zigbee_package:
               {% set laatst = states('button.slzb_mr3_core_restart') | as_datetime %}
               {{ laatst is not none and (now() - laatst) < timedelta(minutes=30) }}
             zachte_reset_zinvol: "{{ slzb_reageert and not recent_gereset }}"
+            # Zelfde trucje als hierboven, nu voor de PoE-poort. Valt het hele
+            # kastje uit, dan zien Zigbee en Thread dat allebei en willen ze
+            # allebei deze poort power-cyclen; zonder deze check reboot de
+            # tweede het apparaat midden in het herstel van de eerste.
+            poe_recent_gecycled: >-
+              {% set laatst = states('button.usw_pro_max_16_poe_meterkast_port_1_power_cycle')
+                              | as_datetime %}
+              {{ laatst is not none and (now() - laatst) < timedelta(minutes=15) }}
 
         - action: notify.mobile_devices_adults
           data:
@@ -223,12 +258,15 @@ zigbee_package:
         #####################################################################
         ## Poging 2 - stroom eraf
         #####################################################################
+        # Alleen `unavailable` betekent onbereikbaar. `unknown` stond hier ook,
+        # maar de state van een button ís het tijdstip van de laatste druk, en
+        # deze knop is nog nooit ingedrukt - dus hij staat gewoon op `unknown`
+        # en trede 2 stopte er altijd. Geverifieerd tegen de draaiende HA op
+        # 2026-08-06.
         - if:
             - condition: state
               entity_id: button.usw_pro_max_16_poe_meterkast_port_1_power_cycle
-              state:
-                - unavailable
-                - unknown
+              state: unavailable
           then:
             - action: notify.mobile_devices_adults
               data:
@@ -244,6 +282,20 @@ zigbee_package:
                       critical: 1
                       volume: 0.7
             - stop: "Switch onbereikbaar, handmatig nakijken"
+
+        - if:
+            - condition: template
+              value_template: "{{ poe_recent_gecycled }}"
+          then:
+            - action: notify.mobile_devices_adults
+              data:
+                title: Zigbee weg, herstel loopt al
+                message: >-
+                  De PoE van de SLZB is net al eraf geweest - vrijwel zeker door
+                  de Thread-waakhond, want het is hetzelfde kastje. Ik doe het
+                  niet nog een keer; als Zigbee over een uur nog weg is, probeer
+                  ik het opnieuw.
+            - stop: "PoE net al gecycled, herstel van de andere radio afwachten"
 
         - action: notify.mobile_devices_adults
           data:

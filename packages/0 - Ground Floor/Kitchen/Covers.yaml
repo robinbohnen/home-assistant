@@ -40,13 +40,22 @@ kitchen_covers_package:
     ## groep zonder ergens naar te kijken, terwijl `covers_lock_alarm_events` en
     ## de klimaatregie dat contact wél allebei respecteren. Een contact op
     ## 'unknown' of 'unavailable' telt daarbij als open.
+    ##
+    ## Die raamcheck maakte wel een nieuw gat: beide tijdstriggers zijn mómenten,
+    ## dus stond een raam net op dat ene moment open - op precies de warme avond
+    ## waarop je de keuken lucht - dan bleef dat rolgordijn de hele nacht omhoog.
+    ## `covers_lock_alarm_events` haalt dat niet in, want die kijkt alleen naar
+    ## slot- en alarmgebeurtenissen en slaat een open raam net zo goed over.
+    ## Daarom sluit hij nu alsnog zodra het raam dichtgaat, mits we op dat moment
+    ## in het avond-/nachtvenster zitten.
     ##########################################################################
     - id: kitchen_covers_close
       alias: Kitchen - Covers
       description: >-
         Laat de keukenrolgordijnen zakken voor de avond, op wat het eerst komt:
         het begin van de naar-bed-routine van de kinderen of een half uur voor
-        zonsondergang. Een rolgordijn waarvan het raam openstaat blijft omhoog.
+        zonsondergang. Een rolgordijn waarvan het raam openstaat blijft omhoog en
+        gaat alsnog dicht zodra dat raam gesloten wordt.
       mode: single
       triggers:
         - trigger: sun
@@ -56,7 +65,42 @@ kitchen_covers_package:
           at:
             - input_datetime.bedtime_maxi_1h_off
             - input_datetime.bedtime_mini_1h_off
-      conditions: []
+        # from/to expliciet, zodat een contact dat na een herstart uit
+        # 'unknown' komt opborrelen niet als "raam net dichtgedaan" telt.
+        - trigger: state
+          entity_id:
+            - binary_sensor.keuken_raam_groot_contact
+            - binary_sensor.keuken_raam_klein_contact
+          from: "on"
+          to: "off"
+          id: raam_dicht
+      conditions:
+        # Alleen de raamtrigger heeft een tijdvenster nodig; de twee andere
+        # triggers zíjn het moment. Ondergrens is hetzelfde "wat het eerst komt"
+        # als hierboven, bovengrens 06:00 zodat een raam dat 's ochtends
+        # dichtgaat niet met de ochtendroutine gaat vechten.
+        - condition: or
+          conditions:
+            - condition: not
+              conditions:
+                - condition: trigger
+                  id: raam_dicht
+            - condition: template
+              value_template: >-
+                {% set zon = state_attr('sun.sun', 'next_setting') | as_datetime %}
+                {% set voorbij_zon = is_state('sun.sun', 'below_horizon')
+                     or (zon is not none and now() > zon - timedelta(minutes=30)) %}
+                {% set ns = namespace(voorbij_bed=false) %}
+                {% for b in ['input_datetime.bedtime_maxi_1h_off',
+                             'input_datetime.bedtime_mini_1h_off' ] %}
+                  {% set s = states(b) %}
+                  {% if s not in ['unknown', 'unavailable', 'none', '']
+                        and now() >= today_at(s) %}
+                    {% set ns.voorbij_bed = true %}
+                  {% endif %}
+                {% endfor %}
+                {{ (voorbij_zon or ns.voorbij_bed)
+                   and (now().hour >= 12 or now().hour < 6) }}
       actions:
         - if:
             - condition: state

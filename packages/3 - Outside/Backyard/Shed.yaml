@@ -2,76 +2,29 @@ backyard_shed_lights_package:
   automation:
     - id: lights_movement_backyard_shed
       alias: Backyard Shed - Lights
-      description: Turn on the lights of the Shed if there is movement detected
+      description: Turn on the lights of the Shed when the door is opened
+      # In de schuur hangt geen bewegingssensor, alleen het deurcontact. Tot
+      # 2026-08-06 stond hier ook binary_sensor.schuur_beweging_occupancy; die
+      # heeft nooit bestaan, dus die takken waren dood.
       # restart: tijdens de 5 minuten na "deur open" loopt de delay nog; met
-      # single zou een nieuwe deur- of bewegingstrigger genegeerd worden.
+      # single zou een nieuwe deurtrigger genegeerd worden.
       mode: restart
       triggers:
-        - trigger: state
-          entity_id:
-            - binary_sensor.schuur_beweging_occupancy
-          to: "on"
-          id: beweging
         - trigger: state
           entity_id:
             - binary_sensor.achtertuin_achtertuin_schuur_deur_deur
           to: "on"
           id: deuropen
-        - trigger: state
-          entity_id:
-            - binary_sensor.schuur_beweging_occupancy
-          to: "off"
-          for:
-            hours: 0
-            minutes: 2
-            seconds: 0
-          id: geenbeweging
       conditions: []
       actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - beweging
-              sequence:
-                - action: switch.turn_on
-                  metadata: {}
-                  data: {}
-                  target:
-                    entity_id: switch.achtertuin_schuur_lampen
-            - conditions:
-                - condition: trigger
-                  id:
-                    - geenbeweging
-              sequence:
-                - action: switch.turn_off
-                  metadata: {}
-                  data: {}
-                  target:
-                    entity_id: switch.achtertuin_schuur_lampen
-            - conditions:
-                - condition: trigger
-                  id:
-                    - deuropen
-              sequence:
-                - action: switch.turn_on
-                  metadata: {}
-                  data: {}
-                  target:
-                    entity_id: switch.achtertuin_schuur_lampen
-                - delay:
-                    hours: 0
-                    minutes: 5
-                    seconds: 0
-                    milliseconds: 0
-                - action: switch.turn_off
-                  metadata: {}
-                  data: {}
-                  target:
-                    entity_id: switch.achtertuin_schuur_lampen
-          default:
-            - action: switch.toggle
-              metadata: {}
-              data: {}
-              target:
-                entity_id: switch.achtertuin_schuur_lampen
+        - action: switch.turn_on
+          target:
+            entity_id: switch.achtertuin_schuur_lampen
+        - delay:
+            hours: 0
+            minutes: 5
+            seconds: 0
+            milliseconds: 0
+        - action: switch.turn_off
+          target:
+            entity_id: switch.achtertuin_schuur_lampen
