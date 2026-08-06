@@ -44,8 +44,9 @@ UI editors happy. Everything is YAML, split per room.
 Run the tests before restarting after a climate change:
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install jinja2 pyyaml
-.venv/bin/python tests/test_klimaat.py
+python3 -m venv .venv && .venv/bin/pip install jinja2 pyyaml pytest
+.venv/bin/python -m pytest tests/          # all of them
+.venv/bin/python tests/test_klimaat.py     # or one on its own, with its full output
 ```
 
 It puts the decision table through 50+ scenarios (summer, winter, night, storm, rain,

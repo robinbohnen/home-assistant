@@ -686,60 +686,76 @@ klimaat_zonwering_package:
                   tekst: "{{ vraagtekst }}"
                   minuten: 30
               continue_on_error: true
-        - wait_for_trigger:
-            - trigger: event
-              event_type: mobile_app_notification_action
-              event_data:
-                action: "{{ actie_ja }}"
-              id: ja
-            - trigger: event
-              event_type: mobile_app_notification_action
-              event_data:
-                action: "{{ actie_nee }}"
-              id: nee
-            # Zelfde opzet als het `virtual_button`-event: één generiek event
-            # met hetzelfde trigger-id, zodat de afhandeling hieronder niet
-            # hoeft te weten of het antwoord van de telefoon of uit de keuken
-            # kwam. Zie packages/0 - Ground Floor/Kitchen/Voice.yaml.
-            - trigger: event
-              event_type: spraak_antwoord
-              event_data:
-                vraag: zonnescherm
-                antwoord: ja
-              id: ja
-            - trigger: event
-              event_type: spraak_antwoord
-              event_data:
-                vraag: zonnescherm
-                antwoord: nee
-              id: nee
-          timeout:
-            minutes: 30
-          continue_on_timeout: false
+        # Het antwoord wordt NIET hier afgewacht maar in een eigen
+        # automatisering hieronder (`klimaat_zonnescherm_antwoord`). Tot
+        # 2026-08-06 stond hier een `wait_for_trigger` van dertig minuten, en
+        # zo'n wachtende run overleeft geen enkele reload van de
+        # automatiseringen. Bewerkte je in dat halfuur één YAML-bestand, dan
+        # was de run weg terwijl de vraag op je telefoon en de
+        # antwoordtimer van de satelliet gewoon bleven staan: je kon nog "ja"
+        # zeggen, de satelliet antwoordde keurig "Doe ik, het zonnescherm gaat
+        # eruit", en er bewoog niets.
+
+    ###########################################################################
+    ## Het antwoord op die vraag afhandelen
+    ###########################################################################
+    # Los van de vraag zelf, zodat er niets hoeft te blijven wachten. Beide
+    # kanalen komen hier binnen: de knop op de telefoon en het
+    # `spraak_antwoord`-event uit packages/0 - Ground Floor/Kitchen/Voice.yaml.
+    #
+    # De telefoonknoppen heten `ZONNESCHERM_JA_<context.id>`, dus er valt niet
+    # op een vaste waarde te filteren; het event komt hier binnen zonder filter
+    # en de conditie hieronder kijkt naar het begin van de naam.
+    - id: klimaat_zonnescherm_antwoord
+      alias: Klimaat - Zonnescherm antwoord
+      description: >-
+        Voert uit wat je antwoordt op de zonnescherm-vraag: ja schuift hem uit,
+        nee laat hem een paar uur met rust.
+      mode: single
+      triggers:
+        - trigger: event
+          event_type: mobile_app_notification_action
+        - trigger: event
+          event_type: spraak_antwoord
+          event_data:
+            vraag: zonnescherm
+      conditions:
+        - alias: Hoort bij de zonneschermvraag, en die is nog geen half uur oud
+          condition: template
+          value_template: >-
+            {% set actie = trigger.event.data.action | default('', true) %}
+            {% set hoort_erbij = trigger.event.event_type == 'spraak_antwoord'
+                 or actie.startswith('ZONNESCHERM_JA_')
+                 or actie.startswith('ZONNESCHERM_NEE_') %}
+            {% set gevraagd = state_attr('automation.klimaat_zonnescherm_vragen',
+                                         'last_triggered') %}
+            {{ hoort_erbij and gevraagd is not none
+               and (now() - gevraagd) < timedelta(minutes=30) }}
+      actions:
+        - variables:
+            ja: >-
+              {{ trigger.event.data.get('antwoord') == 'ja'
+                 or (trigger.event.data.action | default('', true)).startswith('ZONNESCHERM_JA_') }}
         # Beantwoord op de telefoon? Dan hoeft de satelliet er niet meer op te
-        # wachten. Andersom heeft het antwoord-intent de vraag zelf al gesloten
-        # en doet deze aanroep niets.
+        # wachten. Kwam het antwoord uit de keuken, dan heeft het intent de
+        # vraag zelf al gesloten en doet deze aanroep niets.
         - action: script.spraak_vraag_sluiten
-        - choose:
-            - conditions:
-                - condition: template
-                  value_template: "{{ wait.trigger.id == 'ja' }}"
-              sequence:
-                # Omgekeerd bedraad: open_cover = uitschuiven. Deze cover kent
-                # geen tussenstand, dus positie is hier altijd 100.
-                - action: cover.open_cover
-                  target:
-                    entity_id: cover.achtertuin_zonnescherm
-                  continue_on_error: true
-            - conditions:
-                - condition: template
-                  value_template: "{{ wait.trigger.id == 'nee' }}"
-              sequence:
-                # Zelfde behandeling als een handmatige bediening: een paar uur
-                # niets meer over dit scherm.
-                - action: timer.start
-                  target:
-                    entity_id: timer.override_zonnescherm
-                  data:
-                    duration: >-
-                      {{ (states('input_number.klimaat_override_uren') | float(4) * 3600) | int }}
+        - if:
+            - condition: template
+              value_template: "{{ ja }}"
+          then:
+            # Omgekeerd bedraad: open_cover = uitschuiven. Deze cover kent
+            # geen tussenstand, dus positie is hier altijd 100.
+            - action: cover.open_cover
+              target:
+                entity_id: cover.achtertuin_zonnescherm
+              continue_on_error: true
+          else:
+            # Zelfde behandeling als een handmatige bediening: een paar uur
+            # niets meer over dit scherm.
+            - action: timer.start
+              target:
+                entity_id: timer.override_zonnescherm
+              data:
+                duration: >-
+                  {{ (states('input_number.klimaat_override_uren') | float(4) * 3600) | int }}

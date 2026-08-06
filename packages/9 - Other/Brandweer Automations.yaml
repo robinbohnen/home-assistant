@@ -1160,11 +1160,23 @@ brandweer_package:
           event: brandweer_bezetting
           event_data:
             payload: "{{ trigger.json }}"
-        - action: input_select.select_option
-          target:
-            entity_id: input_select.brandweer_bezetting_status
-          data:
-            option: "{{ status }}"
+        # Alleen zetten als het een bestaande optie is. De webhook staat op
+        # `local_only: false`, dus hier komt ook binnen wat een ander verstuurt,
+        # en een onbekende status liet `select_option` falen - waarmee de hele
+        # queued run stopte vóór de ploegsynchronisatie en de melding. Dezelfde
+        # guard als bij de ploeg hieronder.
+        - alias: Status doorgeven, mits het een bekende optie is
+          if:
+            - condition: template
+              value_template: >-
+                {{ status in (state_attr('input_select.brandweer_bezetting_status',
+                                         'options') | default([], true)) }}
+          then:
+            - action: input_select.select_option
+              target:
+                entity_id: input_select.brandweer_bezetting_status
+              data:
+                option: "{{ status }}"
         # PreCom weet zeker welke ploeg dienst heeft; de maandagwissel hierboven
         # is maar een aanname die na een storing of een geruilde week scheef
         # staat. Bij verschil wint PreCom. Alleen zetten als het echt een

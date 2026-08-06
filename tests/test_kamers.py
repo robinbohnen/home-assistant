@@ -390,10 +390,18 @@ check("open deur wordt geteld", "keuken", "contacten.open", 1)
 check("en met naam", "keuken", "contacten.namen", ["Achterdeur"])
 
 # ---------------------------------------------------------------------------
-print()
-if FOUTEN:
-    print(f"{len(FOUTEN)} FOUT(EN):")
-    for f in FOUTEN:
-        print("  -", f)
-    raise SystemExit(1)
-print("Alle scenario's kloppen.")
+# Als pytest dit bestand importeert draait alles hierboven al; deze functie
+# geeft pytest alleen iets om te verzamelen. Zonder haar meldde `pytest
+# tests/` "no tests ran" met exitcode 5, wat makkelijk voor groen doorgaat.
+def test_scenarios():
+    assert not FOUTEN, "\n".join(FOUTEN)
+
+
+if __name__ == "__main__":
+    print()
+    if FOUTEN:
+        print(f"{len(FOUTEN)} FOUT(EN):")
+        for f in FOUTEN:
+            print("  -", f)
+        raise SystemExit(1)
+    print("Alle scenario's kloppen.")

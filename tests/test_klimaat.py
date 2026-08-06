@@ -1027,10 +1027,18 @@ if zonder_cover:
 else:
     print(f"PASS  {'elke cover staat bij Werkelijke stand':52}")
 
-print()
-if FOUTEN:
-    print(f"{len(FOUTEN)} FOUT(EN):")
-    for f in FOUTEN:
-        print("  -", f)
-    raise SystemExit(1)
-print("Alle scenario's zoals bedoeld.")
+# Als pytest dit bestand importeert draait alles hierboven al; deze functie
+# geeft pytest alleen iets om te verzamelen. Zonder haar meldde `pytest
+# tests/` "no tests ran" met exitcode 5, wat makkelijk voor groen doorgaat.
+def test_scenarios():
+    assert not FOUTEN, "\n".join(FOUTEN)
+
+
+if __name__ == "__main__":
+    print()
+    if FOUTEN:
+        print(f"{len(FOUTEN)} FOUT(EN):")
+        for f in FOUTEN:
+            print("  -", f)
+        raise SystemExit(1)
+    print("Alle scenario's zoals bedoeld.")

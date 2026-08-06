@@ -62,36 +62,14 @@ livingroom_aquarium_package:
                 entity_id:
                   - switch.aquarium_stopcontact_co2
 
-    - id: livingroom_aquarium_feed
-      alias: Livingroom - Aquarium On after Feeding
-      description: "Turn on aquarium 15 minutes after feeding"
-      mode: single
-      triggers:
-        - trigger: state
-          entity_id:
-            - switch.aquarium_stopcontact_pomp_skimmer
-          to: "off"
-          for:
-            hours: 0
-            minutes: 15
-            seconds: 0
-      conditions: []
-      actions:
-        - action: switch.turn_on
-          metadata: {}
-          data: {}
-          target:
-            device_id: a7a7a0b3f429d2ca4ecbe76539f2bb06
-        - delay:
-            hours: 0
-            minutes: 5
-            seconds: 0
-            milliseconds: 0
-        - action: switch.turn_on
-          metadata: {}
-          data: {}
-          target:
-            device_id: 7164e62fd79d4bcb899cc522b71b881f
+    # Hier stond livingroom_aquarium_feed ("aquarium weer aan 15 minuten na het
+    # voeren"). Verwijderd op 2026-08-06: de trigger hing aan de stekker
+    # "Aquarium Stopcontact Pomp & Skimmer", en die is uit Zigbee2MQTT verdwenen
+    # - het apparaat staat nog in de registratie maar heeft geen entiteiten
+    # meer. De automatisering kon dus nooit meer afgaan. Erger was waar hij
+    # naartoe schakelde: het tweede device_id blijkt "Garage Stopcontact
+    # Wasmachine en Droger" te zijn, dus hád hij gevuurd, dan had hij de
+    # wasmachine aangezet.
 
     - id: livingroom_aquarium_buttons
       alias: Livingroom - Aquarium Toggle Pumps
@@ -111,8 +89,11 @@ livingroom_aquarium_package:
             action: on_press
       conditions: []
       actions:
+        # Stond op switch.aquarium_stopcontact_pomp_skimmer; die stekker bestaat
+        # niet meer, dus deze knop deed niets. Dit is het enige aquarium-
+        # stopcontact dat er nog is naast de CO2-stekker.
         - action: switch.toggle
           metadata: {}
           data: {}
           target:
-            entity_id: switch.aquarium_stopcontact_pomp_skimmer
+            entity_id: switch.aquarium_stopcontact_alles
