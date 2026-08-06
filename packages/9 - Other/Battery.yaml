@@ -54,14 +54,22 @@ battery_package:
           entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
           below: input_number.batterij_min_soc
           id: soc_leeg
-        # Op het TOTAALtarief, niet op binary_sensor ..._negatieve_prijs_nu:
-        # die kijkt naar de kale marktprijs, terwijl teruglevering het hele
-        # tarief oplevert (markt + inkoop + energiebelasting + btw). Bij een
-        # licht negatieve marktprijs krijgen we nog gewoon geld terug; pas
-        # onder nul totaal kost ontladen ons geld.
-        - trigger: numeric_state
-          entity_id: sensor.slimhuys_zonneplan_huidige_prijs
-          below: 0
+        # Let op de sensornaam: ..._negatieve_ALL_IN_prijs_nu, niet
+        # ..._negatieve_prijs_nu. Die laatste kijkt naar de kale marktprijs,
+        # terwijl teruglevering het hele tarief oplevert (markt + inkoop +
+        # energiebelasting + btw). Bij een licht negatieve marktprijs krijgen we
+        # nog gewoon geld terug; pas onder nul totaal kost ontladen ons geld.
+        # SlimHuys rekent dat sinds 2026-08-06 zelf uit, dus die vergelijking
+        # staat hier niet meer met de hand.
+        - trigger: state
+          entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu
+          to: "on"
+          # Na een herstart komt een binary sensor via `unknown`
+          # binnen; zonder deze guard telt dat als een echte
+          # prijswissel en gaat de tak eronder onnodig lopen.
+          not_from:
+            - unknown
+            - unavailable
           id: prijs_negatief
         - trigger: state
           entity_id: sensor.slimhuys_zonneplan_tariefniveau_nu
@@ -150,11 +158,11 @@ battery_package:
                 # Bij een negatief totaaltarief kost teruglevering geld. "Hoog
                 # tarief" en "negatieve prijs" kunnen tegelijk voorkomen doordat
                 # het niveau over de dag wordt bepaald en de prijs per kwartier.
-                # Valt de prijssensor weg, dan ontladen we niet - net als eerder
-                # met de binary sensor.
-                - condition: numeric_state
-                  entity_id: sensor.slimhuys_zonneplan_huidige_prijs
-                  above: 0
+                # Staat de sensor op `unavailable`, dan is dit niet 'off' en
+                # ontladen we dus niet - dezelfde veilige kant als voorheen.
+                - condition: state
+                  entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu
+                  state: "off"
               sequence:
                 - action: select.select_option
                   metadata: {}

@@ -248,20 +248,35 @@ backyard_spa_package:
             seconds: 0
           above: 0
           id: no_overcapacity
-        # Op het TOTAALtarief, niet op binary_sensor ..._negatieve_prijs_nu:
-        # die kijkt naar de kale marktprijs, terwijl we bij verbruik het hele
-        # tarief betalen (markt + inkoop + energiebelasting + btw). Bij een
-        # licht negatieve marktprijs kost opwarmen dus nog gewoon geld. Pas
-        # onder een negatief totaaltarief krijgen we betaald om te stoken.
-        # `huidige_prijs` volgt de kwartieren, dus losse kwartieren blijven
-        # meetellen - daar was de binary sensor eerder voor gekozen.
-        - trigger: numeric_state
-          entity_id: sensor.slimhuys_zonneplan_huidige_prijs
-          below: 0
+        # Let op de sensornaam: ..._negatieve_ALL_IN_prijs_nu, niet
+        # ..._negatieve_prijs_nu. Die laatste kijkt naar de kale marktprijs,
+        # terwijl we bij verbruik het hele tarief betalen (markt + inkoop +
+        # energiebelasting + btw). Bij een licht negatieve marktprijs kost
+        # opwarmen dus nog gewoon geld; pas onder een negatief totaaltarief
+        # krijgen we betaald om te stoken.
+        #
+        # Die som stond hier eerst met de hand uitgeschreven; sinds 2026-08-06
+        # levert SlimHuys hem kant-en-klaar. Scheelt ook het randgeval waarin
+        # het tarief precies 0,00 is en tussen `below` en `above` door viel.
+        - trigger: state
+          entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu
+          to: "on"
+          # Na een herstart komt een binary sensor via `unknown`
+          # binnen; zonder deze guard telt dat als een echte
+          # prijswissel en gaat de tak eronder onnodig lopen.
+          not_from:
+            - unknown
+            - unavailable
           id: negative_price
-        - trigger: numeric_state
-          entity_id: sensor.slimhuys_zonneplan_huidige_prijs
-          above: 0
+        - trigger: state
+          entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu
+          to: "off"
+          # Na een herstart komt een binary sensor via `unknown`
+          # binnen; zonder deze guard telt dat als een echte
+          # prijswissel en gaat de tak eronder onnodig lopen.
+          not_from:
+            - unknown
+            - unavailable
           id: positive_price
       conditions:
         - condition: not

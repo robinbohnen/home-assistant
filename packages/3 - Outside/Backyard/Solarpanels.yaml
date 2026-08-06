@@ -104,22 +104,38 @@ backyard_solarpanels_package:
       description: "Solarpanels off when the all-in power price is negative"
       mode: single
       triggers:
-        # NIET op binary_sensor ..._negatieve_prijs_nu: die kijkt naar de kale
-        # marktprijs.
-        # Bij teruglevering krijgen we het TOTAALtarief (markt + inkoop +
-        # energiebelasting + btw), en dat staat bij een licht negatieve
-        # marktprijs nog gewoon positief - de panelen gingen dan uit terwijl
-        # teruglevering nog geld opleverde. Uitzetten mag pas als het
-        # totaaltarief zelf onder nul zakt.
-        # `huidige_prijs` volgt hetzelfde kwartierritme als de binary sensor,
-        # dus we missen geen losse kwartieren.
-        - trigger: numeric_state
-          entity_id: sensor.slimhuys_zonneplan_huidige_prijs
-          below: 0
+        # Let op de sensornaam: ..._negatieve_ALL_IN_prijs_nu, niet
+        # ..._negatieve_prijs_nu. Die laatste kijkt naar de kale marktprijs, en
+        # bij teruglevering krijgen we het TOTAALtarief (markt + inkoop +
+        # energiebelasting + btw). Bij een licht negatieve marktprijs levert
+        # teruglevering dus nog gewoon geld op en horen de panelen aan te
+        # blijven; uitzetten mag pas als het totaaltarief zelf onder nul zakt.
+        #
+        # Hier stond die som met de hand (numeric_state op huidige_prijs onder
+        # nul). Sinds 2026-08-06 rekent SlimHuys hem zelf uit en draagt de
+        # sensor `epex_now`, `total_now` en `threshold` als attributen mee, dus
+        # er valt hier niets meer zelf te bedenken. Bijvangst: een tarief van
+        # precies 0,00 viel tussen `below: 0` en `above: 0` door en liet de
+        # panelen in hun laatste stand hangen.
+        - trigger: state
+          entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu
+          to: "on"
+          # Na een herstart komt een binary sensor via `unknown`
+          # binnen; zonder deze guard telt dat als een echte
+          # prijswissel en gaat de tak eronder onnodig lopen.
+          not_from:
+            - unknown
+            - unavailable
           id: solar_panels_off
-        - trigger: numeric_state
-          entity_id: sensor.slimhuys_zonneplan_huidige_prijs
-          above: 0
+        - trigger: state
+          entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu
+          to: "off"
+          # Na een herstart komt een binary sensor via `unknown`
+          # binnen; zonder deze guard telt dat als een echte
+          # prijswissel en gaat de tak eronder onnodig lopen.
+          not_from:
+            - unknown
+            - unavailable
           id: solar_panels_on
       conditions: []
       actions:

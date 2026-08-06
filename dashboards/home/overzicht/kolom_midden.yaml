@@ -644,6 +644,14 @@ cards:
                   var d = new Date(String(s.state).replace(' ', 'T'));
                   return isNaN(d.getTime()) ? {tekst: s.state} : {d: d};
                 };
+                // Zelfde als `lees`, maar voor een tijdstip dat als attribuut
+                // binnenkomt in plaats van als state (next_negative_start).
+                var leesWaarde = function(v){
+                  if(v === null || v === undefined) return null;
+                  if(['geen','none','unknown','unavailable',''].indexOf(String(v).toLowerCase()) >= 0) return null;
+                  var d = new Date(String(v).replace(' ', 'T'));
+                  return isNaN(d.getTime()) ? {tekst: String(v)} : {d: d};
+                };
                 var wanneer = function(x){
                   if(!x) return '';
                   if(!x.d) return x.tekst;
@@ -657,27 +665,33 @@ cards:
                   var pTxt = p && !isNaN(Number(p.state)) ? ` <span style="color:#4ade80">€ ${Number(p.state).toFixed(3).replace('.',',')}</span>` : '';
                   delen.push(`<span>${ico('mdi:clock-check-outline')} goedkoopste blok <span style="color:white">${wanneer(blok)}</span>${pTxt}</span>`);
                 }
-                // De binary sensor van SlimHuys kijkt naar de KALE marktprijs.
-                // Bij verbruik betaal je het totaaltarief: markt + inkoop +
-                // energiebelasting + btw. Op 6 augustus 2026 stond EPEX
-                // negatief terwijl het totaaltarief 0,1277 was - "prijs is nu
-                // negatief" was daar gewoon onwaar, en het leek net alsof de
-                // jacuzzi daarop was aangesprongen (dat was zonne-overschot).
-                // Spa.yaml, Battery.yaml en Solarpanels.yaml maken dit
-                // onderscheid al met zoveel woorden; dit is de laatste plek die
-                // nog op de kale prijs keek.
+                // TWEE SENSOREN DIE BIJNA HETZELFDE HETEN
+                //   ..._negatieve_all_in_prijs_nu  -> markt + inkoop +
+                //      energiebelasting + btw. Dít is wat je betaalt, en alleen
+                //      hierbij word je betaald om stroom te gebruiken.
+                //   ..._negatieve_prijs_nu         -> de kale marktprijs.
+                // Op 6 augustus 2026 stond de tweede op `on` terwijl het
+                // totaaltarief 0,1277 was; de kop zei toen "prijs is nu
+                // negatief" en dat was gewoon onwaar. Sindsdien levert SlimHuys
+                // de all-in variant, dus er valt hier niets meer zelf uit te
+                // rekenen - `total_now` staat als attribuut op de sensor.
+                var allinNu = states['binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu'];
                 var epexNu = states['binary_sensor.meterkast_slimhuys_zonneplan_negatieve_prijs_nu'];
-                var allin = states['sensor.slimhuys_zonneplan_huidige_prijs'];
-                var allinNum = allin && !isNaN(Number(allin.state)) ? Number(allin.state) : null;
+                var euro = function(v){ return (v === null || v === undefined || isNaN(Number(v)))
+                  ? null : '€ ' + Number(v).toFixed(3).replace('.', ','); };
+                var straksAllin = leesWaarde((allinNu && allinNu.attributes) ? allinNu.attributes.next_negative_start : null);
                 var straks = lees('sensor.slimhuys_zonneplan_volgende_negatieve_prijs');
-                if(allinNum !== null && allinNum < 0) {
+                if(allinNu && allinNu.state === 'on') {
                   delen.push(`<span style="color:#4ade80">${ico('mdi:flash', 'color:#4ade80')} prijs is nu negatief</span>`);
+                } else if(straksAllin) {
+                  // Het moment waarop je wél betaald krijgt; dat weegt zwaarder
+                  // dan een marktprijs die nu toevallig onder nul staat.
+                  delen.push(`<span style="color:#4ade80">${ico('mdi:flash-outline', 'color:#4ade80')} negatief vanaf <span style="color:white">${wanneer(straksAllin)}</span></span>`);
                 } else if(epexNu && epexNu.state === 'on') {
-                  // Wel het goedkoopste moment van de dag, maar je krijgt er
-                  // niet voor betaald - dus geen groen en geen "negatief".
-                  var nogTxt = allinNum !== null
-                    ? ` · je betaalt nog <span style="color:white">€ ${allinNum.toFixed(3).replace('.', ',')}</span>` : '';
-                  delen.push(`<span>${ico('mdi:flash-outline')} marktprijs negatief${nogTxt}</span>`);
+                  // Goedkoopste moment van de dag, maar je betaalt nog steeds -
+                  // dus geen groen en niet "negatief" zonder meer.
+                  var nog = euro(epexNu.attributes ? epexNu.attributes.total_now : null);
+                  delen.push(`<span>${ico('mdi:flash-outline')} marktprijs negatief${nog ? ` · je betaalt nog <span style="color:white">${nog}</span>` : ''}</span>`);
                 } else if(straks) {
                   delen.push(`<span>${ico('mdi:flash-outline')} marktprijs negatief vanaf <span style="color:white">${wanneer(straks)}</span></span>`);
                 }
