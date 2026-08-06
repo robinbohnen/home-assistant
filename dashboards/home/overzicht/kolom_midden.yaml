@@ -199,10 +199,27 @@ cards:
               opacity: 0.22
               float_precision: 2
               # Deze sensor staat in W, verbruik in kW; hier gelijktrekken.
-              # Het history-item heeft niet altijd attributen, dus via hass.states.
+              #
+              # WAAROM DIT ZO OMSLACHTIG STAAT
+              # Hier stond `unit === 'W' ? x / 1000 : x`. Dat gaat mis zodra een
+              # punt geen getal is: op 2026-08-06 stond deze sensor drie keer
+              # even op `unavailable` (de omvormers vielen weg tijdens de
+              # Zigbee-storing), en één zo'n punt kwam ongedeeld in de grafiek.
+              # Gevolg: de y-as sprong naar 3000 en de echte curve van 4-6 kW lag
+              # plat tegen de bodem - de grafiek leek stuk terwijl de data klopte.
+              #
+              # Twee dingen daartegen: niet-numerieke punten worden `null` (die
+              # tekent apexcharts gewoon niet), en de deling gebeurt TENZIJ de
+              # eenheid expliciet kW is. Ontbreekt het attribuut - historische
+              # punten dragen het niet altijd mee - dan delen we dus, en dat is
+              # hier de goede gok: dit is een min_max van twee omvormers die
+              # allebei in W meten.
               transform: >-
-                return hass.states['sensor.solar_power_generated_now']
-                  .attributes.unit_of_measurement === 'W' ? x / 1000 : x;
+                var s = hass.states['sensor.solar_power_generated_now'];
+                var u = (s && s.attributes) ? s.attributes.unit_of_measurement : null;
+                var v = Number(x);
+                return (x === null || x === undefined || isNaN(v))
+                  ? null : (u === 'kW' ? v : v / 1000);
               group_by:
                 duration: 2m
                 func: avg
@@ -214,9 +231,16 @@ cards:
               stroke_width: 2
               opacity: 1
               float_precision: 2
+              # Spiegelbeeld van de productielijn hierboven, met één verschil:
+              # deze meter staat in kW, dus hier delen we alleen als de eenheid
+              # expliciet W is. Ook hier worden niet-numerieke punten `null`,
+              # zodat een weggevallen meter de as niet meer kan opblazen.
               transform: >-
-                return hass.states['sensor.electricity_meter_energieverbruik']
-                  .attributes.unit_of_measurement === 'W' ? x / 1000 : x;
+                var s = hass.states['sensor.electricity_meter_energieverbruik'];
+                var u = (s && s.attributes) ? s.attributes.unit_of_measurement : null;
+                var v = Number(x);
+                return (x === null || x === undefined || isNaN(v))
+                  ? null : (u === 'W' ? v / 1000 : v);
               group_by:
                 duration: 2m
                 func: avg
