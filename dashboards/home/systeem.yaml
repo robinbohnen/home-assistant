@@ -318,6 +318,12 @@ cards:
                   var n = Object.keys(states).filter(function(id){
                     var s = states[id];
                     if(!s || !s.attributes || s.attributes.device_class !== 'battery') return false;
+                    // Alleen sensoren MÉTEN een batterij. Een number of select met
+                    // device_class battery is een instelling: de Megane heeft
+                    // `minimum_charge_level` op 20 en `target_charge_level` op 100
+                    // staan, en die eerste kwam hier binnen als "bijna lege
+                    // batterij" terwijl de auto gewoon op 99% stond.
+                    if(id.lastIndexOf('sensor.', 0) !== 0 && id.lastIndexOf('binary_sensor.', 0) !== 0) return false;
                     var e = reg ? reg[id] : null;
                     if(e && (e.hidden || e.hidden_by)) return false;
                     if(negeerInt.indexOf((e && e.platform) ? e.platform : '') !== -1) return false;
@@ -346,6 +352,9 @@ cards:
                   Object.keys(states).forEach(function(id){
                     var s = states[id];
                     if(!s || !s.attributes || s.attributes.device_class !== 'battery') return;
+                    // Zelfde reden als bij de teller hierboven: instellingen zijn
+                    // geen metingen.
+                    if(id.lastIndexOf('sensor.', 0) !== 0 && id.lastIndexOf('binary_sensor.', 0) !== 0) return;
                     if(negeerNaam && negeerNaam.test(s.attributes.friendly_name || id)) return;
                     var niveau = null, binair = false;
                     if(id.lastIndexOf('binary_sensor.', 0) === 0){
