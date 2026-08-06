@@ -120,6 +120,15 @@ kitchen_clock_display_package:
             - tue
             - thu
             - wed
+        # Zonder deze check scrolde er "unknown min naar werk" over de klok. Dat
+        # is geen theorie: op 2026-08-06 stonden alle zes reistijdsensoren op
+        # `unknown` omdat de Routes API voor de Google-sleutel uit staat, en dan
+        # zet de klok zichzelf ook nog eens een minuut aan voor niets. Liever
+        # niets tonen dan onzin.
+        - alias: Er is een echte reistijd bekend
+          condition: template
+          value_template: >-
+            {{ states('sensor.robin_reistijd_naar_werk') | float(-1) >= 0 }}
       actions:
         - data:
             qos: 0

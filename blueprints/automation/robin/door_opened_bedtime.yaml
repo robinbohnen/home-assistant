@@ -112,6 +112,23 @@ blueprint:
         seconds: 20
       selector:
         duration:
+    bezet_timer:
+      name: Slot op de lampen
+      description: >-
+        Eén timer die door ALLE kamers met deze blueprint gedeeld wordt.
+        `mode: single` beschermt maar één automatisering tegen zichzelf; gaan de
+        deuren van twee kinderen binnen de ademduur open, dan maakt de tweede
+        een momentopname van de al ademende lampen en zet die naderhand terug -
+        waarna ze blauw (of roze) blijven staan tot iemand het opmerkt. Zolang
+        deze timer loopt houdt de tweede kamer daarom van de lampen af; hij
+        stuurt dan wél gewoon een bericht, want zichtbaar maken lukt niet.
+        Een timer en geen input_boolean: gaat een run onderweg stuk - een reload
+        is al genoeg - dan loopt een timer vanzelf af en zit het slot niet voor
+        altijd vast.
+      selector:
+        entity:
+          filter:
+            domain: timer
 
 # single, want de momentopname en het terugzetten horen bij elkaar. Bij restart
 # zou een tweede deur die opengaat het terugzetten overslaan en blijft het huis
@@ -124,6 +141,7 @@ variables:
   scene_id: !input scene_id
   attentie_lampen: !input attentie_lampen
   mediaspeler: !input mediaspeler
+  bezet_timer: !input bezet_timer
 
 triggers:
   - trigger: state
@@ -138,57 +156,89 @@ conditions:
     before: !input tot
 
 actions:
-  - alias: "Momentopname van hoe het beneden stond"
-    action: scene.create
-    data:
-      scene_id: !input scene_id
-      snapshot_entities: !input attentie_lampen
+  - variables:
+      # Doet een andere kinderkamer op dit moment het lampenspel? Dan blijven
+      # we er helemaal vanaf: een momentopname maken van al ademende lampen en
+      # die naderhand terugzetten laat ze juist ademend achter.
+      lampen_vrij: "{{ is_state(bezet_timer, 'idle') }}"
 
   # expand() slaat entiteiten over die niet bestaan, dus alles wat niet
   # aantoonbaar aan staat (uit, unavailable, typefout) telt hier als "niet te
   # zien" en levert een melding op.
+  #
+  # Is het slot bezet, dan gaat het bericht er sowieso uit. De lampen ademen dan
+  # namelijk in de kleur van het ándere kind, en dan wijst de verlichting je de
+  # verkeerde kant op - een bericht is dan het enige dat klopt.
   - alias: "Niets te zien? Dan maar een pushbericht"
     if:
       - condition: template
         value_template: >-
-          {{ expand(attentie_lampen) | selectattr('state', 'eq', 'on')
-             | list | count == 0 }}
+          {{ not lampen_vrij
+             or expand(attentie_lampen) | selectattr('state', 'eq', 'on')
+                | list | count == 0 }}
     then:
       - action: notify.mobile_devices_adults
         data:
           title: !input melding_titel
           message: !input melding_tekst
 
-  # Alleen lampen die al aan staan gaan ademen: een lamp die uit is aanzetten
-  # zou 's nachts het halve huis verlichten in plaats van een seintje geven.
-  - alias: "Lampen die aan staan laten ademen"
-    repeat:
-      for_each: !input attentie_lampen
-      sequence:
-        - if:
-            - condition: template
-              value_template: "{{ is_state(repeat.item, 'on') }}"
-          then:
-            - action: light.turn_on
-              target:
-                entity_id: "{{ repeat.item }}"
-              data:
-                rgb_color: !input kleur
-                effect: breathe
-
-  - alias: "Film op pauze"
+  - alias: "Het lampenspel, als geen andere kamer bezig is"
     if:
       - condition: template
-        value_template: >-
-          {{ mediaspeler not in ['', none] and is_state(mediaspeler, 'playing') }}
+        value_template: "{{ lampen_vrij }}"
     then:
-      - action: media_player.media_play_pause
+      # Slot eerst, dan pas de momentopname: andersom zou de andere kamer er
+      # precies tussen kunnen glippen. De looptijd is ruimer dan de ademduur,
+      # zodat hij ook bij een vastgelopen run vanzelf weer vrijgeeft.
+      - action: timer.start
         target:
-          entity_id: "{{ mediaspeler }}"
+          entity_id: "{{ bezet_timer }}"
 
-  - delay: !input ademduur
+      - alias: "Momentopname van hoe het beneden stond"
+        action: scene.create
+        data:
+          scene_id: !input scene_id
+          snapshot_entities: !input attentie_lampen
 
-  - alias: "Alles terug zoals het stond"
-    action: scene.turn_on
-    target:
-      entity_id: "scene.{{ scene_id }}"
+      # Alleen lampen die al aan staan gaan ademen: een lamp die uit is
+      # aanzetten zou 's nachts het halve huis verlichten in plaats van een
+      # seintje geven.
+      - alias: "Lampen die aan staan laten ademen"
+        repeat:
+          for_each: !input attentie_lampen
+          sequence:
+            - if:
+                - condition: template
+                  value_template: "{{ is_state(repeat.item, 'on') }}"
+              then:
+                - action: light.turn_on
+                  target:
+                    entity_id: "{{ repeat.item }}"
+                  data:
+                    rgb_color: !input kleur
+                    effect: breathe
+
+      # media_play_pause is een schakelaar, geen pauzeknop: had de andere kamer
+      # de film al stilgezet, dan zou dit hem weer laten lopen. De conditie op
+      # `playing` vangt dat af.
+      - alias: "Film op pauze"
+        if:
+          - condition: template
+            value_template: >-
+              {{ mediaspeler not in ['', none] and is_state(mediaspeler, 'playing') }}
+        then:
+          - action: media_player.media_play_pause
+            target:
+              entity_id: "{{ mediaspeler }}"
+
+      - delay: !input ademduur
+
+      - alias: "Alles terug zoals het stond"
+        action: scene.turn_on
+        target:
+          entity_id: "scene.{{ scene_id }}"
+
+      # Slot meteen vrijgeven; de looptijd van de timer is alleen het vangnet.
+      - action: timer.cancel
+        target:
+          entity_id: "{{ bezet_timer }}"

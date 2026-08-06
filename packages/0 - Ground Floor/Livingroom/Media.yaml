@@ -8,6 +8,15 @@ livingroom_media_package:
       icon: mdi:lightbulb-on-70
 
   input_boolean:
+    # "Het Sonos-volume is deze kijksessie al een keer teruggezet." Zonder deze
+    # vlag zou elke keer dat de Apple TV op `playing` springt - ook na een korte
+    # pauze of het overslaan van een aflevering - het volume weer naar 0,17
+    # gezet worden, dwars door een handmatige aanpassing heen.
+    #
+    # Tot 2026-08-06 ging hij alleen aan en nooit meer uit. Gevolg: de tv heeft
+    # het volume precies één keer verlaagd en daarna nooit meer. Hij wordt nu
+    # weer vrijgegeven zodra de sessie echt afgelopen is, zie
+    # `livingroom_tv_volume_reset` hieronder.
     changed_tv_volume:
       name: "TV Volume changed"
       icon: mdi:remote-tv
@@ -133,3 +142,56 @@ livingroom_media_package:
           data: {}
           target:
             entity_id: group.all_sonos_secondary
+
+    ###########################################################################
+    ## De volumevlag weer vrijgeven
+    ###########################################################################
+    # `livingroom_media_playing` verlaagt het Sonos-volume alleen als deze vlag
+    # uit staat, zodat een handmatige correctie tijdens het kijken niet elke
+    # keer overreden wordt. Alleen: niets zette hem ooit terug, dus na de
+    # allereerste keer gebeurde het nooit meer.
+    #
+    # Niet op `paused` of `idle` resetten: een plaspauze of het overslaan van
+    # een aflevering hoort geen nieuwe sessie te zijn - dan zou het volume bij
+    # het hervatten alsnog over je aanpassing heen gaan. Pas als de Apple TV of
+    # de televisie echt uit is, is de sessie voorbij.
+    #
+    # De tik van 04:00 is het vangnet: valt de Apple TV weg zonder ooit netjes
+    # `off` te melden (unavailable na een netwerkstoring bijvoorbeeld), dan zou
+    # de vlag blijven hangen en waren we terug bij het oude gedrag. Vier uur 's
+    # nachts ligt na het laatste realistische kijkmoment en ruim voor het
+    # eerste, dus hij valt nooit midden in een sessie.
+    - id: livingroom_tv_volume_reset
+      alias: Livingroom - TV volumevlag vrijgeven
+      description: >-
+        Geeft input_boolean.changed_tv_volume weer vrij zodra de kijksessie
+        voorbij is, zodat de volgende keer het Sonos-volume weer automatisch
+        zacht gaat.
+      mode: single
+      triggers:
+        # not_from voorkomt dat een herstart (unknown -> off) hier als "tv gaat
+        # uit" telt; dat is onschuldig, maar het houdt de trace leesbaar.
+        - trigger: state
+          entity_id: media_player.woonkamer_appletv
+          to:
+            - "off"
+            - standby
+          not_from:
+            - unknown
+            - unavailable
+        - trigger: state
+          entity_id: media_player.woonkamer_77_oled_3
+          to: "off"
+          not_from:
+            - unknown
+            - unavailable
+        - trigger: time
+          at: "04:00:00"
+      conditions:
+        - condition: state
+          entity_id: input_boolean.changed_tv_volume
+          state: "on"
+      actions:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.changed_tv_volume

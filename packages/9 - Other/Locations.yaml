@@ -34,11 +34,12 @@ general_locations_package:
                 - action: script.notify_critical
                   data:
                     doelgroep: notify.mobile_devices_robin
-                    titel: "{{ states['input_text.naam_partner'].state }} gaat weg bij Crole"
+                    titel: "{{ states('input_text.naam_partner') }} gaat weg bij Crole"
                     bericht: >-
-                      {{ states['input_text.naam_partner'].state }} gaat weg bij Crole en is over {{
-                      states['sensor.samantha_reistijd_naar_huis'].state }} minuten
-                      thuis.
+                      {% set m = states('sensor.samantha_reistijd_naar_huis') | float(-1) %}
+                      {{ states('input_text.naam_partner') }} gaat weg bij Crole en is
+                      {{ ('over ' ~ (m | round(0) | int) ~ ' minuten thuis.')
+                         if m >= 0 else 'onderweg naar huis.' }}
                     volume: 0.1
             - conditions:
                 - condition: trigger
@@ -48,11 +49,12 @@ general_locations_package:
                 - action: script.notify_critical
                   data:
                     doelgroep: notify.mobile_devices_robin
-                    titel: "{{ states['input_text.naam_partner'].state }} gaat weg bij de Efteling"
+                    titel: "{{ states('input_text.naam_partner') }} gaat weg bij de Efteling"
                     bericht: >-
-                      {{ states['input_text.naam_partner'].state }} gaat weg bij de Efteling en is over {{
-                      states['sensor.samantha_reistijd_naar_huis'].state }} minuten
-                      thuis.
+                      {% set m = states('sensor.samantha_reistijd_naar_huis') | float(-1) %}
+                      {{ states('input_text.naam_partner') }} gaat weg bij de Efteling en is
+                      {{ ('over ' ~ (m | round(0) | int) ~ ' minuten thuis.')
+                         if m >= 0 else 'onderweg naar huis.' }}
                     volume: 0.1
             - conditions:
                 - condition: trigger
@@ -66,7 +68,8 @@ general_locations_package:
                     doelgroep: notify.mobile_devices_partner
                     titel: Robin gaat weg op het werk
                     bericht: >-
-                      Robin gaat weg op het werk en is over {{
-                      states['sensor.robin_reistijd_naar_huis'].state }} minuten
-                      thuis.
+                      {% set m = states('sensor.robin_reistijd_naar_huis') | float(-1) %}
+                      Robin gaat weg op het werk en is
+                      {{ ('over ' ~ (m | round(0) | int) ~ ' minuten thuis.')
+                         if m >= 0 else 'onderweg naar huis.' }}
                     volume: 0.1
