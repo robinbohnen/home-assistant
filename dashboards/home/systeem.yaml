@@ -328,6 +328,12 @@ cards:
                     if(e && (e.hidden || e.hidden_by)) return false;
                     if(negeerInt.indexOf((e && e.platform) ? e.platform : '') !== -1) return false;
                     if(negeerNaam && negeerNaam.test(s.attributes.friendly_name || id)) return false;
+                    // Een batterijapparaat op `unavailable` telt mee: die kun je
+                    // niet met een schakelaar hebben uitgezet, dus stil betekent
+                    // lege batterij of stuk. De pil in de kopbalk noemt precies
+                    // dit aantal ("N apparaten stil") en linkt hierheen; stonden
+                    // ze hier niet, dan kwam je op een lege lijst uit.
+                    if(s.state === 'unavailable') return true;
                     if(id.lastIndexOf('binary_sensor.', 0) === 0) return s.state === 'on';
                     var v = Number(s.state);
                     return !isNaN(v) && v <= d;
@@ -335,7 +341,7 @@ cards:
                   var kleur = n === 0 ? '#4ade80' : (n > 5 ? '#ef4444' : '#f59e0b');
                   return `<span style="display:flex;align-items:baseline;gap:12px;width:100%">
                     <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:rgba(255,255,255,0.55)">BATTERIJEN</span>
-                    <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">onder ${d}%</span>
+                    <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">onder ${d}% of stil</span>
                     <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:rgba(255,255,255,0.06)">${n}</span></span>`;
                 ]]]
               lijst: |
@@ -356,8 +362,10 @@ cards:
                     // geen metingen.
                     if(id.lastIndexOf('sensor.', 0) !== 0 && id.lastIndexOf('binary_sensor.', 0) !== 0) return;
                     if(negeerNaam && negeerNaam.test(s.attributes.friendly_name || id)) return;
-                    var niveau = null, binair = false;
-                    if(id.lastIndexOf('binary_sensor.', 0) === 0){
+                    var niveau = null, binair = false, stil = false;
+                    if(s.state === 'unavailable'){
+                      stil = true;
+                    } else if(id.lastIndexOf('binary_sensor.', 0) === 0){
                       if(s.state !== 'on') return;
                       binair = true;
                     } else {
@@ -378,19 +386,21 @@ cards:
                       : ((s.attributes.friendly_name || id).replace(/ ?batter[iy][j]?[ -]?(level|niveau|low|laag)?/i, '').trim() || id);
                     if(!groepen[integratie]) groepen[integratie] = {};
                     var g = groepen[integratie];
-                    if(!g[sleutel]) g[sleutel] = {naam: naam, gebied: gebied, niveau: niveau, binair: binair, dev_id: devId, ent: id};
+                    if(!g[sleutel]) g[sleutel] = {naam: naam, gebied: gebied, niveau: niveau, binair: binair, stil: stil, dev_id: devId, ent: id};
                     else {
                       // percentage wint van een enkel 'laag'-signaal; anders de laagste
+                      if(stil) g[sleutel].stil = true;
                       if(niveau !== null && (g[sleutel].niveau === null || niveau < g[sleutel].niveau)) {
                         g[sleutel].niveau = niveau; g[sleutel].binair = false;
                       }
                     }
                   });
                   var namen = Object.keys(groepen);
-                  if(!namen.length) return `<span style="font-size:14px;color:#4ade80">Geen bijna lege batterijen.</span>`;
-                  var sleutelVan = function(x){ return x.niveau === null ? -1 : x.niveau; };
+                  if(!namen.length) return `<span style="font-size:14px;color:#4ade80">Geen bijna lege of stille batterijen.</span>`;
+                  // Stil bovenaan (-2), dan een kaal 'laag'-signaal (-1), dan op percentage.
+                  var sleutelVan = function(x){ return x.stil ? -2 : (x.niveau === null ? -1 : x.niveau); };
                   var kleurVan = function(x){
-                    if(x.niveau === null) return '#ef4444';
+                    if(x.stil || x.niveau === null) return '#ef4444';
                     return x.niveau <= 10 ? '#ef4444' : (x.niveau <= 20 ? '#f59e0b' : 'rgba(255,255,255,0.7)');
                   };
                   var lijstVan = {};
@@ -415,7 +425,7 @@ cards:
                     var rijen = lijstVan[g].map(function(x){
                       var plek = x.gebied ? `<span style="color:rgba(255,255,255,0.35)"> · ${x.gebied}</span>` : '';
                       var pct = x.niveau === null ? 100 : Math.max(2, x.niveau);
-                      var waarde = x.niveau === null ? 'laag' : x.niveau + '%';
+                      var waarde = x.stil ? 'stil' : (x.niveau === null ? 'laag' : x.niveau + '%');
                       return klik(x.dev_id, x.ent, `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.04)">
                         <span style="flex:1;text-align:left;font-size:13.5px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
                         <span style="width:56px;height:6px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden;flex:0 0 auto">
