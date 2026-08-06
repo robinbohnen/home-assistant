@@ -82,38 +82,86 @@ dashboard_context_package:
         - name: Systeem status
           unique_id: systeem_status
           icon: mdi:heart-pulse
-          # Drempels: onder de 5 onbeschikbare entiteiten is het normale ruis
-          # (apparaten die even niet inchecken). Batterijen pas bij 10% - de
-          # systeem-pagina waarschuwt al vanaf 25%, dus dit is de harde grens.
-          # device_tracker telt niet mee: telefoons komen en gaan.
+          # WAAROM HIER NIET MEER "X ONBESCHIKBAAR" STAAT
+          # Dat telde elke entiteit op `unavailable` en kwam op 473 uit. In dit
+          # huis is dat geen storing maar de normale toestand: tientallen spots
+          # hangen aan een wandschakelaar, en zodra die uit gaat verdwijnen de
+          # lamp én al zijn knopjes, selects en getallen uit de lijst. Van de 77
+          # volledig weggevallen apparaten waren er precies drie interessant.
+          # Een getal dat altijd hoog staat lees je na een week niet meer.
+          #
+          # De pil noemt nu alleen dingen waar je iets mee kúnt:
+          #   - de zigbee-bridge (die verklaart de rest meestal)
+          #   - sensor.watchdog_kritieke_sensoren: de korte lijst waar de
+          #     klimaat-, batterij- en alarmlogica op leunt, zie Watchdog.yaml
+          #   - batterijapparaten die niets meer laten horen; die kun je niet
+          #     met een schakelaar uitzetten, dus stil = stuk of leeg
+          #   - batterijen die echt bijna leeg zijn
+          #
+          # Het ruwe totaal staat nog wel op de systeempagina
+          # (dashboards/home/systeem.yaml), want dáár zoek je het op als je al
+          # weet dát er iets is.
           state: >
-            {% set ns = namespace(weg=0, accu=0) %}
-            {% for s in states %}
-              {% if s.state == 'unavailable' and s.domain not in ['device_tracker', 'update'] %}
-                {% set ns.weg = ns.weg + 1 %}
-              {% endif %}
-            {% endfor %}
+            {% set kritiek = states('sensor.watchdog_kritieke_sensoren') | int(0) %}
+            {% set zigbee = states('binary_sensor.zigbee2mqtt_bridge_connection_state_3')
+                            in ['off', 'unavailable'] %}
+            {% set ns = namespace(stil=0, leeg=0) %}
             {% for s in states.sensor %}
               {% if s.attributes.device_class | default('') == 'battery'
-                    and s.state | float(101) <= 10 %}
-                {% set ns.accu = ns.accu + 1 %}
+                    and 'state_of_charge' not in s.entity_id
+                    and 'state_of_health' not in s.entity_id %}
+                {% if s.state == 'unavailable' %}
+                  {% set ns.stil = ns.stil + 1 %}
+                {% elif s.state | float(101) <= 10 %}
+                  {% set ns.leeg = ns.leeg + 1 %}
+                {% endif %}
               {% endif %}
             {% endfor %}
-            {% set zigbee = states('binary_sensor.zigbee2mqtt_bridge_connection_state_3') in ['off', 'unavailable'] %}
-            {{ 'aandacht' if (ns.weg > 5 or ns.accu > 0 or zigbee) else 'ok' }}
+            {{ 'aandacht' if (kritiek > 0 or ns.stil > 0 or ns.leeg > 0 or zigbee) else 'ok' }}
           attributes:
-            onbeschikbaar: >
+            # Uit packages/9 - Other/Watchdog.yaml; die lijst is met naam en
+            # toenaam samengesteld, dus elke 1 hierboven is er een die telt.
+            kritiek: "{{ states('sensor.watchdog_kritieke_sensoren') | int(0) }}"
+            # Een batterijsensor op `unavailable` betekent dat het hele apparaat
+            # niets meer laat horen. Bij een raamcontact of bewegingsmelder is
+            # dat geen "staat uit" maar een gat in je alarm of je brandmelding -
+            # op 2026-08-06 stonden zo drie raamcontacten stil (badkamer en twee
+            # in het kantoor) die in de all_windows-groep van Firealarm.yaml
+            # zitten, en dat zag niemand omdat ze wegvielen tegen die 473.
+            #
+            # De uitzondering op `state_of_charge`/`state_of_health`: dat zijn
+            # meetwaarden van de thuisaccu en de omvormer. Die hebben
+            # device_class battery maar zijn geen cel die je vervangt; ze stonden
+            # allebei op 0% en meldden dus eeuwig "2 lege batterijen".
+            batterijen_stil: >
               {% set ns = namespace(n=0) %}
-              {% for s in states %}
-                {% if s.state == 'unavailable' and s.domain not in ['device_tracker', 'update'] %}
+              {% for s in states.sensor %}
+                {% if s.attributes.device_class | default('') == 'battery'
+                      and 'state_of_charge' not in s.entity_id
+                      and 'state_of_health' not in s.entity_id
+                      and s.state == 'unavailable' %}
                   {% set ns.n = ns.n + 1 %}
                 {% endif %}
               {% endfor %}
               {{ ns.n }}
+            batterijen_stil_namen: >
+              {% set ns = namespace(namen=[]) %}
+              {% for s in states.sensor %}
+                {% if s.attributes.device_class | default('') == 'battery'
+                      and 'state_of_charge' not in s.entity_id
+                      and 'state_of_health' not in s.entity_id
+                      and s.state == 'unavailable' %}
+                  {% set ns.namen = ns.namen + [s.name] %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.namen | join(', ') }}
             kritieke_batterijen: >
               {% set ns = namespace(n=0) %}
               {% for s in states.sensor %}
                 {% if s.attributes.device_class | default('') == 'battery'
+                      and 'state_of_charge' not in s.entity_id
+                      and 'state_of_health' not in s.entity_id
+                      and s.state != 'unavailable'
                       and s.state | float(101) <= 10 %}
                   {% set ns.n = ns.n + 1 %}
                 {% endif %}
