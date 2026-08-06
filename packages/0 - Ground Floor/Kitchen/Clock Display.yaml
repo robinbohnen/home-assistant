@@ -140,9 +140,13 @@ kitchen_clock_display_package:
             qos: 0
             retain: true
             topic: clock_1/notify
+            # Afronden is niet cosmetisch: Waze levert gebroken minuten
+            # (27.05, 5.083...) waar Google een heel getal gaf. Zonder round
+            # scrolt er "27.05 min naar werk" over de klok.
             payload: >-
               {"icon": 1635,"duration": 60, "scrollSpeed": 50, "text": "{{
-              states('sensor.robin_reistijd_naar_werk') }} min naar werk"}
+              states('sensor.robin_reistijd_naar_werk') | float(0) | round(0) | int
+              }} min naar werk"}
           action: mqtt.publish
         - delay:
             hours: 0

@@ -672,7 +672,12 @@ cards:
               - type: custom:mushroom-template-card
                 entity: sensor.robin_reistijd_naar_brandweer_uden
                 primary: Reistijd kazerne
-                secondary: "{{ (states('sensor.robin_reistijd_naar_brandweer_uden') ~ ' min') if has_value('sensor.robin_reistijd_naar_brandweer_uden') else '—' }}"
+                # round(0): Waze geeft gebroken minuten (5.083...), Google gaf
+                # een heel getal. Zonder afronden staat hier een rij decimalen.
+                secondary: >-
+                  {% set s = 'sensor.robin_reistijd_naar_brandweer_uden' %}
+                  {{ ((states(s) | float(0) | round(0) | int) ~ ' min')
+                     if has_value(s) else '—' }}
                 icon: mdi:fire-station
                 icon_color: orange
           # ---------- Stand van de dienstdoende ploeg ----------
