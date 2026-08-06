@@ -1,0 +1,241 @@
+# Licht bij thuiskomen en vertrek: vijf kamers hadden hier hun eigen kopie van.
+#
+# Kitchen, Livingroom en Dining waren na het invullen van de lamp en de
+# helderheidshelper letter voor letter gelijk (125 regels per kamer); Bedroom en
+# Office waren onderling gelijk en een uitgeklede versie: alleen doven bij
+# vertrek, geen aan-tak en geen knop. Wie de knopafhandeling in de keuken
+# aanpaste, vergat de woonkamer -- precies de reden dat dit nu één bestand is.
+#
+# Gebruikt door:
+#   packages/0 - Ground Floor/Kitchen/Lights.yaml      (kitchen_lights_onoff)
+#   packages/0 - Ground Floor/Livingroom/Lights.yaml   (livingroom_lights_onoff)
+#   packages/0 - Ground Floor/Dining/Lights.yaml       (dining_lights_onoff)
+#   packages/1 - First Floor/Bedroom/Lights.yaml       (bedroom_lights_onoff)
+#   packages/1 - First Floor/Office/Lights.yaml        (office_lights_onoff)
+#
+# Drie dingen staan hier bewust anders dan in die vijf kopieën:
+#
+#   1. De `default: light.toggle` is weg. Elke trigger-id werd al door een
+#      choose-tak opgevangen, dus die tak liep nooit -- maar de eerste trigger
+#      die iemand zonder id toevoegt, klapt de lamp om op het slechtst denkbare
+#      moment. Zelfde reden als in motion_light.yaml.
+#   2. mode is restart in plaats van single. Bij vertrek komen het slot ("een
+#      minuut op slot") en het alarm vlak na elkaar; met single verdween de
+#      tweede in een "already running"-melding, en dat is net de run die de
+#      dubbele uit hieronder nog had kunnen afmaken.
+#   3. De dubbele uit wacht nu tot de lamp echt uit is in plaats van blind twee
+#      seconden te slapen en dan nog eens uit te sturen. Zie de opmerking bij
+#      dubbel_uit.
+blueprint:
+  name: Licht bij thuiskomen en vertrek
+  description: >-
+    Lamp aan zodra de voordeur van het slot gaat of het alarm uitgeschakeld
+    wordt, en uit zodra iedereen weg is (voordeur een minuut op slot of alarm
+    op armed_away/armed_home). Optioneel dooft de slaapkamerknop de lamp ook
+    's avonds terwijl er nog iemand thuis is. Helderheid en overgangstijd komen
+    uit helpers zodat ze per kamer en vanaf het dashboard instelbaar blijven.
+  author: Robin Bohnen
+  domain: automation
+  homeassistant:
+    # Het mengen van eigen triggers met een trigger-selector-input bestaat
+    # sinds 2024.10.
+    min_version: 2024.10.0
+  input:
+    lamp:
+      name: Lamp
+      selector:
+        entity:
+          filter:
+            domain: light
+    aan_bij_thuiskomst:
+      name: Aangaan bij thuiskomen
+      description: >-
+        Uit voor kamers die alleen mogen doven bij vertrek (slaapkamer,
+        kantoor): daar wil je geen licht dat vanzelf aanspringt zodra de
+        voordeur opengaat.
+      default: true
+      selector:
+        boolean:
+    helderheid:
+      name: Helderheid-helper
+      description: >-
+        input_number met het percentage waarmee de lamp aangaat. Alleen nodig
+        als de kamer aangaat bij thuiskomen.
+      default: ""
+      selector:
+        entity:
+          filter:
+            domain: input_number
+    overgang:
+      name: Overgangstijd-helper
+      description: input_number met de fade-tijd in seconden.
+      default: input_number.lights_transition_seconds
+      selector:
+        entity:
+          filter:
+            domain: input_number
+    knop_triggers:
+      name: Knoptriggers (optioneel)
+      description: >-
+        Triggers van de slaapkamerknop (welterusten). Geef elke trigger hier
+        `id: knop` mee, anders doet hij niets. Ze staan in de instantie en niet
+        hier, omdat de device_id's uit secrets.yaml komen. Anders dan de
+        vertrek-triggers doven deze de lamp ook als er nog iemand thuis is --
+        maar alleen binnen het avondvenster hieronder.
+      default: []
+      selector:
+        trigger:
+    dubbel_uit:
+      name: Uit-commando herhalen
+      description: >-
+        Voor lampgroepen waarbij een uit met transition niet altijd aankomt en
+        er dus één lamp blijft branden. Aan = na het uitzetten wachten tot de
+        lamp uit meldt en anders binnen twee seconden nog een keer uit sturen,
+        zonder transition. Let op: staat de overgangstijd hoger dan twee
+        seconden, dan kapt die tweede het uitfaden af.
+      default: false
+      selector:
+        boolean:
+    alarm_paneel:
+      name: Alarmpaneel
+      default: alarm_control_panel.alarmo
+      selector:
+        entity:
+          filter:
+            domain: alarm_control_panel
+    voordeur_slot:
+      name: Voordeurslot
+      default: lock.kroon18voordeur
+      selector:
+        entity:
+          filter:
+            domain: lock
+    volwassenen:
+      name: Volwassenen-groep
+      description: >-
+        Zolang deze groep thuis is, dooft vertrek de lamp niet: het alarm gaat
+        ook aan als er iemand thuisblijft (armed_home).
+      default: group.all_adults
+      selector:
+        entity:
+          filter:
+            domain: group
+
+mode: restart
+
+# !input werkt niet binnen templates; alles wat een template nodig heeft gaat
+# via deze variabelen.
+variables:
+  lamp: !input lamp
+  helderheid: !input helderheid
+  overgang: !input overgang
+  aan_bij_thuiskomst: !input aan_bij_thuiskomst
+  dubbel_uit: !input dubbel_uit
+
+triggers:
+  - trigger: state
+    entity_id: !input voordeur_slot
+    to: unlocked
+    id: thuis
+  - trigger: state
+    entity_id: !input alarm_paneel
+    to: disarmed
+    id: thuis
+  # Een minuut wachten: de deur gaat bij vertrek eerst op slot en daarna loopt
+  # er nog van alles naar buiten. Meteen doven laat je in het donker staan.
+  - trigger: state
+    entity_id: !input voordeur_slot
+    to: locked
+    for: "00:01:00"
+    id: vertrokken
+  - trigger: state
+    entity_id: !input alarm_paneel
+    to:
+      - armed_away
+      - armed_home
+    id: vertrokken
+  # Genest triggers-blok: zo voeg je een trigger-selector-input samen met de
+  # vaste triggers hierboven. De input direct als lijstitem plakken
+  # (`- !input ...`) is ongeldig en laat élke instantie stuklopen met "kon niet
+  # worden ingesteld", ook met default [].
+  - triggers: !input knop_triggers
+
+conditions: []
+
+actions:
+  - choose:
+      - alias: "Thuiskomen"
+        conditions:
+          - condition: trigger
+            id:
+              - thuis
+          # Bedroom en Office krijgen deze triggers ook binnen, maar horen er
+          # niets mee te doen. Een trigger-lijst is niet per instantie weg te
+          # laten zonder ook de slot- en alarmentiteit te dupliceren, dus de
+          # keuze zit hier in plaats van in de triggers: twee lege runs per
+          # thuiskomst is goedkoper dan die duplicatie.
+          - alias: "Deze kamer gaat aan bij thuiskomen"
+            condition: template
+            value_template: "{{ aan_bij_thuiskomst }}"
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: !input lamp
+            data:
+              transition: "{{ states(overgang) | int(1) }}"
+              brightness_pct: "{{ states(helderheid) | int(100) }}"
+
+      - alias: "Vertrek of welterusten"
+        conditions:
+          - condition: trigger
+            id:
+              - vertrokken
+              - knop
+          - condition: or
+            conditions:
+              - alias: "Geen volwassenen meer thuis"
+                condition: not
+                conditions:
+                  - condition: state
+                    entity_id: !input volwassenen
+                    state: home
+              # De knop is de welterusten-/vertrekknop naast het bed. Overdag
+              # indrukken terwijl er iemand thuis is hoort niets te doen; in de
+              # avond en nacht is het juist de bedoeling dat het huis dooft,
+              # ook al is de indrukker zelf nog thuis.
+              - alias: "Knop in de avond of nacht"
+                condition: and
+                conditions:
+                  - condition: trigger
+                    id:
+                      - knop
+                  - condition: time
+                    after: "17:00:00"
+                    before: "06:00:00"
+        sequence:
+          - action: light.turn_off
+            target:
+              entity_id: !input lamp
+            data:
+              transition: "{{ states(overgang) | int(1) }}"
+          - if:
+              - condition: template
+                value_template: "{{ dubbel_uit }}"
+            then:
+              # Was een blinde `delay: 2` gevolgd door een tweede uit. Die
+              # tweede ging ook af als de lamp allang uit was, en dat is een
+              # onnodig commando over Zigbee. Wachten tot de lamp uit meldt
+              # levert hetzelfde op en is meestal binnen een fractie klaar.
+              - wait_template: "{{ is_state(lamp, 'off') }}"
+                timeout: "00:00:02"
+                continue_on_timeout: true
+              - if:
+                  - condition: template
+                    value_template: "{{ is_state(lamp, 'on') }}"
+                then:
+                  - action: light.turn_off
+                    target:
+                      entity_id: !input lamp
+    # Bewust geen default: een trigger zonder afgedekte id doet niets. Hier
+    # stond light.toggle -- dood, want alle ids waren afgedekt, maar precies de
+    # valstrik die de keukenlamp bij het thuiskomen zou uitzetten.

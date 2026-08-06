@@ -3,13 +3,6 @@ brandweer_package:
     - resource: https://brandweeruden.112radar.nl/status.php
       scan_interval: 300
       sensor:
-        - name: "Bezetting Dienstdoend"
-          icon: mdi:alphabetical-variant
-          value_template: "{{ value_json.dienstdoend }}"
-          json_attributes:
-            - tijdstip
-            - ploegen
-
         - name: "Bezetting Ploeg A"
           icon: mdi:alpha-a-circle
           state_class: measurement
@@ -74,13 +67,6 @@ brandweer_package:
         - B Ploeg
         - C Ploeg
       icon: mdi:firebase
-    brandweer_bezetting_status:
-      name: "Brandweer - Bezetting Status"
-      options:
-        - ok
-        - krap
-        - onderbezet
-      icon: mdi:account-group
 
   input_text:
     brandweer_laatste_melding:
@@ -88,12 +74,6 @@ brandweer_package:
       icon: mdi:fire-circle
     brandweer_laatste_melding_fonetisch:
       name: "Brandweer - Laatste Melding Fonetisch"
-      icon: mdi:account-voice
-    brandweer_laatste_p2000_melding:
-      name: "Brandweer - Laatste p2000 melding"
-      icon: mdi:police-badge
-    brandweer_laatste_p2000_melding_fonetisch:
-      name: "Brandweer - Laatste p2000 melding fonetisch"
       icon: mdi:account-voice
 
   input_datetime:
@@ -176,12 +156,6 @@ brandweer_package:
           action: input_text.set_value
         - target:
             entity_id: input_text.brandweer_laatste_melding_fonetisch
-          data:
-            value: "{{ trigger.json.tts_text }}"
-          alias: Stel variabele in met de laatste melding erin (fonetisch)
-          action: input_text.set_value
-        - target:
-            entity_id: input_text.brandweer_laatste_p2000_melding_fonetisch
           data:
             value: "{{ trigger.json.tts_text }}"
           alias: Stel variabele in met de laatste melding erin (fonetisch)
@@ -1160,23 +1134,6 @@ brandweer_package:
           event: brandweer_bezetting
           event_data:
             payload: "{{ trigger.json }}"
-        # Alleen zetten als het een bestaande optie is. De webhook staat op
-        # `local_only: false`, dus hier komt ook binnen wat een ander verstuurt,
-        # en een onbekende status liet `select_option` falen - waarmee de hele
-        # queued run stopte vóór de ploegsynchronisatie en de melding. Dezelfde
-        # guard als bij de ploeg hieronder.
-        - alias: Status doorgeven, mits het een bekende optie is
-          if:
-            - condition: template
-              value_template: >-
-                {{ status in (state_attr('input_select.brandweer_bezetting_status',
-                                         'options') | default([], true)) }}
-          then:
-            - action: input_select.select_option
-              target:
-                entity_id: input_select.brandweer_bezetting_status
-              data:
-                option: "{{ status }}"
         # PreCom weet zeker welke ploeg dienst heeft; de maandagwissel hierboven
         # is maar een aanname die na een storing of een geruilde week scheef
         # staat. Bij verschil wint PreCom. Alleen zetten als het echt een

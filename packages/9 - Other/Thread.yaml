@@ -80,6 +80,20 @@
 ## bestand bij te werken. Een waakhond die alleen let op wat je hem in 2026 hebt
 ## verteld, is over een jaar geen waakhond meer.
 ##
+## DE HERSTELLADDER ZELF STAAT IN ZIGBEE.YAML
+## De SLZB-MR3 heeft twee radio's - poort 6638 is deze (Silicon Labs, ASH/EZSP),
+## poort 7638 is Zigbee (TI, ZNP) - maar het is één kastje, met één resetknop en
+## één PoE-poort. De ladder om het terug te zetten (core-restart -> PoE eraf ->
+## opgeven) is dus voor allebei dezelfde en staat één keer uitgeschreven, in
+## `script.slzb_radio_terugzetten` onderaan packages/9 - Other/Zigbee.yaml.
+## Daar staat ook de hardware-uitleg over het kastje en de ZNP-pingtest.
+##
+## Thread is het geval mét een extra stap: ná de radio moet ook de OTBR-add-on
+## opnieuw op. Die stap komt hieronder uit dit bestand - het script krijgt de
+## slug en de wachttijden als veld mee, en doet zonder slug (zoals bij Zigbee)
+## niets extra's. De volgorde blijft daarmee zoals hierboven beschreven: eerst
+## de radio, dan pas de add-on.
+##
 ## LET OP: dit is een nieuw packagebestand; het laadt pas na een volledige
 ## herstart van Home Assistant, een YAML-reload is niet genoeg.
 ##############################################################################
@@ -160,6 +174,10 @@ thread_package:
     #   2. PoE-poort uit/aan   -> add-on herstarten -> een kwartier wachten
     #   3. opgeven met een critical melding
     #
+    # Die ladder staat in `script.slzb_radio_terugzetten` (onderaan
+    # packages/9 - Other/Zigbee.yaml); hieronder staat alleen wanneer we hem voor
+    # Thread aanroepen en waarmee.
+    #
     # Trede 1 wordt overgeslagen als de SLZB zelf niet meer reageert; dan valt
     # er softwarematig niets te resetten en is de stroom de enige weg. Elke
     # trede stopt zodra de mesh terug is, dus normaal gesproken komt hij nooit
@@ -168,18 +186,6 @@ thread_package:
     # Worst case duurt een hele ronde ~35 minuten (2 + 15 + 3 + 15). Dat past
     # binnen de rem van één poging per uur hieronder, en `mode: single` zorgt
     # dat een tweede storing tijdens die ronde niet meeloopt.
-    #
-    # De twee dingen die van buiten de config moesten komen zijn op
-    # 2026-08-05 nagekeken en kloppen:
-    #   - add-on-slug `core_openthread_border_router`
-    #   - PoE-poort 1 van de switch in de meterkast voedt de SLZB
-    #
-    # Installeer je de add-on ooit opnieuw uit een andere repository, dan
-    # verandert die slug. De juiste staat in de URL van de add-on:
-    # /hassio/addon/<slug>/info. De `continue_on_error` bij die actie is
-    # daarvoor het vangnet: bij een verkeerde slug loopt de automatisering door
-    # naar de controle en krijg je alsnog een melding, in plaats van dat hij
-    # halverwege stilvalt.
     - id: thread_border_router_herstart
       alias: Thread - Mesh terugzetten
       description: >-
@@ -204,6 +210,11 @@ thread_package:
         # uurrem hieronder niets.
         - trigger: time_pattern
           hours: "/1"
+      # Deze vier condities blijven hier staan en gaan niet mee het gedeelde
+      # script in: `last_triggered` wordt pas gezet als de acties beginnen, dus
+      # ná deze condities, en `this` wijst in een script naar het script zelf.
+      # Zouden ze daar staan, dan zou een ronde voor Zigbee die van Thread een
+      # uur lang blokkeren. Zie de langere uitleg in Zigbee.yaml.
       conditions:
         - condition: state
           entity_id: binary_sensor.thread_netwerk_stuk
@@ -229,186 +240,56 @@ thread_package:
             {% set sinds = states.binary_sensor.thread_netwerk_stuk.last_changed %}
             {{ sinds is none or (now() - sinds) < timedelta(hours=6) }}
       actions:
-        # Twee wegen, afhankelijk van of de SLZB zelf nog reageert. Zijn
-        # entiteiten staan op `unavailable` zodra de integratie hem niet kan
-        # bereiken - precies de situatie van 5 augustus, toen socat "No route to
-        # host" gaf. Dan heeft een core-restart geen zin en moet de stroom eraf.
-        - variables:
-            slzb_reageert: >-
-              {{ states('button.slzb_mr3_core_restart')
-                 not in ['unavailable', 'unknown', 'none', ''] }}
-            # De state van een button ís het tijdstip van de laatste druk, dus
-            # dit ziet ook een reset door de Zigbee-waakhond of eentje met de
-            # hand. Zigbee.yaml doet exact hetzelfde de andere kant op; het is
-            # één kastje met twee radio's.
-            recent_gereset: >-
-              {% set laatst = states('button.slzb_mr3_core_restart') | as_datetime %}
-              {{ laatst is not none and (now() - laatst) < timedelta(minutes=30) }}
-            zachte_reset_zinvol: "{{ slzb_reageert and not recent_gereset }}"
-            poe_recent_gecycled: >-
-              {% set laatst = states('button.usw_pro_max_16_poe_meterkast_port_1_power_cycle')
-                              | as_datetime %}
-              {{ laatst is not none and (now() - laatst) < timedelta(minutes=15) }}
-
-        - action: notify.mobile_devices_adults
+        # Vanaf hier is alles gelijk aan Zigbee, op de add-on na; zie
+        # `script.slzb_radio_terugzetten` onderaan Zigbee.yaml. Deze aanroep is
+        # met opzet de laatste actie: een `stop:` in het script beëindigt dan de
+        # hele ronde, net als toen het nog één blok was.
+        - action: script.slzb_radio_terugzetten
           data:
-            title: Thread ligt eruit
-            message: >-
-              {{ states('sensor.thread_matter_onbereikbaar') }} van de
-              {{ state_attr('sensor.thread_matter_onbereikbaar', 'totaal') }}
-              Matter-entiteiten zijn onbereikbaar.
-              {% if zachte_reset_zinvol %}
-                Ik reset de SLZB en start de border router opnieuw.
-              {% elif not slzb_reageert %}
-                De SLZB reageert zelf ook niet, dus ik haal de PoE eraf.
-              {% else %}
-                De SLZB is net al herstart en dat hielp niet, dus ik haal de PoE
-                eraf.
-              {% endif %}
-
-        #####################################################################
-        ## Poging 1 - zachte reset, alleen als die iets kan opleveren
-        #####################################################################
-        - if:
-            - condition: template
-              value_template: "{{ zachte_reset_zinvol }}"
-          then:
-            # De coördinator eerst, dan pas de add-on. Andersom hielp op
-            # 5 augustus niet: dat had de Supervisor de hele nacht al gedaan.
-            - action: button.press
-              target:
-                entity_id: button.slzb_mr3_core_restart
-            # De SLZB moet op zijn en zijn TCP-poort weer openzetten voordat de
-            # add-on er iets mee kan. Te vroeg beginnen levert precies de
-            # crashlus op die we willen mijden.
-            - delay: "00:02:00"
-            - action: hassio.addon_restart
-              data:
-                addon: core_openthread_border_router
-              continue_on_error: true
+            naam: Thread
+            andere_radio: Zigbee
+            stuk_sensor: binary_sensor.thread_netwerk_stuk
+            apparaten: Matter-apparaten
             # Bij de handmatige reddingsactie duurde terugkomen "enkele
             # minuten"; een kwartier is dus ruim.
-            - wait_for_trigger:
-                - trigger: state
-                  entity_id: binary_sensor.thread_netwerk_stuk
-                  to: "off"
-              timeout: "00:15:00"
-              continue_on_timeout: true
-
-        - if:
-            - condition: state
-              entity_id: binary_sensor.thread_netwerk_stuk
-              state: "off"
-          then:
-            - action: notify.mobile_devices_adults
-              data:
-                title: Thread is terug
-                message: >-
-                  SLZB gereset en border router herstart; de Matter-apparaten
-                  zijn weer bereikbaar.
-            - stop: "Hersteld met een zachte reset"
-
-        #####################################################################
-        ## Poging 2 - stroom eraf
-        #####################################################################
-        # PoE-poort 1 van de switch in de meterkast voedt de SLZB (nagekeken op
-        # 2026-08-05). Dit is het enige dat een gehangen kastje terugbrengt
-        # zonder dat er iemand naar de meterkast loopt - en dat was op 5
-        # augustus precies wat er nodig was.
-        #
-        # Waarom pas hier: spanning wegnemen is grover dan nodig zolang het
-        # apparaat nog praat, en een koude start kost meer tijd. Reageert de
-        # SLZB niet meer, dan wordt poging 1 hierboven overgeslagen en komt hij
-        # meteen hier terecht.
-        # Alleen `unavailable` betekent onbereikbaar. `unknown` stond hier ook,
-        # maar dat is de normale state van een knop die nog nooit is ingedrukt -
-        # waardoor trede 2 er altijd stopte. Zie Zigbee.yaml, zelfde knop.
-        - if:
-            - condition: state
-              entity_id: button.usw_pro_max_16_poe_meterkast_port_1_power_cycle
-              state: unavailable
-          then:
-            - action: notify.mobile_devices_adults
-              data:
-                title: Thread weg, switch onbereikbaar
-                message: >-
-                  De Matter-apparaten zijn weg en de PoE-switch in de meterkast
-                  reageert ook niet, dus ik kan de SLZB niet spanningsloos
-                  maken. Hier moet iemand naar kijken.
-                data:
-                  push:
-                    sound:
-                      name: default
-                      critical: 1
-                      volume: 0.7
-            - stop: "Switch onbereikbaar, handmatig nakijken"
-
-        - if:
-            - condition: template
-              value_template: "{{ poe_recent_gecycled }}"
-          then:
-            - action: notify.mobile_devices_adults
-              data:
-                title: Thread weg, herstel loopt al
-                message: >-
-                  De PoE van de SLZB is net al eraf geweest - vrijwel zeker door
-                  de Zigbee-waakhond, want het is hetzelfde kastje. Ik doe het
-                  niet nog een keer; als Thread over een uur nog weg is, probeer
-                  ik het opnieuw.
-            - stop: "PoE net al gecycled, herstel van de andere radio afwachten"
-
-        - action: notify.mobile_devices_adults
-          data:
-            title: Thread nog steeds weg
-            message: Ik haal de PoE van de SLZB er even af.
-
-        - action: button.press
-          target:
-            entity_id: button.usw_pro_max_16_poe_meterkast_port_1_power_cycle
-
-        # Een koude start duurt langer dan een core-restart; drie minuten
-        # voordat de add-on het opnieuw mag proberen.
-        - delay: "00:03:00"
-
-        - action: hassio.addon_restart
-          data:
+            wachttijd: "00:15:00"
+            # DE EXTRA STAP DIE THREAD HEEFT EN ZIGBEE NIET
+            # Op 2026-08-05 nagekeken: de slug is `core_openthread_border_router`.
+            # Installeer je de add-on ooit opnieuw uit een andere repository, dan
+            # verandert die. De juiste staat in de URL van de add-on:
+            # /hassio/addon/<slug>/info. Het script zet er `continue_on_error` op
+            # als vangnet: bij een verkeerde slug loopt de ronde door naar de
+            # controle en krijg je alsnog een melding, in plaats van dat hij
+            # halverwege stilvalt.
             addon: core_openthread_border_router
-          continue_on_error: true
-
-        - wait_for_trigger:
-            - trigger: state
-              entity_id: binary_sensor.thread_netwerk_stuk
-              to: "off"
-          timeout: "00:15:00"
-          continue_on_timeout: true
-
-        - choose:
-            - conditions:
-                - condition: state
-                  entity_id: binary_sensor.thread_netwerk_stuk
-                  state: "off"
-              sequence:
-                - action: notify.mobile_devices_adults
-                  data:
-                    title: Thread is terug
-                    message: >-
-                      De SLZB is via de PoE-poort opnieuw opgestart en de
-                      Matter-apparaten zijn weer bereikbaar.
-          default:
-            # Alles gehad: zachte reset, stroom eraf, add-on opnieuw. Dan zit
-            # het dieper dan een vastgelopen radio. Critical, want zonder Thread
-            # doen de lampen en de luchtreinigers beneden niets en zie je dat
-            # verder nergens aan.
-            - action: notify.mobile_devices_adults
-              data:
-                title: Thread blijft weg
-                message: >-
-                  SLZB spanningsloos gemaakt én de border router herstart, maar
-                  {{ states('sensor.thread_matter_onbereikbaar') }} entiteiten
-                  zijn nog steeds onbereikbaar. Dit lost zichzelf niet op.
-                data:
-                  push:
-                    sound:
-                      name: default
-                      critical: 1
-                      volume: 0.7
+            # De SLZB moet op zijn en zijn TCP-poort weer openzetten voordat de
+            # add-on er iets mee kan. Te vroeg beginnen levert precies de
+            # crashlus op die we willen mijden. Na een koude start via de PoE
+            # duurt dat langer dan na een core-restart.
+            addon_wacht_na_reset: "00:02:00"
+            addon_wacht_na_poe: "00:03:00"
+            meldingen:
+              stuk: >-
+                {{ states('sensor.thread_matter_onbereikbaar') }} van de
+                {{ state_attr('sensor.thread_matter_onbereikbaar', 'totaal') }}
+                Matter-entiteiten zijn onbereikbaar.
+              zachte_reset: >-
+                Ik reset de SLZB en start de border router opnieuw.
+              hersteld_zacht: >-
+                SLZB gereset en border router herstart; de Matter-apparaten
+                zijn weer bereikbaar.
+              hersteld_poe: >-
+                De SLZB is via de PoE-poort opnieuw opgestart en de
+                Matter-apparaten zijn weer bereikbaar.
+              # Alles gehad: zachte reset, stroom eraf, add-on opnieuw. Dan zit
+              # het dieper dan een vastgelopen radio.
+              #
+              # Let op: deze teksten worden bij het aanroepen ingevuld, dus het
+              # aantal hieronder is dat van het begin van de ronde en niet van
+              # ~35 minuten later. Bij een storing die het hele Thread-netwerk
+              # plat legt is dat hetzelfde getal; komt er in de tussentijd een
+              # deel terug, dan is het de stand van bij het begin.
+              opgegeven: >-
+                SLZB spanningsloos gemaakt én de border router herstart, maar
+                {{ states('sensor.thread_matter_onbereikbaar') }} entiteiten
+                zijn nog steeds onbereikbaar. Dit lost zichzelf niet op.

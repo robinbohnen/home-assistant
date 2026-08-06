@@ -11,114 +11,21 @@ dining_lights_package:
     - id: dining_lights_onoff
       alias: Dining - Lights
       description: Automate lights when certain conditions are met
-      mode: single
-      triggers:
-        - trigger: state
-          entity_id:
-            - lock.kroon18voordeur
-          to: unlocked
-          id: lock_unlocked
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: disarmed
-          id: alarm_disarmed
-        - trigger: state
-          entity_id:
-            - lock.kroon18voordeur
-          to: locked
-          id: lock_locked
-          for:
-            hours: 0
-            minutes: 1
-            seconds: 0
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_away
-          id: alarm_armed_away
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_home
-          id: alarm_armed_home
-        - domain: mqtt
-          device_id: !secret bedroom_button_1
-          type: action
-          subtype: single
-          trigger: device
-          id: slaapkamer_knop_single
-        - domain: mqtt
-          device_id: !secret bedroom_button_2
-          type: action
-          subtype: single
-          trigger: device
-          id: slaapkamer_knop_single
-        # Virtuele druk, zie packages/9 - Other/Virtual Buttons.yaml
-        - trigger: event
-          event_type: virtual_button
-          event_data:
-            button: bedroom_buttons
-            action: single
-          id: slaapkamer_knop_single
-      conditions: []
-      actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - lock_unlocked
-                    - alarm_disarmed
-              sequence:
-                - action: light.turn_on
-                  metadata: {}
-                  data:
-                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                    brightness_pct: "{{ states('input_number.lights_dining_percentage')|int }}"
-                  target:
-                    entity_id: light.eettafel_lampen
-            - conditions:
-                - condition: trigger
-                  id:
-                    - lock_locked
-                    - alarm_armed_away
-                    - alarm_armed_home
-                    - slaapkamer_knop_single
-              sequence:
-                - if:
-                    - condition: or
-                      conditions:
-                        - condition: not
-                          conditions:
-                            - condition: state
-                              entity_id: group.all_adults
-                              state: home
-                        - condition: and
-                          conditions:
-                            - condition: trigger
-                              id:
-                                - slaapkamer_knop_single
-                            - condition: time
-                              after: "17:00:00"
-                              before: "06:00:00"
-                  then:
-                    - action: light.turn_off
-                      metadata: {}
-                      data:
-                        transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                      target:
-                        entity_id: light.eettafel_lampen
-                    - delay:
-                        seconds: 2
-                    - action: light.turn_off
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: light.eettafel_lampen
-          default:
-            - action: light.toggle
-              metadata: {}
-              data:
-                transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-              target:
-                entity_id: light.eettafel_lampen
+      use_blueprint:
+        path: robin/lights_onoff.yaml
+        input:
+          lamp: light.eettafel_lampen
+          helderheid: input_number.lights_dining_percentage
+          # Groep van losse lampen: één uit-commando met transition laat er
+          # geregeld eentje branden.
+          dubbel_uit: true
+          # De slaapkamerknop (welterusten) dooft de eettafel direct.
+          knop_triggers:
+            # Uit de router in packages/1 - First Floor/Bedroom/Buttons.yaml.
+            # De blueprint kijkt zelf nog of het avond of nacht is; met dit
+            # event is dat dubbelop maar consistent.
+            - trigger: event
+              event_type: huis_routine
+              event_data:
+                routine: avond
+              id: knop

@@ -1,135 +1,183 @@
+##############################################################################
+## DE KNOPPEN NAAST HET BED
+##
+## Hier woont de knop zelf én de vertaling ervan naar één huisbreed event.
+##
+## WAAROM EEN ROUTER
+## Elf automatiseringen door het hele huis hingen los aan deze knop, en elk
+## herhaalde dezelfde drie triggers (twee MQTT-apparaten plus de virtuele druk)
+## én dezelfde tijdsplitsing 06:00-17:00. Dat is elf plekken waar een nieuw
+## kastje naast het bed of een verschoven ochtendgrens moet landen. Nu vuurt
+## deze router één event `huis_routine` met `routine: ochtend` of
+## `routine: avond`, en luistert de rest van het huis alleen daar nog op.
+##
+## Wie een nieuwe kamer wil laten meedoen, heeft genoeg aan:
+##
+##     triggers:
+##       - trigger: event
+##         event_type: huis_routine
+##         event_data:
+##           routine: avond
+##
+## HOLD DOET NU HETZELFDE ALS SINGLE
+## Tot 2026-08-06 stond `hold` alleen in de choose van dit bestand, en luisterde
+## de rest van het huis uitsluitend op `single`. Vasthouden ontgrendelde dus wel
+## de voordeur of schakelde het alarm in, maar liet alle rolluiken en lampen
+## staan: een half uitgevoerde routine, en dat is de verwarrendste uitkomst van
+## de drie. Van de twee manieren om dat recht te trekken is dit de veiligste:
+## `hold` deed de ingrijpendste stappen (slot, alarm) al, dus hem compleet maken
+## voegt alleen toe wat je toch al verwachtte. Hem juist wegnemen zou een
+## werkende snelkoppeling stilletjes afpakken.
+##
+## `double` blijft lokaal: dat is puur het slaapkamerlicht en gaat het huis
+## niets aan.
+##############################################################################
+
 bedroom_buttons_package:
   automation:
-    - id: bedroom_buttons_pressed
-      alias: Bedroom - Buttons pressed
-      description: When someone touches the buttons in the slaapkamer
+    - id: bedroom_button_routine
+      alias: Bedroom - Routine router
+      description: >-
+        Vertaalt een druk (of vasthouden) op de knoppen naast het bed naar één
+        event voor het hele huis: ochtend of avond.
       mode: single
+      max_exceeded: silent
       triggers:
         - domain: mqtt
           device_id: !secret bedroom_button_1
           type: action
           subtype: single
           trigger: device
-          id: single
         - domain: mqtt
           device_id: !secret bedroom_button_2
           type: action
           subtype: single
           trigger: device
-          id: single
-        - domain: mqtt
-          device_id: !secret bedroom_button_1
-          type: action
-          subtype: double
-          trigger: device
-          id: double
-        - domain: mqtt
-          device_id: !secret bedroom_button_2
-          type: action
-          subtype: double
-          trigger: device
-          id: double
         - domain: mqtt
           device_id: !secret bedroom_button_1
           type: action
           subtype: hold
           trigger: device
-          id: hold
         - domain: mqtt
           device_id: !secret bedroom_button_2
           type: action
           subtype: hold
           trigger: device
-          id: hold
-        # Virtuele drukken via script.virtual_button_press — zelfde trigger-id's
-        # als de fysieke knoppen hierboven, zie packages/9 - Other/Virtual Buttons.yaml
+        # Virtuele drukken via script.virtual_button_press,
+        # zie packages/9 - Other/Virtual Buttons.yaml
         - trigger: event
           event_type: virtual_button
           event_data:
             button: bedroom_buttons
             action: single
-          id: single
+        - trigger: event
+          event_type: virtual_button
+          event_data:
+            button: bedroom_buttons
+            action: hold
+      conditions: []
+      actions:
+        # De enige plek in huis waar deze grens nog staat. Stond hij eerder in
+        # elf bestanden, dan liep een aanpassing gegarandeerd ergens mis.
+        - event: huis_routine
+          event_data:
+            routine: >-
+              {{ 'ochtend' if today_at('06:00') <= now() < today_at('17:00')
+                 else 'avond' }}
+
+    - id: bedroom_buttons_pressed
+      alias: Bedroom - Buttons pressed
+      description: >-
+        Wat de knop naast het bed in de slaapkamer zelf doet: de voordeur van
+        het slot 's ochtends, het huis dichtzetten 's avonds, en met dubbelklik
+        het slaapkamerlicht.
+      mode: single
+      triggers:
+        - trigger: event
+          event_type: huis_routine
+          event_data:
+            routine: ochtend
+          id: ochtend
+        - trigger: event
+          event_type: huis_routine
+          event_data:
+            routine: avond
+          id: avond
+        # Dubbelklik gaat het huis niet aan en blijft daarom rechtstreeks aan
+        # het apparaat hangen.
+        - domain: mqtt
+          device_id: !secret bedroom_button_1
+          type: action
+          subtype: double
+          trigger: device
+          id: double
+        - domain: mqtt
+          device_id: !secret bedroom_button_2
+          type: action
+          subtype: double
+          trigger: device
+          id: double
         - trigger: event
           event_type: virtual_button
           event_data:
             button: bedroom_buttons
             action: double
           id: double
-        - trigger: event
-          event_type: virtual_button
-          event_data:
-            button: bedroom_buttons
-            action: hold
-          id: hold
       conditions: []
       actions:
         - choose:
-            - conditions:
+            - alias: Opstaan
+              conditions:
                 - condition: trigger
                   id:
-                    - single
-                    - hold
+                    - ochtend
               sequence:
-                - choose:
-                    - conditions:
-                        - condition: time
-                          after: "06:00:00"
-                          before: "17:00:00"
-                      sequence:
-                        - if:
-                            - condition: state
-                              entity_id: lock.kroon18voordeur
-                              state: locked
-                          then:
-                            - action: lock.unlock
-                              metadata: {}
-                              data: {}
-                              target:
-                                entity_id: lock.kroon18voordeur
-                          alias: Unlock lock
-                      alias: Wake up
-                    - conditions:
-                        - condition: time
-                          after: "17:00:00"
-                          before: "06:00:00"
-                      sequence:
-                        - if:
-                            - condition: state
-                              entity_id: alarm_control_panel.alarmo
-                              state: disarmed
-                          then:
-                            - action: alarm_control_panel.alarm_arm_home
-                              metadata: {}
-                              data: {}
-                              target:
-                                entity_id: alarm_control_panel.alarmo
-                          alias: Turn on alarm
-                        - action: climate.turn_off
-                          target:
-                            entity_id: climate.airco_woonkamer
-                          data: {}
-                          continue_on_error: true
-                        # De zolderairco is vaak onbereikbaar: apart script dat
-                        # het blijft proberen, zie packages/2 - Second Floor/Attic/AC.yaml.
-                        # Via script.turn_on zodat de rest van de knopactie niet wacht.
-                        - action: script.turn_on
-                          target:
-                            entity_id: script.script_attic_ac_off
-                          data: {}
-                        - action: cover.set_cover_position
-                          metadata: {}
-                          data:
-                            position: 15
-                          target:
-                            entity_id: cover.slaapkamer_rolluik_low_speed
-                      alias: Go to bed
-            - conditions:
+                - if:
+                    - condition: state
+                      entity_id: lock.kroon18voordeur
+                      state: locked
+                  then:
+                    - action: lock.unlock
+                      target:
+                        entity_id: lock.kroon18voordeur
+                  alias: Unlock lock
+            - alias: Naar bed
+              conditions:
+                - condition: trigger
+                  id:
+                    - avond
+              sequence:
+                - if:
+                    - condition: state
+                      entity_id: alarm_control_panel.alarmo
+                      state: disarmed
+                  then:
+                    - action: alarm_control_panel.alarm_arm_home
+                      target:
+                        entity_id: alarm_control_panel.alarmo
+                  alias: Turn on alarm
+                - action: climate.turn_off
+                  target:
+                    entity_id: climate.airco_woonkamer
+                  data: {}
+                  continue_on_error: true
+                # De zolderairco is vaak onbereikbaar: apart script dat het
+                # blijft proberen, zie packages/2 - Second Floor/Attic/AC.yaml.
+                # Via script.turn_on zodat de rest van de knopactie niet wacht.
+                - action: script.turn_on
+                  target:
+                    entity_id: script.script_attic_ac_off
+                - action: cover.set_cover_position
+                  data:
+                    position: 15
+                  target:
+                    entity_id: cover.slaapkamer_rolluik_low_speed
+            - alias: Slaapkamerlicht
+              conditions:
                 - condition: trigger
                   id:
                     - double
               sequence:
                 - action: light.toggle
-                  metadata: {}
-                  data: {}
                   target:
                     entity_id: light.slaapkamer_lampen

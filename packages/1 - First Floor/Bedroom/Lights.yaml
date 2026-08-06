@@ -3,57 +3,16 @@ bedroom_lights_package:
     - id: bedroom_lights_onoff
       alias: Bedroom - Lights
       description: Automate lights when certain conditions are met
-      mode: single
-      triggers:
-        - trigger: state
-          entity_id:
-            - lock.kroon18voordeur
-          to: locked
-          id: lock_locked
-          for:
-            hours: 0
-            minutes: 1
-            seconds: 0
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_away
-          id: alarm_armed_away
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_home
-          id: alarm_armed_home
-      conditions: []
-      actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - lock_locked
-                    - alarm_armed_away
-                    - alarm_armed_home
-              sequence:
-                - if:
-                    - condition: not
-                      conditions:
-                        - condition: state
-                          entity_id: group.all_adults
-                          state: home
-                  then:
-                    - action: light.turn_off
-                      metadata: {}
-                      data:
-                        transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                      target:
-                        entity_id: light.slaapkamer_lampen
-          default:
-            - action: light.toggle
-              metadata: {}
-              data:
-                transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-              target:
-                entity_id: light.slaapkamer_lampen
+      use_blueprint:
+        path: robin/lights_onoff.yaml
+        input:
+          lamp: light.slaapkamer_lampen
+          # Alleen doven bij vertrek: licht dat vanzelf aanspringt zodra de
+          # voordeur opengaat is in de slaapkamer niet gewenst.
+          aan_bij_thuiskomst: false
+          # Bewust geen knop_triggers: de welterustenknop staat hier naast het
+          # bed en dooft de rest van het huis. Zou hij deze lamp ook doven, dan
+          # sta je in het donker terwijl je nog moet gaan liggen.
 
     - id: bedroom_lights_doorbell
       alias: Bedroom - Lights on Doorbell Ring

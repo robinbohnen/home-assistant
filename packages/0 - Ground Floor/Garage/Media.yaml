@@ -3,50 +3,11 @@ garage_media_package:
     - id: media_movement_garage
       alias: Garage - Media
       description: "Turn on the media in the garage if there is movement detected"
-      mode: single
-      triggers:
-        - trigger: state
-          entity_id: binary_sensor.pir_group_garage
-          to: "on"
-          id: beweging
-        - trigger: state
-          entity_id: binary_sensor.pir_group_garage
-          to: "off"
-          for:
-            hours: 0
-            minutes: 2
-            seconds: 0
-          id: geenbeweging
-      conditions:
-        - condition: state
-          entity_id: input_boolean.enable_pir_garage
-          state: "on"
-      actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - beweging
-              sequence:
-                - if:
-                    - condition: state
-                      entity_id: media_player.garage_sonos
-                      state: idle
-                  then:
-                    - action: media_player.join
-                      metadata: {}
-                      data:
-                        group_members:
-                          - media_player.garage_sonos
-                      target:
-                        entity_id: media_player.woonkamer_sonos
-            - conditions:
-                - condition: trigger
-                  id:
-                    - geenbeweging
-              sequence:
-                - action: media_player.unjoin
-                  metadata: {}
-                  data: {}
-                  target:
-                    entity_id: media_player.garage_sonos
+      use_blueprint:
+        path: robin/sonos_motion_join.yaml
+        input:
+          bewegingssensor: binary_sensor.pir_group_garage
+          speaker: media_player.garage_sonos
+          schakelaar: input_boolean.enable_pir_garage
+          # Bewust geen volumeregeling: in de garage staat de speaker altijd
+          # goed en wil je hem juist zelf harder kunnen zetten.

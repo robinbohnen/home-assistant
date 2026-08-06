@@ -1,5 +1,13 @@
 covers_package:
   group:
+    # LET OP: dit zijn dezelfde zeven ramen als `cover.all_covers_upstairs` in
+    # packages/2 - Second Floor/Attic/AC.yaml, maar dan de `_low_speed`-
+    # varianten - die lopen langzamer en zijn 's ochtends niet door het hele
+    # huis te horen. Twee lijsten van dezelfde ramen dus, met een ander doel:
+    # deze voor de dagelijkse routines, die andere voor brand- en alarmgevallen
+    # waar snelheid boven stilte gaat. Komt er een rolluik bij, zet het in
+    # ALLEBEI. (`cover.slaapkamer_mini` heeft geen low_speed-variant en staat
+    # daarom in beide lijsten met dezelfde entiteit.)
     covers_first_floor:
       name: Rolluiken eerste verdieping
       icon: mdi:window-shutter
@@ -12,13 +20,6 @@ covers_package:
         - cover.slaapkamer_maxi_rechts_low_speed
         - cover.slaapkamer_mini
 
-    covers_kitchen_rollerblinds:
-      name: Rolgordijnen keuken
-      icon: mdi:blinds
-      entities:
-        - cover.rollerblind_0001
-        - cover.rollerblind_0002
-
   automation:
     #################################################################
     ## Bedroom button press - open covers
@@ -28,59 +29,41 @@ covers_package:
       description: Open covers when bedroom button is pressed
       mode: single
       triggers:
-        - domain: mqtt
-          device_id: !secret bedroom_button_1
-          type: action
-          subtype: single
-          trigger: device
-          id: bedroom_buttons_pressed
-        - domain: mqtt
-          device_id: !secret bedroom_button_2
-          type: action
-          subtype: single
-          trigger: device
-          id: bedroom_buttons_pressed
-        # Virtuele druk, zie packages/9 - Other/Virtual Buttons.yaml
+        # Uit de router in packages/1 - First Floor/Bedroom/Buttons.yaml. Die
+        # bepaalt of het ochtend of avond is; hier hoeft alleen de ochtend
+        # opgevangen te worden, want 's avonds doet deze automatisering niets.
         - trigger: event
-          event_type: virtual_button
+          event_type: huis_routine
           event_data:
-            button: bedroom_buttons
-            action: single
-          id: bedroom_buttons_pressed
+            routine: ochtend
       conditions: []
       actions:
-        - choose:
-            - conditions:
-                - condition: time
-                  after: "06:00:00"
-                  before: "17:00:00"
-              sequence:
-                - if:
-                    - condition: numeric_state
-                      entity_id: sensor.voortuin_zon_luminance
-                      above: 20000
-                  then:
-                    - action: cover.open_cover
-                      data: {}
-                      target:
-                        entity_id:
-                          - cover.badkamer_rolluik_low_speed
-                          - cover.slaapkamer_rolluik_low_speed
-                    - action: cover.close_cover
-                      data: {}
-                      target:
-                        entity_id:
-                          - cover.keuken_screen_links
-                          - cover.keuken_screen_rechts
-                  else:
-                    - action: cover.open_cover
-                      data: {}
-                      target:
-                        entity_id: group.covers_first_floor
-                    - action: cover.open_cover
-                      data: {}
-                      target:
-                        entity_id: group.covers_kitchen_rollerblinds
+        - if:
+            - condition: numeric_state
+              entity_id: sensor.voortuin_zon_luminance
+              above: 20000
+          then:
+            - action: cover.open_cover
+              data: {}
+              target:
+                entity_id:
+                  - cover.badkamer_rolluik_low_speed
+                  - cover.slaapkamer_rolluik_low_speed
+            - action: cover.close_cover
+              data: {}
+              target:
+                entity_id:
+                  - cover.keuken_screen_links
+                  - cover.keuken_screen_rechts
+          else:
+            - action: cover.open_cover
+              data: {}
+              target:
+                entity_id: group.covers_first_floor
+            - action: cover.open_cover
+              data: {}
+              target:
+                entity_id: cover.covers_kitchen_rollerblinds
 
     #################################################################
     ## Lock/alarm events - open/close kitchen rollerblinds
@@ -138,7 +121,7 @@ covers_package:
                     - action: cover.open_cover
                       data: {}
                       target:
-                        entity_id: group.covers_kitchen_rollerblinds
+                        entity_id: cover.covers_kitchen_rollerblinds
             - conditions:
                 - condition: trigger
                   id:

@@ -62,6 +62,23 @@
 ## dat een storing die beide netwerken raakt het apparaat twee keer achter
 ## elkaar reset.
 ##
+## DE HERSTELLADDER STAAT ONDERAAN DIT BESTAND, VOOR BEIDE RADIO'S
+## `script.slzb_radio_terugzetten` is de ladder van zacht naar hard
+## (core-restart -> PoE eraf -> opgeven), en die is voor Zigbee en Thread
+## letterlijk dezelfde: het is één kastje, één knop, één PoE-poort. Hij stond
+## twee keer uitgeschreven en moest met de hand in de pas gehouden worden - de
+## interlock tussen beide radio's werkt alleen als de tijdvensters aan weerszijden
+## gelijk zijn. Nu staat hij één keer.
+##
+## Hij staat hier en niet in Thread.yaml omdat dit de kale ladder is: Zigbee doet
+## precies wat het script doet en niets meer. Thread zet er één stap bovenop (de
+## OTBR-add-on opnieuw starten na de radio) en geeft die als veld mee. De basis
+## hoort bij het basisgeval; bovendien staat de hardware-uitleg over het kastje -
+## de twee poorten, de ZNP-ping - hierboven al.
+##
+## Wat radio-eigen is (welke sensor, welke wachttijd, welke teksten, wel of geen
+## add-on) komt uit de aanroeper. Wat over het kastje gaat, staat in het script.
+##
 ## LET OP: dit is een nieuw packagebestand; het laadt pas na een volledige
 ## herstart van Home Assistant, een YAML-reload is niet genoeg.
 ##############################################################################
@@ -106,6 +123,9 @@ zigbee_package:
     #   2. PoE-poort uit/aan  -> tien minuten wachten
     #   3. opgeven met een critical melding
     #
+    # Die ladder staat onderaan dit bestand in `script.slzb_radio_terugzetten`;
+    # hieronder staat alleen wanneer we hem voor Zigbee aanroepen en waarmee.
+    #
     # Trede 1 wordt overgeslagen als de SLZB zelf niet meer reageert; dan valt er
     # softwarematig niets te resetten en is de stroom de enige weg. Elke trede
     # stopt zodra de bridge terug is, dus normaal komt hij nooit verder dan de
@@ -116,9 +136,6 @@ zigbee_package:
     # op een minuut of vijf) en een lamp op een fysieke schakelaar komt sowieso
     # nooit terug. Daarop wachten zou de automatisering altijd laten afgaan op
     # trede 3.
-    #
-    # PoE-poort 1 van de switch in de meterkast voedt de SLZB; dat is op
-    # 2026-08-05 nagekeken voor Thread.yaml, hetzelfde apparaat.
     - id: zigbee_coordinator_herstart
       alias: Zigbee - Coördinator terugzetten
       description: >-
@@ -146,6 +163,17 @@ zigbee_package:
         # deed de uurrem hieronder niets.
         - trigger: time_pattern
           hours: "/1"
+      # DEZE VIER CONDITIES BLIJVEN HIER STAAN, EN NIET IN HET GEDEELDE SCRIPT.
+      # Dat is geen slordigheid maar het enige dat werkt: `last_triggered` van
+      # een automatisering wordt pas gezet als de acties écht beginnen, dus ná
+      # deze conditieś. Zou de opstart- of zesuursgrens in het script staan, dan
+      # telde elke afgeknepen ronde alsnog mee als "getriggerd" en zou de uurrem
+      # hieronder de vangnettrigger van 25 minuten uptime wegdrukken.
+      #
+      # En `this` wijst in een script naar het script zelf, niet naar de
+      # aanroeper: één gedeelde `last_triggered` zou betekenen dat een ronde voor
+      # Zigbee die van Thread een uur lang blokkeert. Elke radio hoort zijn eigen
+      # uurbudget te hebben.
       conditions:
         # Bij de uurtrigger is dit de eigenlijke toets; bij de flanken een
         # goedkope zekerheid tegen een sensor die net weer omklapte.
@@ -173,21 +201,167 @@ zigbee_package:
             {% set sinds = states.binary_sensor.zigbee_netwerk_stuk.last_changed %}
             {{ sinds is none or (now() - sinds) < timedelta(hours=6) }}
       actions:
+        # Vanaf hier is alles gelijk aan Thread; zie het script onderaan dit
+        # bestand. Deze aanroep is met opzet de laatste actie: een `stop:` in het
+        # script beëindigt dan de hele ronde, net als toen het nog één blok was.
+        - action: script.slzb_radio_terugzetten
+          data:
+            naam: Zigbee
+            andere_radio: Thread
+            stuk_sensor: binary_sensor.zigbee_netwerk_stuk
+            apparaten: Zigbee-apparaten
+            # Gemeten op 5 augustus: web-UI terug na ~40 seconden, de radio
+            # antwoordde na ~50. Daarna moet systemd op .203 Zigbee2MQTT nog
+            # oppakken (tien seconden tussen twee pogingen) en moet die zich bij
+            # MQTT melden. Tien minuten is daar ruim voor; hier is niets te
+            # winnen met haast. Na de PoE dezelfde tien minuten, met de
+            # opstarttijd van het kastje erbij.
+            wachttijd: "00:10:00"
+            # Leeg, want Zigbee2MQTT draait op 192.168.2.203 als systemd-service
+            # en niet als add-on: Home Assistant kan er niet bij en hoeft dat ook
+            # niet. Zie de kop van dit bestand. Thread geeft hier wél een slug
+            # mee, en dát is het enige inhoudelijke verschil tussen de twee.
+            addon: ""
+            meldingen:
+              stuk: >-
+                Zigbee2MQTT heeft al tien minuten geen verbinding, dus de Zigbee-
+                apparaten doen niets.
+              zachte_reset: >-
+                Ik herstart de coördinator; Thread valt daarbij twee minuten weg.
+              hersteld_zacht: >-
+                De coördinator is herstart en Zigbee2MQTT heeft weer verbinding.
+                Het mesh vult zich de komende minuten vanzelf.
+              hersteld_poe: >-
+                De SLZB is via de PoE-poort opnieuw opgestart en Zigbee2MQTT
+                heeft weer verbinding.
+              # Coördinator gereset én spanningsloos gemaakt, en nog steeds geen
+              # bridge. Dan ligt het niet aan de radio maar aan Zigbee2MQTT zelf.
+              opgegeven: >-
+                De coördinator is gereset én spanningsloos gemaakt, maar
+                Zigbee2MQTT heeft nog steeds geen verbinding. Dan ligt het niet
+                aan de radio: kijk op 192.168.2.203 met
+                `systemctl status zigbee2mqtt`.
+
+  ###########################################################################
+  ## GEDEELD MET THREAD - de herstelladder van het kastje zelf
+  ###########################################################################
+  script:
+    # Aangeroepen door `zigbee_coordinator_herstart` hierboven en door
+    # `thread_border_router_herstart` in packages/9 - Other/Thread.yaml. Beide
+    # radio's zitten in dezelfde SLZB-MR3 op 192.168.2.207, aan dezelfde
+    # PoE-poort, achter dezelfde resetknop - dus is de manier om ze terug te
+    # zetten ook dezelfde.
+    #
+    # WAT HIER NIET IN ZIT, EN WAAROM
+    # Het besluit óf er een ronde mag lopen (netwerk stuk, HA lang genoeg op,
+    # hooguit één poging per uur, na zes uur ophouden) staat bij de aanroepers.
+    # Dat moet ook: `last_triggered` van een automatisering wordt pas gezet als
+    # haar acties beginnen, en `this` wijst hier naar het script en niet naar de
+    # aanroeper. Zie de uitleg boven `conditions:` hierboven.
+    slzb_radio_terugzetten:
+      alias: SLZB - Radio terugzetten
+      description: >-
+        De herstelladder van de SLZB-MR3: eerst een core-restart, dan de PoE
+        eraf, dan opgeven met een critical melding. Stopt zodra het netwerk
+        terug is en meldt bij elke stap wat er gebeurt.
+      icon: mdi:restart-alert
+      # PARALLEL, EN MET GOEDE REDEN
+      # Valt het hele kastje uit, dan merken Zigbee en Thread dat allebei en
+      # roepen ze dit script vrijwel tegelijk aan. Met `mode: single` zou de
+      # tweede aanroep stilletjes verdampen - géén melding, terwijl juist de
+      # melding "de PoE is net al eraf geweest" het antwoord is dat je dan wil.
+      # De interlocks hieronder (`recent_gereset`, `poe_recent_gecycled`) doen
+      # dat werk; die hebben een tweede ronde nodig om het te kunnen zeggen.
+      # Meer dan twee radio's zitten er niet in het kastje, dus max 2.
+      mode: parallel
+      max: 2
+      fields:
+        naam:
+          name: Netwerk
+          description: Hoe dit netwerk in de meldingen heet
+          required: true
+          example: Zigbee
+          selector:
+            text:
+        andere_radio:
+          name: Andere radio
+          description: De andere radio in hetzelfde kastje, voor de tekst bij de interlock
+          required: true
+          example: Thread
+          selector:
+            text:
+        stuk_sensor:
+          name: Stuk-sensor
+          description: De binary_sensor die `on` staat zolang dit netwerk eruit ligt
+          required: true
+          example: binary_sensor.zigbee_netwerk_stuk
+          selector:
+            entity:
+              domain: binary_sensor
+        apparaten:
+          name: Apparaten
+          description: Hoe de apparaten van dit netwerk heten in de melding
+          required: true
+          example: Zigbee-apparaten
+          selector:
+            text:
+        wachttijd:
+          name: Wachttijd per trede
+          description: Hoe lang er na een reset op herstel gewacht wordt
+          required: true
+          example: "00:10:00"
+          selector:
+            text:
+        addon:
+          name: Add-on
+          description: >-
+            Slug van een add-on die ná de radio opnieuw op moet, of leeg als er
+            geen is
+          default: ""
+          selector:
+            text:
+        addon_wacht_na_reset:
+          name: Wachten voor de add-on (na core-restart)
+          description: Hoe lang de SLZB krijgt om op te komen voor de add-on herstart
+          default: "00:02:00"
+          selector:
+            text:
+        addon_wacht_na_poe:
+          name: Wachten voor de add-on (na PoE)
+          description: Idem, maar na een koude start - die duurt langer
+          default: "00:03:00"
+          selector:
+            text:
+        meldingen:
+          name: Meldingsteksten
+          description: >-
+            De inhoudelijke zinnen: `stuk`, `zachte_reset`, `hersteld_zacht`,
+            `hersteld_poe` en `opgegeven`. De titels en de rest van de zinnen
+            maakt het script zelf.
+          required: true
+          selector:
+            object:
+      sequence:
+        #####################################################################
+        ## Wat kan er nog, en wat heeft de andere radio net al gedaan
+        #####################################################################
         # Twee redenen om de zachte trede over te slaan en meteen de stroom te
         # pakken:
         #
         #   - De SLZB-entiteiten staan op `unavailable`, dus de integratie kan
-        #     het kastje niet bereiken en er valt niets te resetten.
+        #     het kastje niet bereiken en er valt niets te resetten. Precies de
+        #     situatie van 5 augustus, toen socat "No route to host" gaf.
         #   - Het kastje is in het afgelopen half uur al opnieuw opgestart. De
         #     state van een button ís namelijk het tijdstip van de laatste druk,
-        #     dus dit ziet ook een reset door de Thread-automatisering of eentje
-        #     met de hand. Een core-restart die hielp is binnen een minuut of
-        #     twee zichtbaar; is Zigbee daarna nóg tien minuten weg, dan lost een
+        #     dus dit ziet ook een reset door de ándere waakhond of eentje met de
+        #     hand. Een core-restart die hielp is binnen een minuut of twee
+        #     zichtbaar; is het netwerk daarna nóg tien minuten weg, dan lost een
         #     tweede druk op diezelfde knop het niet alsnog op.
         #
-        # Dit staat expres niet bij `conditions:`. Daar zou het de hele ronde
-        # blokkeren - geen melding, geen escalatie - terwijl een reset die net
-        # niet hielp juist de reden is om door te gaan naar de PoE.
+        # Dit staat expres niet bij de `conditions:` van de aanroepers. Daar zou
+        # het de hele ronde blokkeren - geen melding, geen escalatie - terwijl
+        # een reset die net niet hielp juist de reden is om door te gaan naar de
+        # PoE.
         - variables:
             slzb_reageert: >-
               {{ states('button.slzb_mr3_core_restart')
@@ -207,17 +381,16 @@ zigbee_package:
 
         - action: notify.mobile_devices_adults
           data:
-            title: Zigbee ligt eruit
+            title: "{{ naam }} ligt eruit"
             message: >-
-              Zigbee2MQTT heeft al tien minuten geen verbinding, dus de Zigbee-
-              apparaten doen niets.
+              {{ meldingen.stuk }}
               {% if zachte_reset_zinvol %}
-                Ik herstart de coördinator; Thread valt daarbij twee minuten weg.
+                {{ meldingen.zachte_reset }}
               {% elif not slzb_reageert %}
                 De SLZB reageert zelf ook niet, dus ik haal de PoE eraf.
               {% else %}
-                De coördinator is net al herstart en dat hielp niet, dus ik haal
-                de PoE eraf.
+                De SLZB is net al herstart en dat hielp niet, dus ik haal de PoE
+                eraf.
               {% endif %}
 
         #####################################################################
@@ -230,38 +403,54 @@ zigbee_package:
             - action: button.press
               target:
                 entity_id: button.slzb_mr3_core_restart
-            # Gemeten op 5 augustus: web-UI terug na ~40 seconden, de radio
-            # antwoordde na ~50. Daarna moet systemd op .203 Zigbee2MQTT nog
-            # oppakken (tien seconden tussen twee pogingen) en moet die zich bij
-            # MQTT melden. Tien minuten is daar ruim voor; hier is niets te
-            # winnen met haast.
-            - wait_for_trigger:
-                - trigger: state
-                  entity_id: binary_sensor.zigbee_netwerk_stuk
-                  to: "off"
-              timeout: "00:10:00"
+            # De radio eerst, dan pas wat eraan hangt. Andersom hielp op
+            # 5 augustus niet: de add-on kan niets zolang de radio aan de andere
+            # kant van die TCP-verbinding hangt te wezen. Zie Thread.yaml, dat
+            # als enige een slug meegeeft; voor Zigbee slaat dit blok over.
+            - if:
+                - condition: template
+                  value_template: "{{ addon | default('', true) != '' }}"
+              then:
+                - delay: "{{ addon_wacht_na_reset | default('00:02:00', true) }}"
+                - action: hassio.addon_restart
+                  data:
+                    addon: "{{ addon }}"
+                  continue_on_error: true
+            # `wait_template` en geen `wait_for_trigger`: de sensor komt hier uit
+            # een veld, en in een trigger mag `entity_id` geen template zijn.
+            # Bijvangst: staat hij al op `off`, dan lopen we meteen door in
+            # plaats van op een flank te wachten die al geweest is.
+            - wait_template: "{{ is_state(stuk_sensor, 'off') }}"
+              timeout: "{{ wachttijd }}"
               continue_on_timeout: true
 
         - if:
-            - condition: state
-              entity_id: binary_sensor.zigbee_netwerk_stuk
-              state: "off"
+            - condition: template
+              value_template: "{{ is_state(stuk_sensor, 'off') }}"
           then:
             - action: notify.mobile_devices_adults
               data:
-                title: Zigbee is terug
-                message: >-
-                  De coördinator is herstart en Zigbee2MQTT heeft weer
-                  verbinding. Het mesh vult zich de komende minuten vanzelf.
-            - stop: "Hersteld met een core-restart"
+                title: "{{ naam }} is terug"
+                message: "{{ meldingen.hersteld_zacht }}"
+            - stop: "Hersteld met een zachte reset"
 
         #####################################################################
         ## Poging 2 - stroom eraf
         #####################################################################
+        # PoE-poort 1 van de switch in de meterkast voedt de SLZB (nagekeken op
+        # 2026-08-05). Dit is het enige dat een gehangen kastje terugbrengt
+        # zonder dat er iemand naar de meterkast loopt - en dat was op 5 augustus
+        # precies wat er nodig was.
+        #
+        # Waarom pas hier: spanning wegnemen is grover dan nodig zolang het
+        # apparaat nog praat, en een koude start kost meer tijd. Reageert de SLZB
+        # niet meer, dan wordt poging 1 hierboven overgeslagen en komt hij meteen
+        # hier terecht.
+        #
         # Alleen `unavailable` betekent onbereikbaar. `unknown` stond hier ook,
         # maar de state van een button ís het tijdstip van de laatste druk, en
-        # deze knop is nog nooit ingedrukt - dus hij staat gewoon op `unknown`
-        # en trede 2 stopte er altijd. Geverifieerd tegen de draaiende HA op
+        # deze knop is nog nooit ingedrukt - dus hij staat gewoon op `unknown` en
+        # trede 2 stopte er altijd. Geverifieerd tegen de draaiende HA op
         # 2026-08-06.
         - if:
             - condition: state
@@ -270,9 +459,9 @@ zigbee_package:
           then:
             - action: notify.mobile_devices_adults
               data:
-                title: Zigbee weg, switch onbereikbaar
+                title: "{{ naam }} weg, switch onbereikbaar"
                 message: >-
-                  De Zigbee-apparaten zijn weg en de PoE-switch in de meterkast
+                  De {{ apparaten }} zijn weg en de PoE-switch in de meterkast
                   reageert ook niet, dus ik kan de SLZB niet spanningsloos
                   maken. Hier moet iemand naar kijken.
                 data:
@@ -289,57 +478,57 @@ zigbee_package:
           then:
             - action: notify.mobile_devices_adults
               data:
-                title: Zigbee weg, herstel loopt al
+                title: "{{ naam }} weg, herstel loopt al"
                 message: >-
                   De PoE van de SLZB is net al eraf geweest - vrijwel zeker door
-                  de Thread-waakhond, want het is hetzelfde kastje. Ik doe het
-                  niet nog een keer; als Zigbee over een uur nog weg is, probeer
-                  ik het opnieuw.
+                  de {{ andere_radio }}-waakhond, want het is hetzelfde kastje.
+                  Ik doe het niet nog een keer; als {{ naam }} over een uur nog
+                  weg is, probeer ik het opnieuw.
             - stop: "PoE net al gecycled, herstel van de andere radio afwachten"
 
         - action: notify.mobile_devices_adults
           data:
-            title: Zigbee nog steeds weg
+            title: "{{ naam }} nog steeds weg"
             message: Ik haal de PoE van de SLZB er even af.
 
         - action: button.press
           target:
             entity_id: button.usw_pro_max_16_poe_meterkast_port_1_power_cycle
 
-        # Een koude start duurt langer dan een core-restart, dus dezelfde tien
-        # minuten maar met de opstarttijd van het kastje erbij.
-        - wait_for_trigger:
-            - trigger: state
-              entity_id: binary_sensor.zigbee_netwerk_stuk
-              to: "off"
-          timeout: "00:10:00"
+        # Een koude start duurt langer dan een core-restart, vandaar een eigen
+        # (langere) wachttijd voordat de add-on het opnieuw mag proberen.
+        - if:
+            - condition: template
+              value_template: "{{ addon | default('', true) != '' }}"
+          then:
+            - delay: "{{ addon_wacht_na_poe | default('00:03:00', true) }}"
+            - action: hassio.addon_restart
+              data:
+                addon: "{{ addon }}"
+              continue_on_error: true
+
+        - wait_template: "{{ is_state(stuk_sensor, 'off') }}"
+          timeout: "{{ wachttijd }}"
           continue_on_timeout: true
 
         - choose:
             - conditions:
-                - condition: state
-                  entity_id: binary_sensor.zigbee_netwerk_stuk
-                  state: "off"
+                - condition: template
+                  value_template: "{{ is_state(stuk_sensor, 'off') }}"
               sequence:
                 - action: notify.mobile_devices_adults
                   data:
-                    title: Zigbee is terug
-                    message: >-
-                      De SLZB is via de PoE-poort opnieuw opgestart en
-                      Zigbee2MQTT heeft weer verbinding.
+                    title: "{{ naam }} is terug"
+                    message: "{{ meldingen.hersteld_poe }}"
           default:
-            # Coördinator gereset én spanningsloos gemaakt, en nog steeds geen
-            # bridge. Dan ligt het niet aan de radio maar aan Zigbee2MQTT zelf.
-            # Critical, want zonder Zigbee doet het halve huis niets en zie je
-            # dat verder nergens aan.
+            # Alles gehad: zachte reset, stroom eraf. Dan zit het dieper dan een
+            # vastgelopen radio. Critical, want zonder Zigbee doet het halve huis
+            # niets en zonder Thread de lampen en luchtreinigers beneden - en je
+            # ziet dat verder nergens aan.
             - action: notify.mobile_devices_adults
               data:
-                title: Zigbee blijft weg
-                message: >-
-                  De coördinator is gereset én spanningsloos gemaakt, maar
-                  Zigbee2MQTT heeft nog steeds geen verbinding. Dan ligt het niet
-                  aan de radio: kijk op 192.168.2.203 met
-                  `systemctl status zigbee2mqtt`.
+                title: "{{ naam }} blijft weg"
+                message: "{{ meldingen.opgegeven }}"
                 data:
                   push:
                     sound:

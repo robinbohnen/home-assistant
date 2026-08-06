@@ -47,44 +47,13 @@ presence_package:
           prob_given_true: 0.50   # WiFi connected = extra zekerheid, maar niet verplicht als je thuis bent
           prob_given_false: 0.05  # WiFi connected terwijl je weg bent = zelden
 
-    #################################################################
-    ## Samantha - Bayesian aanwezigheid
-    #################################################################
-    - platform: bayesian
-      name: "Samantha thuis"
-      unique_id: bayesian_samantha_home
-      device_class: presence
-      prior: 0.40
-      probability_threshold: 0.85
-      observations:
-        - platform: state
-          entity_id: person.samantha_henkelman
-          to_state: "home"
-          prob_given_true: 0.95
-          prob_given_false: 0.03
-
-        - platform: state
-          entity_id: device_tracker.apple_iphone_samantha
-          to_state: "home"
-          prob_given_true: 0.50
-          prob_given_false: 0.05
-
-  #################################################################
-  ## Template sensor: zijn er überhaupt volwassenen thuis?
-  ## Werkt naast de bestaande group.all_adults (die GPS gebruikt).
-  ## Gebruik binary_sensor.volwassenen_thuis in nieuwe automations.
-  #################################################################
-  template:
-    - binary_sensor:
-        - name: "Volwassenen thuis"
-          unique_id: adults_home_bayesian
-          device_class: presence
-          state: >-
-            {{ is_state('binary_sensor.robin_thuis', 'on')
-               or is_state('binary_sensor.samantha_thuis', 'on') }}
-          availability: >-
-            {{ states('binary_sensor.robin_thuis') not in ['unknown', 'unavailable']
-               and states('binary_sensor.samantha_thuis') not in ['unknown', 'unavailable'] }}
+    # Hier stonden ook "Samantha thuis" (bayesian) en de template-sensor
+    # "Volwassenen thuis" die Robin en Samantha combineerde. Verwijderd op
+    # 2026-08-06: niets las ze. De combinatiesensor was aspirationeel ("gebruik
+    # deze in nieuwe automations") en dat is nooit gebeurd, waardoor de
+    # Samantha-sensor alleen nog binnen die ene dode sensor werd gelezen.
+    # Aanwezigheid van volwassenen loopt overal via group.all_adults.
+    # binary_sensor.robin_thuis blijft: die voedt de conflictmelding hieronder.
 
   #################################################################
   ## Notificatie bij onbetrouwbare detectie

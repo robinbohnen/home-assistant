@@ -1877,37 +1877,25 @@ cards:
             square: false
             cards:
               # ---- Overkapping toggle ----
+              # Was twee kaarten met tegengestelde zichtbaarheidsregels, elk met
+              # een eigen join/unjoin die ook al in de overkappingsknop stond.
+              # Nu één kaart die zichzelf omschrijft naar de groepsstatus en het
+              # gedeelde script aanroept (packages/9 - Other/Sonos Groups.yaml).
               - type: custom:mushroom-template-card
-                primary: Overkapping erbij
-                secondary: bij Woonkamer voegen
-                icon: mdi:speaker-multiple
-                icon_color: blue
-                visibility:
-                  - condition: state
-                    entity: binary_sensor.sonos_overkapping_bij_woonkamer
-                    state: "off"
+                entity: binary_sensor.sonos_overkapping_bij_woonkamer
+                primary: >-
+                  {{ 'Overkapping eraf' if is_state(entity, 'on')
+                     else 'Overkapping erbij' }}
+                secondary: >-
+                  {{ 'loskoppelen' if is_state(entity, 'on')
+                     else 'bij Woonkamer voegen' }}
+                icon: >-
+                  {{ 'mdi:speaker-off' if is_state(entity, 'on')
+                     else 'mdi:speaker-multiple' }}
+                icon_color: "{{ 'orange' if is_state(entity, 'on') else 'blue' }}"
                 tap_action:
                   action: perform-action
-                  perform_action: media_player.join
-                  target:
-                    entity_id: media_player.woonkamer_sonos
-                  data:
-                    group_members:
-                      - media_player.overkapping_sonos
-              - type: custom:mushroom-template-card
-                primary: Overkapping eraf
-                secondary: loskoppelen
-                icon: mdi:speaker-off
-                icon_color: orange
-                visibility:
-                  - condition: state
-                    entity: binary_sensor.sonos_overkapping_bij_woonkamer
-                    state: "on"
-                tap_action:
-                  action: perform-action
-                  perform_action: media_player.unjoin
-                  target:
-                    entity_id: media_player.overkapping_sonos
+                  perform_action: script.sonos_overkapping_toggle
               # ---- Benedenverdieping toggle ----
               - type: custom:mushroom-template-card
                 primary: Benedenverdieping

@@ -171,98 +171,220 @@ klimaat_zonwering_package:
   ###########################################################################
   ## Laag 3 - het advies per zone
   ##
-  ## Alle zeven sensoren roepen dezelfde macro aan; verander je de tabel in
+  ## Alle tien sensoren komen uit dezelfde macro; verander je de tabel in
   ## custom_templates/klimaat.jinja, dan verandert alles mee. `positie` en
   ## `uitvoeren` zijn wat de uitvoerder leest, `reden` en `blokkade` zijn voor
   ## het dashboard.
+  ##
+  ## WAAROM ÉÉN TRIGGER-BLOK EN NIET TIEN GEWONE SENSOREN
+  ## State en attributen worden ieder apart gerenderd. Met de macro-aanroep in
+  ## elk van die templates draaide `advies()` zeven keer per sensor - één keer
+  ## voor de state en zes keer voor de attributen - en dus zeventig keer per
+  ## ronde, elke keer met exact dezelfde uitkomst. Een variabele uit de
+  ## `action:`-sectie is beschikbaar in de templates van álle entiteiten in dit
+  ## blok, dus nu draait de macro nog één keer per zone: tien keer per ronde.
+  ## Zelfde patroon en dezelfde reden als packages/9 - Other/Kamers.yaml; het
+  ## vraagt HA 2024.10 of nieuwer.
+  ##
+  ## WAAROM DIE TRIGGERLIJST
+  ## De prijs van dit patroon: een trigger-based template volgt niet meer
+  ## vanzelf alles wat de macro onderweg uitleest, hij ververst alleen op zijn
+  ## eigen triggers. De minuuttik onderaan is daarom het echte vangnet - nooit
+  ## meer dan zestig seconden achterstand, en de uitvoerder zelf loopt op een
+  ## kwartier. De state-triggers erboven staan er voor de gevallen waar een
+  ## minuut wachten wél opvalt of gevaarlijk is: iets dat een mens net heeft
+  ## aangeraakt, en de meldingen die een screen naar binnen moeten halen.
+  ## Wat er níet bij staat beweegt uit zichzelf traag (kamertemperatuur,
+  ## zonshoogte, buitentemperatuur, de bedtijd-helpers) en heeft aan de
+  ## minuuttik ruim genoeg.
+  ##
+  ## Na een template-reload staan deze sensoren hoogstens één minuut op
+  ## `unknown`. De uitvoerder leest dan `positie` als -1 en doet niets, dus dat
+  ## is stil wachten en geen verkeerde beweging.
   ###########################################################################
   template:
-    - sensor:
+    - trigger:
+        # 1. De knoppen en schuifjes van de klimaatregie zelf. Zet je op het
+        #    dashboard iets om, dan hoor je het advies te zien veranderen
+        #    terwijl je kijkt - niet ergens in de minuut erna.
+        - trigger: state
+          entity_id:
+            - input_boolean.klimaatregie_actief
+            - input_boolean.klimaat_wakker
+            - input_boolean.klimaat_nachtspui
+            - input_select.klimaat_regime
+            - input_number.klimaat_kamer_warm
+            - input_number.klimaat_hittedag_vanaf
+            - input_number.klimaat_verwachte_max
+            - input_number.klimaat_spui_delta
+            - input_number.klimaat_kier_positie
+            - input_number.klimaat_screen_max_wind
+            - input_number.klimaat_screen_max_regen
+        # 2. Per zone de handmatig-schakelaar en de handbedieningstimer. Deze
+        #    twee bepalen `uitvoeren`: zet je een zone op handmatig, dan mag de
+        #    uitvoerder daar in de minuut erna niet nog één keer aan trekken.
+        #    Dit lijstje loopt per zone en wordt met de hand bijgehouden. Komt
+        #    er een zone bij en vergeet je hem hier, dan is het gevolg mild:
+        #    die zone merkt zijn eigen schakelaar pas bij de volgende minuuttik.
+        - trigger: state
+          entity_id:
+            - input_boolean.zonwering_handmatig_keuken_screens
+            - input_boolean.zonwering_handmatig_keuken_rolgordijn_groot
+            - input_boolean.zonwering_handmatig_keuken_rolgordijn_klein
+            - input_boolean.zonwering_handmatig_kantoor_links
+            - input_boolean.zonwering_handmatig_kantoor_rechts
+            - input_boolean.zonwering_handmatig_badkamer
+            - input_boolean.zonwering_handmatig_slaapkamer
+            - input_boolean.zonwering_handmatig_slaapkamer_logan
+            - input_boolean.zonwering_handmatig_slaapkamer_emma
+            - input_boolean.zonwering_handmatig_zonnescherm
+            - timer.override_keuken_screens
+            - timer.override_keuken_rolgordijn_groot
+            - timer.override_keuken_rolgordijn_klein
+            - timer.override_kantoor_links
+            - timer.override_kantoor_rechts
+            - timer.override_badkamer
+            - timer.override_slaapkamer
+            - timer.override_slaapkamer_logan
+            - timer.override_slaapkamer_emma
+            - timer.override_zonnescherm
+        # 3. Veiligheid: wind, storm, regen en een openstaand raam. Dit zijn de
+        #    redenen om een screen in te halen of een rolgordijn juist niet te
+        #    laten zakken, en daar wil je geen minuut op wachten.
+        - trigger: state
+          entity_id:
+            - weather.knmi_thuis
+            - binary_sensor.knmi_waarschuwing
+            - sensor.neerslag_komende_30_minuten
+            - binary_sensor.keuken_raam_groot_contact
+            - binary_sensor.keuken_raam_klein_contact
+        # 4. De zon per gevel: dit is de prikkel waar het hele advies om draait
+        #    en hij schakelt maar een paar keer per dag.
+        - trigger: state
+          entity_id:
+            - binary_sensor.zon_op_voorgevel
+            - binary_sensor.zon_op_zijgevel
+            - binary_sensor.zon_op_achtergevel
+            - binary_sensor.zon_richting_voorgevel
+            - binary_sensor.zon_richting_zijgevel
+            - binary_sensor.zon_richting_achtergevel
+        # 5. Wie er thuis is, of het alarm scherp staat, en of het keukenscreen
+        #    er nog hangt - dat laatste bepaalt of de rolgordijnen bijspringen.
+        - trigger: state
+          entity_id:
+            - group.all_adults
+            - alarm_control_panel.alarmo
+            - cover.covers_kitchen_screens
+        # 6. Het vangnet voor al het andere dat de macro leest: kamer- en
+        #    buitentemperatuur, de zonshoogte en de bedtijd-helpers. Die
+        #    kruipen, dus een minuut achterstand is er geen.
+        - trigger: time_pattern
+          minutes: "/1"
+        # Zonder deze staan alle adviezen na een herstart een minuut op unknown.
+        - trigger: homeassistant
+          event: start
+
+      action:
+        # Eén ronde langs alle zones, en de uitkomst gaat als dict {zone: advies}
+        # naar de sensoren hieronder. De macro levert al JSON, dus we plakken die
+        # stukken aan elkaar en parsen één keer; dat scheelt tien keer heen en
+        # weer serialiseren. Een dict opbouwen met .update() kan hier niet - de
+        # template-sandbox van Home Assistant blokkeert het muteren van dicts.
+        - variables:
+            adviezen: >-
+              {% from 'klimaat.jinja' import advies, zone_lijst %}
+              {%- set ns = namespace(delen=[]) -%}
+              {%- for z in zone_lijst() | from_json -%}
+                {%- set ns.delen = ns.delen + [(z | to_json) ~ ':' ~ (advies(z) | trim)] -%}
+              {%- endfor -%}
+              {{ ('{' ~ ns.delen | join(',') ~ '}') | from_json }}
+
+      sensor:
         - name: "Zonwering advies Keuken screens"
           unique_id: zonwering_advies_keuken_screens
           icon: mdi:blinds-horizontal
-          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).advies }}"
+          state: "{{ adviezen.keuken_screens.advies }}"
           attributes:
-            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).positie }}"
-            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).uitvoeren }}"
-            vraagt: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).vraagt }}"
-            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).reden }}"
-            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).blokkade }}"
-            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_screens') | trim | from_json).cover }}"
+            positie: "{{ adviezen.keuken_screens.positie }}"
+            uitvoeren: "{{ adviezen.keuken_screens.uitvoeren }}"
+            vraagt: "{{ adviezen.keuken_screens.vraagt }}"
+            reden: "{{ adviezen.keuken_screens.reden }}"
+            blokkade: "{{ adviezen.keuken_screens.blokkade }}"
+            cover: "{{ adviezen.keuken_screens.cover }}"
 
         # Binnenzonwering. Die springt alleen bij als het screen ervoor niet
         # omlaag staat; zie blok 5b in klimaat.jinja.
         - name: "Zonwering advies Keuken rolgordijn groot"
           unique_id: zonwering_advies_keuken_rolgordijn_groot
           icon: mdi:blinds
-          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).advies }}"
+          state: "{{ adviezen.keuken_rolgordijn_groot.advies }}"
           attributes:
-            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).positie }}"
-            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).uitvoeren }}"
-            vraagt: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).vraagt }}"
-            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).reden }}"
-            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).blokkade }}"
-            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_groot') | trim | from_json).cover }}"
+            positie: "{{ adviezen.keuken_rolgordijn_groot.positie }}"
+            uitvoeren: "{{ adviezen.keuken_rolgordijn_groot.uitvoeren }}"
+            vraagt: "{{ adviezen.keuken_rolgordijn_groot.vraagt }}"
+            reden: "{{ adviezen.keuken_rolgordijn_groot.reden }}"
+            blokkade: "{{ adviezen.keuken_rolgordijn_groot.blokkade }}"
+            cover: "{{ adviezen.keuken_rolgordijn_groot.cover }}"
 
         - name: "Zonwering advies Keuken rolgordijn klein"
           unique_id: zonwering_advies_keuken_rolgordijn_klein
           icon: mdi:blinds
-          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).advies }}"
+          state: "{{ adviezen.keuken_rolgordijn_klein.advies }}"
           attributes:
-            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).positie }}"
-            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).uitvoeren }}"
-            vraagt: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).vraagt }}"
-            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).reden }}"
-            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).blokkade }}"
-            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('keuken_rolgordijn_klein') | trim | from_json).cover }}"
+            positie: "{{ adviezen.keuken_rolgordijn_klein.positie }}"
+            uitvoeren: "{{ adviezen.keuken_rolgordijn_klein.uitvoeren }}"
+            vraagt: "{{ adviezen.keuken_rolgordijn_klein.vraagt }}"
+            reden: "{{ adviezen.keuken_rolgordijn_klein.reden }}"
+            blokkade: "{{ adviezen.keuken_rolgordijn_klein.blokkade }}"
+            cover: "{{ adviezen.keuken_rolgordijn_klein.cover }}"
 
         - name: "Zonwering advies Kantoor links"
           unique_id: zonwering_advies_kantoor_links
           icon: mdi:window-shutter
-          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_links') | trim | from_json).advies }}"
+          state: "{{ adviezen.kantoor_links.advies }}"
           attributes:
-            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_links') | trim | from_json).positie }}"
-            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_links') | trim | from_json).uitvoeren }}"
-            vraagt: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_links') | trim | from_json).vraagt }}"
-            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_links') | trim | from_json).reden }}"
-            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_links') | trim | from_json).blokkade }}"
-            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_links') | trim | from_json).cover }}"
+            positie: "{{ adviezen.kantoor_links.positie }}"
+            uitvoeren: "{{ adviezen.kantoor_links.uitvoeren }}"
+            vraagt: "{{ adviezen.kantoor_links.vraagt }}"
+            reden: "{{ adviezen.kantoor_links.reden }}"
+            blokkade: "{{ adviezen.kantoor_links.blokkade }}"
+            cover: "{{ adviezen.kantoor_links.cover }}"
 
         - name: "Zonwering advies Kantoor rechts"
           unique_id: zonwering_advies_kantoor_rechts
           icon: mdi:window-shutter
-          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_rechts') | trim | from_json).advies }}"
+          state: "{{ adviezen.kantoor_rechts.advies }}"
           attributes:
-            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_rechts') | trim | from_json).positie }}"
-            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_rechts') | trim | from_json).uitvoeren }}"
-            vraagt: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_rechts') | trim | from_json).vraagt }}"
-            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_rechts') | trim | from_json).reden }}"
-            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_rechts') | trim | from_json).blokkade }}"
-            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('kantoor_rechts') | trim | from_json).cover }}"
+            positie: "{{ adviezen.kantoor_rechts.positie }}"
+            uitvoeren: "{{ adviezen.kantoor_rechts.uitvoeren }}"
+            vraagt: "{{ adviezen.kantoor_rechts.vraagt }}"
+            reden: "{{ adviezen.kantoor_rechts.reden }}"
+            blokkade: "{{ adviezen.kantoor_rechts.blokkade }}"
+            cover: "{{ adviezen.kantoor_rechts.cover }}"
 
         - name: "Zonwering advies Badkamer"
           unique_id: zonwering_advies_badkamer
           icon: mdi:window-shutter
-          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('badkamer') | trim | from_json).advies }}"
+          state: "{{ adviezen.badkamer.advies }}"
           attributes:
-            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('badkamer') | trim | from_json).positie }}"
-            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('badkamer') | trim | from_json).uitvoeren }}"
-            vraagt: "{% from 'klimaat.jinja' import advies %}{{ (advies('badkamer') | trim | from_json).vraagt }}"
-            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('badkamer') | trim | from_json).reden }}"
-            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('badkamer') | trim | from_json).blokkade }}"
-            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('badkamer') | trim | from_json).cover }}"
+            positie: "{{ adviezen.badkamer.positie }}"
+            uitvoeren: "{{ adviezen.badkamer.uitvoeren }}"
+            vraagt: "{{ adviezen.badkamer.vraagt }}"
+            reden: "{{ adviezen.badkamer.reden }}"
+            blokkade: "{{ adviezen.badkamer.blokkade }}"
+            cover: "{{ adviezen.badkamer.cover }}"
 
         - name: "Zonwering advies Slaapkamer"
           unique_id: zonwering_advies_slaapkamer
           icon: mdi:window-shutter
-          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer') | trim | from_json).advies }}"
+          state: "{{ adviezen.slaapkamer.advies }}"
           attributes:
-            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer') | trim | from_json).positie }}"
-            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer') | trim | from_json).uitvoeren }}"
-            vraagt: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer') | trim | from_json).vraagt }}"
-            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer') | trim | from_json).reden }}"
-            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer') | trim | from_json).blokkade }}"
-            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer') | trim | from_json).cover }}"
+            positie: "{{ adviezen.slaapkamer.positie }}"
+            uitvoeren: "{{ adviezen.slaapkamer.uitvoeren }}"
+            vraagt: "{{ adviezen.slaapkamer.vraagt }}"
+            reden: "{{ adviezen.slaapkamer.reden }}"
+            blokkade: "{{ adviezen.slaapkamer.blokkade }}"
+            cover: "{{ adviezen.slaapkamer.cover }}"
 
         - name: "Zonwering advies Slaapkamer Logan"
           # unique_id blijft 'maxi': hij staat al zo in het entiteitenregister
@@ -270,27 +392,27 @@ klimaat_zonwering_package:
           # opleveren. Het entity_id komt van de naam hierboven.
           unique_id: zonwering_advies_maxi
           icon: mdi:window-shutter
-          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_logan') | trim | from_json).advies }}"
+          state: "{{ adviezen.slaapkamer_logan.advies }}"
           attributes:
-            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_logan') | trim | from_json).positie }}"
-            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_logan') | trim | from_json).uitvoeren }}"
-            vraagt: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_logan') | trim | from_json).vraagt }}"
-            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_logan') | trim | from_json).reden }}"
-            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_logan') | trim | from_json).blokkade }}"
-            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_logan') | trim | from_json).cover }}"
+            positie: "{{ adviezen.slaapkamer_logan.positie }}"
+            uitvoeren: "{{ adviezen.slaapkamer_logan.uitvoeren }}"
+            vraagt: "{{ adviezen.slaapkamer_logan.vraagt }}"
+            reden: "{{ adviezen.slaapkamer_logan.reden }}"
+            blokkade: "{{ adviezen.slaapkamer_logan.blokkade }}"
+            cover: "{{ adviezen.slaapkamer_logan.cover }}"
 
         - name: "Zonwering advies Slaapkamer Emma"
           # Zie de opmerking bij Logan hierboven.
           unique_id: zonwering_advies_mini
           icon: mdi:window-shutter
-          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_emma') | trim | from_json).advies }}"
+          state: "{{ adviezen.slaapkamer_emma.advies }}"
           attributes:
-            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_emma') | trim | from_json).positie }}"
-            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_emma') | trim | from_json).uitvoeren }}"
-            vraagt: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_emma') | trim | from_json).vraagt }}"
-            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_emma') | trim | from_json).reden }}"
-            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_emma') | trim | from_json).blokkade }}"
-            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('slaapkamer_emma') | trim | from_json).cover }}"
+            positie: "{{ adviezen.slaapkamer_emma.positie }}"
+            uitvoeren: "{{ adviezen.slaapkamer_emma.uitvoeren }}"
+            vraagt: "{{ adviezen.slaapkamer_emma.vraagt }}"
+            reden: "{{ adviezen.slaapkamer_emma.reden }}"
+            blokkade: "{{ adviezen.slaapkamer_emma.blokkade }}"
+            cover: "{{ adviezen.slaapkamer_emma.cover }}"
 
         # Het zonnescherm. `positie` is hier al vertaald naar cover-termen
         # (die cover is omgekeerd bedraad), dus de uitvoerder hoeft niets
@@ -298,14 +420,14 @@ klimaat_zonwering_package:
         - name: "Zonwering advies Zonnescherm"
           unique_id: zonwering_advies_zonnescherm
           icon: mdi:awning-outline
-          state: "{% from 'klimaat.jinja' import advies %}{{ (advies('zonnescherm') | trim | from_json).advies }}"
+          state: "{{ adviezen.zonnescherm.advies }}"
           attributes:
-            positie: "{% from 'klimaat.jinja' import advies %}{{ (advies('zonnescherm') | trim | from_json).positie }}"
-            uitvoeren: "{% from 'klimaat.jinja' import advies %}{{ (advies('zonnescherm') | trim | from_json).uitvoeren }}"
-            vraagt: "{% from 'klimaat.jinja' import advies %}{{ (advies('zonnescherm') | trim | from_json).vraagt }}"
-            reden: "{% from 'klimaat.jinja' import advies %}{{ (advies('zonnescherm') | trim | from_json).reden }}"
-            blokkade: "{% from 'klimaat.jinja' import advies %}{{ (advies('zonnescherm') | trim | from_json).blokkade }}"
-            cover: "{% from 'klimaat.jinja' import advies %}{{ (advies('zonnescherm') | trim | from_json).cover }}"
+            positie: "{{ adviezen.zonnescherm.positie }}"
+            uitvoeren: "{{ adviezen.zonnescherm.uitvoeren }}"
+            vraagt: "{{ adviezen.zonnescherm.vraagt }}"
+            reden: "{{ adviezen.zonnescherm.reden }}"
+            blokkade: "{{ adviezen.zonnescherm.blokkade }}"
+            cover: "{{ adviezen.zonnescherm.cover }}"
 
   automation:
     ###########################################################################
@@ -329,26 +451,18 @@ klimaat_zonwering_package:
         rolluiken morgenochtend niet alsnog opent.
       mode: single
       triggers:
-        # Zelfde knoppen als packages/3 - Outside/Backyard/Sunscreen.yaml.
-        - domain: mqtt
-          device_id: !secret bedroom_button_1
-          type: action
-          subtype: single
-          trigger: device
-          id: knop
-        - domain: mqtt
-          device_id: !secret bedroom_button_2
-          type: action
-          subtype: single
-          trigger: device
-          id: knop
-        # Virtuele druk vanaf het dashboard, zie Virtual Buttons.yaml
+        # Uit de router in packages/1 - First Floor/Bedroom/Buttons.yaml. Die
+        # kent de knoppen en bepaalt of het ochtend of avond is.
         - trigger: event
-          event_type: virtual_button
+          event_type: huis_routine
           event_data:
-            button: bedroom_buttons
-            action: single
-          id: knop
+            routine: ochtend
+          id: knop_ochtend
+        - trigger: event
+          event_type: huis_routine
+          event_data:
+            routine: avond
+          id: knop_avond
         # Noodrem aan de ochtendkant: drukt niemand op de knop, dan is het huis
         # om 10:00 wakker verklaard en mag alles weer automatisch. Zelfde
         # tijdstip als WAKKER_UITERLIJK in klimaat.jinja; die twee horen gelijk
@@ -365,28 +479,20 @@ klimaat_zonwering_package:
       conditions: []
       actions:
         - choose:
-            # 06:00-17:00 is de opstaan-routine. Zelfde venster als het label
-            # op de kaart "Slaapkamer knop" in dashboards/home/overzicht.yaml;
-            # die twee horen gelijk te blijven.
+            # De router beslist wat ochtend is; het label op de kaart
+            # "Slaapkamer knop" in dashboards/home/overzicht.yaml gebruikt
+            # hetzelfde venster en hoort daarmee gelijk te blijven.
             - conditions:
                 - condition: trigger
-                  id: knop
-                - condition: time
-                  after: "06:00:00"
-                  before: "17:00:00"
+                  id:
+                    - knop_ochtend
+                    - wakker_uiterlijk
               sequence:
                 - action: input_boolean.turn_on
                   target:
                     entity_id: input_boolean.klimaat_wakker
-            - conditions:
-                - condition: trigger
-                  id: wakker_uiterlijk
-              sequence:
-                - action: input_boolean.turn_on
-                  target:
-                    entity_id: input_boolean.klimaat_wakker
-          # Al het andere zet de vlag uit: een druk buiten dat venster is de
-          # naar-bed-routine, en anders is het de reset van 22:00.
+          # Al het andere zet de vlag uit: de avondroutine van de knop, of de
+          # reset van 22:00.
           default:
             - action: input_boolean.turn_off
               target:

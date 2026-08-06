@@ -119,49 +119,25 @@ backyard_lights_package:
       description: "One single press on one of the bedroom buttons"
       mode: single
       triggers:
-        - domain: mqtt
-          device_id: !secret bedroom_button_1
-          type: action
-          subtype: single
-          trigger: device
-        - domain: mqtt
-          device_id: !secret bedroom_button_2
-          type: action
-          subtype: single
-          trigger: device
-        # Virtuele druk, zie packages/9 - Other/Virtual Buttons.yaml
+        # Eén event uit de router in
+        # packages/1 - First Floor/Bedroom/Buttons.yaml.
         - trigger: event
-          event_type: virtual_button
+          event_type: huis_routine
           event_data:
-            button: bedroom_buttons
-            action: single
+            routine: avond
       conditions: []
       actions:
-        - choose:
-            - conditions:
-                - condition: time
-                  after: "06:00:00"
-                  before: "17:00:00"
-              sequence: []
-              alias: Opstaan
-            - conditions:
-                - condition: time
-                  after: "17:00:00"
-                  before: "06:00:00"
-              sequence:
-                - action: light.turn_off
-                  metadata: {}
-                  data:
-                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                  target:
-                    entity_id:
-                      - light.achtertuin_lampen
-                - delay:
-                    seconds: 2
-                - action: light.turn_off
-                  metadata: {}
-                  data: {}
-                  target:
-                    entity_id:
-                      - light.achtertuin_lampen
-              alias: Naar bed gaan
+        - action: light.turn_off
+          data:
+            transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+          target:
+            entity_id:
+              - light.achtertuin_lampen
+        # Een groep losse lampen laat er met één uit-commando met transition
+        # geregeld eentje branden; vandaar de tweede zonder fade.
+        - delay:
+            seconds: 2
+        - action: light.turn_off
+          target:
+            entity_id:
+              - light.achtertuin_lampen

@@ -1,0 +1,222 @@
+# Sonos meenemen met de woonkamer zodra er iemand binnenloopt.
+#
+# Vier kamers (toilet, garage, badkamer, speelkamer) hadden hier hun eigen
+# kopie van staan. De verschillen tussen die kopieën zijn bewust géén van alle
+# gladgestreken, want ze zijn niet allemaal toeval:
+#
+#   * Het volume wordt in de badkamer alleen omláág gehaald (staat hij al
+#     zacht, dan blijft dat zo), terwijl het toilet hem juist altijd op vol
+#     zet. Die speaker is hardwarematig begrensd, dus "1" is daar het normale
+#     luisterniveau en geen typefout. Vandaar twee losse inputs: een niveau en
+#     de keuze of dat niveau afgedwongen of alleen als plafond geldt.
+#   * De speelkamer joint alleen als de tv uit is én de Sonos idle, maar
+#     unjoint al zodra de tv uit is. Die asymmetrie is hier instelbaar
+#     gelaten in plaats van stilzwijgend gelijkgetrokken: join_vereisten en
+#     unjoin_vereisten zijn aparte inputs.
+#
+# Let op bij algemene_condities: die gelden voor het joinen én het unjoinen.
+# Zet je daar een tijdvenster in (zoals de badkamer doet), dan wordt buiten dat
+# venster ook niet meer losgekoppeld en blijft de speaker aan de woonkamer
+# hangen tot de eerstvolgende beweging binnen het venster.
+blueprint:
+  name: Sonos aansluiten bij beweging
+  description: >-
+    Speaker aansluiten bij de woonkamergroep zodra er beweging is (en optioneel
+    zodra een deur opengaat), en weer loskoppelen als het er een tijd stil is.
+    Joinen gebeurt alleen als de speaker idle is, zodat een lopende afspeellijst
+    in die kamer niet overruled wordt. Alles hangt aan een enable_pir_*-helper
+    zodat het per kamer vanaf het dashboard uit kan.
+  author: Robin Bohnen
+  domain: automation
+  homeassistant:
+    # De triggers:/conditions:/actions:-schrijfwijze en de conditieselector.
+    min_version: 2024.10.0
+  input:
+    bewegingssensor:
+      name: Bewegingssensor
+      description: >-
+        PIR of PIR-groep. Aan = aansluiten; een tijd uit = loskoppelen.
+      selector:
+        entity:
+          filter:
+            domain: binary_sensor
+    deur_contacten:
+      name: Deurcontacten (optioneel)
+      description: >-
+        Deuren die ook aansluiten zodra ze opengaan. Bedoeld voor kleine
+        ruimtes waar de PIR pas afgaat als je al binnen staat.
+      default: []
+      selector:
+        entity:
+          multiple: true
+          filter:
+            domain: binary_sensor
+    speaker:
+      name: Speaker in deze kamer
+      selector:
+        entity:
+          filter:
+            domain: media_player
+    groepsleider:
+      name: Speaker om bij aan te sluiten
+      description: De speaker waarvan de muziek overgenomen wordt.
+      default: media_player.woonkamer_sonos
+      selector:
+        entity:
+          filter:
+            domain: media_player
+    schakelaar:
+      name: Aan/uit-schakelaar
+      description: >-
+        input_boolean waarmee de hele automatisering aan of uit kan (de
+        enable_pir_*-helpers op het dashboard).
+      selector:
+        entity:
+          filter:
+            domain: input_boolean
+    uit_na:
+      name: Loskoppelen na
+      description: Zo lang geen beweging, dan gaat de speaker uit de groep.
+      default:
+        hours: 0
+        minutes: 2
+        seconds: 0
+      selector:
+        duration:
+    volume_niveau:
+      name: Volumeniveau
+      description: >-
+        Volume dat vóór het aansluiten gezet wordt. 0 = niet aan het volume
+        komen. Wat er precies mee gebeurt hangt af van de instelling hieronder.
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.01
+          mode: box
+    volume_forceren:
+      name: Volume altijd op dat niveau zetten
+      description: >-
+        Aan = het niveau wordt elke keer afgedwongen, ook omhoog (toilet: die
+        speaker kan hardwarematig niet harder dan prettig is). Uit = het niveau
+        is een plafond en er wordt alleen ingegrepen als hij harder staat.
+      default: false
+      selector:
+        boolean:
+    algemene_condities:
+      name: Algemene condities (optioneel)
+      description: >-
+        Condities voor de hele automatisering, bijvoorbeeld een tijdvenster.
+        Deze blokkeren ook het loskoppelen, dus gebruik ze alleen als dat de
+        bedoeling is.
+      default: []
+      selector:
+        condition:
+    join_vereisten:
+      name: Extra voorwaarden voor het aansluiten (optioneel)
+      description: >-
+        Bovenop de vaste eis dat de speaker idle is. Denk aan "de tv in deze
+        kamer staat uit".
+      default: []
+      selector:
+        condition:
+    unjoin_vereisten:
+      name: Extra voorwaarden voor het loskoppelen (optioneel)
+      description: >-
+        Leeg = altijd loskoppelen na de wachttijd. Bewust los van de
+        join-voorwaarden, want die twee liepen in de speelkamer al uiteen.
+      default: []
+      selector:
+        condition:
+
+# single: er wordt niet gewacht in de acties, dus een tweede beweging tijdens
+# het joinen mag gewoon vervallen.
+mode: single
+max_exceeded: silent
+
+# !input werkt niet binnen templates; het volume moet gerekend worden en gaat
+# daarom via variabelen.
+variables:
+  speaker: !input speaker
+  volume_niveau: !input volume_niveau
+  volume_forceren: !input volume_forceren
+
+triggers:
+  - trigger: state
+    entity_id: !input bewegingssensor
+    to: "on"
+    id: beweging
+  - trigger: state
+    entity_id: !input bewegingssensor
+    to: "off"
+    for: !input uit_na
+    id: geen_beweging
+  # Een deur die opengaat telt als beweging; een lege lijst deurcontacten is
+  # een geldige trigger die simpelweg nooit afgaat.
+  - trigger: state
+    entity_id: !input deur_contacten
+    to: "on"
+    id: beweging
+
+conditions:
+  - alias: "Sonos-bij-beweging staat hier aan"
+    condition: state
+    entity_id: !input schakelaar
+    state: "on"
+  - alias: "Kamerspecifieke algemene condities"
+    condition: and
+    conditions: !input algemene_condities
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id:
+              - beweging
+          - alias: "Kamerspecifieke voorwaarden voor aansluiten"
+            condition: and
+            conditions: !input join_vereisten
+        sequence:
+          # Eerst het volume, dan pas joinen: andersom knalt de muziek er even
+          # op het oude niveau uit voordat hij bijgesteld wordt.
+          - alias: "Volume bijstellen als deze kamer daarom vraagt"
+            if:
+              - condition: template
+                value_template: >-
+                  {{ volume_niveau | float(0) > 0
+                     and (volume_forceren
+                          or state_attr(speaker, 'volume_level') | float(0)
+                              > volume_niveau | float(0)) }}
+            then:
+              - action: media_player.volume_set
+                target:
+                  entity_id: !input speaker
+                data:
+                  volume_level: !input volume_niveau
+          # Alleen idle: speelt hier al iets anders, dan is dat een bewuste
+          # keuze van wie er in de kamer staat en die overrulen we niet.
+          - if:
+              - condition: state
+                entity_id: !input speaker
+                state: idle
+            then:
+              - action: media_player.join
+                target:
+                  entity_id: !input groepsleider
+                data:
+                  group_members:
+                    - !input speaker
+
+      - conditions:
+          - condition: trigger
+            id:
+              - geen_beweging
+          - alias: "Kamerspecifieke voorwaarden voor loskoppelen"
+            condition: and
+            conditions: !input unjoin_vereisten
+        sequence:
+          - action: media_player.unjoin
+            target:
+              entity_id: !input speaker
+    # Geen default-tak: een trigger zonder afgedekte id hoort niets te doen.

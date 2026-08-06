@@ -1,0 +1,194 @@
+# Kinderdeur open na bedtijd: één keer opgeschreven in plaats van per kamer.
+#
+# Gebruikt door:
+#   - packages/1 - First Floor/Bedroom Maxi/Door Opened During Bedtime Maxi.yaml
+#     (id: maxi_opened_door_bedtime, blauw)
+#   - packages/2 - Second Floor/Bedroom Mini/Door Opened During Bedtime Mini.yaml
+#     (id: mini_opened_door_bedtime, roze)
+#
+# De twee kopieën waren regel voor regel gelijk op de sensor, de bedtijd-helper,
+# het scene_id, de meldingstekst en de kleur na. Twee dingen zijn hier bewust
+# anders dan in die kopieën:
+#
+#   1. De melding "lampen zijn uit dus" hing aan de stand van één vaste lamp
+#      (de Hue bar). Stond die uit maar de tuinspot aan, dan kwam er een melding
+#      terwijl er wél een lamp knipperde; andersom kreeg je niets. Nu telt of er
+#      überhaupt géén attentielamp aan staat. Een lamp die 'unavailable' is telt
+#      daarbij als niet-aan: dan is er geen zichtbaar signaal en is de melding
+#      juist het vangnet.
+#   2. De lampen worden doorlopen in plaats van per stuk uitgeschreven, zodat
+#      een derde kinderkamer of een extra lamp alleen nog een regel in de
+#      instantie is.
+#
+# Let op de volgorde: eerst de scene aanmaken (momentopname van hoe het huis er
+# nu bij staat), dan pas laten ademen. Andersom leg je de ademstand vast en
+# blijft het huis daarna blauw of roze staan.
+blueprint:
+  name: Kinderdeur open tijdens bedtijd
+  description: >-
+    Gaat de deur van een kinderkamer na bedtijd open, dan ademen een paar lampen
+    beneden even in een kleur die bij die kamer hoort, pauzeert de tv en gaat
+    daarna alles terug naar hoe het stond. Staat er geen enkele lamp aan, dan is
+    er niets te zien en gaat er in plaats daarvan een pushmelding uit.
+  author: Robin Bohnen
+  domain: automation
+  homeassistant:
+    # triggers:/actions:/action: in de nieuwe schrijfwijze.
+    min_version: 2024.10.0
+  input:
+    deur_contact:
+      name: Deurcontact
+      description: Het contact op de slaapkamerdeur van dit kind.
+      selector:
+        entity:
+          filter:
+            domain: binary_sensor
+    bedtijd:
+      name: Bedtijd-helper
+      description: >-
+        input_datetime met het moment waarop dit kind in bed hoort te liggen
+        (de bedtime_*_1h_off-helpers). Vanaf dat tijdstip telt een open deur.
+      selector:
+        entity:
+          filter:
+            domain: input_datetime
+    tot:
+      name: Tot en met
+      description: >-
+        Vanaf dit tijdstip 's ochtends mag de deur gewoon open en gebeurt er
+        niets meer.
+      default: "09:30:00"
+      selector:
+        time:
+    scene_id:
+      name: Scene-id voor de momentopname
+      description: >-
+        MOET per kamer uniek zijn. Twee automatiseringen die hetzelfde scene_id
+        aanmaken overschrijven elkaars momentopname, en dan zet de ene kamer de
+        lampen terug in de stand die de andere net vastlegde.
+      selector:
+        text:
+    attentie_lampen:
+      name: Attentielampen
+      description: >-
+        De lampen beneden die gaan ademen. Hiervan wordt ook de momentopname
+        gemaakt, zodat precies terugkomt wat er is aangepast.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            domain: light
+    kleur:
+      name: Kleur
+      description: Per kamer een eigen kleur, zodat je aan de lamp ziet wie er uit bed is.
+      selector:
+        color_rgb:
+    melding_titel:
+      name: Titel van de melding
+      selector:
+        text:
+    melding_tekst:
+      name: Tekst van de melding
+      selector:
+        text:
+          multiline: true
+    mediaspeler:
+      name: Mediaspeler om te pauzeren (optioneel)
+      description: >-
+        Speelt deze af, dan wordt hij gepauzeerd: met een film aan zie je een
+        ademende lamp niet. Bewust geen hervatting achteraf, dat is precies de
+        bedoeling van de onderbreking.
+      default: media_player.woonkamer_appletv
+      selector:
+        entity:
+          filter:
+            domain: media_player
+    ademduur:
+      name: Hoe lang ademen
+      description: Daarna gaat de momentopname weer aan.
+      default:
+        hours: 0
+        minutes: 0
+        seconds: 20
+      selector:
+        duration:
+
+# single, want de momentopname en het terugzetten horen bij elkaar. Bij restart
+# zou een tweede deur die opengaat het terugzetten overslaan en blijft het huis
+# ademen; max_exceeded houdt het log schoon voor iets dat gewoon klopt.
+mode: single
+max_exceeded: silent
+
+# !input werkt niet binnen templates; alles wat een template raakt gaat hierlangs.
+variables:
+  scene_id: !input scene_id
+  attentie_lampen: !input attentie_lampen
+  mediaspeler: !input mediaspeler
+
+triggers:
+  - trigger: state
+    entity_id: !input deur_contact
+    from: "off"
+    to: "on"
+
+conditions:
+  - alias: "Tussen bedtijd en de ochtend"
+    condition: time
+    after: !input bedtijd
+    before: !input tot
+
+actions:
+  - alias: "Momentopname van hoe het beneden stond"
+    action: scene.create
+    data:
+      scene_id: !input scene_id
+      snapshot_entities: !input attentie_lampen
+
+  # expand() slaat entiteiten over die niet bestaan, dus alles wat niet
+  # aantoonbaar aan staat (uit, unavailable, typefout) telt hier als "niet te
+  # zien" en levert een melding op.
+  - alias: "Niets te zien? Dan maar een pushbericht"
+    if:
+      - condition: template
+        value_template: >-
+          {{ expand(attentie_lampen) | selectattr('state', 'eq', 'on')
+             | list | count == 0 }}
+    then:
+      - action: notify.mobile_devices_adults
+        data:
+          title: !input melding_titel
+          message: !input melding_tekst
+
+  # Alleen lampen die al aan staan gaan ademen: een lamp die uit is aanzetten
+  # zou 's nachts het halve huis verlichten in plaats van een seintje geven.
+  - alias: "Lampen die aan staan laten ademen"
+    repeat:
+      for_each: !input attentie_lampen
+      sequence:
+        - if:
+            - condition: template
+              value_template: "{{ is_state(repeat.item, 'on') }}"
+          then:
+            - action: light.turn_on
+              target:
+                entity_id: "{{ repeat.item }}"
+              data:
+                rgb_color: !input kleur
+                effect: breathe
+
+  - alias: "Film op pauze"
+    if:
+      - condition: template
+        value_template: >-
+          {{ mediaspeler not in ['', none] and is_state(mediaspeler, 'playing') }}
+    then:
+      - action: media_player.media_play_pause
+        target:
+          entity_id: "{{ mediaspeler }}"
+
+  - delay: !input ademduur
+
+  - alias: "Alles terug zoals het stond"
+    action: scene.turn_on
+    target:
+      entity_id: "scene.{{ scene_id }}"
