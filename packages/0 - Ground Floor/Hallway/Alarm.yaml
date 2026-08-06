@@ -166,21 +166,16 @@ hallway_alarm_package:
             namen: >-
               {{ expand(trigger.event.data.sensors | default([], true))
                  | map(attribute='name') | list | join(', ') }}
-        - action: notify.mobile_devices_adults
+        # Critical: een onbewaakt huis moet je nu weten, niet morgenochtend.
+        - action: script.notify_critical
           data:
-            title: Alarm NIET ingeschakeld
-            message: >-
+            doelgroep: notify.mobile_devices_adults
+            titel: Alarm NIET ingeschakeld
+            bericht: >-
               Het alarm kon niet op {{ trigger.event.data.command | default('aan', true) }}
               gezet worden{% if namen %}: {{ namen }} staat nog open{% endif %}.
               Het huis is dus niet bewaakt.
-            data:
-              # Doorbreekt de stille modus: een onbewaakt huis moet je nu weten,
-              # niet morgenochtend.
-              push:
-                sound:
-                  name: default
-                  critical: 1
-                  volume: 0.7
+            volume: 0.7
 
     - id: 'alarm_bypassed_sensors_notify'
       alias: Hallway Alarm - Melding bij overgeslagen sensoren

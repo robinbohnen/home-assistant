@@ -22,6 +22,14 @@
 ## regime), zodat dit advies hetzelfde "denkt" als de zonwering. Puur
 ## meldingen: covers zijn het domein van de klimaatregie zelf.
 ## Binnen = woonkamer-multisensor (leefverdieping); buiten = KNMI.
+##
+## Het rekenwerk zelf staat in custom_templates/klimaat.jinja, onderaan bij
+## "RAMEN-ADVIES": `buitenlucht()` (binnen/buiten/delta plus de drie
+## vergelijkingen), `open_ramen()` en `cooldown_voorbij()`. Dat stond hier
+## eerst vijftien keer uitgeschreven, en dan is één plek die je vergeet bij te
+## werken genoeg om twee adviezen tegen elkaar in te laten denken.
+## LET OP: aanpassen van dat bestand vraagt een volledige herstart van Home
+## Assistant, herladen van de templates is niet genoeg.
 ##############################################################################
 
 temp_control_package:
@@ -40,11 +48,8 @@ temp_control_package:
         # blijft daar een kwartier (geen gefladder rond de kruising).
         - trigger: template
           value_template: >-
-            {% set binnen = states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | float(none) %}
-            {% set buiten = states('sensor.knmi_temperatuur') | float(none) %}
-            {% set delta = states('input_number.klimaat_spui_delta') | float(1) %}
-            {{ binnen is not none and buiten is not none
-               and buiten <= binnen - delta }}
+            {% from 'klimaat.jinja' import buitenlucht %}
+            {{ (buitenlucht() | from_json).spui_ok }}
           for: "00:15:00"
         # Vangnet: was het kruismoment vóór het tijdvenster (of miste een
         # herstart hem), dan beoordeelt deze vaste check het alsnog.
@@ -62,11 +67,8 @@ temp_control_package:
         # Herbevestig de kruising (voor de vaste-tijd-trigger).
         - condition: template
           value_template: >-
-            {% set binnen = states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | float(none) %}
-            {% set buiten = states('sensor.knmi_temperatuur') | float(none) %}
-            {% set delta = states('input_number.klimaat_spui_delta') | float(1) %}
-            {{ binnen is not none and buiten is not none
-               and buiten <= binnen - delta }}
+            {% from 'klimaat.jinja' import buitenlucht %}
+            {{ (buitenlucht() | from_json).spui_ok }}
         # Niet midden in de nacht en niet vlak na het opstaan.
         - condition: time
           after: "17:00:00"
@@ -82,15 +84,19 @@ temp_control_package:
         # Max één keer per dag, ook al vuren beide triggers.
         - condition: template
           value_template: >-
-            {{ this.attributes.last_triggered is none
-               or now() - this.attributes.last_triggered > timedelta(hours=12) }}
+            {% from 'klimaat.jinja' import cooldown_voorbij %}
+            {{ cooldown_voorbij(this.attributes.last_triggered, 12) }}
       actions:
+        - variables:
+            lucht: >-
+              {% from 'klimaat.jinja' import buitenlucht %}
+              {{ buitenlucht() | from_json }}
         - action: notify.mobile_devices_adults
           data:
             title: Ramen open
             message: >-
-              Buiten is het nu {{ states('sensor.knmi_temperatuur') | round(1) }}°,
-              binnen {{ states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | round(1) }}°.
+              Buiten is het nu {{ lucht.buiten | round(1) }}°,
+              binnen {{ lucht.binnen | round(1) }}°.
               Goed moment om ramen open te zetten en gratis af te koelen.
 
     ###########################################################################
@@ -105,9 +111,8 @@ temp_control_package:
       triggers:
         - trigger: template
           value_template: >-
-            {% set binnen = states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | float(none) %}
-            {% set buiten = states('sensor.knmi_temperatuur') | float(none) %}
-            {{ binnen is not none and buiten is not none and buiten >= binnen }}
+            {% from 'klimaat.jinja' import buitenlucht %}
+            {{ (buitenlucht() | from_json).buiten_warmer }}
           for: "00:15:00"
         # Vangnet, zie de open-variant hierboven.
         - trigger: time
@@ -118,9 +123,8 @@ temp_control_package:
           state: Koelen
         - condition: template
           value_template: >-
-            {% set binnen = states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | float(none) %}
-            {% set buiten = states('sensor.knmi_temperatuur') | float(none) %}
-            {{ binnen is not none and buiten is not none and buiten >= binnen }}
+            {% from 'klimaat.jinja' import buitenlucht %}
+            {{ (buitenlucht() | from_json).buiten_warmer }}
         - condition: time
           after: "07:30:00"
           before: "15:00:00"
@@ -139,23 +143,23 @@ temp_control_package:
               state: "on"
         - condition: template
           value_template: >-
-            {{ this.attributes.last_triggered is none
-               or now() - this.attributes.last_triggered > timedelta(hours=12) }}
+            {% from 'klimaat.jinja' import cooldown_voorbij %}
+            {{ cooldown_voorbij(this.attributes.last_triggered, 12) }}
       actions:
         - variables:
+            lucht: >-
+              {% from 'klimaat.jinja' import buitenlucht %}
+              {{ buitenlucht() | from_json }}
             nog_open: >-
-              {{ (expand('binary_sensor.all_windows')
-                  + expand('binary_sensor.woonkamer_openslaande_deuren_contact',
-                           'binary_sensor.speelkamer_openslaande_deuren_contact'))
-                 | selectattr('state', 'eq', 'on')
-                 | map(attribute='name') | list | join(', ') }}
+              {% from 'klimaat.jinja' import open_ramen %}
+              {{ open_ramen() | from_json | join(', ') }}
         - action: notify.mobile_devices_adults
           data:
             title: Ramen dicht
             message: >-
               Buiten wordt het nu warmer dan binnen
-              ({{ states('sensor.knmi_temperatuur') | round(1) }}° om
-              {{ states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | round(1) }}°).
+              ({{ lucht.buiten | round(1) }}° om
+              {{ lucht.binnen | round(1) }}°).
               Nog open: {{ nog_open }}.
 
     ###########################################################################
@@ -198,11 +202,8 @@ temp_control_package:
         # (dat al bij buiten >= binnen afgaat) en niet gelijktijdig.
         - condition: template
           value_template: >-
-            {% set binnen = states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | float(none) %}
-            {% set buiten = states('sensor.knmi_temperatuur') | float(none) %}
-            {% set delta = states('input_number.klimaat_spui_delta') | float(1) %}
-            {{ binnen is not none and buiten is not none
-               and buiten >= binnen + delta }}
+            {% from 'klimaat.jinja' import buitenlucht %}
+            {{ (buitenlucht() | from_json).buiten_heter }}
         # Bewust geen kamer_warm-drempel: juist als binnen nog koel is, is een
         # open raam op een hittedag het duurst. Dan gooi je de voorsprong weg.
         - condition: or
@@ -231,22 +232,22 @@ temp_control_package:
         # uur dat de warmte binnenstroomt zwaarder dan wat stookkosten.
         - condition: template
           value_template: >-
-            {{ this.attributes.last_triggered is none
-               or now() - this.attributes.last_triggered > timedelta(hours=3) }}
+            {% from 'klimaat.jinja' import cooldown_voorbij %}
+            {{ cooldown_voorbij(this.attributes.last_triggered, 3) }}
       actions:
         - variables:
+            lucht: >-
+              {% from 'klimaat.jinja' import buitenlucht %}
+              {{ buitenlucht() | from_json }}
             nog_open: >-
-              {{ (expand('binary_sensor.all_windows')
-                  + expand('binary_sensor.woonkamer_openslaande_deuren_contact',
-                           'binary_sensor.speelkamer_openslaande_deuren_contact'))
-                 | selectattr('state', 'eq', 'on')
-                 | map(attribute='name') | list | join(', ') }}
+              {% from 'klimaat.jinja' import open_ramen %}
+              {{ open_ramen() | from_json | join(', ') }}
         - action: notify.mobile_devices_adults
           data:
             title: Hitte komt binnen
             message: >-
-              Buiten is het {{ states('sensor.knmi_temperatuur') | round(1) }}°,
-              binnen {{ states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | round(1) }}°.
+              Buiten is het {{ lucht.buiten | round(1) }}°,
+              binnen {{ lucht.binnen | round(1) }}°.
               Dit staat al drie kwartier open en haalt warmte naar binnen:
               {{ nog_open }}.
 
@@ -285,14 +286,15 @@ temp_control_package:
           before: "22:00:00"
         - condition: template
           value_template: >-
-            {{ this.attributes.last_triggered is none
-               or now() - this.attributes.last_triggered > timedelta(hours=6) }}
+            {% from 'klimaat.jinja' import cooldown_voorbij %}
+            {{ cooldown_voorbij(this.attributes.last_triggered, 6) }}
       actions:
+        # Zonder tuindeuren: zie de macro, het stookadvies kijkt net als zijn
+        # trigger alleen naar de ramengroep.
         - variables:
             nog_open: >-
-              {{ expand('binary_sensor.all_windows')
-                 | selectattr('state', 'eq', 'on')
-                 | map(attribute='name') | list | join(', ') }}
+              {% from 'klimaat.jinja' import open_ramen %}
+              {{ open_ramen(false) | from_json | join(', ') }}
         - action: notify.mobile_devices_adults
           data:
             title: Raam staat open

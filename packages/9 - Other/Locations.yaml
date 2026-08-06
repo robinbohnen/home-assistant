@@ -28,52 +28,45 @@ general_locations_package:
                   id:
                     - partner_crole
               sequence:
-                - data:
-                    title: "{{ states['input_text.naam_partner'].state }} gaat weg bij Crole"
-                    message: >-
+                # Volume 0.1: dit moet je wel merken als je telefoon stil staat,
+                # maar het is geen noodgeval - vandaar het laagste volume dat
+                # script.notify_critical kent.
+                - action: script.notify_critical
+                  data:
+                    doelgroep: notify.mobile_devices_robin
+                    titel: "{{ states['input_text.naam_partner'].state }} gaat weg bij Crole"
+                    bericht: >-
                       {{ states['input_text.naam_partner'].state }} gaat weg bij Crole en is over {{
                       states['sensor.samantha_reistijd_naar_huis'].state }} minuten
                       thuis.
-                    data:
-                      push:
-                        sound:
-                          name: default
-                          critical: 1
-                          volume: 0.1
-                  action: notify.mobile_devices_robin
+                    volume: 0.1
             - conditions:
                 - condition: trigger
                   id:
                     - partner_efteling
               sequence:
-                - data:
-                    title: "{{ states['input_text.naam_partner'].state }} gaat weg bij de Efteling"
-                    message: >-
+                - action: script.notify_critical
+                  data:
+                    doelgroep: notify.mobile_devices_robin
+                    titel: "{{ states['input_text.naam_partner'].state }} gaat weg bij de Efteling"
+                    bericht: >-
                       {{ states['input_text.naam_partner'].state }} gaat weg bij de Efteling en is over {{
                       states['sensor.samantha_reistijd_naar_huis'].state }} minuten
                       thuis.
-                    data:
-                      push:
-                        sound:
-                          name: default
-                          critical: 1
-                          volume: 0.1
-                  action: notify.mobile_devices_robin
+                    volume: 0.1
             - conditions:
                 - condition: trigger
                   id:
                     - robin_work
               sequence:
-                - data:
-                    title: Robin gaat weg op het werk
-                    message: >-
+                # Spiegelbeeld van de twee hierboven: deze gaat naar de partner,
+                # niet naar Robin zelf.
+                - action: script.notify_critical
+                  data:
+                    doelgroep: notify.mobile_devices_partner
+                    titel: Robin gaat weg op het werk
+                    bericht: >-
                       Robin gaat weg op het werk en is over {{
                       states['sensor.robin_reistijd_naar_huis'].state }} minuten
                       thuis.
-                    data:
-                      push:
-                        sound:
-                          name: default
-                          critical: 1
-                          volume: 0.1
-                  action: notify.mobile_devices_partner
+                    volume: 0.1

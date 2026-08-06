@@ -32,6 +32,19 @@ attic_ac_package:
       # kreeg je de vraag na elke herstart opnieuw.
       restore: true
 
+    # Hoe lang "Ja" op de melding nog geldt. Stond effectief op twee minuten
+    # (de timeout van de oude wait_for_trigger), en dat is voor een melding op
+    # je telefoon niet te halen tenzij je hem toevallig in je hand hebt - de
+    # knop deed dus meestal niets. Een kwartier is lang genoeg om te antwoorden
+    # en kort genoeg dat je niet 's avonds alsnog per ongeluk de airco aanzet
+    # op een vraag van vanmiddag. Restore, zodat een herstart binnen dat
+    # kwartier het venster niet stiekem openhoudt of dichtgooit.
+    airco_zolder_antwoord:
+      name: "Airco zolder - antwoordvenster"
+      duration: "00:15:00"
+      icon: mdi:comment-question-outline
+      restore: true
+
   cover:
     - platform: group
       unique_id: covers_upstairs
@@ -100,63 +113,82 @@ attic_ac_package:
             - data: {}
               action: script.script_attic_ac
 
+    ###########################################################################
+    ## Het antwoord op die vraag afhandelen
+    ###########################################################################
+    # Los van de vraag, zodat er niets hoeft te blijven wachten. De knop op de
+    # telefoon heet vast `AIRCO_ZOLDER_JA`; de geldigheid komt van het
+    # antwoordvenster, niet van een lopende run.
+    - id: airco_zolder_antwoord
+      alias: Attic AC - Antwoord op de vraag
+      description: >-
+        Zet de zolderairco aan als je "Ja" antwoordt op de vraag, mits het
+        antwoordvenster nog loopt.
+      mode: single
+      triggers:
+        - trigger: event
+          event_type: mobile_app_notification_action
+          event_data:
+            action: AIRCO_ZOLDER_JA
+      conditions:
+        - alias: Vraag staat nog open
+          condition: state
+          entity_id: timer.airco_zolder_antwoord
+          state: active
+      actions:
+        # Venster meteen dicht: twee telefoons die allebei "Ja" tikken hoeven
+        # de airco niet twee keer aan te zetten.
+        - action: timer.cancel
+          target:
+            entity_id: timer.airco_zolder_antwoord
+        - action: cover.close_cover
+          target:
+            entity_id: cover.all_covers_upstairs
+        - action: climate.turn_on
+          target:
+            entity_id: climate.airco_zolder
+        - action: climate.set_temperature
+          target:
+            entity_id: climate.airco_zolder
+          data:
+            temperature: 18
+            hvac_mode: cool
+        - action: climate.set_fan_mode
+          target:
+            entity_id: climate.airco_zolder
+          data:
+            fan_mode: high
+
   script:
+    # ALLEEN VRAGEN; HET ANTWOORD WORDT ELDERS AFGEHANDELD
+    # Hier stond een `wait_for_trigger` van twee minuten met de hele uitvoering
+    # erachter. Zo'n wachtende run overleeft geen reload van de scripts, en dat
+    # is precies wat er gebeurt zodra je één YAML-bestand aanraakt: de vraag
+    # staat dan nog op je telefoon, maar "Ja" komt bij niemand meer aan. Dezelfde
+    # constructie zat bij de zonneschermvraag en is daar op 2026-08-06 om die
+    # reden gesplitst; zie packages/9 - Other/Klimaat Zonwering.yaml.
+    #
+    # Het antwoord komt nu binnen bij `airco_zolder_antwoord` hierboven, en die
+    # heeft niets nodig dat blijft draaien.
     script_attic_ac:
       alias: Airco aan wanneer warm vraag
+      mode: single
       sequence:
-        - alias: Set up variables for the actions
-          variables:
-            action_airco_aan: "{{ 'YES_' ~ context.id }}"
+        - action: timer.start
+          target:
+            entity_id: timer.airco_zolder_antwoord
         - alias: Ask if airco need to turn on
+          action: notify.mobile_devices_adults
           data:
-            message: Het is snikheet binnen, wil je de airco aanzetten?
+            title: Airco zolder aanzetten?
+            message: Het is snikheet boven, wil je de airco aanzetten?
             data:
               actions:
-                - action: "{{ action_airco_aan }}"
+                # Vaste naam, geen context.id meer: de afhandelaar is een losse
+                # automatisering en kan een per-run gegenereerde naam niet
+                # kennen. Het antwoordvenster hieronder bewaakt de geldigheid.
+                - action: AIRCO_ZOLDER_JA
                   title: Ja
-          action: notify.mobile_devices_adults
-        - alias: Wait for a response
-          wait_for_trigger:
-            - event_type: mobile_app_notification_action
-              event_data:
-                action: "{{ action_airco_aan }}"
-              trigger: event
-          timeout:
-            hours: 0
-            minutes: 2
-            seconds: 0
-            milliseconds: 0
-        - alias: Perform the action
-          choose:
-            - conditions:
-                # `wait.trigger` is None als er niet geantwoord is binnen de
-                # timeout; zonder die check gooit dit template dan een fout.
-                - condition: template
-                  value_template: >-
-                    {{ wait.trigger is not none
-                       and wait.trigger.event.data.action == action_airco_aan }}
-              sequence:
-                - data: {}
-                  target:
-                    entity_id:
-                      - cover.all_covers_upstairs
-                  action: cover.close_cover
-                - data: {}
-                  target:
-                    entity_id: climate.airco_zolder
-                  action: climate.turn_on
-                - data:
-                    temperature: 18
-                    hvac_mode: cool
-                  target:
-                    entity_id: climate.airco_zolder
-                  action: climate.set_temperature
-                - data:
-                    fan_mode: high
-                  target:
-                    entity_id: climate.airco_zolder
-                  action: climate.set_fan_mode
-      mode: single
 
     script_attic_ac_off:
       alias: Airco zolder uit (met herhaalpogingen)

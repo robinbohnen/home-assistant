@@ -6,14 +6,9 @@ presence_package:
   ## betrouwbaardere aanwezigheidsdetectie te krijgen. Een enkel
   ## signaal dat wegvalt zorgt niet meer voor een fout-negatief.
   ##
-  ## SETUP:
-  ## 1. Zoek je UniFi device tracker entity IDs op via:
-  ##    Developer Tools → States → zoek op "device_tracker."
-  ##    De UniFi integratie maakt entities aan per verbonden apparaat.
-  ## 2. Vervang de UNIFI_PLACEHOLDER waarden hieronder.
-  ## 3. Voeg de UniFi device trackers ook toe via:
-  ##    Instellingen → Personen → [persoon] → Device Trackers
-  ##    zodat ook person.* ermee rekening houdt.
+  ## Deze twee sensoren sturen niets aan; ze bestaan om de conflictmeldingen
+  ## onderaan dit bestand te voeden. Voor de vraag "is er een volwassene thuis"
+  ## gebruikt de rest van de config group.all_adults.
   #################################################################
 
   binary_sensor:
@@ -47,13 +42,40 @@ presence_package:
           prob_given_true: 0.50   # WiFi connected = extra zekerheid, maar niet verplicht als je thuis bent
           prob_given_false: 0.05  # WiFi connected terwijl je weg bent = zelden
 
-    # Hier stonden ook "Samantha thuis" (bayesian) en de template-sensor
-    # "Volwassenen thuis" die Robin en Samantha combineerde. Verwijderd op
-    # 2026-08-06: niets las ze. De combinatiesensor was aspirationeel ("gebruik
-    # deze in nieuwe automations") en dat is nooit gebeurd, waardoor de
-    # Samantha-sensor alleen nog binnen die ene dode sensor werd gelezen.
-    # Aanwezigheid van volwassenen loopt overal via group.all_adults.
-    # binary_sensor.robin_thuis blijft: die voedt de conflictmelding hieronder.
+    #################################################################
+    ## Samantha - Bayesian aanwezigheid
+    #################################################################
+    # Spiegelbeeld van Robin hierboven, met dezelfde kansen. Deze sensor heeft
+    # één afnemer en dat is met opzet: de conflictmelding onderaan dit bestand.
+    # Hij bestond eerder ook al, maar toen zonder die melding - hij werd alleen
+    # gelezen door een combinatiesensor die zelf nergens werd gebruikt, en is op
+    # 2026-08-06 daarom eerst weggegooid en meteen daarna teruggezet mét het
+    # stuk dat er altijd al bij hoorde.
+    #
+    # Wat er NIET terugkomt is die combinatiesensor ("Volwassenen thuis"). Voor
+    # de vraag of er een volwassene thuis is gebruikt de rest van de config
+    # group.all_adults, en twee bronnen voor hetzelfde is precies hoe ze uit
+    # elkaar gaan lopen.
+    - platform: bayesian
+      name: "Samantha thuis"
+      unique_id: bayesian_samantha_home
+      device_class: presence
+      prior: 0.40
+      probability_threshold: 0.85
+      observations:
+        - platform: state
+          entity_id: person.samantha_henkelman
+          to_state: "home"
+          prob_given_true: 0.95
+          prob_given_false: 0.03
+
+        # De UniFi-tracker van haar telefoon, het spiegelbeeld van
+        # device_tracker.iphone_9 bij Robin.
+        - platform: state
+          entity_id: device_tracker.apple_iphone_samantha
+          to_state: "home"
+          prob_given_true: 0.50
+          prob_given_false: 0.05
 
   #################################################################
   ## Notificatie bij onbetrouwbare detectie
@@ -89,6 +111,47 @@ presence_package:
             message: >-
               GPS zegt Robin is {% if is_state('person.robin_bohnen', 'home') %}thuis{% else %}weg{% endif %},
               maar WiFi zegt het tegenovergestelde. Controleer je aanwezigheid in HA.
+            data:
+              push:
+                sound: default
+
+    # Spiegelbeeld van presence_conflict_robin. Dit is waarom
+    # binary_sensor.samantha_thuis bestaat: zonder deze melding was die sensor
+    # alleen maar een tweede mening die niemand las.
+    #
+    # De melding gaat naar Robin en niet naar Samantha, want dit is geen bericht
+    # over waar iemand is maar een storingssignaal over de detectie zelf - en
+    # dat is Robins werk. Wil je het toch naar haar sturen, dan is
+    # notify.mobile_devices_partner de andere kant van dat ene regeltje.
+    - id: presence_conflict_samantha
+      alias: Presence - GPS en WiFi conflict Samantha
+      description: Waarschuw als GPS en WiFi-aanwezigheid voor Samantha conflicteren
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: person.samantha_henkelman
+          to: "home"
+          for:
+            minutes: 10
+        - trigger: state
+          entity_id: person.samantha_henkelman
+          to: "not_home"
+          for:
+            minutes: 10
+      conditions:
+        # Alleen melden als GPS en de Bayesian-sensor het oneens zijn
+        - condition: template
+          value_template: >-
+            {% set gps_home = is_state('person.samantha_henkelman', 'home') %}
+            {% set bayesian_home = is_state('binary_sensor.samantha_thuis', 'on') %}
+            {{ gps_home != bayesian_home }}
+      actions:
+        - action: notify.mobile_devices_robin
+          data:
+            title: "Aanwezigheid conflict"
+            message: >-
+              GPS zegt Samantha is {% if is_state('person.samantha_henkelman', 'home') %}thuis{% else %}weg{% endif %},
+              maar WiFi zegt het tegenovergestelde. Controleer haar aanwezigheid in HA.
             data:
               push:
                 sound: default

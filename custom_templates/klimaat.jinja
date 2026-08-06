@@ -670,3 +670,87 @@
      'gevel': gevel_txt,
      'regime': regime} | to_json -}}
 {%- endmacro -%}
+
+{#- ======================= RAMEN-ADVIES (MELDINGEN) ======================= -#}
+{#-
+  Alles hieronder staat los van de beslistabel: `advies()` gebruikt het niet en
+  het verandert er niets aan. Het hoort bij `packages/9 - Other/Temperature
+  Control.yaml`, dat meldt wanneer ramen open- of dichtzetten loont.
+
+  Waarom het hier staat en niet daar: datzelfde rekenwerk stond in vier
+  automatiseringen steeds opnieuw overgetypt. De binnen/buiten-som vijf keer als
+  trigger of conditie en nog eens drie keer in een meldingstekst, de lijst met
+  wat er open staat drie keer, de cooldown vier keer. Eén drempel die je op vijf
+  plekken moet bijwerken is er vier te veel; en de spui-vergelijking hoort per
+  definitie hetzelfde te zijn als die in `advies()` (blok 3), anders adviseert
+  het huis in stilte twee dingen tegelijk.
+
+  Covers blijven het domein van de beslistabel: dit is puur meldingswerk.
+-#}
+
+{#- De drie temperatuurfeiten waar het ramen-advies op draait, in één keer
+    uitgelezen. Binnen = de woonkamer-multisensor (de leefverdieping), buiten =
+    KNMI - dezelfde bron als `advies()` hierboven.
+
+    De afgeleide vlaggen zitten er meteen bij, want juist daar zat de kans op
+    verschil: `spui_ok` is bewust exact dezelfde som als in blok 3, en
+    `buiten_heter` is het spiegelbeeld ervan. Dat is geen symmetrie om de
+    symmetrie: door aan beide kanten dezelfde dode zone te gebruiken kan de
+    hittemelding nooit gelijktijdig met het ochtendadvies afgaan.
+
+    Een onbereikbare sensor maakt alle drie de vlaggen `false`: een kapotte
+    thermometer hoort een melding tegen te houden, niet uit te lokken. -#}
+{%- macro buitenlucht() -%}
+{%- set binnen = states('sensor.woonkamer_woonkamer_multisensor_temperatuur') | float(none) -%}
+{%- set buiten = states('sensor.knmi_temperatuur') | float(none) -%}
+{%- set delta = states('input_number.klimaat_spui_delta') | float(1) -%}
+{%- set geldig = binnen is not none and buiten is not none -%}
+{{- {'binnen': binnen,
+     'buiten': buiten,
+     'delta': delta,
+     'geldig': geldig,
+     'spui_ok': geldig and buiten <= binnen - delta,
+     'buiten_warmer': geldig and buiten >= binnen,
+     'buiten_heter': geldig and buiten >= binnen + delta} | to_json -}}
+{%- endmacro -%}
+
+{#- Wat staat er nu open, als leesbare namen? Gaat als JSON-lijst terug zodat de
+    aanroeper zelf bepaalt hoe hij hem toont (`| from_json | join(', ')`).
+
+    De openslaande tuindeuren zitten in `all_doors` en niet in `all_windows`, dus
+    die moeten er los bij. Ze zijn een parameter en geen vaste bijlage, omdat het
+    stookadvies ze bewust weglaat: daar kijkt de trigger ook alleen naar de
+    ramengroep, en een tuindeur die in de winter even openstaat is meestal
+    iemand die naar buiten loopt.
+
+    De twee `expand()`-aanroepen staan bewust naast elkaar in plaats van als één
+    aanroep met drie argumenten: `expand()` sorteert zijn uitkomst op entity_id,
+    dus in één keer zouden de tuindeuren tussen de ramen door de melding in
+    schuiven. Nu blijft het "eerst de ramen, dan de deuren". -#}
+{%- macro open_ramen(tuindeuren=true) -%}
+{%- set alles = expand('binary_sensor.all_windows')
+                + (expand(['binary_sensor.woonkamer_openslaande_deuren_contact',
+                           'binary_sensor.speelkamer_openslaande_deuren_contact'])
+                   if tuindeuren else []) -%}
+{{- alles | selectattr('state', 'eq', 'on') | map(attribute='name') | list | to_json -}}
+{%- endmacro -%}
+
+{#- Cooldown: is het lang genoeg geleden dat deze automatisering iets meldde?
+
+    LET OP het eerste argument. Binnen een macro wijst `this` niet naar de
+    automatisering maar naar het template zelf, dus de macro kán hem niet zelf
+    opzoeken. Daarom geeft de aanroeper `this.attributes.last_triggered` mee:
+
+        {% from 'klimaat.jinja' import cooldown_voorbij %}
+        {{ cooldown_voorbij(this.attributes.last_triggered, 12) }}
+
+    Geef je per ongeluk `this` mee in plaats van het attribuut, dan klapt de
+    aftrekking en telt de conditie als niet-waar - de melding blijft dan uit in
+    plaats van dat hij gaat spammen. Dat is de goede kant om fout te gaan.
+
+    Wat de macro wél centraal houdt is de `is none`-tak. Zonder die tak loopt de
+    aftrekking stuk zolang de automatisering nog nooit gedraaid heeft, en dan
+    komt de allereerste melding na een verse installatie nooit. -#}
+{%- macro cooldown_voorbij(laatst, uren) -%}
+{{- laatst is none or now() - laatst > timedelta(hours=uren) -}}
+{%- endmacro -%}

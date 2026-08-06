@@ -55,3 +55,90 @@ persons_package:
       services:
         - action: !secret device_maxi
         - action: !secret device_mini
+
+  ###########################################################################
+  ## CRITICAL PUSH - één plek voor het geluid dat door de stille modus komt
+  ###########################################################################
+  # Een critical push negeert de belstand en het volume van de telefoon. Het
+  # blok dat dat regelt stond dertien keer letterlijk in de config, verspreid
+  # over zeven bestanden. Dat is precies het soort duplicatie waarbij je er bij
+  # een wijziging twee vergeet - en dat was al te zien ook: op de ene plek
+  # stond `volume: 1`, op de andere `volume: 1.0`.
+  #
+  # Waarom hier en niet bij de aanroepers: de notify-groepen waar dit script
+  # naartoe stuurt staan hierboven. Wie wil weten wie welke melding krijgt en
+  # hoe hard, heeft daarmee alles in één bestand.
+  #
+  # Wat hier NIET in hoort: meldingen die meer meesturen dan tekst en geluid
+  # (camerabeeld, actieknoppen, een tag om te vervangen). Die houden hun eigen
+  # blok, want de bijzonderheid zit hem daar juist in de rest van `data:`.
+  script:
+    notify_critical:
+      alias: Melding - Critical push
+      description: >-
+        Stuurt een melding die door de stille modus van de telefoon heen komt.
+        Het volume is bewust een veld: een locatiemelding hoeft niet zo hard
+        als een brandmelding.
+      icon: mdi:bell-alert
+      # PARALLEL, EN MET REDEN
+      # Dit wordt onder andere aangeroepen vanuit `script.slzb_radio_terugzetten`,
+      # dat zelf al parallel draait omdat Zigbee en Thread bij een kastje-uitval
+      # tegelijk aankloppen. Met `mode: single` zou de tweede melding stilletjes
+      # verdampen, terwijl je juist bij zo'n storing allebei de meldingen wil
+      # zien. Hetzelfde geldt voor een brandalarm, waar ramen en deuren binnen
+      # dezelfde seconde melden.
+      mode: parallel
+      max: 10
+      fields:
+        titel:
+          name: Titel
+          description: De kop van de melding; templates mogen, die worden bij de aanroep gerenderd
+          required: true
+          example: Brandalarm!
+          selector:
+            text:
+        bericht:
+          name: Bericht
+          description: De tekst van de melding
+          required: true
+          example: Er zijn nog ramen open, sluit deze en ga naar buiten.
+          selector:
+            text:
+        doelgroep:
+          name: Doelgroep
+          description: >-
+            De notify-groep die dit moet horen. Zonder opgave de volwassenen:
+            een melding die door de stille modus breekt hoort niet standaard
+            bij de kinderen terecht te komen.
+          default: notify.mobile_devices_adults
+          example: notify.mobile_devices_robin
+          selector:
+            text:
+        volume:
+          name: Volume
+          description: >-
+            0 tot 1. 0.1 voor iets dat je alleen even moet weten, 0.7 voor een
+            storing, 1 als er iemand het huis uit moet.
+          default: 0.7
+          example: 0.7
+          selector:
+            number:
+              min: 0
+              max: 1
+              step: 0.1
+      sequence:
+        # De `| default()`-filters staan hier omdat de `default:` bij een veld
+        # alleen de UI voorinvult; roept een automatisering dit script aan
+        # zonder het veld, dan is de variabele gewoon niet gezet.
+        - action: "{{ doelgroep | default('notify.mobile_devices_adults', true) }}"
+          data:
+            title: "{{ titel }}"
+            message: "{{ bericht }}"
+            data:
+              push:
+                sound:
+                  name: default
+                  critical: 1
+                  # `| float` omdat de push-payload hier een getal wil en niet
+                  # de tekst "0.7"; een verkeerd type kost je het geluid.
+                  volume: "{{ volume | default(0.7, true) | float(0.7) }}"

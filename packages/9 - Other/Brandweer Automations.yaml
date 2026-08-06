@@ -392,18 +392,16 @@ brandweer_package:
               value_template: "{{ states('input_select.brandweer_dienstdoende_ploeg') == states('input_select.brandweer_mijn_huidige_ploeg') }}"
               alias: Kijk of ik momenteel dienst heb
           then:
-            - metadata: {}
-              data:
-                title: Brandweer Uden
-                message: "{{ states.input_text.brandweer_laatste_melding.state }}"
-                data:
-                  push:
-                    sound:
-                      name: default
-                      critical: 1
-                      volume: 1
+            # Volume 1 en critical: een uitruk mag geen stille modus overleven.
+            # De else-tak hieronder stuurt dezelfde tekst zonder geluid, want
+            # dan heb ik geen dienst.
+            - data:
+                doelgroep: notify.mobile_devices_all
+                titel: Brandweer Uden
+                bericht: "{{ states.input_text.brandweer_laatste_melding.state }}"
+                volume: 1
               alias: Stuur HA notificatie naar alle gebruikers met hoge prioriteit
-              action: notify.mobile_devices_all
+              action: script.notify_critical
           else:
             - metadata: {}
               data:
