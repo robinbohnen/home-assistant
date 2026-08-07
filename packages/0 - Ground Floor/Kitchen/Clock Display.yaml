@@ -521,11 +521,28 @@ kitchen_clock_display_package:
             retain: true
             topic: clock_1/custom/brw_occupation
             payload: >-
-              {%- macro ploeg(id) -%}{{ states(id) if has_value(id) else '?' }}{%- endmacro -%}
+              {#- DEZELFDE BRON ALS HET DASHBOARD, IN DEZELFDE VOLGORDE
+                  Hier stond alleen `sensor.bezetting_ploeg_*`: de poll van
+                  112radar, die elke vijf minuten ververst. Het dashboard leest
+                  bij voorkeur het `ploegen`-attribuut van de PreCom-webhook, en
+                  die twee tellen niet gelijk - op 2026-08-07 zei de klok 3/5/6
+                  en het dashboard 2/4/6. Twee schermen die hetzelfde zouden
+                  moeten zeggen en dat niet doen is erger dan een getal dat vijf
+                  minuten oud is, dus nu overal de webhook eerst en de poll als
+                  terugval. Zie dashboards/home/nest_hub.yaml voor dezelfde
+                  keuze in JS. -#}
+              {%- macro ploeg(letter) -%}
+                {%- set w = (state_attr('sensor.brandweer_bezetting', 'ploegen') or [])
+                            | selectattr('ploeg', 'eq', letter) | list -%}
+                {%- set poll = 'sensor.bezetting_ploeg_' ~ (letter | lower) -%}
+                {%- if w | count > 0 and w[0].aantal is defined -%}{{ w[0].aantal }}
+                {%- elif has_value(poll) -%}{{ states(poll) }}
+                {%- else -%}?{%- endif -%}
+              {%- endmacro -%}
               {"icon": 8050,"color":"FFFFFF","repeat": 3, "scrollSpeed": 50,
-              "text": {{ ('A Ploeg: ' ~ ploeg('sensor.bezetting_ploeg_a') ~
-              ', B Ploeg: ' ~ ploeg('sensor.bezetting_ploeg_b') ~
-              ', C Ploeg: ' ~ ploeg('sensor.bezetting_ploeg_c')) | to_json }}}
+              "text": {{ ('A Ploeg: ' ~ ploeg('A') | trim ~
+              ', B Ploeg: ' ~ ploeg('B') | trim ~
+              ', C Ploeg: ' ~ ploeg('C') | trim) | to_json }}}
           action: mqtt.publish
       mode: single
 
