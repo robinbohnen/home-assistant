@@ -116,6 +116,46 @@ music_package:
               - media_player.slaapkamer_maxi_sonos
               - media_player.speelkamer_sonos
               - media_player.woonkamer_sonos
+        # Eerst groeperen, dan pas afspelen. Andersom was het jarenlang de
+        # oorzaak van "de radio staat maar in de helft van het huis aan".
+        #
+        # `media_player.join` wacht bij Sonos tot de groep exact zo is als
+        # gevraagd (HA vergelijkt de verzamelingen letterlijk) en geeft het na
+        # 30 seconden op. Belangrijker: bij die timeout breekt HA de hele
+        # groepeeractie af, dus alle speakers die nog aan de beurt moesten
+        # komen blijven stil achter.
+        #
+        # En wie veranderde die groep tussendoor? Deze automatisering zelf.
+        # `play_media` zette de woonkamer op `playing`, drie seconden later
+        # triggerde `Kitchen - Media` daarop en joinde de twee keukenspeakers -
+        # midden in het wachten hierboven. Verzameling wijkt af, 30 seconden
+        # wachten, foutmelding, rest van het huis stil. Zo ging het op
+        # 2026-08-07 om 13:47 en 13:58.
+        #
+        # Door eerst te joinen is de groep al compleet voordat er geluid is.
+        # `Kitchen - Media` en de kamers op `blueprints/.../sonos_motion_join`
+        # slaan dan over, want hun speaker is dan geen `idle` meer.
+        #
+        # `continue_on_error` hoort bij die omdraaiing: loopt het groeperen
+        # alsnog vast, dan mag dat de muziek niet tegenhouden. De fout blijft
+        # gewoon in de trace staan.
+        - action: media_player.join
+          continue_on_error: true
+          metadata: {}
+          data:
+            # De woonkamer staat hier bewust niet tussen: dat is de
+            # groepsleider (het `target` hieronder), niet iemand die zich bij
+            # zichzelf aansluit.
+            group_members:
+              - media_player.garage_sonos
+              - media_player.speelkamer_sonos
+              - media_player.kantoor_sonos
+              - media_player.slaapkamer_maxi_sonos
+              - media_player.slaapkamer_mini_sonos
+              - media_player.keuken_sonos
+              - media_player.keuken_sonos_2
+          target:
+            entity_id: media_player.woonkamer_sonos
         - action: media_player.play_media
           metadata:
             title: Qmusic
@@ -131,20 +171,6 @@ music_package:
           data:
             media_content_id: FV:2/20
             media_content_type: favorite_item_id
-          target:
-            entity_id: media_player.woonkamer_sonos
-        - action: media_player.join
-          metadata: {}
-          data:
-            group_members:
-              - media_player.garage_sonos
-              - media_player.speelkamer_sonos
-              - media_player.woonkamer_sonos
-              - media_player.kantoor_sonos
-              - media_player.slaapkamer_maxi_sonos
-              - media_player.slaapkamer_mini_sonos
-              - media_player.keuken_sonos
-              - media_player.keuken_sonos_2
           target:
             entity_id: media_player.woonkamer_sonos
 
