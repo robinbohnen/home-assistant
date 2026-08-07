@@ -148,6 +148,18 @@ music_package:
           target:
             entity_id: media_player.woonkamer_sonos
 
+    # De trigger-entiteit komt van de samsungtv-integratie, die aan/uit over het
+    # netwerk polt. Reageert de tv even niet - een netwerkhik, of de verbinding
+    # die na een herstart van HA opnieuw moet opbouwen - dan zet die integratie
+    # hem op `off` in plaats van `unavailable`. Op 2026-08-07 om 13:47 gebeurde
+    # dat midden in een PS5-sessie: negen seconden "uit", en de radio ging aan
+    # in een kamer waar iemand zat te gamen.
+    #
+    # Vandaar de drie remmen hieronder. `for` filtert de korte blips weg (een
+    # echte tv-uit blijft uit), `not_from` vangt de herstart-overgang af net
+    # zoals bij `livingroom_tv_volume_reset`, en de PS5-conditie zorgt dat een
+    # gamesessie sowieso nooit de muziek aanzet - ook niet als de tv-entiteit
+    # langer dan twee minuten de weg kwijt is.
     - id: play_music_tv_off
       alias: General - Music Play Default TV Off
       description: "When TV is turned off; play default music"
@@ -157,6 +169,10 @@ music_package:
           entity_id:
             - media_player.woonkamer_77_oled_3
           to: "off"
+          not_from:
+            - unknown
+            - unavailable
+          for: "00:02:00"
       conditions:
         - condition: and
           conditions:
@@ -166,6 +182,12 @@ music_package:
               before: input_datetime.bedtime_mini_1h_off
             - condition: sun
               after: sunrise
+            - alias: Niet terwijl er op de PS5 gespeeld wordt
+              condition: not
+              conditions:
+                - condition: state
+                  entity_id: media_player.playstation_5
+                  state: playing
       actions:
         - action: automation.trigger
           metadata: {}
