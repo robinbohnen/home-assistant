@@ -113,23 +113,39 @@ cards:
                   kw = (u === 'W') ? raw / 1000 : raw;
                   v = kw.toFixed(2).replace('.',',');
                 }
-                // Percentage van wat de omvormers maximaal kúnnen, net als het
-                // percentage bij de batterij hiernaast. De plafonds komen uit de
-                // capaciteitssensoren (in kW) en niet uit een getal hier, zodat
-                // een andere omvormer de schaal meeneemt; 5 + 3 kW als terugval.
+                // PER SET, NIET SAMEN
+                // Eén percentage over beide omvormers haalt nooit 100%: de sets
+                // pieken op verschillende momenten (oost 's ochtends, zuidwest
+                // 's middags), dus samen blijf je rond de 85% steken en lijkt de
+                // tegel altijd halfleeg. Per set gedeeld door zijn eigen
+                // omvormer klopt het wel, en dan zie je de zuidwest op een
+                // heldere middag ook echt 100% raken - dat is de omvormer die
+                // staat te klippen. Zelfde verdeling als de twee balken op de
+                // AWTRIX-klok (packages/0 - Ground Floor/Kitchen/Clock Display.yaml).
                 //
-                // Let op bij het lezen: dit haalt in de praktijk nooit 100%. De
-                // twee sets pieken op verschillende momenten - oost 's ochtends,
-                // zuidwest 's middags - dus samen kom je zelden boven ~85%. Het
-                // is een maat voor "hoe hard staan de panelen te werken", niet
-                // voor "haal ik het maximum". De klok in de keuken toont het per
-                // set, en dáár raakt de zuidwest wél echt 100% (klippen).
-                var cap = function(id, val){ var s = states[id];
-                  return (s && !isNaN(Number(s.state))) ? Number(s.state) : val; };
-                var plafond = cap('sensor.inverter_kroon_18_achtertuin_capacity', 5)
-                            + cap('sensor.inverter_kroon_18_zolder_capacity', 3);
-                var pctStr = (kw === null || plafond <= 0) ? ''
-                  : ` <span style="font-size:13px;color:rgba(255,255,255,0.60)">· ${Math.round(kw / plafond * 100)}%</span>`;
+                // ZW = achtertuin, 16 panelen, 10 graden zuidwest, GW5000N-EH.
+                // O  = zolder, 12 panelen, 45 graden oost, GW3000D-NS.
+                // Let op de namen: de sensor heet `overkapping` maar hoort bij
+                // het apparaat "Achtertuin". De plafonds komen uit de
+                // capaciteitssensoren (kW), niet uit een getal hier.
+                var num = function(id){ var s = states[id];
+                  return (s && !isNaN(Number(s.state))) ? Number(s.state) : null; };
+                var pct = function(vermogenId, capId, terugval){
+                  var p = num(vermogenId), c = num(capId);
+                  c = (c === null ? terugval : c) * 1000;
+                  return (p === null || c <= 0) ? null : Math.round(p / c * 100);
+                };
+                var zw = pct('sensor.inverter_kroon_18_overkapping',
+                             'sensor.inverter_kroon_18_achtertuin_capacity', 5);
+                var oo = pct('sensor.inverter_kroon_18_zolder_voorzijde',
+                             'sensor.inverter_kroon_18_zolder_capacity', 3);
+                // Vol = klippen; zelfde geel als op de klok, zodat het opvalt.
+                var deel = function(naam, p){
+                  if(p === null) return '';
+                  var kleur = p >= 98 ? '#FFD60A' : 'rgba(255,255,255,0.60)';
+                  return ` <span style="font-size:13px;color:${kleur}">· ${naam} ${p}%</span>`;
+                };
+                var pctStr = deel('ZW', zw) + deel('O', oo);
                 return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:#4ade80;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.60)">kW</span>${pctStr}</div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">productie</div></div>`;
               ]]]
             cons: |
