@@ -106,14 +106,31 @@ cards:
             prod: |
               [[[
                 var e = states['sensor.solar_power_generated_now'];
-                var v = '—';
+                var v = '—', kw = null;
                 if(e && !isNaN(Number(e.state))) {
                   var raw = Number(e.state);
                   var u = e.attributes.unit_of_measurement || '';
-                  var kw = (u === 'W') ? raw / 1000 : raw;
+                  kw = (u === 'W') ? raw / 1000 : raw;
                   v = kw.toFixed(2).replace('.',',');
                 }
-                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:#4ade80;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.60)">kW</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">productie</div></div>`;
+                // Percentage van wat de omvormers maximaal kúnnen, net als het
+                // percentage bij de batterij hiernaast. De plafonds komen uit de
+                // capaciteitssensoren (in kW) en niet uit een getal hier, zodat
+                // een andere omvormer de schaal meeneemt; 5 + 3 kW als terugval.
+                //
+                // Let op bij het lezen: dit haalt in de praktijk nooit 100%. De
+                // twee sets pieken op verschillende momenten - oost 's ochtends,
+                // zuidwest 's middags - dus samen kom je zelden boven ~85%. Het
+                // is een maat voor "hoe hard staan de panelen te werken", niet
+                // voor "haal ik het maximum". De klok in de keuken toont het per
+                // set, en dáár raakt de zuidwest wél echt 100% (klippen).
+                var cap = function(id, val){ var s = states[id];
+                  return (s && !isNaN(Number(s.state))) ? Number(s.state) : val; };
+                var plafond = cap('sensor.inverter_kroon_18_achtertuin_capacity', 5)
+                            + cap('sensor.inverter_kroon_18_zolder_capacity', 3);
+                var pctStr = (kw === null || plafond <= 0) ? ''
+                  : ` <span style="font-size:13px;color:rgba(255,255,255,0.60)">· ${Math.round(kw / plafond * 100)}%</span>`;
+                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:#4ade80;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.60)">kW</span>${pctStr}</div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">productie</div></div>`;
               ]]]
             cons: |
               [[[
