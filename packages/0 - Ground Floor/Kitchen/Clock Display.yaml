@@ -242,10 +242,11 @@ kitchen_clock_display_package:
                   {%- set c1 = [states('sensor.inverter_kroon_18_achtertuin_capacity') | float(5) * 1000, 1] | max -%}
                   {%- set c2 = [states('sensor.inverter_kroon_18_zolder_capacity') | float(3) * 1000, 1] | max -%}
                   {%- set tot = p1 + p2 -%}
-                  {#- Onder de kilowatt hele watts, daarboven "4.2k": vier tekens
-                      is het maximum dat naast het zonnetje past. -#}
-                  {%- set label = (tot | round(0) | int) | string if tot < 1000
-                                  else ((tot / 1000) | round(1)) | string ~ 'k' -%}
+                  {#- Hele watts met eenheid. Het zonnetje loopt tot x=6, dus er
+                      blijft 25 px over: zes tekens van 4 px. Het maximum dat
+                      hier ooit kan staan is "8000W" (vijf tekens), want verder
+                      dan 5 + 3 kW AC komen de omvormers niet. -#}
+                  {%- set label = (tot | round(0) | int) | string ~ 'W' -%}
                   {%- set tx = 32 - (label | length * 4) -%}
                   {%- set l1 = [[(p1 * 32 / c1) | round(0) | int, 32] | min, 0] | max -%}
                   {%- set l2 = [[(p2 * 32 / c2) | round(0) | int, 32] | min, 0] | max -%}
