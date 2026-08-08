@@ -69,12 +69,19 @@ brandweer_package:
       icon: mdi:firebase
 
   input_text:
+    # max: 255 en niet de standaard 100. Een P2000-regel met veel eenheden
+    # ("BR heide (Uitbr.: hoog) Goordreef Erp 210093 210091 213861 214131
+    # 222841" zat al op 83) loopt daar overheen, en dan faalt input_text.set_value
+    # op de EERSTE actie van de webhook-automatisering: geen melding, geen TTS,
+    # geen agenda. Stil falen op de grootste inzetten is precies verkeerd om.
     brandweer_laatste_melding:
       name: "Brandweer - Laatste melding"
       icon: mdi:fire-circle
+      max: 255
     brandweer_laatste_melding_fonetisch:
       name: "Brandweer - Laatste Melding Fonetisch"
       icon: mdi:account-voice
+      max: 255
 
   input_datetime:
     brandweer_laatste_melding:
@@ -326,23 +333,35 @@ brandweer_package:
             entity_id: calendar.r_bohnen_vrbn_nl_agenda
           action: ms365_calendar.modify_calendar_event
 
+    # Zelfde trackerkeuze als in `brandweer_webhook_main_calendar` hieronder: de
+    # GPS-tracker van de app in plaats van person.robin_bohnen.
     - id: brandweer_back_at_station
       alias: Brandweer - Back at Station
       description: Cancel incident if back at the firestation
       mode: single
       triggers:
-        - entity_id: person.robin_bohnen
+        - entity_id: device_tracker.iphone_van_robin
           zone: zone.brandweer_kazerne_uden
           event: enter
           trigger: zone
-        - entity_id: person.robin_bohnen
+        - entity_id: device_tracker.iphone_van_robin
           zone: zone.home
           event: enter
           trigger: zone
       conditions:
+        # `for: 5 minuten` want de eerste trigger hierboven vuurt OOK op mijn
+        # aankomst bij het uitrukken - precies het moment waarop de
+        # agenda-automatisering de vlag aanzet. Zonder deze rem is het een race
+        # tussen twee automatiseringen die op dezelfde state-change reageren, en
+        # verliest hij: de afspraak zou meteen weer afgesloten worden. Met de
+        # snellere app-tracker wordt dat venster scherper dan het was.
         - condition: state
           entity_id: input_boolean.brandweer_uitgerukt
           state: "on"
+          for:
+            hours: 0
+            minutes: 5
+            seconds: 0
       actions:
         - metadata: {}
           data: {}
@@ -731,6 +750,18 @@ brandweer_package:
                               target:
                                 entity_id: alarm_control_panel.alarmo
 
+    # LET OP: hier staat bewust `device_tracker.iphone_van_robin` en NIET
+    # `person.robin_bohnen`. De person-entiteit hangt aan twee trackers, en
+    # `device_tracker.iphone_9` is er een van het type `router`. Home Assistant
+    # geeft een niet-GPS-tracker die `home` zegt voorrang boven de GPS-tracker,
+    # en die router bleef in de praktijk 7 tot 12 minuten "thuis" melden nadat
+    # ik al weg was. De zone-enter op de kazerne kwam daardoor bij `person` vaak
+    # helemaal niet binnen - de app-tracker had me er al na 2 a 4 minuten staan.
+    # Gevolg: de wait_for_trigger hieronder liep af, `continue_on_timeout: false`
+    # kapte de run af, en de uitruk kwam nergens terecht (agenda, uitgerukt-vlag,
+    # teller). In de 11 dagen die de recorder bewaarde miste dat 4 van de 6
+    # uitrukken; de twee die het haalden waren mazzel (5m48 van de 6 minuten) of
+    # omdat ik al op de kazerne stond. Zelfde reden in `brandweer_back_at_station`.
     - id: brandweer_webhook_main_calendar
       alias: Brandweer - Webhook MAIN - Calendar changes
       description: Add appointment to calendar when gone with firestation
@@ -747,18 +778,22 @@ brandweer_package:
               condition: not
               conditions:
                 - condition: zone
-                  entity_id: person.robin_bohnen
+                  entity_id: device_tracker.iphone_van_robin
                   zone: zone.brandweer_kazerne_uden
           then:
-            - alias: 6 minuten wachten totdat Robin op kazerne is
+            # 10 en niet 6 minuten: de app-tracker is snel, maar een telefoon die
+            # even geen fix heeft of een uitruk waarbij ik van verder moet komen
+            # mag niet weer stilletjes buiten de boot vallen. Te laat een
+            # agenda-item is beter dan geen.
+            - alias: 10 minuten wachten totdat Robin op kazerne is
               wait_for_trigger:
-                - entity_id: person.robin_bohnen
+                - entity_id: device_tracker.iphone_van_robin
                   zone: zone.brandweer_kazerne_uden
                   event: enter
                   trigger: zone
               timeout:
                 hours: 0
-                minutes: 6
+                minutes: 10
                 seconds: 0
                 milliseconds: 0
               continue_on_timeout: false
@@ -768,7 +803,7 @@ brandweer_package:
                   condition: or
                   conditions:
                     - condition: zone
-                      entity_id: person.robin_bohnen
+                      entity_id: device_tracker.iphone_van_robin
                       zone: zone.brandweer_kazerne_uden
               then:
                 - if:
@@ -880,7 +915,7 @@ brandweer_package:
                   condition: or
                   conditions:
                     - condition: zone
-                      entity_id: person.robin_bohnen
+                      entity_id: device_tracker.iphone_van_robin
                       zone: zone.brandweer_kazerne_uden
               then:
                 - if:
