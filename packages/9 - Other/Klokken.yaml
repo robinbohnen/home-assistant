@@ -388,6 +388,14 @@ klokken_package:
           for:
             minutes: 2
           id: stil
+        # EEN HERSTART VALT TUSSEN TWEE TRIGGERS IN
+        # Beide triggers hierboven vragen om een overgang. Staat de klok aan op
+        # het moment dat HA herstart en beweegt er daarna niets meer, dan komt
+        # die overgang nooit en brandt hij tot iemand de garage in loopt. Na de
+        # herstart van 2026-08-08 stond hij daardoor voor niets aan.
+        - trigger: homeassistant
+          event: start
+          id: herstart
       # Dezelfde hoofdschakelaar als de garagelampen. Uit betekent daar "hier
       # beweegt niets, ook niet bij vertrek"; dan hoort dit scherm ook niet
       # ineens uit zichzelf te doven terwijl je eronder staat te sleutelen.
@@ -412,6 +420,20 @@ klokken_package:
               conditions:
                 - condition: trigger
                   id: stil
+              sequence:
+                - action: light.turn_off
+                  target:
+                    entity_id: light.garage_klok_awtrix_garage_matrix
+            # Bewust alleen uitzetten en niet aan: staat de sensor bij het
+            # opstarten juist op beweging, dan is de gewone aan-trigger zo weer
+            # aan de beurt.
+            - alias: Na een herstart de stand inhalen
+              conditions:
+                - condition: trigger
+                  id: herstart
+                - condition: state
+                  entity_id: binary_sensor.pir_group_garage
+                  state: "off"
               sequence:
                 - action: light.turn_off
                   target:
