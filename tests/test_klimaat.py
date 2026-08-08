@@ -180,6 +180,31 @@ check("gevelsensor weg, zonwering blijft staan", "kantoor_links", "kier", False)
 # sensoren en die zijn nog gewoon in orde.
 check("andere gevel blijft normaal werken", "badkamer", "open", True)
 
+# Zelfde fout, andere bron. Bij de reload van 12:10 was niet de gevelsensor weg
+# maar `group.all_adults`: `thuis` werd false, het advies luidde "niemand thuis
+# op een warme dag" en het keukenrolgordijn ging omlaag. De eerste guard keek
+# alleen naar de gevelsensoren en ving dit niet - vandaar dat de controle nu
+# over alle bronnen gaat die bij een reload kunnen verdwijnen.
+scenario("reload: group.all_adults even weg", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "30",
+            "group.all_adults": "unknown"})
+check("thuis-groep weg, rolgordijn blijft staan", "keuken_rolgordijn_groot",
+      "dicht", False)
+# Ander advies (zonder zon op de voorgevel helpt een screen niet), maar het
+# gaat hier om het vlaggetje: ook deze zone komt niet in beweging.
+check("en de screens ook", "keuken_screens", "open", False)
+
+# Een handbediening-timer die tijdens de reload verdwijnt mag een lopende
+# override niet stilzwijgend opheffen; ook dan blijft de zone staan.
+scenario("reload: override-timer even weg", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "30",
+            "timer.override_kantoor_links": "unavailable"})
+check("override-timer weg, zone blijft staan", "kantoor_links", "open", False)
+
 # --- preventief: zon draait naar de achtergevel, schijnt er nog niet --------
 scenario("hittedag, zon draait naar achteren", "16:00",
          **{"input_select.klimaat_regime": "Koelen",

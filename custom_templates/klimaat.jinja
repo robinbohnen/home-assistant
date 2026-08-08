@@ -293,33 +293,73 @@
 {%- set nachtspui = is_state('input_boolean.klimaat_nachtspui', 'on') -%}
 {%- set actief = is_state('input_boolean.klimaatregie_actief', 'on') -%}
 {#- Omgekeerd: 'aan' = handmatig. Een verse input_boolean staat uit, en dat
-    moet 'gewoon meedoen' betekenen, niet 'zone stilzwijgend geblokkeerd'. -#}
+    moet 'gewoon meedoen' betekenen, niet 'zone stilzwijgend geblokkeerd'.
+    Een boolean die er helemaal niet is, is iets anders dan een die uit staat:
+    die valt in de bronnencontrole hierboven en zet de zone stil met een
+    leesbare `blokkade`. Stilzwijgend is het dus nog steeds niet. -#}
 {%- set zone_auto = not is_state('input_boolean.zonwering_handmatig_' ~ zone, 'on') -%}
 {%- set override = is_state('timer.override_' ~ zone, 'active') -%}
 {%- set elevatie = state_attr('sun.sun', 'elevation') | float(0) -%}
+{#- ONBEKEND IS GEEN NEE
+    `is_state(x, 'on')` en `is_state(x, 'home')` geven ook false als x niet
+    bestaat of `unavailable` is. Daarmee verdwijnt het verschil tussen "nee" en
+    "ik weet het even niet", en een advies dat op zo'n stille nee gebouwd is,
+    wordt wel gewoon uitgevoerd.
+
+    Dat is geen theorie. Bij elke YAML-reload haalt Home Assistant een deel van
+    de entiteiten even weg en zet ze daarna terug; de recorder logt dat als een
+    lege staat zonder attributen. Twee keer misgegaan op 2026-08-08:
+      11:57  de gevelsensoren waren weg -> `zon_op` false -> advies voor
+             kantoor sloeg om van dicht (0%) naar kier (15%), rolgordijnen
+             gingen open en 39 seconden later weer dicht.
+      12:10  `group.all_adults` was weg -> `thuis` false -> "niemand thuis op
+             een warme dag" -> het keukenrolgordijn ging omlaag.
+    De tweede sloop langs een guard die alleen naar de gevelsensoren keek. Dus
+    nu in één keer alles wat bij een reload onder je handen vandaan kan
+    verdwijnen: verderop zet dit `uitvoeren` op false, zodat de zonwering zijn
+    stand vasthoudt tot de wereld er weer is. De `/15`-vangnettrigger van de
+    uitvoerder pakt het daarna vanzelf op.
+
+    WAT HIER BEWUST NIET IN STAAT
+    De meetbronnen van buiten: `sensor.knmi_temperatuur`,
+    `binary_sensor.knmi_waarschuwing`, `weather.knmi_thuis`, de neerslagsensor,
+    `alarm_control_panel.alarmo`, `sun.sun` en de kamersensor `z.temp`. Die
+    herladen niet mee met YAML, maar kunnen wél dagen achtereen wegblijven als
+    een integratie stukgaat - en dan zou de zonwering permanent bevriezen.
+    Erger nog: bevriezen blokkeert ook het beschermende kantje. Screens die bij
+    storm naar binnen moeten, moeten dat kunnen blijven doen juist als het KNMI
+    even niets zegt. Voor die bronnen is er de waakhond in
+    packages/9 - Other/Watchdog.yaml. -#}
+{%- set bron = namespace(mist='') -%}
+{%- for e in ['input_select.klimaat_regime',
+              'input_number.klimaat_kamer_warm',
+              'input_number.klimaat_hittedag_vanaf',
+              'input_number.klimaat_verwachte_max',
+              'input_number.klimaat_spui_delta',
+              'input_number.klimaat_kier_positie',
+              'input_number.klimaat_screen_max_wind',
+              'input_number.klimaat_screen_max_regen',
+              'input_boolean.klimaat_nachtspui',
+              'input_boolean.klimaat_wakker',
+              'input_boolean.klimaatregie_actief',
+              'input_boolean.zonwering_handmatig_' ~ zone,
+              'timer.override_' ~ zone,
+              'group.all_adults'] -%}
+  {%- if bron.mist == '' and not has_value(e) -%}
+    {%- set bron.mist = e -%}
+  {%- endif -%}
+{%- endfor -%}
 {#- Een zone kan op meerdere gevels liggen; de zon telt zodra hij op één
     ervan staat. De lus leest beide sensoren per gevel altijd uit, zodat Home
-    Assistant ze allemaal blijft volgen.
-
-    ONBEKEND IS GEEN NEE
-    `is_state(..., 'on')` geeft ook false als de sensor `unavailable` is, en
-    dan is er geen verschil meer tussen "de zon staat er niet op" en "ik weet
-    het even niet". Dat is geen theorie: deze gevelsensoren zijn zelf ook
-    template-entiteiten, dus bij elke YAML-reload flikkeren ze een paar
-    seconden door `unavailable` heen. Op 2026-08-08 viel de zon-tak daardoor
-    weg, sloeg het advies voor kantoor om van 'dicht' (0%) naar 'kier' (15%)
-    met als reden "kamer is 22.6°, licht temperen", en gingen de rolgordijnen
-    open om 39 seconden later weer dicht te gaan.
-    Daarom telt deze lus apart of een sensor gewoon geen waarde heeft; dat zet
-    verderop `uitvoeren` op false, zodat de zonwering zijn stand vasthoudt tot
-    de sensoren er weer zijn. De `/15`-vangnettrigger van de uitvoerder pakt
-    het daarna vanzelf op. -#}
-{%- set zon = namespace(op=false, richting=false, onbekend=false) -%}
+    Assistant ze allemaal blijft volgen. -#}
+{%- set zon = namespace(op=false, richting=false) -%}
 {%- for g in z.gevels -%}
-  {%- if not has_value('binary_sensor.zon_op_' ~ g ~ 'gevel')
-         or not has_value('binary_sensor.zon_richting_' ~ g ~ 'gevel') -%}
-    {%- set zon.onbekend = true -%}
-  {%- endif -%}
+  {%- for e in ['binary_sensor.zon_op_' ~ g ~ 'gevel',
+                'binary_sensor.zon_richting_' ~ g ~ 'gevel'] -%}
+    {%- if bron.mist == '' and not has_value(e) -%}
+      {%- set bron.mist = e -%}
+    {%- endif -%}
+  {%- endfor -%}
   {%- if is_state('binary_sensor.zon_op_' ~ g ~ 'gevel', 'on') -%}
     {%- set zon.op = true -%}
   {%- endif -%}
@@ -329,7 +369,7 @@
 {%- endfor -%}
 {%- set zon_op = zon.op -%}
 {%- set zon_richting = zon.richting -%}
-{%- set zon_onbekend = zon.onbekend -%}
+{%- set bron_onbekend = bron.mist != '' -%}
 {%- set gevel_txt = z.gevels | join('/') ~ 'gevel' -%}
 {%- set thuis = is_state('group.all_adults', 'home') -%}
 {#- Wanneer moet een screen in? Bij wind en vorst, niet bij hitte: een
@@ -665,21 +705,23 @@
 {%- set positie = (100 - positie_zon)
                   if (z.get('omgekeerd') and positie_zon >= 0)
                   else positie_zon -%}
-{#- `not zon_onbekend`: het advies hierboven is bij een wegvallende gevelsensor
-    niet fout maar wél ongefundeerd, en dan is stilstaan het juiste antwoord.
-    Zie de toelichting bij de zon-lus. -#}
+{#- `not bron_onbekend`: het advies hierboven is bij een wegvallende bron niet
+    fout maar wél ongefundeerd, en dan is stilstaan het juiste antwoord. Zie de
+    toelichting bij de bronnenlijst. -#}
 {%- set uitvoeren = actief and zone_auto and not override and positie >= 0
-                    and not zon_onbekend -%}
+                    and not bron_onbekend -%}
 {#- Zonwering die eerst toestemming vraagt: alleen het naar buiten gaan is een
     vraag. 'open' (binnenhalen, ook bij wind en vorst) blijft iets dat de
     uitvoerder gewoon zelf doet. `uitvoeren` blijft hierbij true - de zone doet
     mee, alleen loopt hij via de vraag-automatisering in plaats van via de
     uitvoerder. Die twee lezen allebei dit vlaggetje. -#}
 {%- set vraagt = z.get('vraagt', false) and ns.a in ['dicht', 'kier'] -%}
+{#- De ontbrekende bron staat mét entity-id in de blokkade: blijft een zone
+    hangen, dan wil je kunnen zien wélke bron weg is. -#}
 {%- set blokkade = 'handbediening actief' if override
                    else ('zone staat op handmatig' if not zone_auto
                    else ('klimaatregie staat uit' if not actief
-                   else ('zonsensor heeft even geen waarde' if zon_onbekend
+                   else (('bron ontbreekt: ' ~ bron.mist) if bron_onbekend
                    else ('advies is rust' if positie < 0
                    else ('wacht op je akkoord' if vraagt else ''))))) -%}
 
