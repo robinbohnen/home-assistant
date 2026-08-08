@@ -206,8 +206,15 @@ brandweer_package:
         # Eerst de vlag, dan pas de melding: alles wat op
         # `brandweer_laatste_melding` triggert leest deze boolean, en moet hem
         # dus al goed zien staan op het moment dat het afgaat.
+        # `continue_on_error` omdat dit de EERSTE actie is: bestaat de
+        # input_boolean nog niet (automations herladen zonder de rest van het
+        # package), dan zou een mislukking hier de melding, de TTS én de agenda
+        # meenemen - dezelfde stille storing als de 255-tekengrens hierboven.
+        # Een verkeerd getelde uitruk is een stuk minder erg dan een uitruk die
+        # nergens aankomt.
         - alias: Markeer of dit een na-alarmering is
           action: "input_boolean.turn_{{ 'on' if na_alarmering else 'off' }}"
+          continue_on_error: true
           target:
             entity_id: input_boolean.brandweer_laatste_melding_na_alarmering
         - target:
