@@ -185,10 +185,42 @@ brandweer_package:
       variables:
         tm_body: "{{ trigger.json.get('trigger_message', {}).get('body', '') }}"
         inc_body: "{{ trigger.json.get('incident', {}).get('body', '') }}"
-        na_alarmering: "{{ tm_body != '' and tm_body != inc_body }}"
-        melding_body: "{{ tm_body if na_alarmering else inc_body }}"
+        # Loopt `trigger_message` vóór op `incident`, dan is die de verse: dat
+        # is de `after_enrichment`-stand hierboven. Zijn ze gelijk, dan draait
+        # de verzender op `after_type_enrichment` met "elk bericht" en is
+        # `incident` al compleet - dan pakken we die gewoon.
+        gebruik_trigger_bericht: "{{ tm_body != '' and tm_body != inc_body }}"
+        melding_body: "{{ tm_body if gebruik_trigger_bericht else inc_body }}"
         melding_tts: >-
-          {{ trigger.json.get('trigger_tts_text') if (na_alarmering and trigger.json.get('trigger_tts_text')) else trigger.json.get('tts_text', '') }}
+          {{ trigger.json.get('trigger_tts_text') if (gebruik_trigger_bericht and trigger.json.get('trigger_tts_text')) else trigger.json.get('tts_text', '') }}
+        # IS DIT EEN NA-ALARMERING?
+        # Niet af te leiden uit `trigger_message` vs `incident`: op
+        # `after_type_enrichment` met "elk bericht" zijn die twee bij een
+        # na-alarmering identiek, en dan zou de ploegteller alsnog twee keer
+        # oplopen voor één incident.
+        #
+        # Wat in béide standen klopt: een na-alarmering beschrijft hetzelfde
+        # incident, alleen met andere eenheden erachter. Een P2000-body eindigt
+        # op de roepnummers (zes cijfers, soms een rij: "... Goordreef Erp
+        # 210093 210091 213861 214131 222841"). Haal die eraf en je houdt de
+        # incidentregel over; is die gelijk aan die van de vorige melding, dan
+        # gaat het om hetzelfde incident.
+        #
+        # De grens van 2 uur zit erbij omdat een échte nieuwe uitruk naar
+        # dezelfde straat anders als na-alarmering zou gelden en niet geteld
+        # zou worden. Alleen de teller hangt hieraan - de melding, de TTS en de
+        # lampen gaan hoe dan ook af.
+        # Let op de blok-notatie `>-` bij deze twee: in een blokwaarde blijft
+        # `\\s` staan zoals het er staat, en dat is precies wat Jinja nodig
+        # heeft om er `\s` van te maken. In een `"..."`-waarde eet YAML de
+        # eerste backslash al op en houdt Jinja een ongeldige escape over.
+        incident_kern: >-
+          {{ melding_body | regex_replace('(\\s+\\d{6})+\\s*$', '') | trim }}
+        vorige_kern: >-
+          {{ states('input_text.brandweer_laatste_melding') | regex_replace('(\\s+\\d{6})+\\s*$', '') | trim }}
+        vorige_leeftijd: >-
+          {{ (now() - states.input_text.brandweer_laatste_melding.last_changed).total_seconds() }}
+        na_alarmering: "{{ incident_kern != '' and incident_kern == vorige_kern and vorige_leeftijd < 2 * 60 * 60 }}"
       conditions:
         # Dedup op de tekst die we DAADWERKELIJK gaan opslaan, niet op
         # `incident.body`: zie hierboven, dat veld staat bij een na-alarmering
