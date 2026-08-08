@@ -612,6 +612,44 @@ brandweer_package:
                       "scrollSpeed": 50, "sound": "alarm", "stack": false}
                   action: mqtt.publish
               alias: Zet bericht op led klok
+            # DE WOONKAMER- EN GARAGEKLOK KRIJGEN HEM ALTIJD
+            # Zonder gok op de woonkamerlampen: die twee klokken staan altijd
+            # aan en tonen verder alleen zon en accu, dus een melding is daar
+            # het enige dat om aandacht vraagt. Zie packages/9 - Other/
+            # Klokken.yaml voor wat er verder op die schermen gebeurt.
+            #
+            # `rtttl` EN NIET `sound`
+            # `sound` verwijst naar een bestand in /MELODIES op de klok zelf.
+            # Die map is op een nieuwe klok leeg, en dan scrollt de melding
+            # geluidloos voorbij zonder dat iets dat meldt. De sirene gaat
+            # daarom als losse noten mee - zelfde deuntje als alarm.txt op de
+            # keukenklok, maar zonder iets dat op het apparaat moet staan.
+            #
+            # HET ICOON MOET ER WEL OP STAAN
+            # Icoon 555 is een bestand in /ICONS. Voor een nieuwe klok:
+            #   curl -o 555.jpg http://<ip-keukenklok>/ICONS/555.jpg
+            #   curl -F "data=@555.jpg;filename=/ICONS/555.jpg" http://<ip-nieuwe-klok>/edit
+            - alias: Zet bericht op de woonkamer- en garageklok
+              repeat:
+                for_each:
+                  - clock_2
+                  - clock_3
+                sequence:
+                  - action: mqtt.publish
+                    data:
+                      qos: 0
+                      retain: false
+                      topic: "{{ repeat.item }}/notify"
+                      # to_json om de tekst: een melding met een aanhalingsteken
+                      # of backslash erin maakt anders ongeldige JSON en dan
+                      # blijft het scherm stil - precies bij het bericht dat
+                      # niet gemist mag worden. De spatie ervoor laat de tekst
+                      # netjes het scherm in schuiven.
+                      payload: >-
+                        {"icon": 555, "repeat": 4, "scrollSpeed": 50,
+                        "stack": false,
+                        "rtttl": "siren:d=8,o=5,b=50:b,e,b,e,b,e",
+                        "text": {{ (' ' ~ states('input_text.brandweer_laatste_melding')) | to_json }}}
             - if:
                 - condition: state
                   entity_id: light.woonkamer_lampen

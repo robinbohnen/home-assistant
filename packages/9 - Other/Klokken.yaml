@@ -5,7 +5,7 @@
 ##   clock_1  keuken     - draait de volle app-rotatie, zie
 ##                         packages/0 - Ground Floor/Kitchen/Clock Display.yaml
 ##   clock_2  woonkamer
-##   clock_3  garage
+##   clock_3  garage      - staat alleen aan als er beweging is, zie onderaan
 ## De laatste twee tonen bewust maar twee dingen: wat de panelen doen en hoe de
 ## thuisaccu ervoor staat. Daarnaast branden hun twee bovenste indicatoren:
 ##   indicator 1  stroomprijs nu   groen goedkoop / oranje midden / rood duur
@@ -273,8 +273,8 @@ klokken_package:
         # of de bezetting toevallig veranderde.
         - trigger: state
           entity_id:
-            - light.awtrix_9c6510_matrix
-            - light.awtrix_9bf654_matrix
+            - light.woonkamer_klok_awtrix_woonkamer_matrix
+            - light.garage_klok_awtrix_garage_matrix
           from: unavailable
         - trigger: homeassistant
           event: start
@@ -354,3 +354,65 @@ klokken_package:
               data:
                 brightness: 255
                 rgb_color: "{{ bezetting_kleur }}"
+
+    - id: klokken_garage_matrix_beweging
+      alias: Klokken - Garageklok aan bij beweging
+      description: >-
+        De garage is meestal leeg; daar hoeft geen scherm voor te branden. Bij
+        beweging gaat hij aan, twee minuten na de laatste beweging weer uit.
+      # WAAROM NIET DE BEWEGINGSLICHT-BLUEPRINT
+      # Die wil een helderheid- en een overgangshelper en brengt deurcontacten,
+      # een lux-drempel en het alarm mee. Een display is geen lamp: de
+      # helderheid komt uit de klok zelf (`BRI`, en die regelt hij desgewenst
+      # op zijn eigen lichtsensor), en een fade bestaat er niet. Wat overblijft
+      # is precies wat hieronder staat.
+      #
+      # DE APPS LOPEN ONDERTUSSEN DOOR
+      # Zon en accu worden elke 30 seconden met `retain: true` gepubliceerd, de
+      # indicatoren onthoudt de klok zelf over een uit/aan heen (nagegaan via
+      # /api/stats). Er staat dus meteen weer iets op het scherm zodra je de
+      # garage in loopt, zonder wachten op de volgende cyclus.
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.pir_group_garage
+          to: "on"
+          id: beweging
+        # Twee minuten, gelijk aan de standaard `uit_na` van de
+        # bewegingslicht-blueprint: de garagelampen doven dan ook, en een klok
+        # die daarna nog staat te branden in een donkere garage is precies het
+        # soort verschil waar je later over struikelt.
+        - trigger: state
+          entity_id: binary_sensor.pir_group_garage
+          to: "off"
+          for:
+            minutes: 2
+          id: stil
+      # Dezelfde hoofdschakelaar als de garagelampen. Uit betekent daar "hier
+      # beweegt niets, ook niet bij vertrek"; dan hoort dit scherm ook niet
+      # ineens uit zichzelf te doven terwijl je eronder staat te sleutelen.
+      conditions:
+        - condition: state
+          entity_id: input_boolean.enable_pir_garage
+          state: "on"
+      actions:
+        - choose:
+            - alias: Beweging - scherm aan
+              conditions:
+                - condition: trigger
+                  id: beweging
+              sequence:
+                # Bewust zonder helderheid: dan houdt de klok de stand die hij
+                # zelf had (`BRI`), in plaats van dat dit bestand er een tweede
+                # waarheid naast zet.
+                - action: light.turn_on
+                  target:
+                    entity_id: light.garage_klok_awtrix_garage_matrix
+            - alias: Twee minuten stil - scherm uit
+              conditions:
+                - condition: trigger
+                  id: stil
+              sequence:
+                - action: light.turn_off
+                  target:
+                    entity_id: light.garage_klok_awtrix_garage_matrix
