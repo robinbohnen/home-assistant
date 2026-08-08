@@ -32,11 +32,58 @@
 ## De broker bewaart per topic het laatste bericht. Een klok die nu nog niet
 ## bestaat of net opnieuw opstart, krijgt bij het verbinden dus direct beide
 ## apps binnen zonder op de volgende cyclus te wachten.
+##
+## EEN NIEUWE KLOK KOMT MET VIER FIRMWARE-APPS
+## Uit de doos draaien Time, Temperature, Humidity en Battery mee in de
+## rotatie; op clock_2 en clock_3 stonden ze op 2026-08-08 nog tussen de twee
+## eigen apps. Uitzetten gaat met `script.klok_native_apps_uit`, zie daar.
 ##############################################################################
 
 klokken_package:
 
   script:
+    klok_native_apps_uit:
+      alias: Klok - Firmware-apps uitzetten
+      description: >-
+        Zet de ingebouwde AWTRIX-apps (tijd, temperatuur, luchtvochtigheid,
+        accu) uit, zodat een klok alleen de apps toont die hier gepubliceerd
+        worden. Eenmalig draaien per nieuwe of gereset klok.
+      icon: mdi:apps-box
+      mode: single
+      fields:
+        klokken:
+          name: Klokken
+          description: Lijst met MQTT topic-prefixes, net als bij het teken-script.
+          required: true
+          example: "[clock_2, clock_3]"
+          selector:
+            object:
+      sequence:
+        # RETAIN: FALSE, EN MET REDEN
+        # De klok schrijft elke settings-publish naar zijn flash. Bewaard op de
+        # broker zou dat bij elke herverbinding opnieuw gebeuren, voor een
+        # instelling die de klok zelf al onthoudt.
+        - alias: Firmware-apps uit op elke klok
+          repeat:
+            for_each: "{{ klokken }}"
+            sequence:
+              - action: mqtt.publish
+                data:
+                  qos: 0
+                  retain: false
+                  topic: "{{ repeat.item }}/settings"
+                  payload: >-
+                    {"TIM": false, "DAT": false, "HUM": false, "TEMP": false,
+                    "BAT": false}
+        # DE APP-LIJST VOLGT PAS NA EEN HERSTART
+        # Firmware 0.98 slaat de instelling meteen op, maar bouwt de lopende
+        # rotatie niet opnieuw op: de vier apps bleven in `/api/loop` staan
+        # totdat de klok opnieuw opstartte. Er is geen MQTT-topic voor, dus dat
+        # gaat met de hand:
+        #   curl -X POST http://<ip-van-de-klok>/api/reboot
+        # De klok is na een seconde of tien terug en pikt de bewaarde apps
+        # direct weer op.
+
     klok_zon_en_accu:
       alias: Klok - Zon en accu tekenen
       description: >-
