@@ -7,7 +7,11 @@
 ##   clock_2  woonkamer
 ##   clock_3  garage
 ## De laatste twee tonen bewust maar twee dingen: wat de panelen doen en hoe de
-## thuisaccu ervoor staat.
+## thuisaccu ervoor staat. Daarnaast branden hun twee bovenste indicatoren:
+##   indicator 1  stroomprijs nu   groen goedkoop / oranje midden / rood duur
+##   indicator 2  bezetting van de dienstdoende ploeg, alleen als het knelt
+## Een indicator is een stipje van een pixel: het zegt "kijk even" en verder
+## niets. Alles wat een getal of een naam nodig heeft hoort in een app.
 ##
 ## WAAROM DE TEKENLOGICA HIER STAAT EN NIET DRIE KEER IN EEN ROOM-PACKAGE
 ## Beide frames zijn met de hand uitgerekende pixels op een 32x8-matrix: waar
@@ -233,3 +237,120 @@ klokken_package:
             klokken:
               - clock_2
               - clock_3
+
+    - id: klokken_indicatoren_woonkamer_garage
+      alias: Klokken - Indicatoren stroomprijs en bezetting
+      description: >-
+        De twee stipjes rechts op de woonkamer- en garageklok. Boven (1) is de
+        stroomprijs van nu, midden (2) de bezetting van de dienstdoende ploeg.
+      # WAAROM DIT OVER DE LICHT-ENTITEITEN GAAT EN NIET OVER MQTT
+      # De AWTRIX-integratie maakt van elke indicator een rgb-lamp. Daarmee
+      # weet HA de huidige kleur, blijft `light.turn_off` gewoon uit gaan, en
+      # hoeft hier geen tweede plek te bestaan waar topic-namen kloppen moeten.
+      #
+      # `brightness` MOET MEE
+      # Een `light.turn_on` met alleen `rgb_color` liet het stipje uit: de
+      # integratie schaalt de kleur met de helderheid, en die was nog nooit
+      # gezet. Met `brightness: 255` erbij gaat hij meteen aan.
+      mode: queued
+      max: 5
+      triggers:
+        - trigger: state
+          entity_id: sensor.slimhuys_zonneplan_tariefniveau_nu
+        # De webhook-sensor verandert vaak alleen van attribuut (de stand van
+        # een ploeg zonder statuswissel); een state-trigger zonder `to:` vangt
+        # dat mee. De poll-sensoren staan erbij voor als de webhook stilvalt.
+        - trigger: state
+          entity_id:
+            - sensor.brandweer_bezetting
+            - sensor.bezetting_ploeg_a
+            - sensor.bezetting_ploeg_b
+            - sensor.bezetting_ploeg_c
+            - input_select.brandweer_dienstdoende_ploeg
+        # Een klok komt na een herstart met gedoofde indicatoren terug: die
+        # staan, anders dan de apps, niet als retained bericht op de broker.
+        # Vandaar deze twee triggers - zonder was het stipje weg tot de prijs
+        # of de bezetting toevallig veranderde.
+        - trigger: state
+          entity_id:
+            - light.awtrix_9c6510_matrix
+            - light.awtrix_9bf654_matrix
+          from: unavailable
+        - trigger: homeassistant
+          event: start
+      conditions: []
+      actions:
+        - alias: Beide kleuren bepalen
+          variables:
+            # tariefniveau_nu kent VIJF niveaus, zie de kop van
+            # packages/9 - Other/Stroomprijs.yaml: een test op alleen 'low' of
+            # 'high' mist juist het goedkoopste en het duurste uur.
+            prijs_kleur: >-
+              {%- set n = states('sensor.slimhuys_zonneplan_tariefniveau_nu') -%}
+              {%- if n in ['very_low', 'low'] -%}[50, 215, 75]
+              {%- elif n == 'medium' -%}[255, 159, 10]
+              {%- elif n in ['high', 'very_high'] -%}[255, 59, 48]
+              {%- else -%}uit{%- endif -%}
+            # Zelfde bronvolgorde als de BRW-app op de keukenklok en het
+            # dashboard: eerst het `ploegen`-attribuut van de PreCom-webhook,
+            # dan pas de 5-minutenpoll. Twee schermen die hetzelfde zouden
+            # moeten zeggen en dat niet doen is erger dan een oud getal.
+            bezetting_kleur: >-
+              {%- set ds = states('input_select.brandweer_dienstdoende_ploeg') -%}
+              {%- set letter = (ds[0] | upper) if has_value('input_select.brandweer_dienstdoende_ploeg')
+                               else (state_attr('sensor.brandweer_bezetting', 'ploeg') or '') -%}
+              {%- set w = (state_attr('sensor.brandweer_bezetting', 'ploegen') or [])
+                          | selectattr('ploeg', 'eq', letter) | list -%}
+              {%- set poll = 'sensor.bezetting_ploeg_' ~ (letter | lower) -%}
+              {%- if w | count > 0 and w[0].aantal is defined -%}
+              {%- set n = w[0].aantal | int(-1) -%}
+              {%- elif has_value(poll) -%}
+              {%- set n = states(poll) | int(-1) -%}
+              {%- else -%}
+              {%- set n = -1 -%}
+              {%- endif -%}
+              {#- Onbekend gaat uit en niet op rood: een stipje dat bij elke
+                  hapering van de webhook alarm slaat kijk je binnen een week
+                  overheen, en dan mis je het wel echte tekort ook. -#}
+              {%- if n < 0 -%}uit
+              {%- elif n < 4 -%}[255, 59, 48]
+              {%- elif n < 6 -%}[255, 159, 10]
+              {%- else -%}uit{%- endif -%}
+        - alias: Indicator 1 - stroomprijs nu
+          if:
+            - condition: template
+              value_template: "{{ prijs_kleur == 'uit' }}"
+          then:
+            - action: light.turn_off
+              target:
+                entity_id:
+                  - light.awtrix_9c6510_indicator_1
+                  - light.awtrix_9bf654_indicator_1
+          else:
+            - action: light.turn_on
+              target:
+                entity_id:
+                  - light.awtrix_9c6510_indicator_1
+                  - light.awtrix_9bf654_indicator_1
+              data:
+                brightness: 255
+                rgb_color: "{{ prijs_kleur }}"
+        - alias: Indicator 2 - bezetting dienstdoende ploeg
+          if:
+            - condition: template
+              value_template: "{{ bezetting_kleur == 'uit' }}"
+          then:
+            - action: light.turn_off
+              target:
+                entity_id:
+                  - light.awtrix_9c6510_indicator_2
+                  - light.awtrix_9bf654_indicator_2
+          else:
+            - action: light.turn_on
+              target:
+                entity_id:
+                  - light.awtrix_9c6510_indicator_2
+                  - light.awtrix_9bf654_indicator_2
+              data:
+                brightness: 255
+                rgb_color: "{{ bezetting_kleur }}"
