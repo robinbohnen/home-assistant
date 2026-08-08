@@ -6,6 +6,16 @@ livingroom_media_package:
       max: 100
       step: 1
       icon: mdi:lightbulb-on-70
+    # Bias lighting achter het beeld. De twee Hue Play bars en de Signe zitten
+    # in `light.woonkamer_lampen` en gingen dus mee naar tv-niveau - precies de
+    # lampen die bij een film juist aan horen te staan. Ze krijgen nu hun eigen
+    # niveau, zie `script.woonkamer_media_licht`.
+    tv_bias_percentage:
+      name: "TV Bias Lighting Percentage"
+      min: 0
+      max: 100
+      step: 1
+      icon: mdi:television-ambient-light
 
   input_boolean:
     # "Het Sonos-volume is deze kijksessie al een keer teruggezet." Zonder deze
@@ -21,25 +31,29 @@ livingroom_media_package:
       name: "TV Volume changed"
       icon: mdi:remote-tv
 
-    # "De lampen staan nu op tv-niveau omdat wíj ze zo gezet hebben."
+    # "Er loopt een kijksessie." Aan zodra er gedimd is, uit pas als de sessie
+    # echt voorbij is - een pauze laat hem bewust staan.
     #
-    # Nodig omdat het terugzetten niet aan dezelfde voorwaarde mag hangen als
-    # het dimmen. Dimmen gebeurt alleen als het donker is; terugzetten moet ook
-    # kunnen als het inmiddels licht is geworden. Zonder deze vlag zou een
-    # pauze midden op een zomermiddag - toen er nooit gedimd is - de woonkamer
-    # alsnog naar 80% duwen.
+    # Hij doet twee dingen. Ten eerste hangt het terugzetten hieraan en niet aan
+    # de lux, want dimmen mag alleen als het donker is, terwijl terugzetten ook
+    # moet kunnen als het inmiddels licht is geworden. Zonder die scheiding zou
+    # een pauze midden op een zomermiddag - toen er nooit gedimd is - de
+    # woonkamer alsnog naar 80% duwen.
     #
-    # Hij gaat aan in `script.woonkamer_media_licht` (stand `kijken`) en uit
-    # zodra dat script op `normaal` is gezet. De tik van 04:00 in
-    # `livingroom_media_lights` is het vangnet, voor het geval de Apple TV
-    # wegvalt zonder ooit netjes af te melden.
-    woonkamer_tv_dimstand:
-      name: "Woonkamer TV-dimstand actief"
+    # Ten tweede bepaalt hij wanneer de momentopname gemaakt wordt: alleen bij
+    # de éérste keer dimmen van een sessie. Zou hij bij elke pauze omvallen, dan
+    # maakte het hervatten een nieuwe momentopname van de pauzestand (80%) en
+    # was de stand van vóór de film kwijt.
+    #
+    # De tik van 04:00 in `livingroom_media_lights` is het vangnet, voor het
+    # geval de Apple TV wegvalt zonder ooit netjes af te melden.
+    woonkamer_kijksessie:
+      name: "Woonkamer kijksessie bezig"
       icon: mdi:television-ambient-light
 
   script:
     ###########################################################################
-    ## Wat "kijkstand" en "gewone stand" betekenen - op één plek
+    ## Wat de drie lichtstanden betekenen - op één plek
     ###########################################################################
     # Dit stond eerst twee keer uitgeschreven: als `livingroom_media_playing`
     # en als `livingroom_media_paused`. Die twee liepen uit elkaar (de pauze-
@@ -50,74 +64,137 @@ livingroom_media_package:
     #
     # Nu roepen de automatisering én Brandweer dit script aan. Zelfde truc als
     # `sonos_overkapping_toggle` in packages/9 - Other/Sonos Groups.yaml.
+    #
+    # Let op het verschil tussen `pauze` en `klaar`. Pauze geeft licht: alles
+    # wat brandt naar het gewone avondniveau, want je staat op om iets te halen.
+    # Klaar zet terug wat het wás, uit de momentopname - inclusief lampen die
+    # vóór de film uit stonden. Zou pauze dat ook doen, dan ging het licht in
+    # een donkere kamer bij elke pauze weer uit.
     woonkamer_media_licht:
       alias: Woonkamer - Media licht
       description: >-
-        Zet de woonkamerverlichting in de kijkstand (gedimd, meelift-lampen
-        uit) of terug in de gewone stand.
+        Zet de woonkamerverlichting in de kijkstand, op het gewone avondniveau
+        (pauze), of terug op de stand van vóór de film (klaar).
       icon: mdi:television-ambient-light
       mode: restart
       fields:
         stand:
           name: Stand
           description: >-
-            `kijken` = dimmen voor de tv. `normaal` = terug naar het gewone
-            avondniveau.
+            `kijken` = dimmen voor de tv. `pauze` = alles wat brandt naar het
+            gewone avondniveau. `klaar` = terug naar de momentopname van vóór
+            de film.
           required: true
           example: kijken
           selector:
             select:
               options:
                 - kijken
-                - normaal
+                - pauze
+                - klaar
+      # De samenstelling van de lampgroepen blijft in de groepen zelf staan;
+      # hier wordt hij alleen uitgelezen. Twee accessors omdat het twee soorten
+      # groepen zijn: `light.tv_kast_lampen` is een oude platformgroep en heeft
+      # het attribuut `entity_id`, `light.woonkamer_lampen` is een helper-groep
+      # en heeft `group_entities`. `expand()` werkt op die tweede soort niet -
+      # dat geeft gewoon de groep zelf terug, geen leden.
+      variables:
+        bias: >-
+          {{ (state_attr('light.tv_kast_lampen', 'entity_id') or []) | list
+             + ['light.woonkamer_hue_signe_gradient'] }}
+        plafond: >-
+          {{ (state_attr('light.woonkamer_lampen', 'group_entities') or [])
+             | reject('in', bias) | list }}
+        # Alles wat de momentopname moet vasthouden, als losse lampen. Een
+        # groep in de momentopname zetten werkt ook, maar dan komt iedereen
+        # terug op dezelfde helderheid en is het verschil tussen de tafellamp
+        # en de spots weg.
+        alle_lampen: >-
+          {{ plafond + bias
+             + (state_attr('light.keuken_lampen', 'group_entities') or [])
+             + (state_attr('light.eettafel_lampen', 'group_entities') or []) }}
       sequence:
-        - choose:
-            - alias: "Kijkstand"
-              conditions:
-                - condition: template
-                  value_template: "{{ stand == 'kijken' }}"
-              sequence:
-                # Bewust géén filter op "staat hij al aan": begint de film in
-                # een donkere kamer, dan hoort er juist zacht licht bij te
-                # komen. Dat was ook het gedrag van de oude versie.
-                - action: light.turn_on
-                  target:
-                    entity_id:
-                      - light.woonkamer_lampen
-                      - light.keuken_lampen
-                      - light.eettafel_lampen
+        - if:
+            - condition: template
+              value_template: "{{ stand == 'kijken' }}"
+          then:
+            # Alleen bij de eerste keer dimmen van een sessie. Zie de
+            # toelichting bij input_boolean.woonkamer_kijksessie hierboven.
+            - if:
+                - condition: state
+                  entity_id: input_boolean.woonkamer_kijksessie
+                  state: "off"
+              then:
+                - action: scene.create
                   data:
-                    transition: "{{ states('input_number.lights_transition_seconds') | int(1) }}"
-                    brightness_pct: "{{ states('input_number.tv_playing_percentage') | int(35) }}"
-                # Licht dat het beeld in schijnt. Speelkamer, garage en
-                # trapkast hangen aan de motion_light-blueprint en gaan
-                # vanzelf weer aan zodra er iemand loopt; daarom staan ze
-                # hieronder niet in de terugzet-tak.
-                - action: light.turn_off
-                  target:
-                    entity_id:
-                      - light.entree_lampen
-                      - light.speelkamer_lampen
-                      - light.garage_lampen
-                      - light.trapkast_lampen
-                      - light.woonkamer_humble
-                - action: light.turn_on
-                  target:
-                    entity_id: light.awtrix_121d6c_matrix
-                  data:
-                    brightness_pct: 1
-                - action: input_boolean.turn_on
-                  target:
-                    entity_id: input_boolean.woonkamer_tv_dimstand
+                    scene_id: woonkamer_voor_media
+                    snapshot_entities: "{{ alle_lampen }}"
+            # Plafondspots, tafellamp, keuken en eettafel omlaag. De Play bars
+            # en de Signe zitten hier bewust niet bij; die staan in `bias`.
+            - action: light.turn_on
+              target:
+                entity_id: >-
+                  {{ plafond + ['light.keuken_lampen', 'light.eettafel_lampen'] }}
+              data:
+                transition: "{{ states('input_number.lights_transition_seconds') | int(1) }}"
+                brightness_pct: "{{ states('input_number.tv_playing_percentage') | int(35) }}"
+            # 2200 K is bewust warm en ligt net boven de ondergrens van deze
+            # lampen (2000 K). Het gaat om licht achter het scherm, niet om
+            # licht in de kamer.
+            - action: light.turn_on
+              target:
+                entity_id: "{{ bias }}"
+              data:
+                transition: "{{ states('input_number.lights_transition_seconds') | int(1) }}"
+                # Een net aangemaakte input_number begint op zijn minimum, dus
+                # op 0 - en dat zou betekenen dat de bias lighting de eerste
+                # avond gewoon uit blijft. `or 60` vangt dat af: 0 is voor een
+                # lamp toch geen zinnige waarde (dat is "uit"), dus die lezen we
+                # als "nog niet ingesteld".
+                brightness_pct: "{{ states('input_number.tv_bias_percentage') | int(0) or 60 }}"
+                color_temp_kelvin: 2200
+            # Licht dat het beeld in schijnt. Speelkamer, garage en trapkast
+            # hangen aan de motion_light-blueprint en gaan vanzelf weer aan
+            # zodra er iemand loopt; daarom staan ze niet in de terugzet-tak.
+            - action: light.turn_off
+              target:
+                entity_id:
+                  - light.entree_lampen
+                  - light.speelkamer_lampen
+                  - light.garage_lampen
+                  - light.trapkast_lampen
+                  - light.woonkamer_humble
+            - action: light.turn_on
+              target:
+                entity_id: light.awtrix_121d6c_matrix
+              data:
+                brightness_pct: 1
+            - action: input_boolean.turn_on
+              target:
+                entity_id: input_boolean.woonkamer_kijksessie
 
-            - alias: "Gewone stand"
-              conditions:
-                - condition: template
-                  value_template: "{{ stand == 'normaal' }}"
-              sequence:
-                # Hier wél alleen lampen die aan staan. Anders zou het einde
-                # van een film om half twaalf 's avonds de keuken en de
-                # eettafel aandoen die de hele avond bewust uit stonden.
+          else:
+            - choose:
+                - alias: "Klaar, en er is een momentopname om op terug te vallen"
+                  conditions:
+                    - condition: template
+                      value_template: "{{ stand == 'klaar' }}"
+                    # Scenes uit `scene.create` overleven een herstart van HA
+                    # niet. Is hij weg, dan valt hij hieronder terug op het
+                    # gewone avondniveau in plaats van niets te doen.
+                    - condition: template
+                      value_template: "{{ states.scene.woonkamer_voor_media is not none }}"
+                  sequence:
+                    - action: scene.turn_on
+                      target:
+                        entity_id: scene.woonkamer_voor_media
+                      data:
+                        transition: "{{ states('input_number.lights_transition_seconds') | int(1) }}"
+              default:
+                # Pauze, en klaar zonder momentopname. Alleen lampen die aan
+                # staan: anders zou het einde van een film om half twaalf de
+                # keuken en de eettafel aandoen die de hele avond bewust uit
+                # stonden.
                 - variables:
                     branden: >-
                       {{ ['light.woonkamer_lampen',
@@ -133,38 +210,46 @@ livingroom_media_package:
                       data:
                         transition: "{{ states('input_number.lights_transition_seconds') | int(1) }}"
                         brightness_pct: "{{ states('input_number.lights_livingroom_percentage') | int(80) }}"
-                # De humble ging bij het kijken uit en niets zette hem terug:
-                # `livingroom_lights_ambient_fill` in Lights.yaml doet dat
-                # alleen op zijn eigen triggers (lux die onder 1000 zakt, of
-                # woonkamer_lampen die aangaan), en die komen na een film
-                # niet meer langs. De 20% en 3984 K hieronder horen gelijk te
-                # blijven aan wat daar staat.
-                - if:
-                    - condition: numeric_state
-                      entity_id: sensor.achtertuin_zon_luminance
-                      below: 1000
-                    - condition: state
-                      entity_id: light.woonkamer_lampen
-                      state: "on"
-                  then:
-                    - action: light.turn_on
-                      target:
-                        entity_id: light.woonkamer_humble
-                      data:
-                        brightness_pct: 20
-                        color_temp_kelvin: 3984
+
+            # De humble ging bij het kijken uit en zit in geen enkele groep
+            # hierboven, dus ook niet in de momentopname.
+            # `livingroom_lights_ambient_fill` in Lights.yaml zet hem alleen op
+            # zijn eigen triggers aan (lux die onder 1000 zakt, of
+            # woonkamer_lampen die aangaan) en die komen na een film niet meer
+            # langs. De 20% en 3984 K hieronder horen gelijk te blijven aan wat
+            # daar staat.
+            - if:
+                - condition: numeric_state
+                  entity_id: sensor.achtertuin_zon_luminance
+                  below: 1000
+                - condition: state
+                  entity_id: light.woonkamer_lampen
+                  state: "on"
+              then:
                 - action: light.turn_on
                   target:
-                    entity_id: light.awtrix_121d6c_matrix
+                    entity_id: light.woonkamer_humble
                   data:
-                    brightness_pct: 50
+                    brightness_pct: 20
+                    color_temp_kelvin: 3984
+            - action: light.turn_on
+              target:
+                entity_id: light.awtrix_121d6c_matrix
+              data:
+                brightness_pct: 50
+            # Alleen `klaar` sluit de sessie af. Pauze laat de vlag staan, zodat
+            # het hervatten niet opnieuw een momentopname maakt.
+            - if:
+                - condition: template
+                  value_template: "{{ stand == 'klaar' }}"
+              then:
                 - action: input_boolean.turn_off
                   target:
-                    entity_id: input_boolean.woonkamer_tv_dimstand
+                    entity_id: input_boolean.woonkamer_kijksessie
 
   automation:
     ###########################################################################
-    ## Licht meebewegen met de Apple TV
+    ## Licht meebewegen met wat er op de tv gebeurt
     ###########################################################################
     # De `id` blijft `livingroom_media_playing`: daar hangt de bestaande
     # entiteit aan vast, en de sub-knop op de tv-kaart in
@@ -194,8 +279,8 @@ livingroom_media_package:
     - id: livingroom_media_playing
       alias: Livingroom - Media Lights
       description: >-
-        Dimt de woonkamer als er op de Apple TV gekeken wordt en zet het licht
-        terug bij pauze of aan het eind van de sessie.
+        Dimt de woonkamer zodra er op de tv gekeken of gegamed wordt, geeft
+        licht bij een pauze en zet aan het eind terug wat het was.
       mode: restart
       triggers:
         # not_from overal: na een herstart komen deze spelers uit `unknown` of
@@ -206,6 +291,33 @@ livingroom_media_package:
           not_from:
             - unknown
             - unavailable
+          id: kijken
+        - trigger: state
+          entity_id: media_player.playstation_5
+          to: playing
+          not_from:
+            - unknown
+            - unavailable
+          id: kijken
+        # De tv zelf, voor zijn eigen apps. Een halve minuut speling omdat de
+        # samsungtv-integratie over het netwerk polt en bij een hik `off` en
+        # daarna weer `on` meldt; zie de toelichting bij `play_music_tv_off` in
+        # packages/9 - Other/Music.yaml. De Apple TV hierboven dekt het normale
+        # geval binnen een paar seconden af.
+        - trigger: state
+          entity_id: media_player.woonkamer_77_oled_3
+          to: "on"
+          not_from:
+            - unknown
+            - unavailable
+          for: "00:00:30"
+          id: kijken
+        # Begint de film terwijl het buiten nog licht is, dan dimde er vroeger
+        # die hele avond niets meer: de enige kans om te dimmen was het moment
+        # van starten. Nu telt het moment waarop het donker wordt ook mee.
+        - trigger: numeric_state
+          entity_id: sensor.achtertuin_zon_luminance
+          below: 1000
           id: kijken
         # Acht seconden speling: spoelen en het overslaan van een intro gaan bij
         # de Apple TV via `paused`, en zonder deze wachttijd knippert de hele
@@ -229,10 +341,15 @@ livingroom_media_package:
             - unknown
             - unavailable
           id: klaar
-        # De samsungtv-integratie meldt `off` bij een netwerkhik (zie de
-        # toelichting bij `play_music_tv_off` in packages/9 - Other/Music.yaml).
-        # Zonder deze twee minuten springen de lampen daar middenin een film
-        # van op.
+        - trigger: state
+          entity_id: media_player.playstation_5
+          to:
+            - "off"
+            - standby
+          not_from:
+            - unknown
+            - unavailable
+          id: klaar
         - trigger: state
           entity_id: media_player.woonkamer_77_oled_3
           to: "off"
@@ -241,12 +358,12 @@ livingroom_media_package:
             - unavailable
           for: "00:02:00"
           id: klaar
-        # Vangnet voor de dimstandvlag, zelfde gedachte en zelfde tijdstip als
-        # bij `livingroom_tv_volume_reset` hieronder: valt de Apple TV weg
-        # zonder ooit `off` te melden, dan blijft de vlag anders staan en denkt
-        # de pauze-tak morgenavond dat er nog een sessie loopt. Bewust alleen
-        # de vlag en niet het licht: om vier uur 's nachts hoort er niets aan
-        # te gaan.
+        # Vangnet voor de sessievlag, zelfde gedachte en zelfde tijdstip als bij
+        # `livingroom_tv_volume_reset` hieronder: valt de Apple TV weg zonder
+        # ooit `off` te melden, dan blijft de vlag anders staan en denkt de
+        # pauze-tak morgenavond dat er nog een sessie loopt. Bewust alleen de
+        # vlag en niet het licht: om vier uur 's nachts hoort er niets aan te
+        # gaan.
         - trigger: time
           at: "04:00:00"
           id: vangnet
@@ -257,6 +374,27 @@ livingroom_media_package:
               conditions:
                 - condition: trigger
                   id: kijken
+                # Nodig omdat de lux-trigger ook afgaat als er niemand kijkt.
+                - alias: "Er speelt ook echt iets"
+                  condition: or
+                  conditions:
+                    - condition: state
+                      entity_id: media_player.woonkamer_appletv
+                      state: playing
+                    - condition: state
+                      entity_id: media_player.playstation_5
+                      state: playing
+                    - condition: state
+                      entity_id: media_player.woonkamer_77_oled_3
+                      state: "on"
+                # Muziek via de Apple TV is geen reden om de benedenverdieping
+                # te verduisteren. Ontbreekt het attribuut (speler uit, of een
+                # bron die het niet invult), dan is de uitkomst `none` en dus
+                # niet 'music' - dan dimt hij gewoon.
+                - alias: "Geen muziek via de Apple TV"
+                  condition: template
+                  value_template: >-
+                    {{ state_attr('media_player.woonkamer_appletv', 'media_content_type') != 'music' }}
                 # De lux is leidend, maar het is wel een buitensensor: valt hij
                 # weg, dan zou een kale numeric_state altijd `false` opleveren
                 # en dimde de tv nooit meer - zonder dat iemand doorheeft
@@ -294,9 +432,9 @@ livingroom_media_package:
                   data:
                     stand: kijken
 
-            # Pauze en einde sessie doen hetzelfde: terug naar normaal. Ze
-            # hangen aan de vlag en niet aan de lux, zodat een film die tot na
-            # zonsopkomst doorloopt aan het eind netjes terugzet.
+            # Pauze en einde sessie hangen aan de vlag en niet aan de lux,
+            # zodat een film die tot na zonsopkomst doorloopt aan het eind
+            # netjes terugzet.
             - alias: "Pauze of einde sessie"
               conditions:
                 - condition: trigger
@@ -304,21 +442,33 @@ livingroom_media_package:
                     - pauze
                     - klaar
                 - condition: state
-                  entity_id: input_boolean.woonkamer_tv_dimstand
+                  entity_id: input_boolean.woonkamer_kijksessie
                   state: "on"
+                # Anders haalt het in slaap vallen van de Apple TV midden in
+                # een PS5-sessie de lampen omhoog, en omgekeerd het uitzetten
+                # van de PS5 midden in een film.
+                - alias: "En er speelt verder niets meer"
+                  condition: not
+                  conditions:
+                    - condition: state
+                      entity_id: media_player.playstation_5
+                      state: playing
+                    - condition: state
+                      entity_id: media_player.woonkamer_appletv
+                      state: playing
               sequence:
                 - action: script.woonkamer_media_licht
                   data:
-                    stand: normaal
+                    stand: "{{ 'klaar' if trigger.id == 'klaar' else 'pauze' }}"
 
-            - alias: "Vangnet: vlag vrijgeven"
+            - alias: "Vangnet: sessievlag vrijgeven"
               conditions:
                 - condition: trigger
                   id: vangnet
               sequence:
                 - action: input_boolean.turn_off
                   target:
-                    entity_id: input_boolean.woonkamer_tv_dimstand
+                    entity_id: input_boolean.woonkamer_kijksessie
         # Bewust geen default-tak: een trigger zonder afgedekte id hoort niets
         # te doen. Let op dat `automation.trigger` hier dus ook niets uitricht -
         # wie de lampen van buitenaf wil zetten, roept het script aan.
