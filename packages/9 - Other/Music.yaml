@@ -100,22 +100,41 @@ music_package:
                         - condition: time
                           before: "09:00:00"
                       alias: Bekijk de tijd
+      # De twee kinderslaapkamers stonden hieronder vast in de volume- en de
+      # joinlijst. Om 09:00 werden Maxi en Mini dus altijd aan de woonkamergroep
+      # geplakt, ook als er nog geslapen werd; dat het op 2026-08-08 stil bleef
+      # kwam alleen doordat die speakers met de hand gemute stonden. Nergens in
+      # deze config zit een `volume_mute`, dus dat is geen vangnet waar je op
+      # kunt bouwen - de Sonos-app haalt hem er zo weer af.
+      #
+      # `klimaat_wakker` is het bestaande wakker-signaal van het huis: aan zodra
+      # er 's ochtends op de slaapkamerknop is gedrukt, en anders vanzelf om
+      # 10:00 (zie de noodrem in packages/9 - Other/Klimaat Zonwering.yaml, waar
+      # de helper ook gedefinieerd staat). Om 09:00 staat hij op een normale dag
+      # dus nog uit en blijven beide kinderkamers buiten de groep.
+      #
+      # Waarom een variabele en niet een tweede join-actie erachteraan: het
+      # groeperen moet één aanroep blijven, om precies de reden die bij die
+      # actie hieronder staat.
+      variables:
+        kinderkamers: >-
+          {{ ['media_player.slaapkamer_maxi_sonos',
+              'media_player.slaapkamer_mini_sonos']
+             if is_state('input_boolean.klimaat_wakker', 'on') else [] }}
       actions:
         - action: media_player.volume_set
           metadata: {}
           data:
             volume_level: 0.05
           target:
-            entity_id:
-              - media_player.badkamer_sonos
-              - media_player.garage_sonos
-              - media_player.keuken_sonos
-              - media_player.keuken_sonos_2
-              - media_player.kantoor_sonos
-              - media_player.slaapkamer_mini_sonos
-              - media_player.slaapkamer_maxi_sonos
-              - media_player.speelkamer_sonos
-              - media_player.woonkamer_sonos
+            entity_id: >-
+              {{ ['media_player.badkamer_sonos',
+                  'media_player.garage_sonos',
+                  'media_player.keuken_sonos',
+                  'media_player.keuken_sonos_2',
+                  'media_player.kantoor_sonos',
+                  'media_player.speelkamer_sonos',
+                  'media_player.woonkamer_sonos'] + kinderkamers }}
         # Eerst groeperen, dan pas afspelen. Andersom was het jarenlang de
         # oorzaak van "de radio staat maar in de helft van het huis aan".
         #
@@ -145,15 +164,14 @@ music_package:
           data:
             # De woonkamer staat hier bewust niet tussen: dat is de
             # groepsleider (het `target` hieronder), niet iemand die zich bij
-            # zichzelf aansluit.
-            group_members:
-              - media_player.garage_sonos
-              - media_player.speelkamer_sonos
-              - media_player.kantoor_sonos
-              - media_player.slaapkamer_maxi_sonos
-              - media_player.slaapkamer_mini_sonos
-              - media_player.keuken_sonos
-              - media_player.keuken_sonos_2
+            # zichzelf aansluit. `kinderkamers` is leeg zolang het huis niet
+            # wakker gemeld is - zie de toelichting bij `variables` hierboven.
+            group_members: >-
+              {{ ['media_player.garage_sonos',
+                  'media_player.speelkamer_sonos',
+                  'media_player.kantoor_sonos',
+                  'media_player.keuken_sonos',
+                  'media_player.keuken_sonos_2'] + kinderkamers }}
           target:
             entity_id: media_player.woonkamer_sonos
         - action: media_player.play_media

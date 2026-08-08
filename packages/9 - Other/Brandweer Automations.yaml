@@ -477,23 +477,30 @@ brandweer_package:
                         minutes: 0
                         seconds: 15
                         milliseconds: 0
-                    - alias: Apple TV aan of uit, juiste scene
+                    # Riep hiervoor automation.livingroom_media_playing en
+                    # ...media_paused aan met `skip_condition: true` - de omweg
+                    # om bij de acties van een andere automatisering te komen
+                    # zonder haar condities. Die acties staan nu in
+                    # script.woonkamer_media_licht (packages/0 - Ground
+                    # Floor/Livingroom/Media.yaml), dus het kan rechtstreeks.
+                    #
+                    # De scene hieronder komt er bewust ná: die zet de lampen
+                    # uit de momentopname terug op precies de stand van vóór het
+                    # alarm. Dit script vult aan wat niet in die momentopname
+                    # zat (eettafel, awtrix, de meelift-lampen).
+                    - alias: Apple TV aan of uit, juiste lichtstand
                       if:
                         - condition: state
                           entity_id: media_player.woonkamer_appletv
                           state: playing
                       then:
-                        - data:
-                            skip_condition: true
-                          action: automation.trigger
-                          target:
-                            entity_id: automation.livingroom_media_playing
+                        - action: script.woonkamer_media_licht
+                          data:
+                            stand: kijken
                       else:
-                        - data:
-                            skip_condition: true
-                          action: automation.trigger
-                          target:
-                            entity_id: automation.livingroom_media_paused
+                        - action: script.woonkamer_media_licht
+                          data:
+                            stand: normaal
                     - target:
                         entity_id: scene.brandweer_pre_lampen
                       data:
@@ -540,25 +547,22 @@ brandweer_package:
                         entity_id: scene.brandweer_tv_kast_lampen
                       action: scene.turn_on
                       data: {}
-                    - alias: Apple TV aan of uit, juiste scene
+                    # Zelfde omzetting als in de dienst-tak hierboven: geen
+                    # automation.trigger met skip_condition meer, maar het
+                    # script dat de twee lichtstanden beschrijft.
+                    - alias: Apple TV aan of uit, juiste lichtstand
                       if:
                         - condition: state
                           entity_id: media_player.woonkamer_appletv
                           state: playing
                       then:
-                        - target:
-                            entity_id:
-                              - automation.livingroom_media_playing
+                        - action: script.woonkamer_media_licht
                           data:
-                            skip_condition: true
-                          action: automation.trigger
+                            stand: kijken
                       else:
-                        - target:
-                            entity_id:
-                              - automation.livingroom_media_paused
+                        - action: script.woonkamer_media_licht
                           data:
-                            skip_condition: true
-                          action: automation.trigger
+                            stand: normaal
               alias: Stel lampen in op kleur
             - alias: Slaapkamer licht weer uit
               if:
