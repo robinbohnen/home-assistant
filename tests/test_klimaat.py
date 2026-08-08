@@ -33,6 +33,10 @@ def ha_is_state(eid, val):
     return ha_states(eid) == val
 
 
+def ha_has_value(eid):
+    return ha_states(eid) not in ("unknown", "unavailable", "")
+
+
 def ha_today_at(t="00:00"):
     parts = [int(p) for p in t.split(":")]
     while len(parts) < 3:
@@ -52,7 +56,7 @@ env.filters["float"] = f_float
 env.filters["to_json"] = lambda v, **k: json.dumps(v)
 env.filters["from_json"] = json.loads
 env.globals.update(states=ha_states, state_attr=ha_state_attr, is_state=ha_is_state,
-                   today_at=ha_today_at, now=lambda: NOW)
+                   has_value=ha_has_value, today_at=ha_today_at, now=lambda: NOW)
 
 MOD = env.get_template("klimaat.jinja").module
 
@@ -149,6 +153,32 @@ check("kantoor ligt ook op de voorgevel", "kantoor_rechts", "dicht")
 # De achtergevel blijft open zolang de zon daar niet naartoe draait; anders
 # zit je op elke warme dag de hele dag in het donker.
 check("hete dag, achterzijde blijft licht", "badkamer", "open")
+
+# --- gevelsensor zonder waarde: adviseren mag, uitvoeren niet ---------------
+# Op 2026-08-08 flikkerden de gevelsensoren tijdens een YAML-reload een paar
+# seconden door `unavailable`. `is_state(..., 'on')` leest dat als "geen zon",
+# waardoor het advies voor kantoor omsloeg van dicht (0%) naar kier (15%) en de
+# rolgordijnen opengingen om 39 seconden later weer dicht te gaan. Het advies
+# mag best omslaan - de macro kan met een halve wereld nu eenmaal niets beters -
+# maar `uitvoeren` hoort dan false te zijn, zodat er niets beweegt.
+scenario("gezonde wereld, zon op voorgevel", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "30",
+            "binary_sensor.zon_op_voorgevel": "on",
+            "binary_sensor.zon_richting_voorgevel": "on"})
+check("sensoren gezond, gewoon uitvoeren", "kantoor_links", "dicht", True)
+
+scenario("reload: gevelsensor even unavailable", "14:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "31",
+            "sensor.knmi_temperatuur": "30",
+            "binary_sensor.zon_op_voorgevel": "unavailable",
+            "binary_sensor.zon_richting_voorgevel": "on"})
+check("gevelsensor weg, zonwering blijft staan", "kantoor_links", "kier", False)
+# Een zone op een andere gevel heeft er geen last van: die leest zijn eigen
+# sensoren en die zijn nog gewoon in orde.
+check("andere gevel blijft normaal werken", "badkamer", "open", True)
 
 # --- preventief: zon draait naar de achtergevel, schijnt er nog niet --------
 scenario("hittedag, zon draait naar achteren", "16:00",

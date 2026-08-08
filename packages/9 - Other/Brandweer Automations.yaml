@@ -188,11 +188,31 @@ brandweer_package:
           entity_id:
             - input_text.brandweer_laatste_melding_fonetisch
       conditions:
+        # EEN RELOAD IS GEEN NIEUWE MELDING
+        # Een YAML-reload schrijft deze input_text opnieuw weg met exact
+        # dezelfde tekst: `last_changed` blijft staan, `last_updated` springt
+        # naar nu. Voor een state-trigger zonder `to:` telt dat als een
+        # wijziging. Op 2026-08-08 om 11:57 ging daardoor de melding van drie
+        # uur eerder opnieuw af - critical push dwars door de stille modus, de
+        # BRW-lampen aan, omroep op de Sonos en een uitruk extra op de teller.
+        # Deze conditie eist dat de tekst echt anders is; `is not none` vangt
+        # daarnaast de herstart af, want dan is er geen vorige toestand.
+        # De deurtrigger hierboven komt er gewoon langs: off -> on is een
+        # echte wijziging.
+        - alias: Alleen bij een echt nieuwe melding
+          condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.to_state is not none
+               and trigger.from_state.state != trigger.to_state.state }}
+        # `last_changed` en niet `last_updated`: juist die laatste springt mee
+        # bij een reload, waardoor de controle die dit had moeten tegenhouden
+        # degene was die het doorliet.
         - alias: Kijk of de laatste wijzigingen minder dan 2 minuten geleden was
           condition: template
           value_template: >-
             {{ (now() -
-            states.input_text.brandweer_laatste_melding_fonetisch.last_updated).total_seconds()
+            states.input_text.brandweer_laatste_melding_fonetisch.last_changed).total_seconds()
             < 2 * 60 }}
       actions:
         - parallel:
@@ -229,6 +249,15 @@ brandweer_package:
             - input_text.brandweer_laatste_melding
           trigger: state
       conditions:
+        # Een reload herschrijft de melding met dezelfde tekst en telde hier
+        # een uitruk bij die nooit heeft plaatsgevonden; zie de toelichting bij
+        # `brandweer_tts_nesthub`.
+        - alias: Alleen bij een echt nieuwe melding
+          condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.to_state is not none
+               and trigger.from_state.state != trigger.to_state.state }}
         - condition: template
           value_template: >-
             {% if 'TESTMELDING' in states.input_text.brandweer_laatste_melding.state %}
@@ -403,7 +432,16 @@ brandweer_package:
         - trigger: state
           entity_id:
             - input_text.brandweer_laatste_melding
-      conditions: []
+      conditions:
+        # Een reload herschrijft de melding met dezelfde tekst en stuurde hier
+        # een critical push voor een uitruk van uren eerder; zie de toelichting
+        # bij `brandweer_tts_nesthub`.
+        - alias: Alleen bij een echt nieuwe melding
+          condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.to_state is not none
+               and trigger.from_state.state != trigger.to_state.state }}
       actions:
         - alias: Stuur bericht naar Home Assistant gebruikers
           if:
@@ -437,7 +475,16 @@ brandweer_package:
         - trigger: state
           entity_id:
             - input_text.brandweer_laatste_melding
-      conditions: []
+      conditions:
+        # Een reload herschrijft de melding met dezelfde tekst en zette hier de
+        # lampen op de uitruk-stand; zie de toelichting bij
+        # `brandweer_tts_nesthub`.
+        - alias: Alleen bij een echt nieuwe melding
+          condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.to_state is not none
+               and trigger.from_state.state != trigger.to_state.state }}
       actions:
         - parallel:
             - if:
@@ -770,7 +817,16 @@ brandweer_package:
         - trigger: state
           entity_id:
             - input_text.brandweer_laatste_melding
-      conditions: []
+      conditions:
+        # Een reload herschrijft de melding met dezelfde tekst en zette deze
+        # automatisering aan het wachten op een aankomst bij de kazerne die
+        # nooit zou komen; zie de toelichting bij `brandweer_tts_nesthub`.
+        - alias: Alleen bij een echt nieuwe melding
+          condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.to_state is not none
+               and trigger.from_state.state != trigger.to_state.state }}
       actions:
         - alias: Wacht of ik op de kazerne aankom of deze verlaat
           if:
@@ -1030,6 +1086,15 @@ brandweer_package:
           entity_id:
             - input_text.brandweer_laatste_melding
       conditions:
+        # Een reload herschrijft de melding met dezelfde tekst en zou hier de
+        # klimaatregeling van de auto starten voor een uitruk van uren eerder;
+        # zie de toelichting bij `brandweer_tts_nesthub`.
+        - alias: Alleen bij een echt nieuwe melding
+          condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.to_state is not none
+               and trigger.from_state.state != trigger.to_state.state }}
         - condition: state
           entity_id: device_tracker.hrh85f_locatie
           state: home
@@ -1060,6 +1125,15 @@ brandweer_package:
           entity_id:
             - input_text.brandweer_laatste_melding
       conditions:
+        # Een reload herschrijft de melding met dezelfde tekst; deze
+        # automatisering kleurde de tafellamp daarop naar de prio-stand. Zie de
+        # toelichting bij `brandweer_tts_nesthub`.
+        - alias: Alleen bij een echt nieuwe melding
+          condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.to_state is not none
+               and trigger.from_state.state != trigger.to_state.state }}
         - condition: state
           entity_id: light.woonkamer_hue_tafellamp
           state:
