@@ -299,9 +299,27 @@
 {%- set elevatie = state_attr('sun.sun', 'elevation') | float(0) -%}
 {#- Een zone kan op meerdere gevels liggen; de zon telt zodra hij op één
     ervan staat. De lus leest beide sensoren per gevel altijd uit, zodat Home
-    Assistant ze allemaal blijft volgen. -#}
-{%- set zon = namespace(op=false, richting=false) -%}
+    Assistant ze allemaal blijft volgen.
+
+    ONBEKEND IS GEEN NEE
+    `is_state(..., 'on')` geeft ook false als de sensor `unavailable` is, en
+    dan is er geen verschil meer tussen "de zon staat er niet op" en "ik weet
+    het even niet". Dat is geen theorie: deze gevelsensoren zijn zelf ook
+    template-entiteiten, dus bij elke YAML-reload flikkeren ze een paar
+    seconden door `unavailable` heen. Op 2026-08-08 viel de zon-tak daardoor
+    weg, sloeg het advies voor kantoor om van 'dicht' (0%) naar 'kier' (15%)
+    met als reden "kamer is 22.6°, licht temperen", en gingen de rolgordijnen
+    open om 39 seconden later weer dicht te gaan.
+    Daarom telt deze lus apart of een sensor gewoon geen waarde heeft; dat zet
+    verderop `uitvoeren` op false, zodat de zonwering zijn stand vasthoudt tot
+    de sensoren er weer zijn. De `/15`-vangnettrigger van de uitvoerder pakt
+    het daarna vanzelf op. -#}
+{%- set zon = namespace(op=false, richting=false, onbekend=false) -%}
 {%- for g in z.gevels -%}
+  {%- if not has_value('binary_sensor.zon_op_' ~ g ~ 'gevel')
+         or not has_value('binary_sensor.zon_richting_' ~ g ~ 'gevel') -%}
+    {%- set zon.onbekend = true -%}
+  {%- endif -%}
   {%- if is_state('binary_sensor.zon_op_' ~ g ~ 'gevel', 'on') -%}
     {%- set zon.op = true -%}
   {%- endif -%}
@@ -311,6 +329,7 @@
 {%- endfor -%}
 {%- set zon_op = zon.op -%}
 {%- set zon_richting = zon.richting -%}
+{%- set zon_onbekend = zon.onbekend -%}
 {%- set gevel_txt = z.gevels | join('/') ~ 'gevel' -%}
 {%- set thuis = is_state('group.all_adults', 'home') -%}
 {#- Wanneer moet een screen in? Bij wind en vorst, niet bij hitte: een
@@ -646,7 +665,11 @@
 {%- set positie = (100 - positie_zon)
                   if (z.get('omgekeerd') and positie_zon >= 0)
                   else positie_zon -%}
-{%- set uitvoeren = actief and zone_auto and not override and positie >= 0 -%}
+{#- `not zon_onbekend`: het advies hierboven is bij een wegvallende gevelsensor
+    niet fout maar wél ongefundeerd, en dan is stilstaan het juiste antwoord.
+    Zie de toelichting bij de zon-lus. -#}
+{%- set uitvoeren = actief and zone_auto and not override and positie >= 0
+                    and not zon_onbekend -%}
 {#- Zonwering die eerst toestemming vraagt: alleen het naar buiten gaan is een
     vraag. 'open' (binnenhalen, ook bij wind en vorst) blijft iets dat de
     uitvoerder gewoon zelf doet. `uitvoeren` blijft hierbij true - de zone doet
@@ -656,8 +679,9 @@
 {%- set blokkade = 'handbediening actief' if override
                    else ('zone staat op handmatig' if not zone_auto
                    else ('klimaatregie staat uit' if not actief
+                   else ('zonsensor heeft even geen waarde' if zon_onbekend
                    else ('advies is rust' if positie < 0
-                   else ('wacht op je akkoord' if vraagt else '')))) -%}
+                   else ('wacht op je akkoord' if vraagt else ''))))) -%}
 
 {{- {'advies': ns.a,
      'positie': positie,
