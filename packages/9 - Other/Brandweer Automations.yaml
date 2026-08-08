@@ -99,6 +99,14 @@ brandweer_package:
     brandweer_uitgerukt:
       name: "Brandweer - Nu uitgerukt"
       icon: mdi:fire-circle
+    # Staat op `on` zolang de melding in `brandweer_laatste_melding` een
+    # NA-alarmering is: een tweede P2000-bericht op hetzelfde incident, waarin
+    # extra eenheden worden bijgeroepen. De webhook zet hem vóór de melding
+    # zelf, zodat automatiseringen die op die input_text triggeren hem al goed
+    # zien staan. Wordt gebruikt om niet twee keer een uitruk te tellen.
+    brandweer_laatste_melding_na_alarmering:
+      name: "Brandweer - Laatste melding is na-alarmering"
+      icon: mdi:bell-plus
 
   template:
     - binary_sensor:
@@ -155,24 +163,63 @@ brandweer_package:
           # bij de verzender, daarna pas de waarde in secrets.yaml vervangen.
           webhook_id: !secret brandweer_webhook_main
           trigger: webhook
+      # WELK BERICHT BESCHRIJFT DEZE WEBHOOK EIGENLIJK?
+      # `trigger_message` is het P2000-bericht dat DEZE webhook liet vuren;
+      # `incident` is de verzamelstand van het incident. Bij een na-alarmering
+      # (tweede bericht op hetzelfde incident, extra eenheden) lopen die twee
+      # uiteen, want de verzender staat op `after_enrichment` - dat is stage 1,
+      # en de voertuigverrijking van bericht 2 landt pas ná die webhook op het
+      # incident. In delivery 119023 stond de waterwagen dan ook alleen in
+      # `trigger_message`; `incident.body` en `tts_text` beschreven nog steeds
+      # de tankautospuit uit bericht 1.
+      #
+      # Sturen op `incident.body` maakte de tweede webhook dus niet te
+      # onderscheiden van de eerste: de dedup hieronder slikte hem op, en had
+      # hij dat niet gedaan, dan had de Sonos nóg een keer "1e Tankautospuit"
+      # omgeroepen in plaats van de waterwagen.
+      #
+      # Daarom: `trigger_message` wint als die er is. Dat klopt ook wanneer de
+      # verzender omgezet wordt naar `after_type_enrichment` met "elk bericht"
+      # aan - dan is er een compleet incident-blok per bericht en wijst
+      # `trigger_message` gewoon hetzelfde bericht aan.
+      variables:
+        tm_body: "{{ trigger.json.get('trigger_message', {}).get('body', '') }}"
+        inc_body: "{{ trigger.json.get('incident', {}).get('body', '') }}"
+        na_alarmering: "{{ tm_body != '' and tm_body != inc_body }}"
+        melding_body: "{{ tm_body if na_alarmering else inc_body }}"
+        melding_tts: >-
+          {{ trigger.json.get('trigger_tts_text') if (na_alarmering and trigger.json.get('trigger_tts_text')) else trigger.json.get('tts_text', '') }}
       conditions:
-        - condition: template
-          value_template: >-
-            {% if (trigger.json.incident.body !=
-            states('input_text.brandweer_laatste_melding') and  as_timestamp(now()) -
-            as_timestamp(states.input_text.brandweer_laatste_melding.last_changed) >
-            60) %} true {% else %} false {% endif %}
+        # Dedup op de tekst die we DAADWERKELIJK gaan opslaan, niet op
+        # `incident.body`: zie hierboven, dat veld staat bij een na-alarmering
+        # nog op bericht 1 en wees elke na-alarmering af als duplicaat.
+        #
+        # De rem van 60 seconden die hier stond is daarmee vervallen. Die was
+        # bedoeld tegen dubbele webhooks, maar een na-alarmering komt juist
+        # vaak binnen die minuut - en die moet er langs. Identieke tekst wordt
+        # nog steeds geweigerd, en dát is de echte dubbele-webhook-guard: een
+        # herhaalde webhook levert per definitie dezelfde body op.
+        - alias: Alleen een melding die afwijkt van de vorige
+          condition: template
+          value_template: "{{ melding_body != '' and melding_body != states('input_text.brandweer_laatste_melding') }}"
       actions:
+        # Eerst de vlag, dan pas de melding: alles wat op
+        # `brandweer_laatste_melding` triggert leest deze boolean, en moet hem
+        # dus al goed zien staan op het moment dat het afgaat.
+        - alias: Markeer of dit een na-alarmering is
+          action: "input_boolean.turn_{{ 'on' if na_alarmering else 'off' }}"
+          target:
+            entity_id: input_boolean.brandweer_laatste_melding_na_alarmering
         - target:
             entity_id: input_text.brandweer_laatste_melding
           data:
-            value: "{{ trigger.json.incident.body }}"
+            value: "{{ melding_body }}"
           alias: Stel variabele in met de laatste melding erin
           action: input_text.set_value
         - target:
             entity_id: input_text.brandweer_laatste_melding_fonetisch
           data:
-            value: "{{ trigger.json.tts_text }}"
+            value: "{{ melding_tts }}"
           alias: Stel variabele in met de laatste melding erin (fonetisch)
           action: input_text.set_value
         - metadata: {}
@@ -266,6 +313,14 @@ brandweer_package:
             {{ trigger.from_state is not none
                and trigger.to_state is not none
                and trigger.from_state.state != trigger.to_state.state }}
+        # Een na-alarmering is extra materieel op een uitruk die al loopt, geen
+        # tweede uitruk. Sinds de webhook ook op `trigger_message` stuurt komen
+        # die berichten hier wél binnen (voorheen sneuvelden ze in de dedup) -
+        # en dan zou de ploegteller twee keer oplopen voor één incident.
+        - alias: Niet nog eens tellen bij een na-alarmering
+          condition: state
+          entity_id: input_boolean.brandweer_laatste_melding_na_alarmering
+          state: "off"
         - condition: template
           value_template: >-
             {% if 'TESTMELDING' in states.input_text.brandweer_laatste_melding.state %}
@@ -451,6 +506,14 @@ brandweer_package:
                and trigger.to_state is not none
                and trigger.from_state.state != trigger.to_state.state }}
       actions:
+        # De titel zegt of dit een eerste alarmering is of extra materieel op
+        # een uitruk die al loopt. Zonder dat verschil is een na-alarmering op
+        # het vergrendelscherm niet van een dubbele melding te onderscheiden.
+        - variables:
+            melding_titel: >-
+              {{ 'Brandweer Uden - na-alarmering'
+                 if is_state('input_boolean.brandweer_laatste_melding_na_alarmering', 'on')
+                 else 'Brandweer Uden' }}
         - alias: Stuur bericht naar Home Assistant gebruikers
           if:
             - condition: template
@@ -462,7 +525,7 @@ brandweer_package:
             # dan heb ik geen dienst.
             - data:
                 doelgroep: notify.mobile_devices_all
-                titel: Brandweer Uden
+                titel: "{{ melding_titel }}"
                 bericht: "{{ states.input_text.brandweer_laatste_melding.state }}"
                 volume: 1
               alias: Stuur HA notificatie naar alle gebruikers met hoge prioriteit
@@ -470,7 +533,7 @@ brandweer_package:
           else:
             - metadata: {}
               data:
-                title: Brandweer Uden
+                title: "{{ melding_titel }}"
                 message: "{{ states.input_text.brandweer_laatste_melding.state }}"
               alias: Stuur HA notificatie naar alle gebruikers met lage prioriteit
               action: notify.mobile_devices_all
