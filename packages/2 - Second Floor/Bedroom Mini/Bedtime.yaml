@@ -49,9 +49,23 @@ bedtime_mini_package:
         - trigger: time
           at: "19:00:00"
       conditions: []
+      # De volgorde is niet vrij: `media_stop` op een speaker die nog in een
+      # groep zit, gaat naar de groepsleider en legt daarmee het hele huis stil.
+      # Dus eerst los, dan pas stoppen.
+      #
+      # Zonder die stop bleef de speaker de hele nacht op `paused` staan met de
+      # laatste zender nog geladen; op het Overzicht-dashboard toont dat gewoon
+      # de Qmusic-artwork en -titel, en dan lijkt het alsof er muziek aanstaat
+      # in een slaapkamer waar geslapen wordt (2026-08-09 zo gemeld). Met stop
+      # gaat hij naar `idle` en is de kaart leeg, net als bij Maxi.
       actions:
         - action: media_player.unjoin
           metadata: {}
+          data: {}
+          target:
+            entity_id: media_player.slaapkamer_mini_sonos
+        - action: media_player.media_stop
+          continue_on_error: true
           data: {}
           target:
             entity_id: media_player.slaapkamer_mini_sonos
