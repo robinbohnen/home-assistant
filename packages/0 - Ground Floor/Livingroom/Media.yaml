@@ -113,6 +113,22 @@ livingroom_media_package:
           {{ plafond + bias
              + (state_attr('light.keuken_lampen', 'group_entities') or [])
              + (state_attr('light.eettafel_lampen', 'group_entities') or []) }}
+        # De twee AWTRIX-klokken die vanuit de bank te zien zijn. De garageklok
+        # hoort er niet bij: die kijkt niemand op tijdens een film.
+        #
+        # ALLEEN DE KLOKKEN DIE AL AAN STAAN
+        # `light.turn_on` met een helderheid zet een scherm ook aan. Zonder deze
+        # selectie zou een film op een avond dat het alarm aan staat en het
+        # licht uit is de klokken alsnog laten oplichten - op 1%, maar wel de
+        # hele nacht, want de huisregel in packages/9 - Other/Klokken.yaml komt
+        # daarna pas weer langs als het alarm of het licht verandert.
+        # Ze staan bewust niet in `alle_lampen`: de momentopname hoort over
+        # lampen te gaan, en het terugzetten gebeurt hieronder met een vast
+        # percentage.
+        klokken: >-
+          {{ ['light.keuken_klok_awtrix_keuken_matrix',
+              'light.woonkamer_klok_awtrix_woonkamer_matrix']
+             | select('is_state', 'on') | list }}
       sequence:
         - if:
             - condition: template

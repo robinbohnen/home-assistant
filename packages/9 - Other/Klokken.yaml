@@ -37,6 +37,15 @@
 ## bestaat of net opnieuw opstart, krijgt bij het verbinden dus direct beide
 ## apps binnen zonder op de volgende cyclus te wachten.
 ##
+## WANNEER STAAT ER EEN SCHERM AAN
+## Het alarm is de hoofdschakelaar: staat het huis op scherp, dan gaan alle drie
+## de schermen uit. Voor de keuken- en woonkamerklok is er een uitzondering -
+## brandt het licht in de woonkamer, dan mogen die twee toch aan, want dan is er
+## iemand beneden. De garageklok kent die uitzondering niet en hangt verder aan
+## beweging. Beide regels staan onderaan dit bestand; in
+## packages/0 - Ground Floor/Kitchen/Clock Display.yaml zit hier bewust niets
+## meer over, want daar stonden ze elkaar tegen te werken.
+##
 ## EEN NIEUWE KLOK KOMT MET VIER FIRMWARE-APPS
 ## Uit de doos draaien Time, Temperature, Humidity en Battery mee in de
 ## rotatie; op clock_2 en clock_3 stonden ze op 2026-08-08 nog tussen de twee
@@ -87,6 +96,49 @@ klokken_package:
         #   curl -X POST http://<ip-van-de-klok>/api/reboot
         # De klok is na een seconde of tien terug en pikt de bewaarde apps
         # direct weer op.
+
+    klok_keuken_woonkamer_stand:
+      alias: Klok - Stand keuken en woonkamer bijwerken
+      description: >-
+        Zet de keuken- en woonkamerklok aan of uit volgens de huisregel: aan als
+        het alarm uit staat of als het licht in de woonkamer brandt.
+      icon: mdi:monitor-dashboard
+      # WAAROM DIT EEN SCRIPT IS EN NIET GEWOON DE AUTOMATISERING
+      # De reistijd-app in Kitchen/Clock Display.yaml zet de keukenklok 's
+      # ochtends een minuut aan en moet hem daarna teruggeven. Die stand
+      # daar nog een keer uitrekenen betekent twee plekken die het eens moeten
+      # blijven; nu vraagt hij het gewoon hier op.
+      mode: restart
+      sequence:
+        - variables:
+            # Onbekend of onbereikbaar telt als "alarm uit": een scherm dat
+            # zwart blijft omdat Alarmo even weg was is erger dan een scherm
+            # dat aan staat terwijl het huis op scherp had gestaan - dat
+            # laatste zie je meteen, het eerste zoek je een avond.
+            klok_aan: >-
+              {{ states('alarm_control_panel.alarmo')
+                 in ['disarmed', 'unavailable', 'unknown']
+                 or is_state('light.woonkamer_lampen', 'on') }}
+        # BEWUST ZONDER `brightness`
+        # De helderheid van de keukenklok wordt elders gezet (1% tijdens een
+        # kijksessie, 50% erna - zie Livingroom/Media.yaml). Zou hier een
+        # percentage staan, dan zette een lamp die tijdens een film aangaat het
+        # scherm middenin de kijksessie op vol.
+        - if:
+            - condition: template
+              value_template: "{{ klok_aan }}"
+          then:
+            - action: light.turn_on
+              target:
+                entity_id:
+                  - light.keuken_klok_awtrix_keuken_matrix
+                  - light.woonkamer_klok_awtrix_woonkamer_matrix
+          else:
+            - action: light.turn_off
+              target:
+                entity_id:
+                  - light.keuken_klok_awtrix_keuken_matrix
+                  - light.woonkamer_klok_awtrix_woonkamer_matrix
 
     klok_zon_en_accu:
       alias: Klok - Zon en accu tekenen
@@ -355,11 +407,66 @@ klokken_package:
                 brightness: 255
                 rgb_color: "{{ bezetting_kleur }}"
 
+    - id: klokken_scherm_keuken_woonkamer
+      alias: Klokken - Scherm keuken en woonkamer aan of uit
+      description: >-
+        Zet de keuken- en woonkamerklok uit zodra het alarm aan staat, en weer
+        aan zodra het alarm eraf gaat of er beneden licht brandt.
+      # EEN REGEL, TWEE KLOKKEN: aan = alarm uit OF woonkamerlampen aan.
+      #
+      # LICHT WINT VAN HET ALARM, EN MET REDEN
+      # `armed_home` betekent dat er juist wel iemand thuis is. Ga je 's avonds
+      # nog een keer naar beneden en doe je de lamp aan, dan hoort de klok mee
+      # aan te gaan - anders sta je in de keuken naar een zwart scherm te kijken
+      # terwijl het huis "aan" staat. Bij `armed_away` staat dat licht toch niet
+      # aan, dus daar valt niets te winnen.
+      #
+      # DE GARAGEKLOK VALT HIER BUITEN
+      # Die hangt aan beweging (zie de automatisering hieronder) en heeft zijn
+      # eigen alarm-check; woonkamerlicht zegt niets over de garage.
+      #
+      # WAAROM DE LICHT-ENTITEIT EN NIET `clock_x/power`
+      # HA kent de stand van de matrix dan zelf. Dat is niet cosmetisch: de
+      # app-rotatie van de keukenklok draait op `state: on` van deze entiteit,
+      # en een MQTT-publish liet HA daarover in het ongewisse. Het aan- en
+      # uitzetten zelf staat in `script.klok_keuken_woonkamer_stand`, zie daar.
+      mode: restart
+      triggers:
+        # `to:` staat er niet voor de sier: Alarmo werkt zijn attribuut
+        # `open_sensors` bij elke deur die open of dicht gaat bij, en een
+        # state-trigger zonder `to:` vuurt daar ook op.
+        - trigger: state
+          entity_id: alarm_control_panel.alarmo
+          to:
+            - disarmed
+            - arming
+            - armed_home
+            - armed_away
+        - trigger: state
+          entity_id: light.woonkamer_lampen
+          to:
+            - "on"
+            - "off"
+        # Een klok die opnieuw opstart komt terug met de stand die in zijn eigen
+        # flash staat, niet met de stand die hier hoort. Deze trigger haalt dat
+        # meteen weer recht.
+        - trigger: state
+          entity_id:
+            - light.keuken_klok_awtrix_keuken_matrix
+            - light.woonkamer_klok_awtrix_woonkamer_matrix
+          from: unavailable
+        - trigger: homeassistant
+          event: start
+      conditions: []
+      actions:
+        - action: script.klok_keuken_woonkamer_stand
+
     - id: klokken_garage_matrix_beweging
       alias: Klokken - Garageklok aan bij beweging
       description: >-
         De garage is meestal leeg; daar hoeft geen scherm voor te branden. Bij
-        beweging gaat hij aan, twee minuten na de laatste beweging weer uit.
+        beweging gaat hij aan, twee minuten na de laatste beweging weer uit, en
+        zodra het alarm aan staat blijft hij uit.
       # WAAROM NIET DE BEWEGINGSLICHT-BLUEPRINT
       # Die wil een helderheid- en een overgangshelper en brengt deurcontacten,
       # een lux-drempel en het alarm mee. Een display is geen lamp: de
@@ -396,19 +503,52 @@ klokken_package:
         - trigger: homeassistant
           event: start
           id: herstart
-      # Dezelfde hoofdschakelaar als de garagelampen. Uit betekent daar "hier
-      # beweegt niets, ook niet bij vertrek"; dan hoort dit scherm ook niet
-      # ineens uit zichzelf te doven terwijl je eronder staat te sleutelen.
-      conditions:
-        - condition: state
-          entity_id: input_boolean.enable_pir_garage
-          state: "on"
+        # Alarm aan = niemand hoort hier te zijn. Anders dan bij de keuken- en
+        # woonkamerklok is er geen licht-uitzondering: woonkamerlicht zegt niets
+        # over wie er in de garage staat.
+        - trigger: state
+          entity_id: alarm_control_panel.alarmo
+          to:
+            - arming
+            - armed_home
+            - armed_away
+          id: alarm_aan
+      # DE HOOFDSCHAKELAAR STAAT NU PER TAK EN NIET MEER HIER
+      # `input_boolean.enable_pir_garage` is dezelfde schakelaar als bij de
+      # garagelampen. Uit betekent daar "hier beweegt niets, ook niet bij
+      # vertrek"; dan hoort dit scherm ook niet ineens uit zichzelf te doven
+      # terwijl je eronder staat te sleutelen. Voor het alarm geldt dat juist
+      # niet: staat het huis op scherp, dan gaat dit scherm uit, ook met de
+      # schakelaar uit. Daarom is de conditie de takken in gezakt.
+      conditions: []
       actions:
+        - variables:
+            # Andere naam dan de trigger-id hierboven: die twee zeggen niet
+            # hetzelfde. De trigger vuurt op het moment dat het alarm aangaat,
+            # deze variabele zegt of het nu aan staat - dat laatste is wat de
+            # beweging- en herstart-tak nodig hebben.
+            huis_op_scherp: >-
+              {{ states('alarm_control_panel.alarmo')
+                 not in ['disarmed', 'unavailable', 'unknown'] }}
         - choose:
+            - alias: Alarm aan - scherm uit
+              conditions:
+                - condition: trigger
+                  id: alarm_aan
+              sequence:
+                - action: light.turn_off
+                  target:
+                    entity_id: light.garage_klok_awtrix_garage_matrix
             - alias: Beweging - scherm aan
               conditions:
                 - condition: trigger
                   id: beweging
+                - condition: state
+                  entity_id: input_boolean.enable_pir_garage
+                  state: "on"
+                - alias: Het huis staat niet op scherp
+                  condition: template
+                  value_template: "{{ not huis_op_scherp }}"
               sequence:
                 # Bewust zonder helderheid: dan houdt de klok de stand die hij
                 # zelf had (`BRI`), in plaats van dat dit bestand er een tweede
@@ -420,6 +560,9 @@ klokken_package:
               conditions:
                 - condition: trigger
                   id: stil
+                - condition: state
+                  entity_id: input_boolean.enable_pir_garage
+                  state: "on"
               sequence:
                 - action: light.turn_off
                   target:
@@ -431,9 +574,20 @@ klokken_package:
               conditions:
                 - condition: trigger
                   id: herstart
-                - condition: state
-                  entity_id: binary_sensor.pir_group_garage
-                  state: "off"
+                - condition: or
+                  conditions:
+                    - alias: Het huis staat op scherp
+                      condition: template
+                      value_template: "{{ huis_op_scherp }}"
+                    - alias: Het is stil en de bewegingsschakelaar staat aan
+                      condition: and
+                      conditions:
+                        - condition: state
+                          entity_id: input_boolean.enable_pir_garage
+                          state: "on"
+                        - condition: state
+                          entity_id: binary_sensor.pir_group_garage
+                          state: "off"
               sequence:
                 - action: light.turn_off
                   target:

@@ -1,64 +1,22 @@
+##############################################################################
+## AAN EN UIT STAAT NIET MEER IN DIT BESTAND
+## Hier stonden drie automatiseringen over de stand van het scherm en die
+## spraken elkaar tegen: `Clock Turn on/off` zette de klok uit bij `armed_home`,
+## waarna `Display always on` hem meteen weer aanzette zolang de woonkamerlampen
+## brandden. Wie won hing af van de volgorde waarin HA ze afwerkte.
+##
+## Het is nu een regel voor de keuken- en de woonkamerklok samen, in
+## packages/9 - Other/Klokken.yaml: aan als het alarm uit staat of als het licht
+## in de woonkamer brandt, anders uit. Dat bestand stuurt de matrix-entiteit
+## aan; de app-rotatie hieronder kijkt naar diezelfde entiteit en publiceert
+## dus vanzelf niets meer zodra het scherm uit is.
+##
+## Wat hier wel blijft staan is alles wat de keukenklok als enige doet: de
+## app-rotatie, de thuiskomst-melding en de reistijd 's ochtends.
+##############################################################################
+
 kitchen_clock_display_package:
   automation:
-    - id: kitchen_clock_display_onoff
-      alias: Kitchen - Clock Turn on/off
-      description: "Turn on or off the display in the kitchen"
-      mode: single
-      triggers:
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: disarmed
-          id: alarm_off
-        - trigger: state
-          entity_id:
-            - light.woonkamer_lampen
-          to: "on"
-          id: lights_on
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_away
-          id: alarm_away
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_home
-          id: alarm_home
-      conditions: []
-      actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - alarm_away
-                    - alarm_home
-              sequence:
-                - data:
-                    qos: 0
-                    retain: false
-                    topic: clock_1/power
-                    payload: '{"power": false}'
-                  action: mqtt.publish
-            - conditions:
-                - condition: trigger
-                  id:
-                    - alarm_off
-                    - lights_on
-              sequence:
-                - data:
-                    qos: 0
-                    retain: false
-                    topic: clock_1/power
-                    payload: '{"power": true}'
-                  action: mqtt.publish
-          default:
-            - action: light.toggle
-              metadata: {}
-              data: {}
-              target:
-                entity_id: light.keuken_klok_awtrix_keuken_matrix
-
     - id: kitchen_clock_display_partner_home
       alias: Kitchen - Clock Locations Family
       description: "Display message on clock when someone return home"
@@ -130,9 +88,15 @@ kitchen_clock_display_package:
           value_template: >-
             {{ states('sensor.robin_reistijd_naar_werk') | float(-1) >= 0 }}
       actions:
+        # RETAIN: FALSE OP `power`, EN MET REDEN
+        # De broker bewaart per topic het laatste bericht. Met `retain: true`
+        # bleef hier een `{"power": ...}` van vanochtend staan, die de klok bij
+        # elke herverbinding opnieuw binnenkreeg - dan hing de stand van het
+        # scherm ineens af van het laatste bericht van een reistijd-app in
+        # plaats van van de huisregel in packages/9 - Other/Klokken.yaml.
         - data:
             qos: 0
-            retain: true
+            retain: false
             topic: clock_1/power
             payload: '{"power": true}'
           action: mqtt.publish
@@ -153,12 +117,10 @@ kitchen_clock_display_package:
             minutes: 1
             seconds: 0
             milliseconds: 0
-        - data:
-            qos: 0
-            retain: true
-            topic: clock_1/power
-            payload: '{"power": false}'
-          action: mqtt.publish
+        # Niet blind uit: om half zeven kan het alarm er allang af zijn en de
+        # keukenlamp aan staan, en dan hoort dit scherm gewoon te blijven
+        # branden. Het script zet hem terug op wat de huisregel zegt.
+        - action: script.klok_keuken_woonkamer_stand
 
     - id: kitchen_clock_display_apps
       alias: Kitchen - Clock Display all Apps
@@ -437,43 +399,4 @@ kitchen_clock_display_package:
               ', B Ploeg: ' ~ ploeg('B') | trim ~
               ', C Ploeg: ' ~ ploeg('C') | trim) | to_json }}}
           action: mqtt.publish
-      mode: single
-
-    - id: kitchen_clock_turn_on
-      alias: Kitchen - Clock turn on
-      description: "Turn on clock when livingroom lights turned on"
-      mode: single
-      triggers:
-        - trigger: state
-          entity_id:
-            - light.woonkamer_lampen
-          to: "on"
-          from: "off"
-      conditions: []
-      actions:
-        - action: light.turn_on
-          metadata: {}
-          data:
-            brightness_pct: 50
-          target:
-            entity_id: light.keuken_klok_awtrix_keuken_matrix
-
-    - id: kitchen_clock_always_on
-      alias: Kitchen - Display always on
-      description: "Kitchen display keep always on"
-      triggers:
-        - trigger: state
-          entity_id:
-            - light.keuken_klok_awtrix_keuken_matrix
-          to: "off"
-      conditions:
-        - condition: state
-          entity_id: light.woonkamer_lampen
-          state: "on"
-      actions:
-        - action: light.turn_on
-          metadata: {}
-          data: {}
-          target:
-            entity_id: light.keuken_klok_awtrix_keuken_matrix
       mode: single
