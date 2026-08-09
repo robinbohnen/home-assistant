@@ -194,14 +194,29 @@ klokken_package:
       sequence:
         - alias: Beide frames een keer uitrekenen
           variables:
-            # Een frame op 32x8: links een zonnetje, rechts het totaal, en op de
-            # twee onderste rijen een balk per omvormer.
+            # Een frame op 32x8: links een zonnetje, rechts het totaal, en
+            # onderaan een balk per set panelen.
             #
-            # WAAROM TWEE BALKEN EN NIET EEN
-            # De twee sets hebben een eigen plafond en pieken op een ander
-            # moment. Achtertuin: 16 panelen, 10 graden zuidwest, GW5000N-EH,
-            # 5 kW AC. Zolder: 12 panelen, 45 graden oost, GW3000D-NS, 3 kW AC.
-            # Samen 8 kW, maar in de praktijk haal je hooguit ~7 kW omdat de
+            # HET ZONNETJE IS GEEN VERSIERING
+            # Het is het enige dat zegt waar je naar kijkt. Zonder dat plaatje
+            # staat er een getal op het scherm waarvan je niet weet of het
+            # opwek, verbruik of teruglevering is - dat is uitgeprobeerd en het
+            # leest niet. Zeven pixels breed en dat is hij waard.
+            #
+            # DE VOLGORDE VAN DE BALKEN IS DE VOLGORDE OP DE KAVEL
+            # Van voor naar achter gezien: zolder (voorzijde) boven, de derde
+            # set straks in het midden, achtertuin onder. Dat onthoud je zonder
+            # legenda, en het klopt toevallig ook met de orientatie - de
+            # bovenste balk piekt dus 's ochtends en de onderste 's middags.
+            # Rij 6 blijft leeg tot die derde set er staat. Zolder en
+            # achtertuin staan daarmee nu al op de plek waar ze blijven, dus er
+            # verschuift straks niets en je hoeft niet opnieuw te leren kijken.
+            #
+            # WAAROM EEN BALK PER SET EN NIET EEN VOOR HET TOTAAL
+            # Elke set heeft een eigen plafond en piekt op een ander moment.
+            # Achtertuin: 16 panelen, 10 graden zuidwest, GW5000N-EH, 5 kW AC.
+            # Zolder: 12 panelen, 45 graden oost, GW3000D-NS, 3 kW AC. Samen
+            # 8 kW, maar in de praktijk haal je hooguit ~7 kW omdat de
             # ochtendpiek van oost al voorbij is als zuidwest zijn middagpiek
             # draait. Een balk op 8000 W zou dus nooit verder komen dan een
             # procent of 85 en altijd halfleeg lijken. Per set gedeeld door zijn
@@ -211,33 +226,58 @@ klokken_package:
             #
             # De plafonds komen uit `..._capacity` (in kW) en niet uit een getal
             # in dit bestand, zodat een andere omvormer vanzelf de schaal
-            # meeneemt.
+            # meeneemt. Let op de namen: het vermogen van de achtertuin heet bij
+            # GoodWe `..._overkapping`, het plafond `..._achtertuin_capacity`.
+            # Zelfde omvormer, twee namen.
             zon_payload: >-
               {%- if (has_value('sensor.inverter_kroon_18_overkapping')
                       or has_value('sensor.inverter_kroon_18_zolder_voorzijde'))
                      and states('sensor.solar_power_generated_now') | float(0) > 0 -%}
-              {%- set p1 = states('sensor.inverter_kroon_18_overkapping') | float(0) -%}
-              {%- set p2 = states('sensor.inverter_kroon_18_zolder_voorzijde') | float(0) -%}
-              {%- set c1 = [states('sensor.inverter_kroon_18_achtertuin_capacity') | float(5) * 1000, 1] | max -%}
-              {%- set c2 = [states('sensor.inverter_kroon_18_zolder_capacity') | float(3) * 1000, 1] | max -%}
-              {%- set tot = p1 + p2 -%}
-              {#- Hele watts met eenheid. Cijfers zijn 4 px breed, maar de W is
-                  dat NIET - die is er zes - en met 4 px per teken viel hij net
-                  buiten het scherm. Daarom apart gerekend. Het zonnetje loopt
-                  tot x=6, en het breedste dat hier ooit kan staan is "8000W"
-                  (start op x=10), want verder dan 5 + 3 kW AC komen de
-                  omvormers niet. -#}
-              {%- set watt = (tot | round(0) | int) | string -%}
-              {%- set label = watt ~ 'W' -%}
-              {%- set tx = 32 - (watt | length * 4 + 6) -%}
-              {%- set l1 = [[(p1 * 32 / c1) | round(0) | int, 32] | min, 0] | max -%}
-              {%- set l2 = [[(p2 * 32 / c2) | round(0) | int, 32] | min, 0] | max -%}
+              {%- set p_zolder = states('sensor.inverter_kroon_18_zolder_voorzijde') | float(0) -%}
+              {%- set p_tuin = states('sensor.inverter_kroon_18_overkapping') | float(0) -%}
+              {%- set c_zolder = [states('sensor.inverter_kroon_18_zolder_capacity') | float(3) * 1000, 1] | max -%}
+              {%- set c_tuin = [states('sensor.inverter_kroon_18_achtertuin_capacity') | float(5) * 1000, 1] | max -%}
+              {%- set tot = p_zolder + p_tuin -%}
+              {#- HELE WATTS, MAAR KW ZODRA HET ER VIJF CIJFERS WORDEN
+                  Twee sets halen samen nooit meer dan 8000 W en dat past. Met
+                  een derde omvormer erbij kan het totaal over de 9999 en dan
+                  loopt het label het zonnetje in. Boven de 10 kW dus kW met een
+                  decimaal; dat is drie tekens korter en op dat niveau zegt een
+                  losse watt toch niets meer. -#}
+              {%- if tot < 10000 -%}
+              {%- set label = (tot | round(0) | int) | string ~ 'W' -%}
+              {%- else -%}
+              {%- set label = '%.1f' | format(tot / 1000) ~ 'kW' -%}
+              {%- endif -%}
+              {#- DE BREEDTE WORDT PER TEKEN GETELD EN NIET GESCHAT
+                  Opgemeten door een testframe terug te lezen met /api/screen:
+                  een cijfer schuift 4 px op, een punt 2, de `k` 4 en de `W` 6.
+                  Rechts uitlijnen tot en met x=29 en niet tot de rand, want op
+                  x=30 en x=31 tekent de firmware de indicatorstipjes en die
+                  gaan er overheen. `31 - breedte` levert precies dat op: het
+                  breedste label ("11.4kW", 24 px) begint dan op x=7, direct
+                  naast het zonnetje dat tot x=6 loopt. -#}
+              {%- set tekenbreedte = {'.': 2, 'W': 6} -%}
+              {%- set b = namespace(px=0) -%}
+              {%- for teken in label -%}
+              {%- set b.px = b.px + tekenbreedte.get(teken, 4) -%}
+              {%- endfor -%}
+              {%- set tx = 31 - b.px -%}
+              {%- set l_zolder = [[(p_zolder * 32 / c_zolder) | round(0) | int, 32] | min, 0] | max -%}
+              {%- set l_tuin = [[(p_tuin * 32 / c_tuin) | round(0) | int, 32] | min, 0] | max -%}
               {#- Geel zodra een omvormer tegen zijn plafond zit: dat is geen
-                  storing maar wel het moment waarop je opwek verliest. -#}
-              {%- set k1 = '#FFD60A' if p1 >= c1 * 0.98 else '#32D74B' -%}
-              {%- set k2 = '#FFD60A' if p2 >= c2 * 0.98 else '#32D74B' -%}
+                  storing maar wel het moment waarop je opwek verliest. Op een
+                  balk van 32 px is 98% en 100% een verschil van een pixel, dus
+                  zonder die kleurwissel zou je het klippen simpelweg niet
+                  zien. -#}
+              {%- set k_zolder = '#FFD60A' if p_zolder >= c_zolder * 0.98 else '#32D74B' -%}
+              {%- set k_tuin = '#FFD60A' if p_tuin >= c_tuin * 0.98 else '#32D74B' -%}
+              {#- Rij 6 krijgt bewust ook geen donkere achtergrond: een lege
+                  goot ziet eruit als een set die niets doet, en die set bestaat
+                  nog niet. Straks komen hier de achtergrond en de balk van de
+                  derde set bij, met dezelfde twee regels als hieronder. -#}
               {"draw": [
-              {"df": [0, 6, 32, 1, "#222222"]},
+              {"df": [0, 5, 32, 1, "#222222"]},
               {"df": [0, 7, 32, 1, "#222222"]},
               {"df": [2, 2, 3, 2, "#FFD60A"]},
               {"df": [3, 0, 1, 1, "#FFD60A"]},
@@ -245,8 +285,8 @@ klokken_package:
               {"df": [0, 2, 1, 1, "#FFD60A"]},
               {"df": [6, 2, 1, 1, "#FFD60A"]},
               {"dt": [{{ tx }}, 0, "{{ label }}", "#FFFFFF"]}
-              {%- if l1 > 0 %}, {"df": [0, 6, {{ l1 }}, 1, "{{ k1 }}"]}{% endif %}
-              {%- if l2 > 0 %}, {"df": [0, 7, {{ l2 }}, 1, "{{ k2 }}"]}{% endif %}
+              {%- if l_zolder > 0 %}, {"df": [0, 5, {{ l_zolder }}, 1, "{{ k_zolder }}"]}{% endif %}
+              {%- if l_tuin > 0 %}, {"df": [0, 7, {{ l_tuin }}, 1, "{{ k_tuin }}"]}{% endif %}
               ], "duration": 8, "lifetime": 300, "lifetimeMode": 0}
               {%- endif -%}
             # Een frame op 32x8: batterijsymbool met vulniveau (links, kleur =
@@ -326,6 +366,14 @@ klokken_package:
       # De AWTRIX-integratie maakt van elke indicator een rgb-lamp. Daarmee
       # weet HA de huidige kleur, blijft `light.turn_off` gewoon uit gaan, en
       # hoeft hier geen tweede plek te bestaan waar topic-namen kloppen moeten.
+      #
+      # DE STIPJES LIGGEN OP DE MATRIX ZELF EN GAAN OVER DE APP HEEN
+      # Opgemeten door ze aan te zetten en /api/screen terug te lezen:
+      # indicator 1 pakt (30,0), (31,0) en (31,1), indicator 2 (31,3) en
+      # (31,4), indicator 3 (31,6), (30,7) en (31,7). Daarom stopt het label in
+      # `script.klok_zon_en_accu` op x=29. Neem je indicator 3 ooit in gebruik,
+      # dan raakt de onderste balk (achtertuin) zijn laatste twee pixels kwijt
+      # en is een volle balk daar niet meer van 94% te onderscheiden.
       #
       # `brightness` MOET MEE
       # Een `light.turn_on` met alleen `rgb_color` liet het stipje uit: de
