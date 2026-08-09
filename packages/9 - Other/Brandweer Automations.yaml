@@ -597,21 +597,46 @@ brandweer_package:
                and trigger.from_state.state != trigger.to_state.state }}
       actions:
         - parallel:
-            - if:
+            - alias: Zet bericht op de keukenklok
+              # DE STAND VAN DE KLOK ZELF, NIET EEN TWEEDE AFLEIDING ERVAN
+              # Hier stond `light.woonkamer_lampen` aan als voorwaarde. Maar of
+              # de keukenklok aan staat wordt bepaald door
+              # `script.klok_keuken_woonkamer_stand`, en dat is een ruimere
+              # regel: alarm uit OF woonkamerlicht aan. Overdag met het alarm
+              # eraf en de lampen uit stond die klok dus gewoon te branden
+              # terwijl er bij een uitruk niets op verscheen. De matrix-entiteit
+              # navragen kan niet uit de pas gaan lopen als die regel ooit
+              # verandert - dezelfde reden waarom dat script bestaat.
+              #
+              # EN WAAROM DE ANDERE TWEE KLOKKEN HIER GEEN CHECK KRIJGEN
+              # Op 2026-08-09 nagemeten op de garageklok: stuur je een `notify`
+              # naar een klok waarvan de matrix uit staat, dan wordt het bericht
+              # wel in de buffer getekend en heet de app `Notification`, maar
+              # `matrix` blijft `false` - het scherm gaat er dus niet vanzelf
+              # van aan en je ziet niets. Onschadelijk: de herhalingen lopen
+              # ondertussen af, dus er blijft ook niets staan voor de volgende
+              # keer dat het scherm aangaat. Een check zou daar dus niets
+              # veranderen behalve het geval waarin het scherm halverwege
+              # aangaat, en dan vang je juist liever nog de staart mee.
+              if:
                 - condition: state
-                  entity_id: light.woonkamer_lampen
+                  entity_id: light.keuken_klok_awtrix_keuken_matrix
                   state: "on"
               then:
                 - data:
                     qos: 0
                     retain: false
                     topic: clock_1/notify
+                    # `to_json` om de tekst, om dezelfde reden als bij de
+                    # woonkamer- en garageklok hieronder: een melding met een
+                    # aanhalingsteken of backslash erin maakte hier ongeldige
+                    # JSON, en dan blijft dit scherm stil bij precies het
+                    # bericht dat niet gemist mag worden.
                     payload: >-
-                      {"icon": 555, "repeat": 4, "text": " {{
-                      states.input_text.brandweer_laatste_melding.state }}",
-                      "scrollSpeed": 50, "sound": "alarm", "stack": false}
+                      {"icon": 555, "repeat": 4, "scrollSpeed": 50,
+                      "sound": "alarm", "stack": false,
+                      "text": {{ (' ' ~ states('input_text.brandweer_laatste_melding')) | to_json }}}
                   action: mqtt.publish
-              alias: Zet bericht op led klok
             # DE WOONKAMER- EN GARAGEKLOK KRIJGEN HEM ALTIJD
             # Zonder gok op de woonkamerlampen: die twee klokken staan altijd
             # aan en tonen verder alleen zon en accu, dus een melding is daar
