@@ -366,8 +366,18 @@ klokken_package:
     - id: klokken_indicatoren_woonkamer_garage
       alias: Klokken - Indicatoren stroomprijs en bezetting
       description: >-
-        De twee stipjes rechts op de woonkamer- en garageklok. Boven (1) is de
+        De twee stipjes rechts op alle drie de klokken. Boven (1) is de
         stroomprijs van nu, midden (2) de bezetting van de dienstdoende ploeg.
+      # HET ID ZEGT WOONKAMER_GARAGE EN DAT KLOPT NIET MEER
+      # De keukenklok is er later bij gekomen. Het `id` hernoemen zou een
+      # nieuwe automatisering opleveren en de oude als wees achterlaten, dus
+      # dat blijft staan; de alias en deze beschrijving zijn wel bijgewerkt.
+      #
+      # LET OP DE ENTITEITNAAM VAN DE KEUKEN
+      # Indicator 1 en 3 van de keukenklok heten `light.awtrix_121d6c_...`,
+      # maar indicator 2 heet `light.klok_awtrix_indicator_2`. Daar is ooit een
+      # entiteit hernoemd. Wie de lijst hieronder kopieert en het patroon
+      # doortrekt, zet dus een stipje aan dat niet bestaat.
       # WAAROM DIT OVER DE LICHT-ENTITEITEN GAAT EN NIET OVER MQTT
       # De AWTRIX-integratie maakt van elke indicator een rgb-lamp. Daarmee
       # weet HA de huidige kleur, blijft `light.turn_off` gewoon uit gaan, en
@@ -406,6 +416,7 @@ klokken_package:
         # of de bezetting toevallig veranderde.
         - trigger: state
           entity_id:
+            - light.keuken_klok_awtrix_keuken_matrix
             - light.woonkamer_klok_awtrix_woonkamer_matrix
             - light.garage_klok_awtrix_garage_matrix
           from: unavailable
@@ -457,12 +468,14 @@ klokken_package:
             - action: light.turn_off
               target:
                 entity_id:
+                  - light.awtrix_121d6c_indicator_1
                   - light.awtrix_9c6510_indicator_1
                   - light.awtrix_9bf654_indicator_1
           else:
             - action: light.turn_on
               target:
                 entity_id:
+                  - light.awtrix_121d6c_indicator_1
                   - light.awtrix_9c6510_indicator_1
                   - light.awtrix_9bf654_indicator_1
               data:
@@ -476,12 +489,14 @@ klokken_package:
             - action: light.turn_off
               target:
                 entity_id:
+                  - light.klok_awtrix_indicator_2
                   - light.awtrix_9c6510_indicator_2
                   - light.awtrix_9bf654_indicator_2
           else:
             - action: light.turn_on
               target:
                 entity_id:
+                  - light.klok_awtrix_indicator_2
                   - light.awtrix_9c6510_indicator_2
                   - light.awtrix_9bf654_indicator_2
               data:

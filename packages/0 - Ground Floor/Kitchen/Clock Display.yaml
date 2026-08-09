@@ -339,10 +339,21 @@ kitchen_clock_display_package:
           # Zonder deze guard viel as_timestamp(None) om zodra er geen volgende
           # afspraak was, waardoor de automation afbrak en de BRW-app hieronder
           # niet meer werd bijgewerkt.
+          #
+          # EN VERDER DAN 48 UUR VOORUIT KIJKT DEZE KLOK NIET
+          # Hier stond de eerstvolgende afspraak, hoe ver weg ook. Een afspraak
+          # van over drie dagen scrolde dus drie dagen lang elke 84 seconden
+          # voorbij zonder dat er iets aan veranderde, terwijl deze app met 25
+          # seconden de duurste van de rotatie was. Buiten het venster gaat er
+          # een lege payload heen en valt hij uit de rotatie, net als `afval`
+          # en `regen`.
           if:
             - condition: template
               value_template: >-
-                {{ state_attr('calendar.robin_en_sam', 'start_time') is not none }}
+                {%- set s = state_attr('calendar.robin_en_sam', 'start_time') -%}
+                {{ s is not none
+                   and (s | as_datetime | as_local | as_timestamp)
+                       < as_timestamp(now()) + 48 * 3600 }}
           then:
             - alias: Show next event
               data:
@@ -350,19 +361,30 @@ kitchen_clock_display_package:
                 retain: true
                 topic: clock_1/custom/next_cal_event
                 payload: >-
+                  {#- TIJD VOOROP, EN GEEN VERBINDINGSWOORDEN
+                      Dit was `Logan gesprek - 12-08 om 19:30`. De ` - ` en het
+                      woordje ` om ` zijn zeven tekens die niets toevoegen maar
+                      wel meescrollen, en de tijd stond helemaal achteraan -
+                      precies het stuk dat je wil weten voordat de titel voorbij
+                      is. Binnen 48 uur kan een afspraak alleen vandaag, morgen
+                      of overmorgen vallen, en dat zijn drie verschillende
+                      weekdagen; twee letters zijn dus genoeg om ze uit elkaar
+                      te houden. Vandaag krijgt niets, want dat is de normale
+                      situatie.
+
+                      `repeat` staat op 1 en niet meer op 2: de app komt sowieso
+                      elke 84 seconden terug, dus die tweede rondgang koopt je
+                      niets. `scrollSpeed: 50` blijft wel staan - dat is halve
+                      snelheid en de enige reden dat je 'm kunt lezen. -#}
                   {%- set titel = state_attr('calendar.robin_en_sam', 'message') or 'Afspraak' -%}
                   {%- set start = state_attr('calendar.robin_en_sam', 'start_time') | as_datetime | as_local -%}
-                  {%- if start.date() == now().date() -%}
-                  {%- set dag = 'vandaag' -%}
-                  {%- elif start.date() == (now() + timedelta(days=1)).date() -%}
-                  {%- set dag = 'morgen' -%}
-                  {%- else -%}
-                  {%- set dag = start.strftime('%d-%m') -%}
-                  {%- endif -%}
+                  {%- set dagen = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'] -%}
+                  {%- set dag = '' if start.date() == now().date()
+                                else dagen[start.weekday()] ~ ' ' -%}
                   {%- set tijd = '' if state_attr('calendar.robin_en_sam', 'all_day')
-                                 else ' om ' ~ start.strftime('%H:%M') -%}
-                  {"icon": 10498,"color":"FFFFFF","repeat": 2, "scrollSpeed": 50,
-                  "text": {{ (titel ~ ' - ' ~ dag ~ tijd) | to_json }}}
+                                 else start.strftime('%H:%M') ~ ' ' -%}
+                  {"icon": 10498,"color":"FFFFFF","repeat": 1, "scrollSpeed": 50,
+                  "text": {{ (dag ~ tijd ~ titel) | to_json }}}
               action: mqtt.publish
           else:
             - data:
@@ -370,6 +392,66 @@ kitchen_clock_display_package:
                 retain: true
                 topic: clock_1/custom/next_cal_event
               action: mqtt.publish
+        - alias: Display rain incoming
+          data:
+            qos: 0
+            retain: true
+            topic: clock_1/custom/regen
+            payload: >-
+              {#- ALLEEN OP HET SCHERM ALS HET GAAT REGENEN
+                  Deze app hoort bij `afval`, `robin` en `samantha`: geen bui op
+                  komst is een lege payload, en dan valt hij uit de rotatie in
+                  plaats van dat je 84 seconden lang langs een nul scrolt. Zie
+                  de kop van packages/9 - Other/Klokken.yaml.
+
+                  BRON: BUIENALARM, NIET `neerslag_komende_30_minuten`
+                  Die laatste sensor is een som over een half uur - hij zegt
+                  hoevéél er valt, niet wannéér. Het `data`-attribuut van
+                  Buienalarm is een lijst met een waarde per vijf minuten
+                  (`delta`) vanaf een epoch (`start`), en daarmee is het eerste
+                  natte vakje wel te vinden. Buienradar levert hetzelfde in een
+                  tekstformaat (`000|10:50 ...`) als je ooit een terugval wil.
+
+                  EEN UUR VOORUIT EN NIET TWEE
+                  De reeks loopt twee uur door, maar een bui die over 100
+                  minuten valt is geen reden om nu iets te doen - en dan staat
+                  hij dus voor niets in de rotatie. -#}
+              {%- set d = state_attr('sensor.neerslag_buienalarm_regen_data', 'data') -%}
+              {%- if d and d.get('success') and d.get('precip') -%}
+              {%- set ns = namespace(vak=-1) -%}
+              {%- for v in d.precip -%}
+              {%- if ns.vak < 0 and (v | float(0)) > 0 -%}{%- set ns.vak = loop.index0 -%}{%- endif -%}
+              {%- endfor -%}
+              {%- if ns.vak >= 0 -%}
+              {%- set minuten = (((d.start + ns.vak * d.delta) - as_timestamp(now())) / 60) | round(0) | int -%}
+              {%- if minuten <= 60 -%}
+              {#- Een wolk van vier balkjes met drie druppels eronder, op x=0
+                  t/m 7 - even breed als de firmware-iconen, zodat deze app
+                  naast de andere niet uit de toon valt. Handwerk, want er zit
+                  geen regen-icoon op de klok en `draw` verdringt het
+                  firmware-icoon toch; zie de BRW-app hieronder.
+
+                  Rechts uitlijnen tot x=29: cijfers en de `m` zijn 3 px breed
+                  en schuiven 4 op (opgemeten), en x=30 en x=31 zijn van de
+                  indicatorstipjes. "nu" zodra de bui binnen een vakje van vijf
+                  minuten valt; een tijdstip zou hier niets helpen, want deze
+                  klok toont de tijd zelf niet. -#}
+              {%- set tekst = 'nu' if minuten <= 0 else (minuten | string) ~ 'm' -%}
+              {%- set x = 31 - (tekst | length * 4) -%}
+              {"draw": [
+              {"df": [2, 0, 4, 1, "#8E8E93"]},
+              {"df": [1, 1, 6, 1, "#8E8E93"]},
+              {"df": [0, 2, 8, 1, "#8E8E93"]},
+              {"df": [1, 3, 6, 1, "#8E8E93"]},
+              {"df": [1, 4, 1, 2, "#0A84FF"]},
+              {"df": [4, 5, 1, 2, "#0A84FF"]},
+              {"df": [6, 4, 1, 2, "#0A84FF"]},
+              {"dt": [{{ x }}, 0, "{{ tekst }}", "#FFFFFF"]}
+              ], "duration": 8}
+              {%- endif -%}
+              {%- endif -%}
+              {%- endif -%}
+          action: mqtt.publish
         - alias: Display BRW occupation
           data:
             qos: 0
