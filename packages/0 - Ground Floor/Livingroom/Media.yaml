@@ -145,6 +145,18 @@ livingroom_media_package:
                   data:
                     scene_id: woonkamer_voor_media
                     snapshot_entities: "{{ alle_lampen }}"
+            # DE VLAG GAAT AAN VOORDAT ER EEN LAMP BEWEEGT
+            # Hij stond hieronder, na alle lichtacties. `script.klok_keuken_
+            # woonkamer_stand` leest hem om te weten op welke helderheid een
+            # klok terug moet komen, en die kan hier tussendoor langskomen: zet
+            # je `tv_playing_percentage` op 0, dan gaat `light.woonkamer_lampen`
+            # bij het dimmen helemaal uit en dat is precies zijn trigger. Met de
+            # vlag pas aan het eind zou de klok dan op 50% terugkomen, midden in
+            # een film. De momentopname hierboven kijkt nog naar de oude stand,
+            # dus die blijft kloppen.
+            - action: input_boolean.turn_on
+              target:
+                entity_id: input_boolean.woonkamer_kijksessie
             # Plafondspots, tafellamp, keuken en eettafel omlaag. De Play bars
             # en de Signe zitten hier bewust niet bij; die staan in `bias`.
             - action: light.turn_on
@@ -180,14 +192,18 @@ livingroom_media_package:
                   - light.garage_lampen
                   - light.trapkast_lampen
                   - light.woonkamer_humble
-            - action: light.turn_on
-              target:
-                entity_id: light.keuken_klok_awtrix_keuken_matrix
-              data:
-                brightness_pct: 1
-            - action: input_boolean.turn_on
-              target:
-                entity_id: input_boolean.woonkamer_kijksessie
+            # 1% is niet uit, maar wel het minimum dat de AWTRIX kent: je kunt
+            # de tijd nog aflezen zonder dat er een lampje naast het beeld staat
+            # te branden.
+            - if:
+                - condition: template
+                  value_template: "{{ klokken | count > 0 }}"
+              then:
+                - action: light.turn_on
+                  target:
+                    entity_id: "{{ klokken }}"
+                  data:
+                    brightness_pct: 1
 
           else:
             - choose:
@@ -248,11 +264,18 @@ livingroom_media_package:
                   data:
                     brightness_pct: 20
                     color_temp_kelvin: 3984
-            - action: light.turn_on
-              target:
-                entity_id: light.keuken_klok_awtrix_keuken_matrix
-              data:
-                brightness_pct: 50
+            # Terug naar het gewone niveau. Een vast percentage en geen
+            # momentopname: de 1% van hierboven is de enige stand die deze
+            # schermen ooit anders zet, dus er valt niets te bewaren.
+            - if:
+                - condition: template
+                  value_template: "{{ klokken | count > 0 }}"
+              then:
+                - action: light.turn_on
+                  target:
+                    entity_id: "{{ klokken }}"
+                  data:
+                    brightness_pct: 50
             # Alleen `klaar` sluit de sessie af. Pauze laat de vlag staan, zodat
             # het hervatten niet opnieuw een momentopname maakt.
             - if:

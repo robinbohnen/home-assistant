@@ -46,6 +46,17 @@
 ## packages/0 - Ground Floor/Kitchen/Clock Display.yaml zit hier bewust niets
 ## meer over, want daar stonden ze elkaar tegen te werken.
 ##
+## HOE FEL DAT SCHERM DAN STAAT
+## De keuken- en woonkamerklok volgen dezelfde twee niveaus als de rest van de
+## woonkamer: 1% zolang er een film loopt, 50% zodra hij op pauze of afgelopen
+## staat. Het zetten gebeurt op twee plekken en dat is met opzet.
+## `script.woonkamer_media_licht` doet het op het moment dat de kijkstand
+## verandert - dat is waar de andere lampen ook geregeld worden - en het script
+## hieronder doet het nog een keer bij het aanzetten, voor de klok die tijdens
+## de film uit stond en die overgang dus gemist heeft.
+## De garageklok houdt zijn eigen `BRI`; die hangt in een ruimte zonder
+## avondstand.
+##
 ## EEN NIEUWE KLOK KOMT MET VIER FIRMWARE-APPS
 ## Uit de doos draaien Time, Temperature, Humidity en Battery mee in de
 ## rotatie; op clock_2 en clock_3 stonden ze op 2026-08-08 nog tussen de twee
@@ -101,7 +112,8 @@ klokken_package:
       alias: Klok - Stand keuken en woonkamer bijwerken
       description: >-
         Zet de keuken- en woonkamerklok aan of uit volgens de huisregel: aan als
-        het alarm uit staat of als het licht in de woonkamer brandt.
+        het alarm uit staat of als het licht in de woonkamer brandt, en meteen
+        op de juiste helderheid (1% tijdens een film, anders 50%).
       icon: mdi:monitor-dashboard
       # WAAROM DIT EEN SCRIPT IS EN NIET GEWOON DE AUTOMATISERING
       # De reistijd-app in Kitchen/Clock Display.yaml zet de keukenklok 's
@@ -119,11 +131,24 @@ klokken_package:
               {{ states('alarm_control_panel.alarmo')
                  in ['disarmed', 'unavailable', 'unknown']
                  or is_state('light.woonkamer_lampen', 'on') }}
-        # BEWUST ZONDER `brightness`
-        # De helderheid van de keukenklok wordt elders gezet (1% tijdens een
-        # kijksessie, 50% erna - zie Livingroom/Media.yaml). Zou hier een
-        # percentage staan, dan zette een lamp die tijdens een film aangaat het
-        # scherm middenin de kijksessie op vol.
+            # Een sessie die niet op pauze staat. De pauze-tak van
+            # `livingroom_media_playing` gaat af als de Apple TV op `paused` of
+            # `idle` springt en zet de klokken juist wel op 50%, dus die twee
+            # standen tellen hier niet als kijken. Loopt de sessie via de
+            # PlayStation of de tv zelf, dan komt de Apple TV die standen niet
+            # binnen en blijft het dus gewoon kijken - net als daar.
+            film_loopt: >-
+              {{ is_state('input_boolean.woonkamer_kijksessie', 'on')
+                 and states('media_player.woonkamer_appletv')
+                     not in ['paused', 'idle'] }}
+        # DE HELDERHEID VOLGT DE KIJKSESSIE, NIET DE STAND VAN DE KLOK
+        # Dezelfde twee niveaus als in `script.woonkamer_media_licht`: 1% als er
+        # een film loopt, anders 50%. Dat script zet ze alleen op klokken die op
+        # dat moment aan staan, en dat is niet genoeg. Ging de klok tijdens de
+        # film uit (licht uit, alarm aan) en liep de film daarna af, dan is er
+        # niemand meer die de 1% terugdraait en kwam hij de volgende ochtend
+        # gedimd terug tot de eerstvolgende film. Nu bepaalt het aanzetten zelf
+        # het niveau en verdwijnt dat gat.
         - if:
             - condition: template
               value_template: "{{ klok_aan }}"
@@ -133,6 +158,8 @@ klokken_package:
                 entity_id:
                   - light.keuken_klok_awtrix_keuken_matrix
                   - light.woonkamer_klok_awtrix_woonkamer_matrix
+              data:
+                brightness_pct: "{{ 1 if film_loopt else 50 }}"
           else:
             - action: light.turn_off
               target:
