@@ -116,12 +116,40 @@ music_package:
       # Waarom een variabele en niet een tweede join-actie erachteraan: het
       # groeperen moet één aanroep blijven, om precies de reden die bij die
       # actie hieronder staat.
+      #
+      # Niet toevoegen is niet hetzelfde als eraf halen: `media_player.join`
+      # voegt de genoemde speakers toe en laat de rest van de groep staan.
+      # Zat een kinderkamer om 09:00 al in de woonkamergroep - blijven hangen
+      # van gisteren, of met de hand via de "Gehele huis samen"-knop - dan
+      # houdt `kinderkamers` hem daar niet uit, en begint de radio alsnog naast
+      # een slapend kind. Vandaar `kinderkamers_los` en de unjoin hieronder.
       variables:
+        wakker: "{{ is_state('input_boolean.klimaat_wakker', 'on') }}"
         kinderkamers: >-
           {{ ['media_player.slaapkamer_maxi_sonos',
               'media_player.slaapkamer_mini_sonos']
-             if is_state('input_boolean.klimaat_wakker', 'on') else [] }}
+             if wakker else [] }}
+        # Alleen de kinderkamers die op dít moment echt in de groep zitten.
+        # Zo blijft een unjoin op een speaker die er al los van staat achterwege.
+        kinderkamers_los: >-
+          {{ [] if wakker else
+             ['media_player.slaapkamer_maxi_sonos',
+              'media_player.slaapkamer_mini_sonos']
+             | select('in', state_attr('media_player.woonkamer_sonos', 'group_members') or [])
+             | list }}
       actions:
+        # Eerst loskoppelen, dan pas volume en join: de groep moet kloppen
+        # voordat er geluid is, om dezelfde reden als bij de join hieronder.
+        - alias: Slapende kinderkamers uit de groep halen
+          if:
+            - condition: template
+              value_template: "{{ kinderkamers_los | count > 0 }}"
+          then:
+            - action: media_player.unjoin
+              continue_on_error: true
+              data: {}
+              target:
+                entity_id: "{{ kinderkamers_los }}"
         - action: media_player.volume_set
           metadata: {}
           data:
