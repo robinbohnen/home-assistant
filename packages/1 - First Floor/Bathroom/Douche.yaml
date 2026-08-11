@@ -129,30 +129,64 @@ bathroom_shower_package:
                         for: "00:01:00"
                 then:
                   - stop: "Douche voorbij"
-              # ZOVEEL KNIPPERS ALS ER BLOKKEN VAN VIER MINUTEN OM ZIJN
-              # Eén knipper per keer zou ook kunnen, maar dan is de knipper op
-              # vier minuten niet te onderscheiden van die op zestien - en juist
-              # dat wil je weten. Nu is tweemaal knipperen "acht minuten".
-              # Boven de vijf houdt het op; daarna is het signaal toch vooral
-              # "je staat er lang genoeg".
               - variables:
                   blok: "{{ repeat.index }}"
-              - repeat:
-                  count: "{{ [blok | int(1), 5] | min }}"
-                  sequence:
-                    # `effect: blink` is de Identify-knipper van het
-                    # zigbee-apparaat zelf: één commando, geen stand die
-                    # onthouden en teruggezet moet worden. Dat is hier het
-                    # verschil tussen wel en niet veilig - dimmen-en-herstellen
-                    # laat de badkamer op 1% staan zodra dat tweede commando
-                    # sneuvelt, en dat gebeurt in dit huis nu eenmaal.
-                    - action: light.turn_on
-                      target:
-                        entity_id: light.badkamer_lampen
-                      data:
-                        effect: blink
-                      continue_on_error: true
-                    - delay: "00:00:02"
+                  minuten: "{{ repeat.index * 4 }}"
+              # Knipperen en omroepen tegelijk, en niet na elkaar: de knippers
+              # duren met vijf stuks tien seconden en dan zou de stem daar
+              # achteraan komen sukkelen.
+              - parallel:
+                  # ZOVEEL KNIPPERS ALS ER BLOKKEN VAN VIER MINUTEN OM ZIJN
+                  # Nu er ook een stem is die het getal noemt, is dit vooral
+                  # het vangnet: de Sonos kan uit staan, losgekoppeld zijn of
+                  # net onbereikbaar. Het licht is er altijd, en tweemaal
+                  # knipperen blijft "acht minuten". Boven de vijf houdt het op.
+                  - alias: Kort knipperen met de badkamerlampen
+                    repeat:
+                      count: "{{ [blok | int(1), 5] | min }}"
+                      sequence:
+                        # `effect: blink` is de Identify-knipper van het
+                        # zigbee-apparaat zelf: één commando, geen stand die
+                        # onthouden en teruggezet moet worden. Dat is hier het
+                        # verschil tussen wel en niet veilig -
+                        # dimmen-en-herstellen laat de badkamer op 1% staan
+                        # zodra dat tweede commando sneuvelt, en dat gebeurt in
+                        # dit huis nu eenmaal.
+                        - action: light.turn_on
+                          target:
+                            entity_id: light.badkamer_lampen
+                          data:
+                            effect: blink
+                          continue_on_error: true
+                        - delay: "00:00:02"
+                  # `announce: true` is de audioclip-functie van Sonos: hij
+                  # duikt onder de muziek door op déze speaker en pakt daarna
+                  # de draad weer op. Belangrijk hier, want de badkamerspeaker
+                  # hangt tijdens het douchen meestal aan de woonkamergroep
+                  # (zie Media.yaml) - zonder announce zou de omroep door het
+                  # halve huis gaan.
+                  #
+                  # De clipvolume staat los van het speakervolume, dus die 50
+                  # verandert niets aan de muziek. Het is wel hét getal om te
+                  # draaien als het boven een lopende douche niet te verstaan
+                  # is; de muziek zelf staat hier op hoogstens 0,15.
+                  #
+                  # `continue_on_error` omdat een speaker die net weg is de
+                  # telling niet mag afbreken - dan blijft het knipperen over.
+                  - alias: Omroepen op de badkamerspeaker
+                    action: media_player.play_media
+                    continue_on_error: true
+                    target:
+                      entity_id: media_player.badkamer_sonos
+                    data:
+                      announce: true
+                      extra:
+                        volume: 50
+                      media:
+                        media_content_type: music
+                        media_content_id: >-
+                          media-source://tts/tts.google_translate_nl_nl?message={{
+                          ('Je doucht nu ' ~ minuten ~ ' minuten.') | urlencode }}
             # Bovengrens: een uur. Puur een noodrem voor het geval het water
             # blijft lopen en het licht aan blijft.
             until:
