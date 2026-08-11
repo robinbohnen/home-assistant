@@ -1,0 +1,160 @@
+##############################################################################
+## DOUCHETIMER - elke vier minuten een knipper, zodat je weet hoe lang je staat
+##############################################################################
+##
+## WAAROM WATERDEBIET EN NIET DE LUCHTVOCHTIGHEID
+## Het oorspronkelijke idee was om op de luchtvochtigheid te sturen. Dat werkt,
+## maar minder goed dan het lijkt. `sensor.badkamer_badkamer_temperatuur_
+## luchtvochtigheid` rapporteert standaard maar eens per 4,9 minuten (wel
+## sneller zodra er echt iets verandert, minimaal zo'n 60 seconden ertussen).
+##
+## Nagemeten op de douchebeurt van 10 augustus 2026:
+##
+##   20:33:49  water gaat lopen        <- de echte start
+##   20:36:23  luchtvochtigheid 56,6 -> 64,8 %   <- pas hier zichtbaar
+##
+## Tweeënhalve minuut te laat, en dat is precies de fout die je in een
+## vierminutensignaal niet wilt hebben. Erger: de luchtvochtigheid zegt niets
+## over het STOPPEN. Na die beurt stond hij nog een uur boven de 70%, dus je
+## kunt er niet aan zien of de kraan nog loopt - en dus ook niet of er een
+## tweede iemand onder staat.
+##
+## Het waterdebiet ziet allebei wel. Het is een huisbrede meter, dus de vraag
+## was of je een douche eruit kunt pikken. Over 8 t/m 10 augustus geanalyseerd:
+## 121 keer liep er ergens water, waarvan 24 keer langer dan anderhalve minuut,
+## maar SLECHTS VIER KEER langer dan vier minuten aaneengesloten - en dat waren
+## exact de vier douchebeurten van die twee dagen. Alles wat korter is (wc,
+## handen, de vaatwasser die vult) haalt de eerste knipper op vier minuten
+## sowieso niet. Met de badkamerlamp erbij als voorwaarde blijft er weinig
+## ruimte voor vergissingen over.
+##
+## De luchtvochtigheid wordt hier dus niet gebruikt. Wil je hem er ooit als
+## extra zekerheid bij, dan is de bruikbare drempel +3% binnen 6 minuten: dat
+## kwam in een week 29 keer voor, netjes verdeeld over 9 douchebeurten, terwijl
+## de normale drift 0,1% per 5 minuten is.
+##
+## DE TWEEDE DOUCHER
+## Die herkent hij, zolang de kraan tussendoor even uit gaat. Een sessie is
+## afgelopen als het water twee minuten stilstaat; stapt de volgende er daarna
+## in, dan begint de telling gewoon opnieuw bij nul. Twee minuten en niet één,
+## want op 10 augustus zat er midden in één douchebeurt een pauze van 62
+## seconden - iemand die zich staat in te zepen. Met een kortere drempel telde
+## die persoon zichzelf halverwege terug naar nul.
+##
+## Wat hij NIET ziet: een wisseling waarbij de kraan blijft lopen. Dan is er
+## voor deze meter niets gebeurd en telt hij door vanaf de eerste. Daar is met
+## een huisbrede waterhoeveelheid niet omheen te komen.
+##############################################################################
+
+bathroom_shower_package:
+  automation:
+    - id: bathroom_shower_timer
+      alias: Badkamer - Douchetimer
+      description: >-
+        Knippert de badkamerlampen elke vier minuten kort zolang er gedoucht
+        wordt, zodat je weet hoe lang je onder de douche staat. Het aantal
+        knippers is het aantal blokken van vier minuten.
+      mode: single
+      # Silent: gaat de kraan tijdens een lopende sessie even uit en weer aan
+      # (inzepen), dan vuurt de starttrigger opnieuw. Die hoort dan niets te
+      # doen - de telling loopt al - en zeker geen waarschuwing in het log.
+      max_exceeded: silent
+      triggers:
+        # Een minuut aaneengesloten water. Een wc-spoeling duurt een seconde of
+        # vijftien en handen wassen nog minder, dus die komen hier niet doorheen.
+        # De meter flikkert tussen 6, 12, 18 en 24 L/min - allemaal boven nul -
+        # en valt bij een korte onderbreking even terug op 0; dan begint deze
+        # minuut opnieuw. Op 10 augustus leverde dat een start op 20:35:27, dus
+        # bijna een minuut eerder dan de luchtvochtigheid het had gezien.
+        - trigger: numeric_state
+          entity_id: sensor.meterkast_slimhuys_zonneplan_waterdebiet
+          above: 0
+          for: "00:01:00"
+      conditions:
+        # De poort die van "er loopt ergens water" een douche maakt.
+        - condition: state
+          entity_id: light.badkamer_lampen
+          state: "on"
+      actions:
+        - repeat:
+            sequence:
+              # WACHTEN TOT HET VOLGENDE VIERMINUTENPUNT, OF TOT HET KLAAR IS
+              #
+              # De eerste ronde wacht drie minuten en niet vier: de trigger
+              # hierboven vuurt pas nadat het water al een minuut liep, dus die
+              # minuut is al verstreken. Zo valt de eerste knipper op het echte
+              # vierminutenpunt van de douche en niet een minuut te laat.
+              #
+              # `wait_for_trigger` en geen kale `delay`: zo stopt de lus meteen
+              # als de douche klaar is, in plaats van pas bij het volgende
+              # vierminutenpunt.
+              - wait_for_trigger:
+                  - trigger: numeric_state
+                    entity_id: sensor.meterkast_slimhuys_zonneplan_waterdebiet
+                    below: 1
+                    for: "00:02:00"
+                  # Een minuut, want de bewegingsmelder haalt het licht tijdens
+                  # het douchen af en toe even weg: op 10 augustus ging de lamp
+                  # om 20:45:12 uit en om 20:45:16 weer aan. Zonder die minuut
+                  # zou dat de telling afbreken.
+                  - trigger: state
+                    entity_id: light.badkamer_lampen
+                    to: "off"
+                    for: "00:01:00"
+                timeout: "{{ '00:03:00' if repeat.index == 1 else '00:04:00' }}"
+                continue_on_timeout: true
+              # EÉN UITGANG, EN DIE KIJKT NAAR DE TOESTAND ZELF
+              # Niet naar `wait.trigger`, want een `numeric_state`-trigger met
+              # `for` heeft een overgang nodig. Valt het debiet net tijdens de
+              # knipper hierboven terug naar nul, dan is die overgang al geweest
+              # voordat de volgende `wait_for_trigger` staat te kijken en vuurt
+              # hij nooit meer - en dan zou de lus vrolijk doorknipperen tot de
+              # bovengrens. Deze controle leest gewoon hoe het er nú voor staat
+              # en heeft dat probleem niet; de triggers hierboven zijn er alleen
+              # om er snel bij te zijn.
+              - alias: Douche voorbij of niemand meer in de badkamer
+                if:
+                  - condition: or
+                    conditions:
+                      - alias: Water staat al twee minuten stil
+                        condition: template
+                        value_template: >-
+                          {% set s = states.sensor.meterkast_slimhuys_zonneplan_waterdebiet %}
+                          {{ s is not none
+                             and s.state | float(0) < 1
+                             and (now() - s.last_changed).total_seconds() > 120 }}
+                      - condition: state
+                        entity_id: light.badkamer_lampen
+                        state: "off"
+                        for: "00:01:00"
+                then:
+                  - stop: "Douche voorbij"
+              # ZOVEEL KNIPPERS ALS ER BLOKKEN VAN VIER MINUTEN OM ZIJN
+              # Eén knipper per keer zou ook kunnen, maar dan is de knipper op
+              # vier minuten niet te onderscheiden van die op zestien - en juist
+              # dat wil je weten. Nu is tweemaal knipperen "acht minuten".
+              # Boven de vijf houdt het op; daarna is het signaal toch vooral
+              # "je staat er lang genoeg".
+              - variables:
+                  blok: "{{ repeat.index }}"
+              - repeat:
+                  count: "{{ [blok | int(1), 5] | min }}"
+                  sequence:
+                    # `effect: blink` is de Identify-knipper van het
+                    # zigbee-apparaat zelf: één commando, geen stand die
+                    # onthouden en teruggezet moet worden. Dat is hier het
+                    # verschil tussen wel en niet veilig - dimmen-en-herstellen
+                    # laat de badkamer op 1% staan zodra dat tweede commando
+                    # sneuvelt, en dat gebeurt in dit huis nu eenmaal.
+                    - action: light.turn_on
+                      target:
+                        entity_id: light.badkamer_lampen
+                      data:
+                        effect: blink
+                      continue_on_error: true
+                    - delay: "00:00:02"
+            # Bovengrens: een uur. Puur een noodrem voor het geval het water
+            # blijft lopen en het licht aan blijft.
+            until:
+              - condition: template
+                value_template: "{{ repeat.index >= 15 }}"
