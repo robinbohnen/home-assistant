@@ -44,6 +44,7 @@ music_package:
       triggers:
         - trigger: time
           at: "09:00:00"
+          id: ochtend
         - trigger: state
           entity_id:
             - light.woonkamer_lampen
@@ -122,34 +123,52 @@ music_package:
       # Zat een kinderkamer om 09:00 al in de woonkamergroep - blijven hangen
       # van gisteren, of met de hand via de "Gehele huis samen"-knop - dan
       # houdt `kinderkamers` hem daar niet uit, en begint de radio alsnog naast
-      # een slapend kind. Vandaar `kinderkamers_los` en de unjoin hieronder.
+      # een slapend kind. Vandaar `speakers_los` en de unjoin hieronder.
+      #
+      # Datzelfde geldt voor de overkapping. Die hoort 's ochtends niet
+      # standaard mee te spelen - buiten geluid is een keuze die je zelf maakt,
+      # via de tuinknop of de dashboardkaart (allebei
+      # script.sonos_overkapping_toggle in Sonos Groups.yaml). Hij staat daarom
+      # niet in de joinlijst, maar hangt hij er van gisteravond nog aan, dan
+      # gaat hij bij de ochtendstart los.
+      #
+      # Alleen bij de ochtendstart, en dat is het verschil met de kinderkamers.
+      # Deze automatisering draait namelijk ook overdag: als de woonkamerlampen
+      # aangaan, en via `Music Play Default TV Off`. Zou de overkapping daar ook
+      # losgetrokken worden, dan valt op een zomeravond de tuin uit de groep op
+      # het moment dat de tv uitgaat - precies andersom dan bedoeld. Vandaar
+      # `trigger.id`; bij een aanroep via `automation.trigger` (de TV-off-
+      # automatisering en de Q-Music-knop) bestaat die niet, en dat is hier
+      # dus ook het goede antwoord.
       variables:
+        ochtend: "{{ (trigger | default({})).get('id', '') == 'ochtend' }}"
         wakker: "{{ is_state('input_boolean.klimaat_wakker', 'on') }}"
         kinderkamers: >-
           {{ ['media_player.slaapkamer_maxi_sonos',
               'media_player.slaapkamer_mini_sonos']
              if wakker else [] }}
-        # Alleen de kinderkamers die op dít moment echt in de groep zitten.
-        # Zo blijft een unjoin op een speaker die er al los van staat achterwege.
-        kinderkamers_los: >-
-          {{ [] if wakker else
-             ['media_player.slaapkamer_maxi_sonos',
-              'media_player.slaapkamer_mini_sonos']
+        # Alleen de speakers die op dít moment echt in de groep zitten. Zo
+        # blijft een unjoin op een speaker die er al los van staat achterwege.
+        speakers_los: >-
+          {{ ((['media_player.overkapping_sonos'] if ochtend else [])
+              + ([] if wakker else
+                 ['media_player.slaapkamer_maxi_sonos',
+                  'media_player.slaapkamer_mini_sonos']))
              | select('in', state_attr('media_player.woonkamer_sonos', 'group_members') or [])
              | list }}
       actions:
         # Eerst loskoppelen, dan pas volume en join: de groep moet kloppen
         # voordat er geluid is, om dezelfde reden als bij de join hieronder.
-        - alias: Slapende kinderkamers uit de groep halen
+        - alias: Overkapping en slapende kinderkamers uit de groep halen
           if:
             - condition: template
-              value_template: "{{ kinderkamers_los | count > 0 }}"
+              value_template: "{{ speakers_los | count > 0 }}"
           then:
             - action: media_player.unjoin
               continue_on_error: true
               data: {}
               target:
-                entity_id: "{{ kinderkamers_los }}"
+                entity_id: "{{ speakers_los }}"
         - action: media_player.volume_set
           metadata: {}
           data:
