@@ -596,6 +596,33 @@ brandweer_package:
                and trigger.to_state is not none
                and trigger.from_state.state != trigger.to_state.state }}
       actions:
+        # WELKE LAMPEN STONDEN ER UIT TOEN DE MELDING BINNENKWAM
+        # Nodig om ze naderhand weer uit te kunnen doen, en dat is nodig omdat
+        # het ontwapenen hieronder veel meer aanzet dan deze automatisering
+        # zelf. `alarm_control_panel.alarmo` op `disarmed` is namelijk het
+        # thuiskomst-signaal van het hele huis: elke kamer op
+        # blueprints/automation/robin/lights_onoff.yaml luistert erop, net als
+        # `Backyard - Lights`. Op 9 augustus 2026 om 23:37 en 23:40 ging
+        # daardoor binnen twee seconden werkelijk alles aan - keuken, woonkamer,
+        # tv-kast, hue-tafellamp, de brw-groepen en de hele achtertuin.
+        #
+        # Bij het weer aanzetten van het alarm gaat dat NIET vanzelf terug. Die
+        # blueprint dooft alleen als er geen volwassene meer thuis is, en bij een
+        # nachtelijke uitruk is dat precies niet het geval: Samantha ligt boven,
+        # dus het wordt `armed_home` en de "vertrek"-tak slaat over. Wat er
+        # daarna uitging waren alleen de vier groepen die hieronder met naam
+        # genoemd staan; de rest bleef de hele nacht branden. Nagemeten in de
+        # geschiedenis van 9 op 10 augustus.
+        #
+        # Vandaar deze momentopname: aan het eind gaat alles wat tóen uit stond
+        # en nu aan staat weer uit. Een lamp die al brandde blijft dus branden.
+        - alias: Onthoud welke lampen uit stonden
+          variables:
+            lampen_vooraf_uit: >-
+              {{ states.light
+                 | selectattr('state', 'eq', 'off')
+                 | map(attribute='entity_id')
+                 | list }}
         - parallel:
             - alias: Zet bericht op de keukenklok
               # DE STAND VAN DE KLOK ZELF, NIET EEN TWEEDE AFLEIDING ERVAN
@@ -939,6 +966,33 @@ brandweer_package:
                           - light.eettafel_lampen
                           - light.speelkamer_lampen
                       action: light.turn_off
+                    # EN DE REST VAN HET HUIS, DAT DOOR HET ONTWAPENEN AANGING
+                    # De vier hierboven blijven met naam staan: die zet deze
+                    # automatisering zelf aan, en die horen hoe dan ook uit -
+                    # ook als er eentje toevallig al brandde toen de melding
+                    # binnenkwam. Hieronder gaat alleen uit wat bij de melding
+                    # aantoonbaar uit stónd; zie de momentopname bovenaan de
+                    # acties. Wat er al brandde raken we niet aan.
+                    #
+                    # Dit staat expres vóór het alarm hieronder, in dezelfde
+                    # volgorde als de regel erboven: eerst het huis donker, dan
+                    # pas op scherp.
+                    - alias: Wat door het ontwapenen aanging ook weer uit
+                      variables:
+                        weer_uit: >-
+                          {% set aan_nu = states.light
+                             | selectattr('state', 'eq', 'on')
+                             | map(attribute='entity_id')
+                             | list %}
+                          {{ lampen_vooraf_uit | select('in', aan_nu) | list }}
+                    - if:
+                        - condition: template
+                          value_template: "{{ weer_uit | count > 0 }}"
+                      then:
+                        - action: light.turn_off
+                          data: {}
+                          target:
+                            entity_id: "{{ weer_uit }}"
                     - alias: Alarm weer aanzetten
                       choose:
                         - conditions:
