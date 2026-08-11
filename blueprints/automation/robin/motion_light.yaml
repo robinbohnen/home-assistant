@@ -16,6 +16,9 @@
 # De dubbele-uit uit de hal (transition-uit die soms niet aankomt) is hier
 # veralgemeend: na het uitzetten wordt even gewacht en alleen als de lamp dan
 # nog aan staat, gaat er een tweede uit-commando zonder transition achteraan.
+# Sinds 11 augustus 2026 geldt hetzelfde voor het AANzetten, en telt een deur
+# die net open- of dichtging als aanwezigheid. Zie de toelichting bij beide
+# takken onderaan; ze komen allebei uit één ochtend in de badkamer.
 blueprint:
   name: Bewegingslicht
   description: >-
@@ -176,6 +179,21 @@ variables:
   lux_sensor: !input lux_sensor
   lux_drempel: !input lux_drempel
   volwassenen: !input volwassenen
+  deur_contacten: !input deur_contacten
+  uit_na: !input uit_na
+  # De duration-selector levert {hours, minutes, seconds}; een met de hand
+  # geschreven "00:02:00" wordt ook nog begrepen. In seconden nodig omdat de
+  # deur-coulance onderaan met `last_changed` rekent.
+  uit_na_sec: >-
+    {% if uit_na is mapping %}
+      {{ (uit_na.days | default(0) | int) * 86400
+         + (uit_na.hours | default(0) | int) * 3600
+         + (uit_na.minutes | default(0) | int) * 60
+         + (uit_na.seconds | default(0) | int) }}
+    {% else %}
+      {% set p = (uit_na | string).split(':') | map('int') | list %}
+      {{ p[0] * 3600 + p[1] * 60 + p[2] }}
+    {% endif %}
 
 triggers:
   - trigger: state
@@ -256,6 +274,29 @@ actions:
             data:
               transition: "{{ states(overgang) | int(1) }}"
               brightness_pct: "{{ states(helderheid) | int(100) }}"
+          # DE DUBBELE AAN, spiegelbeeld van de dubbele uit hieronder
+          # Ook een aan-commando komt niet altijd aan. Op 11 augustus 2026 ging
+          # om 08:05:30 de badkamerdeur open, vuurde deze automatisering keurig
+          # (dat staat in het logboek) en bleef het licht toch uit; het ging pas
+          # 68 seconden later met de hand aan. Even kijken of de lamp echt
+          # brandt en zo niet nog een keer sturen, nu zonder transition - dat is
+          # hetzelfde recept dat de hal voor het uitzetten al had.
+          #
+          # Alleen bij een lamp die hard `off` meldt: bij `unavailable` heeft
+          # een tweede commando toch geen zin en hoort het bij de zigbee-radio
+          # thuis, niet hier.
+          - wait_template: "{{ is_state(lamp, 'on') }}"
+            timeout: "{{ states(overgang) | int(1) + 3 }}"
+            continue_on_timeout: true
+          - if:
+              - condition: template
+                value_template: "{{ is_state(lamp, 'off') }}"
+            then:
+              - action: light.turn_on
+                target:
+                  entity_id: !input lamp
+                data:
+                  brightness_pct: "{{ states(helderheid) | int(100) }}"
 
       - conditions:
           - condition: trigger
@@ -266,6 +307,54 @@ actions:
             condition: and
             conditions: !input uit_vereisten
         sequence:
+          # EEN DEUR DIE NET BEWOOG TELT OOK ALS AANWEZIGHEID
+          # De uit-trigger hangt alleen aan de bewegingsmelder, en die staat na
+          # een lange bezetting soms al bijna twee minuten op `off` terwijl er
+          # net iemand binnenkomt. Op 11 augustus 2026 ging om 08:17:21 de
+          # badkamerdeur open en om 08:18:01 - veertig seconden later - het
+          # licht uit, want toen was de PIR precies `uit_na` lang stil. Wie net
+          # binnenstapt staat dan in het donker te wachten tot de melder hem
+          # oppikt, en juist dat wachten is wat je van een bewegingslicht niet
+          # verwacht.
+          #
+          # Dus: gebeurde er korter dan `uit_na` geleden iets met een deur, dan
+          # wachten we op de volgende deurbeweging - en blijft die uit, dan op
+          # de stilte daarna. Open én dicht tellen allebei: allebei betekenen
+          # ze dat er iemand loopt, en de deur achter je dichtdoen is nu net het
+          # gebaar waarna je het licht wilt houden.
+          #
+          # Dit wordt bewust in de actie afgehandeld en niet met extra
+          # deur-triggers bovenaan: triggers met `for` gaan na een herstart van
+          # Home Assistant alsnog af op de teruggezette begintoestand, en dat is
+          # precies het lek van 6 augustus dat de `not_from`-guard hierboven
+          # dichtzette. Een `wait_for_trigger` bestaat alleen zolang deze tak
+          # loopt en heeft dat probleem niet.
+          #
+          # Beweging tijdens het wachten herstart de hele automatisering
+          # (`mode: restart`) en zet het licht gewoon weer aan; een expliciete
+          # uit-knop (`id: uit`) slaat het wachten over en doet wat er staat.
+          - alias: Wachten zolang de deur nog van zich laat horen
+            repeat:
+              while:
+                - condition: template
+                  value_template: >-
+                    {% set ns = namespace(recent=false) %}
+                    {% for s in expand(deur_contacten) %}
+                      {% if (now() - s.last_changed).total_seconds()
+                            < uit_na_sec | int %}
+                        {% set ns.recent = true %}
+                      {% endif %}
+                    {% endfor %}
+                    {{ trigger.id != 'uit' and ns.recent }}
+              sequence:
+                - wait_for_trigger:
+                    - trigger: state
+                      entity_id: !input deur_contacten
+                      to:
+                        - "on"
+                        - "off"
+                  timeout: "{{ uit_na_sec | int }}"
+                  continue_on_timeout: true
           - action: light.turn_off
             target:
               entity_id: !input lamp

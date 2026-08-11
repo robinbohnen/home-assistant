@@ -1,5 +1,5 @@
 ##############################################################################
-## DOUCHETIMER - elke vier minuten een knipper, zodat je weet hoe lang je staat
+## DOUCHETIMER - elke vijf minuten een knipper, zodat je weet hoe lang je staat
 ##############################################################################
 ##
 ## WAAROM WATERDEBIET EN NIET DE LUCHTVOCHTIGHEID
@@ -14,7 +14,7 @@
 ##   20:36:23  luchtvochtigheid 56,6 -> 64,8 %   <- pas hier zichtbaar
 ##
 ## Tweeënhalve minuut te laat, en dat is precies de fout die je in een
-## vierminutensignaal niet wilt hebben. Erger: de luchtvochtigheid zegt niets
+## vijfminutensignaal niet wilt hebben. Erger: de luchtvochtigheid zegt niets
 ## over het STOPPEN. Na die beurt stond hij nog een uur boven de 70%, dus je
 ## kunt er niet aan zien of de kraan nog loopt - en dus ook niet of er een
 ## tweede iemand onder staat.
@@ -23,10 +23,11 @@
 ## was of je een douche eruit kunt pikken. Over 8 t/m 10 augustus geanalyseerd:
 ## 121 keer liep er ergens water, waarvan 24 keer langer dan anderhalve minuut,
 ## maar SLECHTS VIER KEER langer dan vier minuten aaneengesloten - en dat waren
-## exact de vier douchebeurten van die twee dagen. Alles wat korter is (wc,
-## handen, de vaatwasser die vult) haalt de eerste knipper op vier minuten
-## sowieso niet. Met de badkamerlamp erbij als voorwaarde blijft er weinig
-## ruimte voor vergissingen over.
+## exact de vier douchebeurten van die twee dagen. De eerste knipper valt op
+## vijf minuten, dus die zeef is nog een slag strenger dan wat hier gemeten is:
+## alles wat korter is (wc, handen, de vaatwasser die vult) haalt hem sowieso
+## niet. Met de badkamerlamp erbij als voorwaarde blijft er weinig ruimte voor
+## vergissingen over.
 ##
 ## De luchtvochtigheid wordt hier dus niet gebruikt. Wil je hem er ooit als
 ## extra zekerheid bij, dan is de bruikbare drempel +3% binnen 6 minuten: dat
@@ -51,9 +52,9 @@ bathroom_shower_package:
     - id: bathroom_shower_timer
       alias: Badkamer - Douchetimer
       description: >-
-        Knippert de badkamerlampen elke vier minuten kort zolang er gedoucht
+        Knippert de badkamerlampen elke vijf minuten kort zolang er gedoucht
         wordt, zodat je weet hoe lang je onder de douche staat. Het aantal
-        knippers is het aantal blokken van vier minuten.
+        knippers is het aantal blokken van vijf minuten.
       mode: single
       # Silent: gaat de kraan tijdens een lopende sessie even uit en weer aan
       # (inzepen), dan vuurt de starttrigger opnieuw. Die hoort dan niets te
@@ -78,16 +79,16 @@ bathroom_shower_package:
       actions:
         - repeat:
             sequence:
-              # WACHTEN TOT HET VOLGENDE VIERMINUTENPUNT, OF TOT HET KLAAR IS
+              # WACHTEN TOT HET VOLGENDE VIJFMINUTENPUNT, OF TOT HET KLAAR IS
               #
-              # De eerste ronde wacht drie minuten en niet vier: de trigger
+              # De eerste ronde wacht vier minuten en niet vijf: de trigger
               # hierboven vuurt pas nadat het water al een minuut liep, dus die
               # minuut is al verstreken. Zo valt de eerste knipper op het echte
-              # vierminutenpunt van de douche en niet een minuut te laat.
+              # vijfminutenpunt van de douche en niet een minuut te laat.
               #
               # `wait_for_trigger` en geen kale `delay`: zo stopt de lus meteen
               # als de douche klaar is, in plaats van pas bij het volgende
-              # vierminutenpunt.
+              # vijfminutenpunt.
               - wait_for_trigger:
                   - trigger: numeric_state
                     entity_id: sensor.meterkast_slimhuys_zonneplan_waterdebiet
@@ -101,7 +102,7 @@ bathroom_shower_package:
                     entity_id: light.badkamer_lampen
                     to: "off"
                     for: "00:01:00"
-                timeout: "{{ '00:03:00' if repeat.index == 1 else '00:04:00' }}"
+                timeout: "{{ '00:04:00' if repeat.index == 1 else '00:05:00' }}"
                 continue_on_timeout: true
               # EÉN UITGANG, EN DIE KIJKT NAAR DE TOESTAND ZELF
               # Niet naar `wait.trigger`, want een `numeric_state`-trigger met
@@ -131,16 +132,16 @@ bathroom_shower_package:
                   - stop: "Douche voorbij"
               - variables:
                   blok: "{{ repeat.index }}"
-                  minuten: "{{ repeat.index * 4 }}"
+                  minuten: "{{ repeat.index * 5 }}"
               # Knipperen en omroepen tegelijk, en niet na elkaar: de knippers
               # duren met vijf stuks tien seconden en dan zou de stem daar
               # achteraan komen sukkelen.
               - parallel:
-                  # ZOVEEL KNIPPERS ALS ER BLOKKEN VAN VIER MINUTEN OM ZIJN
+                  # ZOVEEL KNIPPERS ALS ER BLOKKEN VAN VIJF MINUTEN OM ZIJN
                   # Nu er ook een stem is die het getal noemt, is dit vooral
                   # het vangnet: de Sonos kan uit staan, losgekoppeld zijn of
                   # net onbereikbaar. Het licht is er altijd, en tweemaal
-                  # knipperen blijft "acht minuten". Boven de vijf houdt het op.
+                  # knipperen blijft "tien minuten". Boven de vijf houdt het op.
                   - alias: Kort knipperen met de badkamerlampen
                     repeat:
                       count: "{{ [blok | int(1), 5] | min }}"
@@ -187,8 +188,110 @@ bathroom_shower_package:
                         media_content_id: >-
                           media-source://tts/tts.google_translate_nl_nl?message={{
                           ('Je doucht nu ' ~ minuten ~ ' minuten.') | urlencode }}
-            # Bovengrens: een uur. Puur een noodrem voor het geval het water
-            # blijft lopen en het licht aan blijft.
+            # Bovengrens: een uur (twaalf blokken van vijf minuten). Puur een
+            # noodrem voor het geval het water blijft lopen en het licht aan
+            # blijft.
             until:
               - condition: template
-                value_template: "{{ repeat.index >= 15 }}"
+                value_template: "{{ repeat.index >= 12 }}"
+
+    ##########################################################################
+    ## VIJFENZEVENTIG LITER
+    ##########################################################################
+    ##
+    ## De minutenteller hierboven zegt hoe lang je staat, deze zegt hoeveel er
+    ## doorheen gaat - en dat is niet hetzelfde getal. De douchebeurt van 11
+    ## augustus 2026 duurde zeven minuten en kostte 89 liter; 75 liter viel
+    ## daarin op 08:13:20, ruim ná de knipper van vijf minuten en ruim vóór die
+    ## van tien. Precies daarom staat dit los van die lus: het moment waarop de
+    ## 75 liter vol is, valt nu eenmaal niet op een blokgrens.
+    ##
+    ## EEN APARTE AUTOMATISERING EN GEEN TAK IN DE LUS
+    ## In de lus hierboven zou een liter-uitgang de telling verzetten - de
+    ## volgende ronde begint dan opnieuw te wachten en het vijfminutenritme
+    ## loopt scheef. Los ernaast heeft elk zijn eigen klok.
+    ##
+    ## WAAROM DE METERSTAND EN NIET HET DEBIET
+    ## `sensor.slimhuys_zonneplan_water_totaal` telt in stappen van één liter en
+    ## meldt elke stap meteen: tijdens die douchebeurt kwam er gemiddeld elke
+    ## vijf seconden een nieuwe waarde binnen. Optellen van het debiet zou een
+    ## eigen integratie vragen en zou de foutjes van een sensor die tussen 6,
+    ## 12, 18 en 24 L/min heen en weer springt netjes opstapelen.
+    ##
+    ## HET NULPUNT
+    ## Deze begint bij de éérste liter en niet, zoals de minutenteller, pas na
+    ## een minuut lopend water: die minuut is bij een douche al gauw twaalf
+    ## liter, en dan zou "75 liter" er in werkelijkheid bijna negentig zijn.
+    ## De prijs daarvan is dat een wc-spoeling vlak voor het douchen in de
+    ## telling meeloopt (een liter of zes). Dat is geen fout: er is dan ook echt
+    ## water verbruikt. Blijft het bij die spoeling, dan haalt hij de 75 nooit
+    ## en stopt hij vanzelf zodra het water twee minuten stilstaat.
+    ##########################################################################
+    - id: bathroom_shower_liters
+      alias: Badkamer - Douche vijfenzeventig liter
+      description: >-
+        Zegt eenmalig op de badkamerspeaker dat er 75 liter verbruikt is,
+        gerekend vanaf het moment dat de kraan opengaat met de badkamerlamp aan.
+      mode: single
+      # Zelfde reden als bij de douchetimer: gaat de kraan tijdens het inzepen
+      # even uit en weer aan, dan vuurt de trigger opnieuw terwijl de telling
+      # al loopt. Dat hoort niets te doen en zeker niets in het log.
+      max_exceeded: silent
+      triggers:
+        - trigger: numeric_state
+          entity_id: sensor.meterkast_slimhuys_zonneplan_waterdebiet
+          above: 0
+      conditions:
+        - condition: state
+          entity_id: light.badkamer_lampen
+          state: "on"
+      variables:
+        # Automatiseringsvariabelen worden bij het afgaan van de trigger
+        # gerenderd, dus dit is de meterstand van het moment dat de kraan
+        # opengaat. In liters, want de meter staat in m³.
+        start_liter: >-
+          {{ states('sensor.slimhuys_zonneplan_water_totaal') | float(0) * 1000 }}
+      actions:
+        - alias: Wachten op de 75e liter, of op het einde van de douche
+          wait_for_trigger:
+            - trigger: template
+              id: liters
+              value_template: >-
+                {{ states('sensor.slimhuys_zonneplan_water_totaal') | float(0) * 1000
+                   - start_liter >= 75 }}
+            # Dezelfde twee einde-signalen als de douchetimer: twee minuten
+            # stilstaand water, of een minuut donkere badkamer. Zie de
+            # toelichting daar voor waarom het twee en één minuut zijn.
+            - trigger: numeric_state
+              entity_id: sensor.meterkast_slimhuys_zonneplan_waterdebiet
+              below: 1
+              for: "00:02:00"
+            - trigger: state
+              entity_id: light.badkamer_lampen
+              to: "off"
+              for: "00:01:00"
+          # Noodrem, net als de twaalf blokken hierboven: zonder deze zou een
+          # einde-signaal dat nooit komt (meter blijft hangen) deze
+          # automatisering laten staan, en `mode: single` houdt de volgende
+          # douche dan buiten de deur.
+          timeout: "01:00:00"
+          continue_on_timeout: true
+        - alias: Alleen omroepen als het de liters waren en niet het einde
+          condition: template
+          value_template: "{{ wait.trigger is not none and wait.trigger.id == 'liters' }}"
+        # Alleen een stem, geen knippers: het licht telt hier de vijf minuten
+        # en een extra knipper zou als een blok gelezen worden.
+        - alias: Omroepen op de badkamerspeaker
+          action: media_player.play_media
+          continue_on_error: true
+          target:
+            entity_id: media_player.badkamer_sonos
+          data:
+            announce: true
+            extra:
+              volume: 50
+            media:
+              media_content_type: music
+              media_content_id: >-
+                media-source://tts/tts.google_translate_nl_nl?message={{
+                'Je hebt nu vijfenzeventig liter water verbruikt.' | urlencode }}
