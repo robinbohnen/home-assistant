@@ -1,4 +1,186 @@
 covers_package:
+  ###########################################################################
+  ## EEN COVER ZETTEN EN NAKIJKEN OF HIJ HET DEED
+  ##
+  ## De keukenrolgordijnen missen af en toe een commando. Ze melden hun echte
+  ## stand daarna gewoon netjes, dus je kunt zien dát ze niets gedaan hebben -
+  ## alleen keek er tot nu toe niemand.
+  ##
+  ## Op 10 augustus 2026 goed te zien in de geschiedenis: om 18:45:45 sloot het
+  ## rechter rolgordijn zoals bedoeld, het linker deed helemaal niets en bleef
+  ## de hele avond op 42 staan. Pas om 22:12 ging hij alsnog dicht.
+  ##
+  ## WAAROM DE BESTAANDE VANGNETTEN DAT NIET OPVINGEN
+  ## `klimaat_zonwering_uitvoeren` kijkt elk kwartier of de stand nog bij het
+  ## advies past en stuurt bij - dat is precies zo'n vangnet. Maar de twee
+  ## sluiters hierboven en in Kitchen/Covers.yaml starten bij het sluiten
+  ## meteen de override-timer van die zone (met goede reden, zie de uitleg
+  ## daar), en een zone op override laat de uitvoerder juist met rust. Het
+  ## vangnet staat dus uit op precies het moment dat het nodig is.
+  ##
+  ## WAT DIT SCRIPT WEL EN NIET DOET
+  ## Het stuurt het commando nog een paar keer, met oplopende tussenpozen, maar
+  ## ALLEEN zolang de cover geen millimeter bewogen heeft. Dat is namelijk de
+  ## handtekening van een gemist commando. Beweegt hij wél en komt hij ergens
+  ## anders uit - iemand pakt de app, of hij stopt tegen een obstakel - dan
+  ## houdt het script op. Anders zou het met een mens gaan vechten, en dat is
+  ## erger dan een rolgordijn dat verkeerd staat.
+  ##
+  ## Aanroepen met `script.turn_on` en niet rechtstreeks: een ronde duurt tot
+  ## ruim twintig minuten en de aanroeper (een automatisering die ook andere
+  ## dingen doet) hoort daar niet op te blijven staan.
+  ###########################################################################
+  script:
+    cover_zetten_en_nakijken:
+      alias: Cover - Zetten en nakijken
+      description: >-
+        Zet een cover op een stand en controleert of hij het commando ook
+        uitgevoerd heeft. Deed hij helemaal niets, dan gaat het commando er nog
+        een paar keer overheen.
+      icon: mdi:window-shutter-auto
+      # Parallel: vier rolgordijnen/rolluiken tegelijk in de gaten houden moet
+      # kunnen, en twee sluiters die vlak na elkaar dezelfde cover aansturen
+      # (18:45 slot/alarm en de avondsluiting) mogen elkaar niet wegdrukken.
+      mode: parallel
+      max: 10
+      fields:
+        cover:
+          name: Cover
+          description: De cover die gezet moet worden
+          required: true
+          example: cover.rollerblind_0001
+          selector:
+            entity:
+              domain: cover
+        doel:
+          name: Gewenste stand
+          description: 0 is dicht, 100 is open
+          required: true
+          example: 0
+          selector:
+            number:
+              min: 0
+              max: 100
+        wachttijden:
+          name: Wachttijden per poging
+          description: >-
+            Hoe lang er per poging op beweging gewacht wordt. Het aantal
+            wachttijden ís het aantal pogingen; de oplopende reeks vangt zowel
+            een enkel verdwenen commando op als een radio die even weg is.
+          default:
+            - "00:01:30"
+            - "00:05:00"
+            - "00:15:00"
+          selector:
+            object:
+        melden:
+          name: Melden als het niet lukt
+          default: true
+          selector:
+            boolean:
+      sequence:
+        # Marge van 5, dezelfde als in `klimaat_zonwering_uitvoeren`: een
+        # rolgordijn stopt zelden op de punt en 42 tegen 45 is geen verschil
+        # waar iemand iets van merkt.
+        #
+        # Covers zonder tussenstand kennen geen `current_position`; die
+        # vertalen we naar 100 of 0, net als de klimaatuitvoerder doet. Een
+        # cover die niets zinnigs meldt levert -1 op en telt daarmee nooit als
+        # "staat al goed".
+        #
+        # De twee ankers hieronder zijn er zodat deze twee uitdrukkingen maar
+        # één keer in het bestand staan: `bereikt` (staat hij waar we hem
+        # willen) en `huidig` (waar staat hij nu). Ze worden op elk gebruik
+        # opnieuw gerenderd - een anker deelt de tekst, niet de uitkomst.
+        - alias: Staat hij al goed, dan is er niets te doen
+          if:
+            - condition: template
+              value_template: &bereikt >-
+                {% set p = state_attr(cover, 'current_position') %}
+                {% set h = p | int(-1) if p is not none
+                           else (100 if is_state(cover, 'open')
+                                 else (0 if is_state(cover, 'closed') else -1)) %}
+                {{ h >= 0 and (h - (doel | int(-1))) | abs <= 5 }}
+          then:
+            - stop: "Stond al op de gevraagde stand"
+        - repeat:
+            for_each: >-
+              {{ wachttijden | default(['00:01:30', '00:05:00', '00:15:00'], true) }}
+            sequence:
+              - variables:
+                  stand_vooraf: &huidig >-
+                    {% set p = state_attr(cover, 'current_position') %}
+                    {{ p | int(-1) if p is not none
+                       else (100 if is_state(cover, 'open')
+                             else (0 if is_state(cover, 'closed') else -1)) }}
+              - choose:
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ doel | int(-1) >= 95 }}"
+                    sequence:
+                      - action: cover.open_cover
+                        target:
+                          entity_id: "{{ cover }}"
+                        continue_on_error: true
+                  - conditions:
+                      - condition: template
+                        value_template: "{{ doel | int(-1) <= 5 }}"
+                    sequence:
+                      - action: cover.close_cover
+                        target:
+                          entity_id: "{{ cover }}"
+                        continue_on_error: true
+                default:
+                  - action: cover.set_cover_position
+                    target:
+                      entity_id: "{{ cover }}"
+                    data:
+                      position: "{{ doel | int }}"
+                    continue_on_error: true
+              # Wachten tot hij er is, en niet blind een vaste tijd: een
+              # geslaagd commando is meestal binnen een halve minuut rond en
+              # dan hoeft er niets meer.
+              - wait_template: *bereikt
+                timeout: "{{ repeat.item }}"
+                continue_on_timeout: true
+              - variables:
+                  huidig_na: *huidig
+              - alias: Gelukt
+                if:
+                  - condition: template
+                    value_template: >-
+                      {{ huidig_na | int(-1) >= 0
+                         and (huidig_na | int(-1) - (doel | int(-1))) | abs <= 5 }}
+                then:
+                  - stop: "Cover staat op de gevraagde stand"
+              # HIJ BEWOOG WEL, MAAR NIET NAAR WAAR WIJ HEM WILDEN
+              # Dan is het geen gemist commando. Iemand bedient hem met de hand,
+              # of hij loopt ergens tegenaan. In beide gevallen is nog eens
+              # hetzelfde commando sturen precies het verkeerde.
+              - alias: Beweegt zelf - niet tegenwerken
+                if:
+                  - condition: template
+                    value_template: "{{ huidig_na | int(-1) != stand_vooraf | int(-1) }}"
+                then:
+                  - stop: "Cover beweegt, maar ergens anders heen"
+        - alias: Alle pogingen gehad en hij staat er nog steeds niet
+          if:
+            - condition: template
+              value_template: "{{ melden | default(true, true) }}"
+          then:
+            - action: notify.mobile_devices_robin
+              data:
+                title: Cover reageert niet
+                message: >-
+                  {{ state_attr(cover, 'friendly_name') | default(cover, true) }}
+                  heeft alle pogingen genegeerd en staat nog op
+                  {% set p = state_attr(cover, 'current_position') %}
+                  {{ p if p is not none else states(cover) }} in plaats van
+                  {{ doel | int }}.
+                data:
+                  tag: "cover-reageert-niet-{{ cover }}"
+                  notification_icon: mdi:window-shutter-alert
+
   group:
     # LET OP: dit zijn dezelfde zeven ramen als `cover.all_covers_upstairs` in
     # packages/2 - Second Floor/Attic/AC.yaml, maar dan de `_low_speed`-
@@ -60,10 +242,21 @@ covers_package:
               data: {}
               target:
                 entity_id: group.covers_first_floor
-            - action: cover.open_cover
-              data: {}
-              target:
-                entity_id: cover.covers_kitchen_rollerblinds
+            # Per rolgordijn en via het script, want de groep kan niet
+            # nakijken of allebei de helften het commando ook echt gehoord
+            # hebben; zie de kop van dit bestand.
+            - repeat:
+                for_each:
+                  - cover.rollerblind_0001
+                  - cover.rollerblind_0002
+                sequence:
+                  - action: script.turn_on
+                    target:
+                      entity_id: script.cover_zetten_en_nakijken
+                    data:
+                      variables:
+                        cover: "{{ repeat.item }}"
+                        doel: 100
 
     #################################################################
     ## Lock/alarm events - open/close kitchen rollerblinds
@@ -118,10 +311,18 @@ covers_package:
                       before: sunset
                       before_offset: "-00:30:00"
                   then:
-                    - action: cover.open_cover
-                      data: {}
-                      target:
-                        entity_id: cover.covers_kitchen_rollerblinds
+                    - repeat:
+                        for_each:
+                          - cover.rollerblind_0001
+                          - cover.rollerblind_0002
+                        sequence:
+                          - action: script.turn_on
+                            target:
+                              entity_id: script.cover_zetten_en_nakijken
+                            data:
+                              variables:
+                                cover: "{{ repeat.item }}"
+                                doel: 100
             - conditions:
                 - condition: trigger
                   id:
@@ -166,10 +367,13 @@ covers_package:
                           entity_id: binary_sensor.keuken_raam_groot_contact
                           state: "off"
                       then:
-                        - action: cover.close_cover
-                          data: {}
+                        - action: script.turn_on
                           target:
-                            entity_id: cover.rollerblind_0001
+                            entity_id: script.cover_zetten_en_nakijken
+                          data:
+                            variables:
+                              cover: cover.rollerblind_0001
+                              doel: 0
                         - action: timer.start
                           target:
                             entity_id: timer.override_keuken_rolgordijn_groot
@@ -178,10 +382,13 @@ covers_package:
                           entity_id: binary_sensor.keuken_raam_klein_contact
                           state: "off"
                       then:
-                        - action: cover.close_cover
-                          data: {}
+                        - action: script.turn_on
                           target:
-                            entity_id: cover.rollerblind_0002
+                            entity_id: script.cover_zetten_en_nakijken
+                          data:
+                            variables:
+                              cover: cover.rollerblind_0002
+                              doel: 0
                         - action: timer.start
                           target:
                             entity_id: timer.override_keuken_rolgordijn_klein

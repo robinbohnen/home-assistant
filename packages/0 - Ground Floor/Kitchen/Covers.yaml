@@ -112,10 +112,19 @@ kitchen_covers_package:
                   entity_id: cover.rollerblind_0001
                   state: closed
           then:
-            - action: cover.close_cover
+            # Via `script.cover_zetten_en_nakijken` (packages/9 - Other/
+            # Covers.yaml): dit rolgordijn mist het commando af en toe, en dan
+            # bleef hij tot nu toe de hele avond omhoog staan. Het script kijkt
+            # na of hij het gehoord heeft en stuurt het anders nog een paar keer.
+            # Met `script.turn_on`, want zo'n ronde kan twintig minuten duren en
+            # het tweede rolgordijn hieronder hoort daar niet op te wachten.
+            - action: script.turn_on
               target:
-                entity_id: cover.rollerblind_0001
-              continue_on_error: true
+                entity_id: script.cover_zetten_en_nakijken
+              data:
+                variables:
+                  cover: cover.rollerblind_0001
+                  doel: 0
         - if:
             - condition: state
               entity_id: binary_sensor.keuken_raam_klein_contact
@@ -126,7 +135,10 @@ kitchen_covers_package:
                   entity_id: cover.rollerblind_0002
                   state: closed
           then:
-            - action: cover.close_cover
+            - action: script.turn_on
               target:
-                entity_id: cover.rollerblind_0002
-              continue_on_error: true
+                entity_id: script.cover_zetten_en_nakijken
+              data:
+                variables:
+                  cover: cover.rollerblind_0002
+                  doel: 0
