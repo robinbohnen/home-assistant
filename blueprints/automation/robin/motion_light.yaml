@@ -16,9 +16,11 @@
 # De dubbele-uit uit de hal (transition-uit die soms niet aankomt) is hier
 # veralgemeend: na het uitzetten wordt even gewacht en alleen als de lamp dan
 # nog aan staat, gaat er een tweede uit-commando zonder transition achteraan.
-# Sinds 11 augustus 2026 geldt hetzelfde voor het AANzetten, en telt een deur
-# die net open- of dichtging als aanwezigheid. Zie de toelichting bij beide
-# takken onderaan; ze komen allebei uit één ochtend in de badkamer.
+# Sinds 11 augustus 2026 geldt hetzelfde voor het AANzetten, telt een deur die
+# net open- of dichtging als aanwezigheid, en kan een kamer het uitzetten
+# uitstellen zolang er iets loopt (`uit_uitstel`, in de badkamer: de douche).
+# Alle drie komen uit dezelfde ochtend in die badkamer; de toelichting staat
+# bij de takken onderaan.
 blueprint:
   name: Bewegingslicht
   description: >-
@@ -106,6 +108,17 @@ blueprint:
       description: >-
         Condities waaraan voldaan moet zijn vóór de lamp uitgaat, zoals "de tv
         in deze kamer staat uit". Leeg = altijd uitzetten na de wachttijd.
+      default: []
+      selector:
+        condition:
+    uit_uitstel:
+      name: Uitstel voor het uitzetten (optioneel)
+      description: >-
+        Condities die het uitzetten UITSTELLEN zolang ze waar zijn, zoals "er
+        loopt water" onder de douche. Anders dan `uit_vereisten` is dit geen
+        veto maar een pauze: zodra ze allemaal zakken gaat de lamp alsnog uit.
+        Meerdere condities gelden als OF - zolang er één waar is blijft de lamp
+        aan. Leeg = geen uitstel.
       default: []
       selector:
         condition:
@@ -355,6 +368,36 @@ actions:
                         - "off"
                   timeout: "{{ uit_na_sec | int }}"
                   continue_on_timeout: true
+          # EN DAARNA NOG WACHTEN OP WAT DE KAMER ZELF ZEGT
+          # De badkamer is hier de aanleiding: onder de douche sta je stil
+          # achter het gordijn, de melder verliest je en het licht ging uit
+          # terwijl je er nog stond. Zolang `uit_uitstel` waar is gaat de lamp
+          # niet uit, en zodra het zakt alsnog - dat is het verschil met
+          # `uit_vereisten`, dat het uitzetten hélemaal overslaat en de lamp dan
+          # tot de volgende bewegingscyclus laat branden.
+          #
+          # De lege lijst wordt hier door een `or` afgevangen en niet door een
+          # `and`: een lege `and` is in Home Assistant WAAR (daar leunen de
+          # `aan_blokkades` hierboven op) en zou elke kamer zonder uitstel
+          # eindeloos laten rondjes draaien. Een lege `or` is onwaar en valt dus
+          # meteen weg. Meegenomen voordeel: bij meerdere condities betekent
+          # `or` "zolang er één van waar is", en dat is precies wat uitstel
+          # hoort te doen.
+          - alias: Wachten zolang de kamer om licht blijft vragen
+            repeat:
+              while:
+                - alias: "Kamerspecifiek uitstel (lege lijst = geen uitstel)"
+                  condition: or
+                  conditions: !input uit_uitstel
+                # Een expliciete uit-knop wacht nergens op. En na een uur is het
+                # klaar: 120 rondjes van dertig seconden, dezelfde noodrem als
+                # de douchetimer, voor het geval een conditie blijft hangen.
+                - alias: "Geen uit-knop, en de noodrem is nog niet bereikt"
+                  condition: template
+                  value_template: >-
+                    {{ trigger.id != 'uit' and repeat.index <= 120 }}
+              sequence:
+                - delay: "00:00:30"
           - action: light.turn_off
             target:
               entity_id: !input lamp

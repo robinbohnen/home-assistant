@@ -34,6 +34,35 @@ bathroom_lights_package:
           lamp: light.badkamer_spots
           schakelaar: input_boolean.enable_pir_bathroom
           helderheid: input_number.lights_bathroom_percentage
+          # ZOLANG ER WATER LOOPT BLIJFT HET LICHT AAN
+          # Onder de douche sta je stil achter het gordijn: de melder verliest
+          # je en twee minuten later gaat het licht uit terwijl je er nog staat.
+          # Op 10 augustus 2026 is dat vastgelegd - de lamp ging om 20:45:12 uit
+          # en om 20:45:16 weer aan, midden in een douchebeurt (zie Douche.yaml,
+          # daar staat de tolerantie die dat moest opvangen). Dit lost het bij
+          # de bron op: loopt er water, dan gaat de lamp niet uit.
+          #
+          # DE TWEE MINUTEN NA DE LAATSTE DRUPPEL
+          # Anders zou het licht uitgaan op het moment dat je je staat in te
+          # zepen. Diezelfde twee minuten maken in Douche.yaml het verschil
+          # tussen een pauze en het einde van een douchebeurt; op 10 augustus
+          # zat er midden in één beurt een pauze van 62 seconden.
+          #
+          # DIT IS EEN HUISBREDE WATERMETER
+          # Loopt de wasmachine terwijl de badkamerlamp aan staat en er niemand
+          # is, dan blijft die lamp langer branden dan nodig. Dat is bewust de
+          # goede kant om fout te gaan: in het donker onder de douche staan is
+          # erger dan een lamp die te lang aan blijft. Wordt het een probleem,
+          # dan is de volgende stap een drempel op het verbruik in plaats van op
+          # "er loopt iets".
+          uit_uitstel:
+            - alias: Er loopt water, of het is nog geen twee minuten geleden
+              condition: template
+              value_template: >-
+                {% set s = states.sensor.meterkast_slimhuys_zonneplan_waterdebiet %}
+                {{ s is not none
+                   and (s.state | float(0) > 0
+                        or (now() - s.last_changed).total_seconds() < 120) }}
 
     # De helderheid-helper wordt hieronder met de zon meegeschakeld: fel
     # overdag, gedimd 's avonds en 's nachts. De blueprint leest de helper bij
