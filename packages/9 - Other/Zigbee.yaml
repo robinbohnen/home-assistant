@@ -186,17 +186,32 @@ zigbee_package:
     #
     # DRIE TREDEN, VAN ZACHT NAAR HARD:
     #
-    #   1. SLZB-core resetten -> tien minuten wachten of de bridge terugkomt
+    #   1. SLZB-core resetten -> vijf minuten wachten of de bridge terugkomt,
+    #      en dat tot zes keer herhalen (de laatste met het volle venster van
+    #      tien minuten)
     #   2. PoE-poort uit/aan  -> tien minuten wachten
     #   3. opgeven met een critical melding
     #
     # Die ladder staat onderaan dit bestand in `script.slzb_radio_terugzetten`;
     # hieronder staat alleen wanneer we hem voor Zigbee aanroepen en waarmee.
     #
+    # WAAROM TREDE 1 ZICH HERHAALT
+    # Tot 11 augustus 2026 was het één druk per ronde en één ronde per uur. In
+    # de nacht ervoor bleek dat te mager: Robin moest deze automatisering
+    # meermaals met de hand aanzetten voordat de coördinator terugkwam. Eén
+    # core-restart is dus niet betrouwbaar genoeg, en een uur wachten voor de
+    # volgende is veel te lang. Vandaar `zachte_pogingen` in het script, de
+    # `pauze` van vijf minuten ertussen (wat Robin als ondergrens gaf), en de
+    # rem hieronder die op vijf minuten staat in plaats van op een uur.
+    #
     # Trede 1 wordt overgeslagen als de SLZB zelf niet meer reageert; dan valt er
     # softwarematig niets te resetten en is de stroom de enige weg. Elke trede
     # stopt zodra de bridge terug is, dus normaal komt hij nooit verder dan de
     # eerste - op 5 augustus was één core-restart genoeg.
+    #
+    # Een hele ronde duurt daarmee worst case ~45 minuten (5 x 5 + 10 + 10).
+    # `mode: single` houdt de triggers die daar doorheen vallen tegen, en zodra
+    # de ronde klaar is start de vijfminutentrigger hieronder de volgende.
     #
     # Er wordt niet gewacht tot álle apparaten terug zijn, alleen tot de bridge
     # weer verbonden is. Het mesh hervormt zich daarna in zijn eigen tempo (reken
@@ -225,11 +240,13 @@ zigbee_package:
           entity_id: binary_sensor.zigbee_netwerk_stuk
           to: "on"
           for: "00:15:00"
-        # Nieuwe poging zolang het stuk blijft. Zonder deze trigger kreeg een
+        # Nieuwe ronde zolang het stuk blijft. Zonder deze trigger kreeg een
         # radio die na de eerste ronde nog weg was nooit een tweede kans, en
-        # deed de uurrem hieronder niets.
+        # deed de rem hieronder niets. Elke vijf minuten, zodat er na een ronde
+        # niet nog eens een uur stilte volgt; `mode: single` zorgt dat de ticks
+        # tijdens een lopende ronde geluidloos verdampen.
         - trigger: time_pattern
-          hours: "/1"
+          minutes: "/5"
       # DEZE VIER CONDITIES BLIJVEN HIER STAAN, EN NIET IN HET GEDEELDE SCRIPT.
       # Dat is geen slordigheid maar het enige dat werkt: `last_triggered` van
       # een automatisering wordt pas gezet als de acties écht beginnen, dus ná
@@ -254,15 +271,26 @@ zigbee_package:
           value_template: >-
             {% set start = states('sensor.home_assistant_gestart') | as_datetime %}
             {{ start is none or (now() - start) > timedelta(minutes=20) }}
-        # Hooguit één ronde per uur. Zonder deze rem wordt een radio die écht
-        # stuk is de hele nacht doorgereset.
+        # Minimaal vijf minuten tussen twee rondes. Dit is niet meer de rem die
+        # het aantal resets beperkt - dat doet `zachte_pogingen` in het script,
+        # dat weet wanneer het genoeg is geweest en escaleert. Deze grens is er
+        # nog voor het geval een ronde vroeg afbreekt (een `stop:` bij een
+        # onbereikbare switch, of een PoE die net al gecycled was): dan mag de
+        # volgende poging niet meteen achter de vorige aan.
         - condition: template
           value_template: >-
             {{ this.attributes.last_triggered is none
-               or now() - this.attributes.last_triggered > timedelta(hours=1) }}
+               or now() - this.attributes.last_triggered > timedelta(minutes=5) }}
         # Na zes uur is duidelijk dat het zichzelf niet meer oplost. Doorgaan
-        # levert alleen nog een critical melding per uur op, de hele nacht, over
-        # iets dat allang gemeld is.
+        # levert alleen nog een critical melding per ronde op, de hele nacht,
+        # over iets dat allang gemeld is.
+        #
+        # Dit is de enige grens die "blijven proberen" nog begrenst, en hij zit
+        # bewust hier en niet strakker: binnen die zes uur zitten nu zo'n zeven
+        # rondes van zes core-restarts, waar het er vóór 11 augustus 2026 zes
+        # in totaal waren. Wat na zes uur nog stuk is, is de coördinator niet
+        # meer aan het hangen maar echt kapot - of het ligt aan Zigbee2MQTT op
+        # .203, en dan helpt resetten sowieso niet. Zie de laatste melding.
         - condition: template
           value_template: >-
             {% set sinds = states.binary_sensor.zigbee_netwerk_stuk.last_changed %}
@@ -284,6 +312,22 @@ zigbee_package:
             # winnen met haast. Na de PoE dezelfde tien minuten, met de
             # opstarttijd van het kastje erbij.
             wachttijd: "00:10:00"
+            # BLIJVEN PROBEREN - zie de uitleg boven `triggers:`.
+            # Zes pogingen van vijf minuten (de laatste tien) is een halfuur
+            # blijven duwen voordat de PoE eraan gaat, en daarna begint de
+            # volgende ronde vanzelf. Vijf minuten is de ondergrens die Robin
+            # gaf; korter kan ook niet zinnig, want de sensor heeft alleen al
+            # twee minuten `delay_off` en het kastje een minuut opstarttijd.
+            zachte_pogingen: 6
+            pauze: "00:05:00"
+            # Even laag als `pauze`: het script slaat de zachte trede over als
+            # de knop "recent" is ingedrukt, en met een venster van een half uur
+            # zou de tweede ronde meteen naar de PoE springen. De keerzijde is
+            # dat een core-restart van de Thread-waakhond Zigbee nu maar vijf
+            # minuten tegenhoudt in plaats van dertig. Dat is hier het goede
+            # ruilmiddel: nog een core-restart kost twee minuten Thread, en die
+            # sensor heeft tien minuten `delay_on` en merkt er niets van.
+            reset_interlock: "00:05:00"
             # Leeg, want Zigbee2MQTT draait op 192.168.2.203 als systemd-service
             # en niet als add-on: Home Assistant kan er niet bij en hoeft dat ook
             # niet. Zie de kop van dit bestand. Thread geeft hier wél een slug
@@ -294,7 +338,9 @@ zigbee_package:
                 Zigbee2MQTT heeft al tien minuten geen verbinding, dus de Zigbee-
                 apparaten doen niets.
               zachte_reset: >-
-                Ik herstart de coördinator; Thread valt daarbij twee minuten weg.
+                Ik herstart de coördinator, en blijf dat elke vijf minuten
+                proberen tot hij terug is; Thread valt daarbij telkens twee
+                minuten weg.
               hersteld_zacht: >-
                 De coördinator is herstart en Zigbee2MQTT heeft weer verbinding.
                 Het mesh vult zich de komende minuten vanzelf.
@@ -379,6 +425,34 @@ zigbee_package:
           example: "00:10:00"
           selector:
             text:
+        zachte_pogingen:
+          name: Zachte pogingen per ronde
+          description: >-
+            Hoe vaak de core-restart binnen één ronde herhaald mag worden
+            voordat de PoE eraan gaat. 1 is één poging.
+          default: 1
+          selector:
+            number:
+              min: 1
+              max: 24
+              mode: box
+        pauze:
+          name: Pauze tussen twee core-restarts
+          description: >-
+            Hoe lang er tussen twee pogingen binnen dezelfde ronde op herstel
+            gewacht wordt. De laatste poging krijgt `wachttijd`, want daarna
+            gaat de PoE eraan. Doet niets bij één poging.
+          default: "00:05:00"
+          selector:
+            text:
+        reset_interlock:
+          name: Interlock op de resetknop
+          description: >-
+            Hoe lang na een eerdere druk op de resetknop de zachte trede
+            overgeslagen wordt - ook als die druk van de andere radio kwam.
+          default: "00:30:00"
+          selector:
+            text:
         addon:
           name: Add-on
           description: >-
@@ -418,12 +492,17 @@ zigbee_package:
         #   - De SLZB-entiteiten staan op `unavailable`, dus de integratie kan
         #     het kastje niet bereiken en er valt niets te resetten. Precies de
         #     situatie van 5 augustus, toen socat "No route to host" gaf.
-        #   - Het kastje is in het afgelopen half uur al opnieuw opgestart. De
-        #     state van een button ís namelijk het tijdstip van de laatste druk,
-        #     dus dit ziet ook een reset door de ándere waakhond of eentje met de
-        #     hand. Een core-restart die hielp is binnen een minuut of twee
-        #     zichtbaar; is het netwerk daarna nóg tien minuten weg, dan lost een
-        #     tweede druk op diezelfde knop het niet alsnog op.
+        #   - Het kastje is recent al opnieuw opgestart. De state van een button
+        #     ís namelijk het tijdstip van de laatste druk, dus dit ziet ook een
+        #     reset door de ándere waakhond of eentje met de hand.
+        #
+        # Hoe lang "recent" is, komt uit `reset_interlock` en is niet voor niets
+        # instelbaar. De aanname erachter was: een core-restart die hielp zie je
+        # binnen twee minuten, dus een tweede druk lost het niet alsnog op. In de
+        # nacht van 10 op 11 augustus 2026 bleek dat niet te kloppen - Robin
+        # moest de reset meermaals met de hand herhalen voordat de coördinator
+        # terugkwam. Een radio die daarop stuit zet dit venster dus laag (Zigbee
+        # doet dat) en herhaalt de zachte trede zelf; zie `zachte_pogingen`.
         #
         # Dit staat expres niet bij de `conditions:` van de aanroepers. Daar zou
         # het de hele ronde blokkeren - geen melding, geen escalatie - terwijl
@@ -435,7 +514,8 @@ zigbee_package:
                  not in ['unavailable', 'unknown', 'none', ''] }}
             recent_gereset: >-
               {% set laatst = states('button.slzb_mr3_core_restart') | as_datetime %}
-              {{ laatst is not none and (now() - laatst) < timedelta(minutes=30) }}
+              {% set venster = reset_interlock | default('00:30:00', true) | as_timedelta %}
+              {{ laatst is not none and (now() - laatst) < venster }}
             zachte_reset_zinvol: "{{ slzb_reageert and not recent_gereset }}"
             # Zelfde trucje als hierboven, nu voor de PoE-poort. Valt het hele
             # kastje uit, dan zien Zigbee en Thread dat allebei en willen ze
@@ -461,35 +541,60 @@ zigbee_package:
               {% endif %}
 
         #####################################################################
-        ## Poging 1 - zachte reset, alleen als die iets kan opleveren
+        ## Trede 1 - zachte reset, alleen als die iets kan opleveren
         #####################################################################
+        # Bij `zachte_pogingen: 1` (de standaard, en wat Thread gebruikt) is dit
+        # letterlijk één druk en één keer wachten. Staat er meer, dan blijft de
+        # lus drukken tot het netwerk terug is of het aantal op is - dát is de
+        # "blijven proberen"-stand, waar Zigbee sinds 11 augustus 2026 op staat.
+        #
+        # De lus stopt zodra `stuk_sensor` op `off` valt; er wordt dus nooit
+        # doorgedrukt op een radio die net terug is.
         - if:
             - condition: template
               value_template: "{{ zachte_reset_zinvol }}"
           then:
-            - action: button.press
-              target:
-                entity_id: button.slzb_mr3_core_restart
-            # De radio eerst, dan pas wat eraan hangt. Andersom hielp op
-            # 5 augustus niet: de add-on kan niets zolang de radio aan de andere
-            # kant van die TCP-verbinding hangt te wezen. Zie Thread.yaml, dat
-            # als enige een slug meegeeft; voor Zigbee slaat dit blok over.
-            - if:
-                - condition: template
-                  value_template: "{{ addon | default('', true) != '' }}"
-              then:
-                - delay: "{{ addon_wacht_na_reset | default('00:02:00', true) }}"
-                - action: hassio.addon_restart
-                  data:
-                    addon: "{{ addon }}"
-                  continue_on_error: true
-            # `wait_template` en geen `wait_for_trigger`: de sensor komt hier uit
-            # een veld, en in een trigger mag `entity_id` geen template zijn.
-            # Bijvangst: staat hij al op `off`, dan lopen we meteen door in
-            # plaats van op een flank te wachten die al geweest is.
-            - wait_template: "{{ is_state(stuk_sensor, 'off') }}"
-              timeout: "{{ wachttijd }}"
-              continue_on_timeout: true
+            - repeat:
+                sequence:
+                  - action: button.press
+                    target:
+                      entity_id: button.slzb_mr3_core_restart
+                  # De radio eerst, dan pas wat eraan hangt. Andersom hielp op
+                  # 5 augustus niet: de add-on kan niets zolang de radio aan de
+                  # andere kant van die TCP-verbinding hangt te wezen. Zie
+                  # Thread.yaml, dat als enige een slug meegeeft; voor Zigbee
+                  # slaat dit blok over.
+                  - if:
+                      - condition: template
+                        value_template: "{{ addon | default('', true) != '' }}"
+                    then:
+                      - delay: "{{ addon_wacht_na_reset | default('00:02:00', true) }}"
+                      - action: hassio.addon_restart
+                        data:
+                          addon: "{{ addon }}"
+                        continue_on_error: true
+                  # `wait_template` en geen `wait_for_trigger`: de sensor komt
+                  # hier uit een veld, en in een trigger mag `entity_id` geen
+                  # template zijn. Bijvangst: staat hij al op `off`, dan lopen we
+                  # meteen door in plaats van op een flank te wachten die al
+                  # geweest is.
+                  #
+                  # Tussenpogingen wachten `pauze`, de laatste `wachttijd`. Dat
+                  # verschil is er omdat na de laatste de PoE eraan gaat, en die
+                  # grovere stap een fatsoenlijk venster verdient om overbodig
+                  # te blijken. Een tussenpoging hoeft alleen lang genoeg te
+                  # wachten om herstel te kúnnen zien.
+                  - wait_template: "{{ is_state(stuk_sensor, 'off') }}"
+                    timeout: >-
+                      {{ wachttijd
+                         if repeat.index >= (zachte_pogingen | default(1, true) | int(1))
+                         else (pauze | default('00:05:00', true)) }}
+                    continue_on_timeout: true
+                until:
+                  - condition: template
+                    value_template: >-
+                      {{ is_state(stuk_sensor, 'off')
+                         or repeat.index >= (zachte_pogingen | default(1, true) | int(1)) }}
 
         - if:
             - condition: template
