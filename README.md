@@ -61,6 +61,17 @@ That webhook now fires on every PreCom change, not just on a status switch, so t
 sensors and dashboards follow every change while the phone is only pushed when the
 status itself flips — `status_veranderd` in the payload is what makes that distinction.
 
+`tests/test_brandweer_webhook.py` reads the `variables:` block of the
+`brandweer_webhook_main` automation straight out of the YAML (no copies that can
+drift) and checks what the webhook derives from a P2000 payload: which body gets
+stored, which text is spoken, and whether a call is a follow-up alarm — that last
+one decides whether the yearly call counter ticks.
+
+`tests/test_kamers.py` does the same for `custom_templates/kamers.jinja`: it runs
+the room measurement table against the real entity ids listed in that table, so a
+renamed thermometer or a room that silently falls back to "any sensor in the area"
+shows up here instead of on the dashboard.
+
 `tests/test_spraak.py` renders every spoken answer of the voice satellite against
 stubbed sensors — including the cases you would otherwise only hear when they go wrong
 (a staffing webhook that has been silent since the restart, `very_low` as a tariff
@@ -262,7 +273,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Withings | [Link](https://www.home-assistant.io/integrations/withings/) | Integrate Withings Body Scale to Home Assistant |
 | Wyoming Protocol | [Link](https://www.home-assistant.io/integrations/wyoming) | The Wyoming integration connects external voice services to Home Assistant |
 | Zon | [Link](https://www.home-assistant.io/integrations/sun) | Check sun to automate things |
-| Zonneplan | [Link](https://github.com/fsaris/home-assistant-zonneplan-one) | Our power and gas provider |
+| Zonneplan | [Link](https://github.com/fsaris/home-assistant-zonneplan-one) | Our power, gas and water provider. The water flow sensor also drives the shower timer in `packages/1 - First Floor/Bathroom/Douche.yaml`, which blinks the bathroom lights every five minutes while the shower runs. |
 
 ## <a name="hacsintegrations">HACS Integrations</a>
 | [Menu](#menu) |

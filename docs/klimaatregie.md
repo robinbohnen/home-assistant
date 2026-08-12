@@ -205,9 +205,9 @@ De beslistabel, van hoog naar laag:
 > Voor regen telt `sensor.neerslag_komende_30_minuten` (echte millimeters)
 > boven `klimaat_screen_max_regen`, standaard 0,1 mm. Een onbereikbare sensor
 > telt als droog: niets doen is dan beter dan de hele dag alles binnenhalen.
-> Hiervóór liep binnenhalen bij regen alleen via de melding in
-> `packages/3 - Outside/Backyard/Sunscreen.yaml`, die een tik op je telefoon
-> nodig heeft; die melding is nu stil zolang de klimaatregie aan staat.
+> Hiervóór liep binnenhalen bij regen alleen via een pushmelding uit de oude
+> zonnescherm-automatisering, die een tik op je telefoon nodig had; die
+> automatisering is inmiddels verwijderd.
 
 7. **Binnenzonwering** (de twee keukenrolgordijnen) beslist net als een screen
    opnieuw en overschrijft stap 4 en 5. Een rolgordijn hangt aan de warme kant
@@ -318,10 +318,9 @@ zone dan over — die laatste omdat een scherm dat nog binnen staat terwijl het
 advies "uit" is geen handbediening is maar een openstaande vraag. Op het
 dashboard zie je dat terug als blokkade *"wacht op je akkoord"*.
 
-> Met de klimaatregie **uit** doet `backyard_sunscreen`
-> (`packages/3 - Outside/Backyard/Sunscreen.yaml`) hetzelfde: die vroeg al om
-> een bevestiging voordat het scherm uitging. Het gedrag is nu dus hetzelfde,
-> of de hoofdschakelaar nu aan of uit staat.
+> Met de klimaatregie **uit** beweegt het zonnescherm helemaal niet meer uit
+> zichzelf: de oude lux-automatisering (`backyard_sunscreen`) is verwijderd.
+> Bediening gaat dan via de overkappingsknop, het dashboard of de spraakassistent.
 
 > **Let op de ochtendknop.** Druk je 's ochtends op de slaapkamerknop, dan
 > gaan de rolluiken open en telt dat als handbediening: die zones liggen dan
@@ -334,19 +333,15 @@ dashboard zie je dat terug als blokkade *"wacht op je akkoord"*.
 
 Alles hangt aan één schakelaar: **`input_boolean.klimaatregie_actief`**.
 
-- **Uit**: hier beweegt niets, en de oude automatiseringen doen hun oude werk.
-- **Aan**: de klimaatregie stuurt, en de oude automatiseringen stappen opzij.
-
-Die laatste hebben daarvoor een conditie gekregen (`state: "off"`):
-
-- `covers_sun_protection`, `covers_morning_routine`, `covers_bedtime`
-  (`packages/9 - Other/Covers.yaml`)
-- `bedroom_maxi_covers`, `bedroom_mini_covers`
-- de vier `cover.close_cover`-acties in `temp_control_automation` — de
-  meldingen daar blijven wél gewoon werken
-- `backyard_sunscreen` (`packages/3 - Outside/Backyard/Sunscreen.yaml`) — die
-  keek alleen naar lux en zou 's winters het scherm uitzetten terwijl je de zon
-  juist binnen wilt hebben
+- **Uit**: hier beweegt niets, en de zonwering doet dan ook niets meer uit
+  zichzelf. De oude automatiseringen die dat vroeger deden
+  (`covers_sun_protection`, `covers_morning_routine`, `covers_bedtime`,
+  `bedroom_maxi_covers`, `bedroom_mini_covers`, `backyard_sunscreen` en de
+  cover-acties in Temperature Control) zijn verwijderd — er is geen
+  terugvallaag meer, alleen handbediening. De ramen-adviezen
+  (`packages/9 - Other/Temperature Control.yaml`) sturen alleen nog meldingen
+  en staan los van deze schakelaar.
+- **Aan**: de klimaatregie stuurt.
 
 Ongemoeid gelaten, omdat het gebruikersacties zijn die de handbediening-laag
 netjes afvangt: de knop-automatiseringen (slaapkamer, kantoor, badkamer) en het
