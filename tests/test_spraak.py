@@ -282,7 +282,169 @@ check("ergste eerst", zeg("HuisAandacht"),
       ["Slaapkamer: CO₂ 1400 ppm", "En nog 1 andere"])
 
 # ---------------------------------------------------------------------------
-# 6. Antwoorden
+# 6. Thuisaccu
+# ---------------------------------------------------------------------------
+print("\nThuisaccu")
+
+wereld(**{
+    "sensor.lilygo_rs485_marstek_battery_state_of_charge": "62.4",
+    "sensor.lilygo_rs485_marstek_battery_power": "850",
+    "sensor.lilygo_rs485_marstek_inverter_state": "Charge",
+})
+check("accu laadt", zeg("ThuisAccu"), ["62 procent", "laadt met 850 watt"])
+
+wereld(**{
+    "sensor.lilygo_rs485_marstek_battery_state_of_charge": "17.0",
+    "sensor.lilygo_rs485_marstek_battery_power": "-420",
+    "sensor.lilygo_rs485_marstek_inverter_state": "Discharge",
+})
+check("accu levert", zeg("ThuisAccu"), ["17 procent", "levert 420 watt"])
+
+# Een onbekende inverter-state met een klein restvermogen is gewoon stilstand;
+# dezelfde dode zone van 20 W als de accu-app op de klokken.
+wereld(**{
+    "sensor.lilygo_rs485_marstek_battery_state_of_charge": "45",
+    "sensor.lilygo_rs485_marstek_battery_power": "5",
+    "sensor.lilygo_rs485_marstek_inverter_state": "Sleep",
+})
+check("accu stil", zeg("ThuisAccu"), "45 procent.")
+
+wereld(**{"sensor.lilygo_rs485_marstek_battery_state_of_charge": "unavailable"})
+check("accu weg", zeg("ThuisAccu"), "thuisaccu even niet lezen")
+
+# ---------------------------------------------------------------------------
+# 7. Zonnepanelen
+# ---------------------------------------------------------------------------
+print("\nZonnepanelen")
+
+wereld(**{
+    "sensor.solar_power_generated_now": "4224.71",
+    "sensor.solar_power_generated_today": "7.3",
+    "sensor.inverter_kroon_18_achtertuin_capacity": "5.0",
+    "sensor.inverter_kroon_18_zolder_capacity": "3.0",
+})
+check("volle zon", zeg("Zonnepanelen"),
+      ["4,2 kilowatt", "53 procent", "7,3 kilowattuur"])
+
+# Capacity-sensoren onbereikbaar: terugval op 5+3 kW, en onder de kilowatt
+# spreken we in hele watts.
+wereld(**{
+    "sensor.solar_power_generated_now": "640",
+    "sensor.solar_power_generated_today": "0.9",
+})
+check("weinig zon", zeg("Zonnepanelen"), ["640 watt", "8 procent", "0,9 kilowattuur"])
+
+# De momentaan-sensor kan wegvallen terwijl de dagteller er nog is.
+wereld(**{"sensor.solar_power_generated_today": "12.1"})
+check("alleen dagteller", zeg("Zonnepanelen"), "12,1 kilowattuur")
+
+wereld()
+check("panelen weg", zeg("Zonnepanelen"), "zonnepanelen even niet lezen")
+
+# ---------------------------------------------------------------------------
+# 8. Auto
+# ---------------------------------------------------------------------------
+print("\nAuto")
+
+wereld(**{
+    "sensor.hrh85f_batterij": "100",
+    "sensor.hrh85f_battery_autonomy": "386",
+    "binary_sensor.hrh85f_opladen": "off",
+    "binary_sensor.hrh85f_stekker": "off",
+})
+check("auto vol", zeg("AutoStatus"), ["100 procent", "386 kilometer"])
+
+wereld(**{
+    "sensor.hrh85f_batterij": "46",
+    "sensor.hrh85f_battery_autonomy": "178",
+    "binary_sensor.hrh85f_opladen": "on",
+    "binary_sensor.hrh85f_stekker": "on",
+    "sensor.hrh85f_charging_remaining_time": "95",
+})
+check("auto laadt kort", zeg("AutoStatus"), ["46 procent", "nog ongeveer 95 minuten"])
+
+STATES["sensor.hrh85f_charging_remaining_time"] = "180"
+check("auto laadt lang", zeg("AutoStatus"), "nog ongeveer 3 uur")
+
+wereld(**{
+    "sensor.hrh85f_batterij": "80",
+    "sensor.hrh85f_battery_autonomy": "300",
+    "binary_sensor.hrh85f_opladen": "off",
+    "binary_sensor.hrh85f_stekker": "on",
+})
+check("stekker zonder laden", zeg("AutoStatus"), "laadt op dit moment niet")
+
+wereld(**{"sensor.hrh85f_batterij": "unavailable"})
+check("auto weg", zeg("AutoStatus"), "auto even niet te pakken")
+
+# ---------------------------------------------------------------------------
+# 9. Wie is thuis
+# ---------------------------------------------------------------------------
+print("\nWie is thuis")
+
+# Bewust verzonnen namen: de echte gezinsleden staan als !secret in
+# Persons.yaml en horen ook hier niet in het bestand. De intent leest de
+# groepen, dus verzonnen leden testen precies hetzelfde pad.
+GEZIN = {
+    "group.all_adults.entity_id": ["person.jan_jansen", "person.piet_puk"],
+    "group.all_children.entity_id": ["person.kind_een"],
+    "person.jan_jansen.friendly_name": "Jan Jansen",
+    "person.piet_puk.friendly_name": "Piet Puk",
+    "person.kind_een.friendly_name": "Kind Een",
+}
+
+wereld(**GEZIN, **{"person.jan_jansen": "home", "person.piet_puk": "home",
+                   "person.kind_een": "home"})
+check("iedereen thuis", zeg("WieThuis"), "Iedereen is thuis")
+
+wereld(**GEZIN, **{"person.jan_jansen": "not_home", "person.piet_puk": "Werk",
+                   "person.kind_een": "not_home"})
+check("niemand thuis", zeg("WieThuis"), "niemand thuis")
+
+# Enkelvoud en meervoud: één iemand thuis "is", de rest als opsomming.
+wereld(**GEZIN, **{"person.jan_jansen": "home", "person.piet_puk": "not_home",
+                   "person.kind_een": "School"})
+check("één thuis", zeg("WieThuis"), ["Jan is thuis", "Piet en Kind niet"])
+
+wereld(**GEZIN, **{"person.jan_jansen": "home", "person.piet_puk": "home",
+                   "person.kind_een": "not_home"})
+check("twee thuis", zeg("WieThuis"), ["Jan en Piet zijn thuis", "Kind niet"])
+
+wereld()
+check("groepen weg", zeg("WieThuis"), "gezinsleden even niet lezen")
+
+# ---------------------------------------------------------------------------
+# 10. Afval en reistijd
+# ---------------------------------------------------------------------------
+print("\nAfval en reistijd")
+
+wereld(**{"sensor.afvalinfo_home_trash_type_today": "Groente, Fruit en Tuinafval",
+          "sensor.afvalinfo_home_trash_type_tomorrow": "geen"})
+check("afval vandaag", zeg("Afval"),
+      "Vandaag wordt groente, fruit en tuinafval opgehaald")
+
+wereld(**{"sensor.afvalinfo_home_trash_type_today": "geen",
+          "sensor.afvalinfo_home_trash_type_tomorrow": "Papier"})
+check("afval morgen", zeg("Afval"),
+      ["Morgen wordt papier opgehaald", "vanavond aan de straat"])
+
+wereld(**{"sensor.afvalinfo_home_trash_type_today": "geen",
+          "sensor.afvalinfo_home_trash_type_tomorrow": "geen"})
+check("geen afval", zeg("Afval"), "geen bak aan de straat")
+
+wereld()
+check("kalender weg", zeg("Afval"), "afvalkalender even niet lezen")
+
+# Waze levert gebroken minuten (zie de valkuil in de audit); de satelliet
+# hoort "27 minuten" te zeggen, niet "27.05".
+wereld(**{"sensor.robin_reistijd_naar_werk": "27.05"})
+check("reistijd", zeg("ReistijdWerk"), "27 minuten rijden")
+
+wereld()
+check("reistijd weg", zeg("ReistijdWerk"), "reistijd even niet ophalen")
+
+# ---------------------------------------------------------------------------
+# 11. Antwoorden
 # ---------------------------------------------------------------------------
 print("\nAntwoorden")
 

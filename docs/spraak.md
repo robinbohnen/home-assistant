@@ -68,6 +68,12 @@ alarm en de brandweermelding al gebruiken).
 | ------ | ------------ | ------------ |
 | `BrandweerBezetting` | "hoeveel man staat er op de kazerne" | `sensor.brandweer_bezetting`, met terugval op de REST-sensor |
 | `StroomprijsNu` | "is de stroom nu goedkoop" | Zonneplan + `sensor.stroomprijs_niveau_volgend_uur` |
+| `ThuisAccu` | "hoe vol zit de accu" | de Marstek-sensoren, met de laad/ontlaad-logica van de klokken-app |
+| `Zonnepanelen` | "wat leveren de panelen nu" | `sensor.solar_power_generated_now/_today` + de capacity-sensoren |
+| `AutoStatus` | "kan ik weg met de auto" | de Mégane-sensoren: percentage, actieradius, stekker en laadtijd |
+| `ReistijdWerk` | "hoe druk is het naar het werk" | `sensor.robin_reistijd_naar_werk` (Waze) |
+| `WieThuis` | "wie is er allemaal thuis" | de leden van `group.all_adults` + `group.all_children`, voornamen uit de friendly name |
+| `Afval` | "welke bak moet aan de straat" | `sensor.afvalinfo_home_trash_type_today/_tomorrow` |
 | `ZonneschermAdvies` | "moet het zonnescherm eruit" | `sensor.zonwering_advies_zonnescherm` |
 | `ZonneschermUit` / `ZonneschermIn` | "zet het zonnescherm uit" | doet het, en zegt het als de regie het er niet mee eens is |
 | `HuisOpen` | "staat er nog iets open" | `sensor.kamers` |

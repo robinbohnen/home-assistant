@@ -351,6 +351,160 @@ keuken_voice_package:
           {%- endif -%}
 
     #########################################################################
+    ## Energie
+    #########################################################################
+    ThuisAccu:
+      description: Hoe vol de Marstek-thuisaccu is en of hij laadt of levert.
+      speech:
+        text: >-
+          {%- set soc = states('sensor.lilygo_rs485_marstek_battery_state_of_charge') | float(none) -%}
+          {%- if soc is none -%}
+            Ik kan de thuisaccu even niet lezen.
+          {%- else -%}
+            {#- Zelfde logica als de accu-app op de klokken (Klokken.yaml): de
+                inverter-state is leidend, het vermogen is de terugval met een
+                dode zone van 20 W. Positief vermogen = laden. -#}
+            {%- set pw = states('sensor.lilygo_rs485_marstek_battery_power') | float(0) -%}
+            {%- set inv = states('sensor.lilygo_rs485_marstek_inverter_state') -%}
+            {%- set laadt = inv == 'Charge' or (inv not in ['Charge', 'Discharge'] and pw > 20) -%}
+            {%- set ontlaadt = inv == 'Discharge' or (inv not in ['Charge', 'Discharge'] and pw < -20) -%}
+            De thuisaccu zit op {{ soc | round(0) | int }} procent
+            {%- if laadt %} en laadt met {{ pw | abs | round(0) | int }} watt
+            {%- elif ontlaadt %} en levert {{ pw | abs | round(0) | int }} watt aan het huis
+            {%- endif %}.
+          {%- endif -%}
+
+    Zonnepanelen:
+      description: Wat de zonnepanelen nu leveren en wat er vandaag al op de teller staat.
+      speech:
+        text: >-
+          {%- set nu = states('sensor.solar_power_generated_now') | float(none) -%}
+          {%- set vandaag = states('sensor.solar_power_generated_today') | float(none) -%}
+          {%- if nu is none and vandaag is none -%}
+            Ik kan de zonnepanelen even niet lezen.
+          {%- else -%}
+            {%- if nu is not none -%}
+              {#- Plafond uit de capacity-sensoren (kW), net als de
+                  productietegel op het overzicht; terugval 5+3 als een
+                  omvormer even weg is. In de praktijk komt dit nooit op 100%:
+                  de sets pieken op verschillende momenten. -#}
+              {%- set cap = (states('sensor.inverter_kroon_18_achtertuin_capacity') | float(5))
+                          + (states('sensor.inverter_kroon_18_zolder_capacity') | float(3)) -%}
+              {%- set pct = (nu / (cap * 1000) * 100) | round(0) | int -%}
+              {%- if nu >= 1000 -%}
+                De panelen leveren nu {{ (nu / 1000) | round(1) | string | replace('.', ',') }} kilowatt, {{ pct }} procent van wat ze kunnen.
+              {%- else -%}
+                De panelen leveren nu {{ nu | round(0) | int }} watt, {{ pct }} procent van wat ze kunnen.
+              {%- endif -%}
+            {%- endif -%}
+            {%- if vandaag is not none %} Vandaag staat de teller op {{ vandaag | round(1) | string | replace('.', ',') }} kilowattuur.
+            {%- endif -%}
+          {%- endif -%}
+
+    #########################################################################
+    ## Auto
+    #########################################################################
+    AutoStatus:
+      description: Hoe vol de Mégane is, hoe ver je daarmee komt en of hij laadt.
+      speech:
+        text: >-
+          {%- set soc = states('sensor.hrh85f_batterij') | float(none) -%}
+          {%- if soc is none -%}
+            Ik krijg de auto even niet te pakken.
+          {%- else -%}
+            {%- set km = states('sensor.hrh85f_battery_autonomy') | float(none) -%}
+            De auto zit op {{ soc | round(0) | int }} procent
+            {%- if km is not none %}, goed voor zo'n {{ km | round(0) | int }} kilometer{% endif %}.
+            {%- if is_state('binary_sensor.hrh85f_opladen', 'on') -%}
+              {%- set rest = states('sensor.hrh85f_charging_remaining_time') | float(none) -%}
+              {%- if rest is not none and rest >= 120 %} Hij is aan het laden, nog ongeveer {{ (rest / 60) | round(0) | int }} uur.
+              {%- elif rest is not none and rest > 0 %} Hij is aan het laden, nog ongeveer {{ rest | round(0) | int }} minuten.
+              {%- else %} Hij is aan het laden.
+              {%- endif -%}
+            {%- elif is_state('binary_sensor.hrh85f_stekker', 'on') %} De stekker zit erin maar hij laadt op dit moment niet.
+            {%- endif -%}
+          {%- endif -%}
+
+    ReistijdWerk:
+      description: Reistijd naar het werk volgens Waze.
+      speech:
+        text: >-
+          {%- set m = states('sensor.robin_reistijd_naar_werk') | float(none) -%}
+          {%- if m is none -%}
+            Ik kan de reistijd even niet ophalen.
+          {%- else -%}
+            Naar het werk is het nu {{ m | round(0) | int }} minuten rijden.
+          {%- endif -%}
+
+    #########################################################################
+    ## Gezin
+    #########################################################################
+    WieThuis:
+      description: Wie er volgens de trackers thuis is en wie niet.
+      speech:
+        text: >-
+          {#- De leden komen uit de groepen, niet als losse entity-id's: de
+              kinderen staan als !secret in Persons.yaml en horen hier dus ook
+              niet met naam en toenaam te staan. Voornaam = eerste woord van de
+              friendly name. -#}
+          {%- set leden = (state_attr('group.all_adults', 'entity_id') or [])
+                        + (state_attr('group.all_children', 'entity_id') or []) -%}
+          {%- if leden | count == 0 -%}
+            Ik kan de gezinsleden even niet lezen.
+          {%- else -%}
+            {%- set ns = namespace(thuis=[], weg=[]) -%}
+            {%- for p in leden -%}
+              {%- set naam = ((state_attr(p, 'friendly_name') or p.split('.') | last).split(' ')) | first -%}
+              {%- if states(p) == 'home' -%}
+                {%- set ns.thuis = ns.thuis + [naam] -%}
+              {%- else -%}
+                {%- set ns.weg = ns.weg + [naam] -%}
+              {%- endif -%}
+            {%- endfor -%}
+            {%- if ns.weg | count == 0 -%}
+              Iedereen is thuis.
+            {%- elif ns.thuis | count == 0 -%}
+              Volgens de trackers is er niemand thuis.
+            {%- else -%}
+              {%- if ns.thuis | count == 1 -%}
+                {{ ns.thuis | first }} is thuis;
+              {%- else -%}
+                {{ ns.thuis[:-1] | join(', ') }} en {{ ns.thuis | last }} zijn thuis;
+              {%- endif -%}
+              {%- if ns.weg | count == 1 %} {{ ns.weg | first }} niet.
+              {%- else %} {{ ns.weg[:-1] | join(', ') }} en {{ ns.weg | last }} niet.
+              {%- endif -%}
+            {%- endif -%}
+          {%- endif -%}
+
+    #########################################################################
+    ## Afval
+    #########################################################################
+    Afval:
+      description: Welke bak er vandaag of morgen aan de straat moet.
+      speech:
+        text: >-
+          {%- set vandaag = states('sensor.afvalinfo_home_trash_type_today') -%}
+          {%- set morgen = states('sensor.afvalinfo_home_trash_type_tomorrow') -%}
+          {%- if vandaag in ['unknown', 'unavailable'] and morgen in ['unknown', 'unavailable'] -%}
+            Ik kan de afvalkalender even niet lezen.
+          {%- else -%}
+            {#- 'geen' is de echte sensorwaarde voor een dag zonder ophaling,
+                zie ook de afvalcheck in Clock Display.yaml. -#}
+            {%- set v = vandaag not in ['unknown', 'unavailable', 'geen', ''] -%}
+            {%- set m = morgen not in ['unknown', 'unavailable', 'geen', ''] -%}
+            {%- if v and m -%}
+              Vandaag wordt {{ vandaag | lower }} opgehaald, en morgen {{ morgen | lower }}.
+            {%- elif v -%}
+              Vandaag wordt {{ vandaag | lower }} opgehaald.
+            {%- elif m -%}
+              Morgen wordt {{ morgen | lower }} opgehaald; die bak kan vanavond aan de straat.
+            {%- else -%}
+              Er hoeft geen bak aan de straat, vandaag en morgen wordt er niets opgehaald.
+            {%- endif -%}
+          {%- endif -%}
+
+    #########################################################################
     ## Zonwering
     #########################################################################
     ZonneschermAdvies:
