@@ -24,21 +24,31 @@ corridor_lights_package:
           lamp: light.overloop_lampen
           schakelaar: input_boolean.enable_pir_corridor
           helderheid: input_number.lights_corridor_percentage
-          # BEWUST GEEN BLOKKADES (Robin, 11 augustus 2026)
-          # Hier stonden twee: geen licht na de bedtijd van de kinderen, en
-          # geen licht boven 20.000 lux buiten. Allebei eruit - beweging of een
-          # deur die opengaat is voortaan het enige dat telt, en dan gaat de
-          # lamp ook aan. Op de overloop is in het donker struikelen erger dan
-          # een streep licht onder een slaapkamerdeur, en het buitenlicht zegt
-          # weinig over hoe donker het híer is.
+          # 's NACHTS GEEN BEWEGINGSLICHT (Robin, 12 augustus 2026)
+          # Op 11 augustus gingen hier alle blokkades eruit; een nacht later
+          # bleek de bedtijdrem wél gewenst: tussen bedtijd en opstaan hoeft de
+          # overloop niet aan te floepen van iedere beweging. De lux-drempel
+          # blijft eruit, die zei niets over hoe donker het híer is.
           #
-          # Wil je de bedtijdrem terug, dan is dit de vorm (alleen het
-          # aanzetten blokkeren, nooit het uitzetten - anders blijft een lamp
-          # die net vóór bedtijd aanging de hele nacht branden):
+          # Het venster loopt van de laatste bedtijd tot het huis zichzelf
+          # wakker meldt en staat in binary_sensor.huis_slaapt (gedefinieerd
+          # naast binary_sensor.bedtime_kids in Bedroom Maxi/Bedtime.yaml; daar
+          # staat ook waarom het die twee helften zijn). De overloop zolder
+          # leest dezelfde sensor - twee kopieën van dit venster is precies hoe
+          # de kamers vóór de blueprint uit elkaar liepen.
           #
-          #   aan_blokkades:
-          #     - condition: not
-          #       conditions:
-          #         - condition: time
-          #           after: input_datetime.bedtime_maxi
-          #           before: "07:15:00"
+          # Alleen het AANzetten wordt geblokkeerd; uitzetten gaat er buitenom
+          # (zie de blueprint), anders blijft een lamp die om 20:55 aanging de
+          # hele nacht branden.
+          #
+          # Doet Mini na zonsondergang haar deur open, dan gaan beide overlopen
+          # gewoon aan - dat doet automation.bedroom_mini_lights_doors_open
+          # rechtstreeks (Bedroom Mini/Lights.yaml) en niet via deze blueprint,
+          # dus daar raakt dit venster niet aan.
+          #
+          # Een template-conditie en geen state-conditie op "off": is de sensor
+          # er even niet, dan hoort het licht gewoon te werken.
+          aan_blokkades:
+            - alias: "Niet tussen bedtijd en opstaan"
+              condition: template
+              value_template: "{{ not is_state('binary_sensor.huis_slaapt', 'on') }}"

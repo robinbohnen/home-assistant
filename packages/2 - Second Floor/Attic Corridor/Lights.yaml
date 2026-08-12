@@ -24,6 +24,23 @@ attic_corridor_lights_package:
           lamp: light.overloop_zolder_lampen
           schakelaar: input_boolean.enable_pir_attic_corridor
           helderheid: input_number.lights_attic_corridor_percentage
-          # Geen bedtijdblokkade en geen daglichtdrempel, net als de overloop op
-          # de eerste verdieping; zie de toelichting daar. Beweging of een deur
-          # die opengaat is hier het enige dat telt.
+          # Geen daglichtdrempel; beweging is overdag het enige dat telt.
+          #
+          # 's Nachts niet: dezelfde rem als op de overloop een verdieping
+          # lager (Robin, 12 augustus 2026). Het venster zelf staat in
+          # binary_sensor.huis_slaapt, zodat de twee overlopen niet uit elkaar
+          # kunnen lopen; de toelichting staat bij die sensor in
+          # packages/1 - First Floor/Bedroom Maxi/Bedtime.yaml en bij de
+          # overloop in packages/1 - First Floor/Corridor/Lights.yaml.
+          #
+          # Doet Mini na zonsondergang haar deur open, dan gaat deze overloop
+          # gewoon aan: dat doet automation.bedroom_mini_lights_doors_open
+          # rechtstreeks en niet via deze blueprint. Die automatisering dooft
+          # na vijf minuten zelf weer, tenzij de bewegingssensor hier dan nog
+          # iemand ziet - en het uitzetten door de blueprint blijft ook 's
+          # nachts gewoon werken, want blokkades gelden alleen voor het
+          # aanzetten.
+          aan_blokkades:
+            - alias: "Niet tussen bedtijd en opstaan"
+              condition: template
+              value_template: "{{ not is_state('binary_sensor.huis_slaapt', 'on') }}"

@@ -33,6 +33,42 @@ bedtime_maxi_package:
             {% set mini = strptime(states('input_datetime.bedtime_mini_1h_off'), '%H:%M:%S').hour %}
             {{ now().hour >= maxi or now().hour >= mini or now().hour < 9 }}
 
+        # De nacht zoals de bewegingslichten op de twee overlopen hem tellen:
+        # van het moment dat de kinderen écht in bed liggen tot het huis
+        # zichzelf wakker meldt (Robin, 12 augustus 2026).
+        #
+        # Waarom niet bedtime_kids hierboven: die hangt aan de *_1h_off-helpers
+        # (19:30) en dan lopen de kinderen nog naar boven - precies wanneer je
+        # licht op de overloop wilt. Hier telt het maximum van de vier échte
+        # bedtijd-helpers, nu 21:00 (de weekendstand). Verzet Robin een
+        # bedtijd, dan schuift dit mee.
+        #
+        # Waarom niet gewoon "klimaat_wakker uit": die vlag valt elke avond om
+        # 22:00 al terug en zegt tussen bedtijd en 22:00 dus nog niets. Vandaar
+        # twee helften: na de laatste bedtijd, of 's ochtends vóór de
+        # slaapkamerknop. De grens van 12:00 is een noodrem - raakt die vlag
+        # overdag uit, dan is het huis daarmee niet ineens weer in slaap.
+        #
+        # Bewust geen availability: valt een helper weg, dan hoort deze sensor
+        # 'off' te melden en het licht dus gewoon te werken. Een sensor die
+        # 'unavailable' wordt is op een donkere overloop de verkeerde kant om.
+        - name: huis_slaapt
+          unique_id: huis_slaapt
+          icon: mdi:home-clock
+          state: >
+            {% set bedtijden = ['input_datetime.bedtime_maxi',
+                                'input_datetime.bedtime_mini',
+                                'input_datetime.bedtime_maxi_weekend',
+                                'input_datetime.bedtime_mini_weekend']
+                               | map('states')
+                               | reject('in', ['unknown', 'unavailable', ''])
+                               | list %}
+            {% set na_bedtijd = bedtijden
+               and now().strftime('%H:%M:%S') >= bedtijden | max %}
+            {% set voor_opstaan = now().hour < 12
+               and is_state('input_boolean.klimaat_wakker', 'off') %}
+            {{ na_bedtijd or voor_opstaan }}
+
   automation:
     - id: bedtime_for_maxi_lights_off
       alias: Bedroom Maxi - Bedtime Lights Off
