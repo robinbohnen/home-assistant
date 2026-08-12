@@ -14,6 +14,66 @@ kitchen_covers_package:
         - cover.rollerblind_0001
         - cover.rollerblind_0002
 
+  template:
+    ##########################################################################
+    ## MAG DIT ROLGORDIJN DICHT?
+    ##
+    ## Je rolt geen gordijn tegen een openstaand raam aan, dus kijkt elke
+    ## sluiter eerst naar het raamcontact. Tot nu toe stond dat overal als
+    ## `state: "off"`, en telde een contact op 'unavailable' dus als open.
+    ##
+    ## Dat is goed bedoeld en precies wat er twee avonden misging. Het contact
+    ## van het grote keukenraam is op 10 augustus om 02:06 van het netwerk
+    ## gevallen (met een volle batterij: 100%, 3025 mV) en is sindsdien weg. De
+    ## sluiters lazen dat als "raam open" en hebben het grote rolgordijn op 10
+    ## en 11 augustus geen enkel commando gestuurd; Robin deed het allebei de
+    ## avonden met de hand (22:12 en 20:52). Het vangnet in
+    ## packages/9 - Other/Covers.yaml kon daar niets aan doen: dat kijkt of een
+    ## VERSTUURD commando is aangekomen, en hier werd er nooit een verstuurd.
+    ## De inhaaltrigger "sluit alsnog zodra het raam dichtgaat" hielp evenmin,
+    ## want een contact dat weg is meldt ook geen dichtgaan meer.
+    ##
+    ## Vandaar dit onderscheid: een raam dat ZEGT dat het openstaat houdt het
+    ## rolgordijn tegen, maar een contact dat al twee uur niets meer zegt weet
+    ## het gewoon niet - en dan is een gordijn dat zakt beter dan een gordijn
+    ## dat wekenlang blijft hangen. De sluiter meldt het wel, zie `vertrouwd`;
+    ## zo blijft een dood contact niet nog eens twee dagen onopgemerkt.
+    ##
+    ## Twee uur, en niet meteen: na een herstart van Home Assistant komen deze
+    ## batterijcontacten pas bij hun eerste melding weer boven water. Let op dat
+    ## een herstart `last_changed` ook opnieuw zet - herstart HA binnen twee uur
+    ## vóór de sluiting, dan telt een dood contact die avond alsnog als open.
+    ##########################################################################
+    - binary_sensor:
+        - name: keuken_rolgordijn_groot_mag_dicht
+          unique_id: keuken_rolgordijn_groot_mag_dicht
+          icon: mdi:blinds
+          state: >
+            {% set r = states.binary_sensor.keuken_raam_groot_contact %}
+            {{ r is none
+               or r.state == 'off'
+               or (r.state in ['unknown', 'unavailable']
+                   and (now() - r.last_changed).total_seconds() > 7200) }}
+          attributes:
+            contact: binary_sensor.keuken_raam_groot_contact
+            vertrouwd: >
+              {{ states('binary_sensor.keuken_raam_groot_contact')
+                 in ['on', 'off'] }}
+        - name: keuken_rolgordijn_klein_mag_dicht
+          unique_id: keuken_rolgordijn_klein_mag_dicht
+          icon: mdi:blinds
+          state: >
+            {% set r = states.binary_sensor.keuken_raam_klein_contact %}
+            {{ r is none
+               or r.state == 'off'
+               or (r.state in ['unknown', 'unavailable']
+                   and (now() - r.last_changed).total_seconds() > 7200) }}
+          attributes:
+            contact: binary_sensor.keuken_raam_klein_contact
+            vertrouwd: >
+              {{ states('binary_sensor.keuken_raam_klein_contact')
+                 in ['on', 'off'] }}
+
   automation:
     ##########################################################################
     ## Rolgordijnen dicht voor de avond
@@ -38,8 +98,10 @@ kitchen_covers_package:
     ## Per rolgordijn en niet als groep, want elk raam heeft zijn eigen contact:
     ## je rolt geen gordijn tegen een openstaand raam aan. Hiervoor sloot hij de
     ## groep zonder ergens naar te kijken, terwijl `covers_lock_alarm_events` en
-    ## de klimaatregie dat contact wél allebei respecteren. Een contact op
-    ## 'unknown' of 'unavailable' telt daarbij als open.
+    ## de klimaatregie dat contact wél allebei respecteren. Of een contact het
+    ## rolgordijn mag tegenhouden staat sinds 12 augustus 2026 in de twee
+    ## `*_mag_dicht`-sensoren bovenaan dit bestand; daar staat ook waarom een
+    ## contact dat al uren niets meldt niet meer als "raam open" telt.
     ##
     ## Die raamcheck maakte wel een nieuw gat: beide tijdstriggers zijn mómenten,
     ## dus stond een raam net op dat ene moment open - op precies de warme avond
@@ -101,11 +163,26 @@ kitchen_covers_package:
                 {% endfor %}
                 {{ (voorbij_zon or ns.voorbij_bed)
                    and (now().hour >= 12 or now().hour < 6) }}
+      variables:
+        # De contacten waarop we straks wél sluiten maar die zich niet gemeld
+        # hebben. Op automatiseringsniveau, zodat de melding onderaan dezelfde
+        # lijst gebruikt als waar de sluiting op leunt.
+        dode_contacten: >-
+          {% set ns = namespace(l=[]) %}
+          {% for s in ['binary_sensor.keuken_rolgordijn_groot_mag_dicht',
+                       'binary_sensor.keuken_rolgordijn_klein_mag_dicht'] %}
+            {% if is_state(s, 'on')
+                  and not (state_attr(s, 'vertrouwd') | bool(true)) %}
+              {% set ns.l = ns.l + [state_attr(s, 'contact')] %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.l }}
       actions:
         - if:
-            - condition: state
-              entity_id: binary_sensor.keuken_raam_groot_contact
-              state: "off"
+            - condition: template
+              value_template: >-
+                {{ is_state('binary_sensor.keuken_rolgordijn_groot_mag_dicht',
+                            'on') }}
             - condition: not
               conditions:
                 - condition: state
@@ -126,9 +203,10 @@ kitchen_covers_package:
                   cover: cover.rollerblind_0001
                   doel: 0
         - if:
-            - condition: state
-              entity_id: binary_sensor.keuken_raam_klein_contact
-              state: "off"
+            - condition: template
+              value_template: >-
+                {{ is_state('binary_sensor.keuken_rolgordijn_klein_mag_dicht',
+                            'on') }}
             - condition: not
               conditions:
                 - condition: state
@@ -142,3 +220,24 @@ kitchen_covers_package:
                 variables:
                   cover: cover.rollerblind_0002
                   doel: 0
+        # Sluiten op een contact dat zich niet meldt mag, maar dan hoort er wel
+        # iemand naar dat contact te kijken. Vaste tag: hij vervangt zichzelf,
+        # dus een dood contact levert geen stapel meldingen op maar wel elke
+        # avond weer een herinnering tot het gemaakt is.
+        - alias: Melden als we op een stil raamcontact hebben gesloten
+          if:
+            - condition: template
+              value_template: "{{ dode_contacten | count > 0 }}"
+          then:
+            - action: notify.mobile_devices_robin
+              data:
+                title: Raamcontact meldt zich niet
+                message: >-
+                  {{ dode_contacten
+                     | map('state_attr', 'friendly_name')
+                     | join(' en ') }}
+                  is al uren stil. Het rolgordijn is toch gezakt - kijk even of
+                  dat raam echt dicht is, en of het contact nog leeft.
+                data:
+                  tag: raamcontact-stil
+                  notification_icon: mdi:window-closed-variant
