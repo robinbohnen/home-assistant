@@ -99,6 +99,17 @@ hallway_doors_package:
         - condition: state
           entity_id: alarm_control_panel.alarmo
           state: disarmed
+        # Een vérse uitschakeling is zelf al het bewijs dat er een bevoegd
+        # iemand bij de deur staat (slot, app of code). Zonder deze rem vuurde
+        # dit bij thuiskomst: het slot ontwapent, de deur gaat open, maar de
+        # persoon-tracker loopt achter en all_adults staat dan nog op
+        # not_home - melding met jezelf op de foto. De staat is hierboven al
+        # disarmed, dus last_changed is het moment van uitzetten.
+        - condition: template
+          alias: Alarm staat al minstens 3 minuten uit
+          value_template: >-
+            {{ states.alarm_control_panel.alarmo is not none
+               and (now() - states.alarm_control_panel.alarmo.last_changed).total_seconds() > 180 }}
       actions:
         - action: camera.snapshot
           target:
