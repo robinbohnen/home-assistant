@@ -52,6 +52,20 @@ bedtime_maxi_package:
         # Bewust geen availability: valt een helper weg, dan hoort deze sensor
         # 'off' te melden en het licht dus gewoon te werken. Een sensor die
         # 'unavailable' wordt is op een donkere overloop de verkeerde kant om.
+        #
+        # De klok is niet het hele verhaal: komen we na de laatste bedtijd thuis
+        # en staan beide kinderdeuren nog open, dan liggen ze er niet in en zijn
+        # wij ook nog niet naar bed - dan mogen de overlopen gewoon aan (Robin,
+        # 13 augustus 2026). Sluiten gebeurt bij het naar bed brengen: op 12
+        # augustus gingen Mini en Maxi om 21:40 binnen 16 seconden van elkaar
+        # dicht, en daarna telt het venster weer normaal.
+        #
+        # Bewust `is_state(...,'on')` op allebei en geen `!= 'off'`: valt een
+        # deurcontact weg, dan telt hij niet als open en blijft de nachtrem
+        # staan. Eén open deur is ook niet genoeg - dat is een kind naar de wc,
+        # geen huis dat nog wakker is. Alleen deze avondhelft kent de
+        # uitzondering; 's ochtends zegt een open deur iets heel anders en
+        # blijft `voor_opstaan` de baas tot de slaapkamerknop omgaat.
         - name: huis_slaapt
           unique_id: huis_slaapt
           icon: mdi:home-clock
@@ -63,8 +77,12 @@ bedtime_maxi_package:
                                | map('states')
                                | reject('in', ['unknown', 'unavailable', ''])
                                | list %}
+            {% set kinderen_nog_op =
+                 is_state('binary_sensor.slaapkamer_maxi_deur_contact', 'on')
+                 and is_state('binary_sensor.slaapkamer_mini_deur_contact', 'on') %}
             {% set na_bedtijd = bedtijden
-               and now().strftime('%H:%M:%S') >= bedtijden | max %}
+               and now().strftime('%H:%M:%S') >= bedtijden | max
+               and not kinderen_nog_op %}
             {% set voor_opstaan = now().hour < 12
                and is_state('input_boolean.klimaat_wakker', 'off') %}
             {{ na_bedtijd or voor_opstaan }}
