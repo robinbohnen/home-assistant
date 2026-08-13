@@ -21,8 +21,18 @@ hallway_alarm_package:
 
     - id: 'alarm_off_automatically'
       alias: Hallway Alarm - Off Automatically
-      description: "Turn off the alarm Automatically someone comes home"
+      description: >-
+        Turn off the alarm Automatically someone comes home.
+        Let op de `delay` onderaan: bij thuiskomen vuren de zone-trigger van de
+        persoon en `group.all_adults` naar `home` in dezelfde milliseconde. Beide
+        runs lazen dan nog `armed_away` (de service-call is fire-and-forget, de
+        run is na 0,6 ms al klaar, dus `single` blokkeerde niets) en stuurden
+        allebei een disarm. Alarmo weigert de tweede met reason `not_allowed` en
+        vuurt daarvoor `alarmo_failed_to_arm` - wat een critical "huis is niet
+        bewaakt"-melding opleverde precies op het moment dat je binnenliep.
+        De delay houdt de run bezet zodat `single` de dubbele trigger opeet.
       mode: single
+      max_exceeded: silent
       triggers:
         - trigger: state
           entity_id:
@@ -62,6 +72,10 @@ hallway_alarm_package:
               data: {}
               target:
                 entity_id: alarm_control_panel.alarmo
+            # Blijf 10 seconden "bezig" zodat gelijktijdige triggers (zone-enter
+            # + group.all_adults) door mode `single` worden genegeerd.
+            - delay:
+                seconds: 10
 
     - id: 'alarm_on_automatically_robin_to_work'
       alias: Hallway Alarm - On Automatically Robin to Work
@@ -154,26 +168,42 @@ hallway_alarm_package:
         de hele nacht onbewaakt. Staat omzeilen wél aan, dan schakelt hij in
         en meldt alarm_bypassed_sensors_notify hieronder wat er niet bewaakt
         wordt.
+
+        Alarmo gebruikt `alarmo_failed_to_arm` ondanks de naam voor ELK geweigerd
+        commando, dus ook voor een mislukte disarm (`command: disarm`). Daardoor
+        kwam er een critical "het huis is niet bewaakt" binnen op het moment dat
+        je juist thuiskwam en uitschakelde. Vandaar de filters hieronder: alleen
+        echte arm-commando's, en niet bij reason `not_allowed` - dat betekent
+        "stond al zo" en dus nooit een onbewaakt huis.
       mode: queued
       max: 5
       max_exceeded: silent
       triggers:
         - trigger: event
           event_type: alarmo_failed_to_arm
-      conditions: []
+      conditions:
+        - condition: template
+          value_template: >-
+            {{ (trigger.event.data.command | default('', true)).startswith('arm') }}
+        - condition: template
+          value_template: >-
+            {{ trigger.event.data.reason | default('', true) != 'not_allowed' }}
       actions:
         - variables:
             namen: >-
               {{ expand(trigger.event.data.sensors | default([], true))
                  | map(attribute='name') | list | join(', ') }}
+            stand: >-
+              {{ (trigger.event.data.command | default('arm', true))
+                 | replace('arm_', '') | replace('arm', 'aan') }}
         # Critical: een onbewaakt huis moet je nu weten, niet morgenochtend.
         - action: script.notify_critical
           data:
             doelgroep: notify.mobile_devices_adults
             titel: Alarm NIET ingeschakeld
             bericht: >-
-              Het alarm kon niet op {{ trigger.event.data.command | default('aan', true) }}
-              gezet worden{% if namen %}: {{ namen }} staat nog open{% endif %}.
+              Het alarm kon niet op {{ stand }} gezet worden{% if namen %}:
+              {{ namen }} staat nog open{% endif %}.
               Het huis is dus niet bewaakt.
             volume: 0.7
 
