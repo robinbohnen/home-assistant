@@ -1,3 +1,25 @@
+##############################################################################
+## LICHT UIT - twee automatiseringen die niet hetzelfde doen
+##
+## light_auto_turn_off    de slaapronde. Draait zodra de woonkamer nog brandt
+##                        en iedereen duidelijk ligt: doet het licht uit en zet
+##                        het alarm aan. Stopt vanzelf zodra de woonkamer uit
+##                        is - dat is precies de bedoeling, anders zou hij de
+##                        hele nacht elke vijf minuten blijven vuren.
+##
+## light_harde_uit_sweep  het vangnet daaronder. Stuurt een paar keer per nacht
+##                        `light.turn_off` naar dezelfde lampen ZONDER eerst te
+##                        kijken of ze aan staan, want dat is nu juist wat er
+##                        kapot kan zijn.
+##
+## Waarom die tweede moet bestaan: in de nacht van 13 op 14 augustus 2026 bleef
+## de entree-kastlamp (IKEA TRADFRI via zigbee2mqtt) branden terwijl Home
+## Assistant hem sinds 22:23:45 als `off` had staan. Elke automatisering die
+## eerst `is_state(lamp, 'on')` vraagt - de slaapronde hierboven voorop - kijkt
+## dan langs de storing heen. Alleen een commando dat sowieso vertrekt, krijgt
+## zo'n lamp alsnog uit.
+##############################################################################
+
 light_package:
   automation:
     - id: light_auto_turn_off
@@ -125,3 +147,124 @@ light_package:
                   target:
                     entity_id: alarm_control_panel.alarmo
           alias: Turn on alarm
+
+    ###########################################################################
+    ## Harde uit-sweep
+    ###########################################################################
+    - id: light_harde_uit_sweep
+      alias: Lights - Harde uit-sweep 's nachts
+      description: >-
+        Stuurt een paar keer per nacht onvoorwaardelijk `light.turn_off` naar
+        de binnenlampen, ook naar lampen die Home Assistant al als uit heeft
+        staan. Vangnet voor een lamp die fysiek brandt terwijl zijn state uit
+        meldt.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        # Vaste momenten en niet elke vijf minuten: een commando naar tien
+        # groepen is echt verkeer over de zigbee-radio, en één nacht met vier
+        # rondes bekort een doorbrander van tien uur al tot hooguit twee.
+        # De eerste ligt kort na de slaapronde, de laatste ruim voor de
+        # ochtendblokkade van de hal (die loopt tot 07:15).
+        - trigger: time
+          at:
+            - "23:45:00"
+            - "01:45:00"
+            - "03:45:00"
+            - "05:45:00"
+      conditions:
+        # LET OP WAT HIER NIET STAAT
+        # Geen enkele conditie op een lámp. Dat is de hele reden van bestaan:
+        # de state van de lamp is precies wat onbetrouwbaar kan zijn. Wat we
+        # wel checken is of er iemand loopt, en dat leest van de bewegings-
+        # melders - een onafhankelijke bron.
+        - alias: "Niemand beneden of op de overloop in beweging geweest"
+          condition: template
+          value_template: >-
+            {# De lijst dekt elke ruimte waarvan hieronder het licht uitgaat.
+               De slaapronde hierboven kijkt alleen naar beneden, en dat mag
+               daar: die draait op een brandende woonkamer. Deze sweep vuurt op
+               de klok, dus de twee overlopen moeten er ook in - anders staat
+               wie om kwart voor vier naar de badkamer loopt ineens in het
+               donker op de trap. De badkamer- en slaapkamermelders hoeven niet:
+               die lampen staan bewust niet in de doellijst. #}
+            {% set melders = [
+                 'binary_sensor.woonkamer_beweging_achter_occupancy',
+                 'binary_sensor.woonkamer_beweging_voor_occupancy',
+                 'binary_sensor.entree_beweging_occupancy',
+                 'binary_sensor.speelkamer_beweging_links_occupancy',
+                 'binary_sensor.toilet_beweging_occupancy',
+                 'binary_sensor.g4_instant_woonkamer_motion',
+                 'binary_sensor.g4_instant_keuken_motion',
+                 'binary_sensor.overloop_beweging_occupancy',
+                 'binary_sensor.overloop_zolder_beweging_occupancy'
+               ] %}
+            {# Een melder die weg is (unavailable) of niet meer bestaat (een
+               hernoemde entiteit) telt hier als "rustig" en blokkeert de sweep
+               dus niet. Dat is de omgekeerde keuze van de waakhond in
+               Watchdog.yaml, met opzet: die moet klágen over een kapotte
+               sensor, deze moet blíjven draaien. Een gewone state-conditie zou
+               op allebei de gevallen stilvallen, en dan is het vangnet weg op
+               precies het moment dat de zigbee-keten hapert - laat staan dat
+               juist dán ook uit-commando's verloren gaan.
+
+               `states[e]` moet daarom door een is-not-none heen: op een
+               onbekende entiteit gooit `.last_changed` een UndefinedError, en
+               een conditie die een fout gooit is onwaar. Deze sweep zou dan
+               vanaf de eerstvolgende hernoeming nooit meer lopen zonder dat
+               iemand het merkt.
+
+               Prijs: staat er iemand stil in een kamer met een dode melder,
+               dan gaat zijn licht uit. Dat corrigeert zich bij de volgende
+               beweging. #}
+            {% set ns = namespace(rustig=true) %}
+            {% for e in melders %}
+              {% set s = states[e] %}
+              {# De recentheidstoets hangt bewust aan `s.state == 'off'` en
+                 niet aan de entiteit als geheel: `last_changed` verspringt ook
+                 bij een wissel naar `unavailable`, en dan zou een melder die
+                 net wegviel de sweep alsnog twintig minuten blokkeren - precies
+                 wat hierboven staat dat het niet moet doen. De twee UniFi-
+                 camera's vallen 's nachts geregeld even weg (nachten van 11-12
+                 en 12-13 augustus 2026, allebei rond 03:45), dus dat is geen
+                 theoretisch geval. #}
+              {% if s is not none
+                    and (s.state == 'on'
+                         or (s.state == 'off'
+                             and (now() - s.last_changed).total_seconds() < 1200)) %}
+                {% set ns.rustig = false %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.rustig }}
+        - alias: "Er wordt niet gekeken"
+          condition: not
+          conditions:
+            - condition: state
+              entity_id: media_player.woonkamer_appletv
+              state: playing
+      actions:
+        # Bewust dezelfde lijst als de slaapronde hierboven, en bewust
+        # uitgeschreven in plaats van "alle lampen behalve": zie de rest van
+        # deze config. Wat er niet in staat is net zo goed een keuze -
+        # slaapkamers (daar mag een nachtlampje branden), de badkamer (daar kan
+        # om vier uur 's nachts iemand staan) en alles buiten (voortuin en
+        # carport horen tot zonsopkomst te branden).
+        #
+        # Geen `transition`: een fade naar uit is een van de twee verdachten
+        # voor de doorbrander van 14-08-2026 - sommige lampen blijven op stand 1
+        # hangen en melden zich toch als uit. Een kaal uit-commando heeft dat
+        # probleem niet.
+        - action: light.turn_off
+          data: {}
+          target:
+            entity_id:
+              - light.woonkamer_lampen
+              - light.garage_lampen
+              - light.speelkamer_lampen
+              - light.keuken_lampen
+              - light.eettafel_lampen
+              - light.entree_lampen
+              - light.toilet_lampen
+              - light.trapkast_lampen
+              - light.overloop_lampen
+              - light.overloop_zolder_lampen
