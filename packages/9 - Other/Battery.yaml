@@ -176,6 +176,54 @@ battery_package:
               {%- set ontlaad_komt = ontlaadset | sort(attribute='start')
                                      | selectattr('start', 'gt', now()) | list -%}
               {%- set komende_ontlaad = ontlaad_komt[0] if ontlaad_komt else none -%}
+
+              {#- ================= VULLEN VÓÓR DE PIEK =================
+                  De zes goedkoopste blokken van het venster zeggen niets over
+                  de VOLGORDE. Op 14 augustus lagen ze allemaal de volgende
+                  middag, terwijl de dure blokken diezelfde avond kwamen: het
+                  plan was dus "vanavond leegtrekken en morgenmiddag weer
+                  vullen", zonder ooit te vragen of er genoeg in zat om die
+                  avond te halen. Dat was het niet - 3,08 kWh bruikbaar tegen
+                  3,60 kWh aan ontlaadblokken.
+                  Hieronder wordt dat tekort uitgerekend en aangevuld met de
+                  goedkoopste blokken die VOOR de piek liggen. Alles hier komt
+                  uit het apparaat zelf (vermogens, vloer, capaciteit), zodat
+                  een andere accu of een gewijzigde instelling meeverandert. -#}
+              {%- set p_laad = states('number.lilygo_rs485_marstek_max_charge_power') | float(2500) -%}
+              {%- set p_ontlaad = states('number.lilygo_rs485_marstek_max_discharge_power') | float(800) -%}
+              {%- set soc = states('sensor.lilygo_rs485_marstek_battery_state_of_charge') | float(0) -%}
+              {%- set rest_kwh = states('sensor.lilygo_rs485_marstek_battery_remaining_capacity') | float(0) -%}
+              {#- Capaciteit uit de accu zelf afleiden; onder de 5% is die deling
+                  te grof, dan de nominale 5,12 kWh van dit apparaat. -#}
+              {%- set cap = (rest_kwh / (soc / 100)) if soc > 5 and rest_kwh > 0 else 5.12 -%}
+              {#- De vloer is de hoogste van twee: onze eigen ondergrens en die
+                  van het apparaat. Het apparaat stopt sowieso, dus daaronder
+                  rekenen zou een tekort verzinnen dat niet bestaat. -#}
+              {%- set vloer = [states('input_number.batterij_min_soc') | float(10),
+                               states('number.lilygo_rs485_marstek_discharging_cutoff_capacity') | float(12)] | max -%}
+              {%- set beschikbaar = [((soc - vloer) / 100) * cap, 0] | max -%}
+              {#- De piek die als eerste aan de beurt is: alle ontlaadblokken
+                  tot aan het eerstvolgende gewone laadblok. Wat daarna komt
+                  wordt door dát laadblok bediend en telt hier niet mee. -#}
+              {%- set grens = komende_laad.start if komende_laad is not none
+                              else (ns.v | map(attribute='start') | max) -%}
+              {%- set piek = ontlaadset | sort(attribute='start')
+                             | selectattr('start', 'lt', grens) | list -%}
+              {%- set nodig = (piek | count) * (p_ontlaad / 1000) * 0.25 -%}
+              {%- set tekort = nodig - beschikbaar -%}
+              {#- Kopen om te verkopen loont alleen met marge: een retourtje
+                  door de accu kost rendement, dus 5 cent onder de ontlaadgrens
+                  is de ondergrens van de moeite. -#}
+              {%- set plafond = (ontlaadset | map(attribute='value') | min | default(0, true)) - 0.05 -%}
+              {%- set eerste_piek = piek[0].start if piek else grens -%}
+              {%- set kandidaten = ns.v | sort(attribute='value')
+                                   | selectattr('start', 'lt', eerste_piek)
+                                   | rejectattr('start', 'in', laad_starts)
+                                   | selectattr('value', 'lt', plafond) | list -%}
+              {%- set aantal = ((tekort / ((p_laad / 1000) * 0.25)) | round(0, 'ceil') | int)
+                               if tekort > 0 else 0 -%}
+              {%- set bijvul = kandidaten[:aantal] if aantal > 0 else [] -%}
+              {%- set bijvul_starts = bijvul | map(attribute='start') | list -%}
               {%- if not ns.v or nu_blok is none -%}
                 {%- set stand = 'rust' -%}
                 {%- set reden = 'geen prijsblokken beschikbaar' -%}
@@ -189,6 +237,12 @@ battery_package:
               {%- elif nu_blok.start in laad_starts -%}
                 {%- set stand = 'laden' -%}
                 {%- set reden = 'een van de ' ~ n_laad ~ ' goedkoopste kwartieren' -%}
+              {#- Vóór de ontlaadset kijken: een bijvulblok is per definitie
+                  goedkoper dan de piek die hij bedient, dus deze twee kunnen
+                  elkaar niet overlappen. -#}
+              {%- elif nu_blok.start in bijvul_starts -%}
+                {%- set stand = 'laden' -%}
+                {%- set reden = 'bijvullen voor de piek, ' ~ (tekort | round(1)) ~ ' kWh tekort' -%}
               {%- elif nu_blok.start in ontlaad_starts -%}
                 {%- set stand = 'ontladen' -%}
                 {%- set reden = 'een van de ' ~ n_ontlaad ~ ' duurste kwartieren' -%}
@@ -203,7 +257,13 @@ battery_package:
                   'laad_grens': (laadset | map(attribute='value') | max | round(4)) if laadset else none,
                   'ontlaad_grens': (ontlaadset | map(attribute='value') | min | round(4)) if ontlaadset else none,
                   'volgend_laadblok': tijdstip(komende_laad) | trim,
-                  'volgend_ontlaadblok': tijdstip(komende_ontlaad) | trim} }}
+                  'volgend_ontlaadblok': tijdstip(komende_ontlaad) | trim,
+                  'piek_blokken': piek | count,
+                  'piek_nodig': nodig | round(2),
+                  'accu_beschikbaar': beschikbaar | round(2),
+                  'bijvul_blokken': bijvul | count,
+                  'bijvul_vanaf': tijdstip(bijvul | sort(attribute='start') | first
+                                           if bijvul else none) | trim} }}
 
       sensor:
         - name: "Batterij kwartierplan"
@@ -318,9 +378,22 @@ battery_package:
                 # accu bijna leeg, dan laden we sowieso bij. Een misgelopen
                 # weersverwachting kost je anders de hele avondpiek, en dat is
                 # precies het uur waarvoor deze accu bedoeld is.
-                - alias: Niet genoeg zon op komst, of de accu is te leeg om te gokken
+                - alias: Niet genoeg zon op komst, te leeg om te gokken, of bijvullen voor de piek
                   condition: template
                   value_template: >-
+                    {#- WIE WINT ER VAN WIE
+                        De overschot-rem hierboven blijft altijd staan: die
+                        meet dat de zon op dit moment ECHT levert, en dan koop
+                        je niets. Deze rem is een VOORSPELLING, en die legt het
+                        af tegen een uitgerekend tekort: zegt het plan
+                        "bijvullen voor de piek", dan is er een concreet aantal
+                        kWh nodig voor een piek die vanavond komt, en dat weegt
+                        zwaarder dan de kans dat de zon het nog doet. Het gaat
+                        bovendien nooit om meer dan het tekort zelf - de
+                        plansensor kiest precies genoeg blokken. -#}
+                    {% if 'bijvullen' in (state_attr('sensor.batterij_kwartierplan', 'reden') | default('', true)) %}
+                      {{ true }}
+                    {% else %}
                     {% set na_zonsondergang = is_state('sun.sun', 'below_horizon')
                                               and now().hour >= 12 %}
                     {% set zon = states('sensor.energy_production_tomorrow') | float(0)
@@ -329,6 +402,7 @@ battery_package:
                     {% set soc = states('sensor.lilygo_rs485_marstek_battery_state_of_charge') | float(0) %}
                     {{ zon < (states('input_number.batterij_zon_drempel') | float(20))
                        or soc < 30 }}
+                    {% endif %}
               sequence:
                 - action: select.select_option
                   data:
