@@ -258,9 +258,15 @@ battery_package:
                     option: charge
                   target:
                     entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+                # Het vermogen komt van de omvormer zelf en staat hier niet
+                # hardgecodeerd: `max_charge_power` is wat dit apparaat aankan.
+                # Zelfde reden als de SoC-drempel van de auto in Voice.yaml -
+                # een eigen getal loopt vroeg of laat uit de pas met de
+                # hardware.
                 - action: number.set_value
                   data:
-                    value: "2500"
+                    value: >-
+                      {{ states('number.lilygo_rs485_marstek_max_charge_power') | float(2500) }}
                   target:
                     entity_id: number.lilygo_rs485_marstek_forcible_charge_power
             - alias: Ontladen in een duur kwartier
@@ -289,9 +295,16 @@ battery_package:
                     option: discharge
                   target:
                     entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+                # ONTLADEN KAN MAAR 800 W OP DIT APPARAAT, LADEN 2500.
+                # Hier stond `2500` hardgecodeerd; die waarde valt binnen het
+                # bereik van de entiteit (0-2500) en wordt dus geaccepteerd,
+                # maar de omvormer haalt hem nooit - en het overschreef de 800
+                # die er met de hand in gezet was. `max_discharge_power` is de
+                # echte grens en die leest de regie nu uit.
                 - action: number.set_value
                   data:
-                    value: "2500"
+                    value: >-
+                      {{ states('number.lilygo_rs485_marstek_max_discharge_power') | float(800) }}
                   target:
                     entity_id: number.lilygo_rs485_marstek_forcible_discharge_power
           # Alles wat geen laad- of ontlaadblok is - inclusief een tak
@@ -525,10 +538,14 @@ battery_package:
                     option: discharge
                   target:
                     entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+                # Zelfde correctie als in de kwartierregie hierboven: 2500 is
+                # geen haalbaar ontlaadvermogen op dit apparaat (de omvormer
+                # doet er 800) en overschreef een handmatig gezette waarde.
                 - action: number.set_value
                   metadata: {}
                   data:
-                    value: "2500"
+                    value: >-
+                      {{ states('number.lilygo_rs485_marstek_max_discharge_power') | float(800) }}
                   target:
                     entity_id: number.lilygo_rs485_marstek_forcible_discharge_power
               alias: High price; discharge
