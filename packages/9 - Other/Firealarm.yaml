@@ -103,10 +103,15 @@ firealarm_package:
             brightness_pct: "100"
           target:
             entity_id: light.all_lights
+        # De vluchtinstructies hieronder in de `!= dicht`-vorm en niet als
+        # `state: on`: bij brand is het niet denkbeeldig dat Zigbee er net uit
+        # ligt (de coordinator hangt in de meterkast) en dan is de groep
+        # unavailable. Een strikte on-check laat de melding dan stil wegvallen;
+        # deze vorm kiest de veilige kant en waarschuwt ook bij twijfel.
         - if:
-            - condition: state
-              entity_id: binary_sensor.all_windows
-              state: "on"
+            - condition: template
+              alias: Ramen niet aantoonbaar allemaal dicht
+              value_template: "{{ not is_state('binary_sensor.all_windows', 'off') }}"
           then:
             # Volume 1: hier moet iemand het huis uit, dus dit mag door alles
             # heen. Het geluid zelf staat in script.notify_critical.
@@ -119,9 +124,9 @@ firealarm_package:
                   buiten.
                 volume: 1
         - if:
-            - condition: state
-              entity_id: binary_sensor.all_doors
-              state: "on"
+            - condition: template
+              alias: Deuren niet aantoonbaar allemaal dicht
+              value_template: "{{ not is_state('binary_sensor.all_doors', 'off') }}"
           then:
             - action: script.notify_critical
               data:
@@ -153,10 +158,13 @@ firealarm_package:
             brightness_pct: "100"
           target:
             entity_id: light.all_lights
+        # Zelfde omkering als bij het brandalarm hierboven, spiegelbeeldig:
+        # `!= open` in plaats van `state: off`, zodat een unavailable groep
+        # (Zigbee weg) de open-die-ramen-instructie niet stil laat wegvallen.
         - if:
-            - condition: state
-              entity_id: binary_sensor.all_windows
-              state: "off"
+            - condition: template
+              alias: Ramen niet aantoonbaar open
+              value_template: "{{ not is_state('binary_sensor.all_windows', 'on') }}"
           then:
             - action: script.notify_critical
               data:
@@ -167,9 +175,9 @@ firealarm_package:
                   buiten.
                 volume: 1
         - if:
-            - condition: state
-              entity_id: binary_sensor.all_doors
-              state: "off"
+            - condition: template
+              alias: Deuren niet aantoonbaar open
+              value_template: "{{ not is_state('binary_sensor.all_doors', 'on') }}"
           then:
             - action: script.notify_critical
               data:

@@ -1060,45 +1060,67 @@ brandweer_package:
       description: Add appointment to calendar when gone with firestation
       mode: single
       triggers:
+        # GEEN wait_for_trigger meer: die wachtte hier tot 10 minuten op de
+        # kazerne-aankomst, en een automation-reload in dat venster doodde de
+        # wachtende run - dan kwam de hele uitruk nergens terecht (agenda,
+        # uitgerukt-vlag, teller). Zelfde kwaal en zelfde oplossing als bij de
+        # zonnescherm- en zoldervraag: de aankomst is nu zelf een trigger en
+        # de versheid van de melding een conditie, in plaats van een run die
+        # in leven moet blijven.
         - trigger: state
           entity_id:
             - input_text.brandweer_laatste_melding
+          id: melding
+        - trigger: zone
+          entity_id: device_tracker.iphone_van_robin
+          zone: zone.brandweer_kazerne_uden
+          event: enter
+          id: kazerne
       conditions:
-        # Een reload herschrijft de melding met dezelfde tekst en zette deze
-        # automatisering aan het wachten op een aankomst bij de kazerne die
-        # nooit zou komen; zie de toelichting bij `brandweer_tts_nesthub`.
-        - alias: Alleen bij een echt nieuwe melding
-          condition: template
-          value_template: >-
-            {{ trigger.from_state is not none
-               and trigger.to_state is not none
-               and trigger.from_state.state != trigger.to_state.state }}
-      actions:
-        - alias: Wacht of ik op de kazerne aankom of deze verlaat
-          if:
-            - alias: Kijk of ik nog niet op de kazerne ben
-              condition: not
+        - condition: or
+          conditions:
+            # Tak 1: melding terwijl ik al op de kazerne sta - dan komt er
+            # geen zone-enter meer. De from/to-check: een reload herschrijft
+            # de melding met dezelfde tekst; zie `brandweer_tts_nesthub`.
+            - condition: and
               conditions:
+                - condition: trigger
+                  id: melding
+                - alias: Alleen bij een echt nieuwe melding
+                  condition: template
+                  value_template: >-
+                    {{ trigger.from_state is not none
+                       and trigger.to_state is not none
+                       and trigger.from_state.state != trigger.to_state.state }}
                 - condition: zone
                   entity_id: device_tracker.iphone_van_robin
                   zone: zone.brandweer_kazerne_uden
+            # Tak 2: aankomst op de kazerne binnen 10 minuten na de melding.
+            # 10 en niet 6 minuten om dezelfde reden als voorheen bij de wait:
+            # een telefoon die even geen fix heeft of een uitruk waarbij ik
+            # van verder moet komen mag niet stilletjes buiten de boot vallen.
+            # Te laat een agenda-item is beter dan geen.
+            - condition: and
+              conditions:
+                - condition: trigger
+                  id: kazerne
+                - alias: Melding is minder dan 10 minuten oud
+                  condition: template
+                  value_template: >-
+                    {{ (now() - states.input_text.brandweer_laatste_melding.last_changed)
+                       .total_seconds() < 600 }}
+      actions:
+        # De conditions hierboven garanderen al dat ik op de kazerne sta; deze
+        # buitenste if bewaart de structuur van vóór de refactor (zodat het
+        # registratieblok eronder niet hoefde te verspringen) en vangt het
+        # theoretische geval dat de tracker wegspringt tussen conditie en
+        # actie.
+        - alias: Alleen registreren als ik echt op de kazerne sta
+          if:
+            - condition: zone
+              entity_id: device_tracker.iphone_van_robin
+              zone: zone.brandweer_kazerne_uden
           then:
-            # 10 en niet 6 minuten: de app-tracker is snel, maar een telefoon die
-            # even geen fix heeft of een uitruk waarbij ik van verder moet komen
-            # mag niet weer stilletjes buiten de boot vallen. Te laat een
-            # agenda-item is beter dan geen.
-            - alias: 10 minuten wachten totdat Robin op kazerne is
-              wait_for_trigger:
-                - entity_id: device_tracker.iphone_van_robin
-                  zone: zone.brandweer_kazerne_uden
-                  event: enter
-                  trigger: zone
-              timeout:
-                hours: 0
-                minutes: 10
-                seconds: 0
-                milliseconds: 0
-              continue_on_timeout: false
             - alias: Als Robin op de kazerne is
               if:
                 - alias: Kijk of ik op de kazerne ben

@@ -50,8 +50,12 @@ hallway_doors_package:
       conditions: []
       actions:
         - variables:
+            # Zelf minuten rekenen en niet `relative_time`: die filter levert
+            # Engels ("20 minutes") ongeacht de taalinstelling, en dat stond
+            # dus letterlijk zo in de Nederlandse melding.
             hoelang: >-
-              {{ relative_time(states.binary_sensor.entree_entree_voordeur_deur.last_changed) }}
+              {{ ((now() - states.binary_sensor.entree_entree_voordeur_deur.last_changed)
+                  .total_seconds() / 60) | round(0) | int }} minuten
         - choose:
             - conditions:
                 - condition: trigger

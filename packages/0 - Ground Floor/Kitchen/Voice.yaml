@@ -370,14 +370,18 @@ keuken_voice_package:
           {%- else -%}
             {#- Zelfde logica als de accu-app op de klokken (Klokken.yaml): de
                 inverter-state is leidend, het vermogen is de terugval met een
-                dode zone van 20 W. Positief vermogen = laden. -#}
-            {%- set pw = states('sensor.lilygo_rs485_marstek_battery_power') | float(0) -%}
+                dode zone van 20 W. Positief vermogen = laden.
+                float(none) en niet float(0): een weggevallen vermogenssensor
+                is "weet ik niet", geen 0 W - anders zegt de stem "laadt met
+                0 watt" zodra de inverter-state Charge meldt. Het wattage
+                wordt dan gewoon weggelaten. -#}
+            {%- set pw = states('sensor.lilygo_rs485_marstek_battery_power') | float(none) -%}
             {%- set inv = states('sensor.lilygo_rs485_marstek_inverter_state') -%}
-            {%- set laadt = inv == 'Charge' or (inv not in ['Charge', 'Discharge'] and pw > 20) -%}
-            {%- set ontlaadt = inv == 'Discharge' or (inv not in ['Charge', 'Discharge'] and pw < -20) -%}
+            {%- set laadt = inv == 'Charge' or (inv not in ['Charge', 'Discharge'] and pw is not none and pw > 20) -%}
+            {%- set ontlaadt = inv == 'Discharge' or (inv not in ['Charge', 'Discharge'] and pw is not none and pw < -20) -%}
             De thuisaccu zit op {{ soc | round(0) | int }} procent
-            {%- if laadt %} en laadt met {{ pw | abs | round(0) | int }} watt
-            {%- elif ontlaadt %} en levert {{ pw | abs | round(0) | int }} watt aan het huis
+            {%- if laadt %} en laadt{% if pw is not none %} met {{ pw | abs | round(0) | int }} watt{% endif %}
+            {%- elif ontlaadt %} en levert{% if pw is not none %} {{ pw | abs | round(0) | int }} watt{% endif %} aan het huis
             {%- endif %}.
           {%- endif -%}
 
@@ -642,6 +646,104 @@ keuken_voice_package:
           continue_on_error: true
       speech:
         text: "Doe ik, de lichten gaan uit."
+
+    #########################################################################
+    ## Acties: het huis iets laten DOEN
+    #########################################################################
+    # De intents hierboven lezen alleen af; deze groep grijpt in. Twee regels
+    # die voor alle drie gelden:
+    #
+    # 1. Alleen de veilige kant kan met de stem. Het alarm kan wél aan en
+    #    NIET uit: een gesproken commando is niet te onderscheiden van iemand
+    #    die door de brievenbus roept, en een satelliet hoort ook wat er op tv
+    #    gebeurt. Uitzetten blijft aan het slot, de app en de code.
+    # 2. Elke actie zegt wat er is gebeurd, ook als er niets gebeurde. Een
+    #    stille satelliet laat je in het ongewisse of hij je verstond.
+    RoutineAvond:
+      description: Start de avondroutine, hetzelfde als de knop naast het bed.
+      action:
+        # Via het event en niet via de losse acties: de router in
+        # packages/1 - First Floor/Bedroom/Buttons.yaml is sinds 2026-08-06 de
+        # enige plek waar staat wat een routine inhoudt. Elf abonnees luisteren
+        # hierop, dus dit blijft vanzelf gelijk aan de knop.
+        - event: huis_routine
+          event_data:
+            routine: avond
+      speech:
+        text: "Welterusten. Ik doe het huis op slot en de lichten uit."
+
+    RoutineOchtend:
+      description: Start de ochtendroutine, hetzelfde als de knop naast het bed.
+      action:
+        - event: huis_routine
+          event_data:
+            routine: ochtend
+      speech:
+        text: "Goedemorgen. Ik zet het huis aan."
+
+    AutoAirco:
+      description: Start de airco van de auto alvast.
+      action:
+        - if:
+            # De auto weigert zelf onder een drempel (live 8%) en meldt dat
+            # nergens terug; dan zou de stem "doe ik" zeggen en gebeurt er
+            # niets. De drempel komt van de auto zelf, niet uit een eigen
+            # getal, zodat Renault hem mag verzetten.
+            - condition: template
+              value_template: >-
+                {{ (states('sensor.hrh85f_batterij') | float(0))
+                   > (states('sensor.hrh85f_hvac_soc_threshold') | float(20)) }}
+          then:
+            - action: button.press
+              target:
+                entity_id: button.hrh85f_start_air_conditioner
+              continue_on_error: true
+      speech:
+        text: >-
+          {%- set soc = states('sensor.hrh85f_batterij') | float(none) -%}
+          {%- set drempel = states('sensor.hrh85f_hvac_soc_threshold') | float(20) -%}
+          {%- if soc is none -%}
+            Ik krijg de auto even niet te pakken.
+          {%- elif soc > drempel -%}
+            Doe ik, de airco van de auto start.
+            {%- if not is_state('binary_sensor.hrh85f_stekker', 'on') %} Let op: de stekker zit er niet in, dus dit gaat van de accu.{% endif -%}
+          {%- else -%}
+            De auto staat op {{ soc | round(0) | int }} procent en start de airco
+            pas boven {{ drempel | round(0) | int }} procent.
+          {%- endif -%}
+
+    AlarmAan:
+      description: Zet het alarm aan; thuis of afwezig op basis van wie er is.
+      action:
+        - if:
+            - condition: template
+              value_template: "{{ not is_state('alarm_control_panel.alarmo', 'disarmed') }}"
+          then: []
+          else:
+            # `force: true` omzeilt openstaande sensoren niet stilletjes: wat
+            # er omzeild is meldt `alarm_bypassed_sensors_notify` in
+            # Hallway/Alarm.yaml, en lukt het armen helemaal niet dan komt
+            # `alarm_failed_to_arm_notify` erachteraan. Zelfde stand als de
+            # welterusten-knop gebruikt.
+            - action: alarmo.arm
+              data:
+                mode: >-
+                  {{ 'home' if is_state('group.all_adults', 'home') else 'away' }}
+                skip_delay: true
+                force: true
+                entity_id: alarm_control_panel.alarmo
+      speech:
+        text: >-
+          {%- set stand = states('alarm_control_panel.alarmo') -%}
+          {%- if stand in ['unknown', 'unavailable'] -%}
+            Ik kan het alarm even niet bereiken.
+          {%- elif stand != 'disarmed' -%}
+            Het alarm staat al aan.
+          {%- elif is_state('group.all_adults', 'home') -%}
+            Doe ik, het alarm gaat op thuis.
+          {%- else -%}
+            Doe ik, het alarm gaat op afwezig.
+          {%- endif -%}
 
     #########################################################################
     ## Antwoorden op een vraag die het huis zelf gesteld heeft

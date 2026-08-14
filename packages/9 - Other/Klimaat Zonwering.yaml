@@ -120,46 +120,61 @@ klimaat_zonwering_package:
 
   timer:
     # Zolang zo'n timer loopt blijft de uitvoerder van die zone af.
+    #
+    # De `restore: true` op alle tien: zonder begint een lopende override na
+    # een HA-herstart weer op idle, en dan zet de eerstvolgende kwartierronde
+    # de cover terug op het advies terwijl iemand hem net bewust anders had
+    # gezet. "Blijf van deze zone af" moet een herstart overleven.
     override_keuken_screens:
       name: "Handbediening Keuken screens"
       duration: "04:00:00"
       icon: mdi:hand-back-right
+      restore: true
     override_keuken_rolgordijn_groot:
       name: "Handbediening Keuken rolgordijn groot"
       duration: "04:00:00"
       icon: mdi:hand-back-right
+      restore: true
     override_keuken_rolgordijn_klein:
       name: "Handbediening Keuken rolgordijn klein"
       duration: "04:00:00"
       icon: mdi:hand-back-right
+      restore: true
     override_kantoor_links:
       name: "Handbediening Kantoor links"
       duration: "04:00:00"
       icon: mdi:hand-back-right
+      restore: true
     override_kantoor_rechts:
       name: "Handbediening Kantoor rechts"
       duration: "04:00:00"
       icon: mdi:hand-back-right
+      restore: true
     override_badkamer:
       name: "Handbediening Badkamer"
       duration: "04:00:00"
       icon: mdi:hand-back-right
+      restore: true
     override_slaapkamer:
       name: "Handbediening Slaapkamer"
       duration: "04:00:00"
       icon: mdi:hand-back-right
+      restore: true
     override_slaapkamer_logan:
       name: "Handbediening Slaapkamer Logan"
       duration: "04:00:00"
       icon: mdi:hand-back-right
+      restore: true
     override_slaapkamer_emma:
       name: "Handbediening Slaapkamer Emma"
       duration: "04:00:00"
       icon: mdi:hand-back-right
+      restore: true
     override_zonnescherm:
       name: "Handbediening Zonnescherm achtertuin"
       duration: "04:00:00"
       icon: mdi:hand-back-right
+      restore: true
     # Zolang deze loopt is de vraag "zal ik het zonnescherm uitzetten?" al
     # gesteld en wordt hij niet opnieuw gesteld. Anders zou hij bij elke
     # kwartierronde opnieuw in beeld komen als er niemand antwoordt.
@@ -654,6 +669,22 @@ klimaat_zonwering_package:
         - condition: state
           entity_id: input_boolean.klimaatregie_actief
           state: "on"
+        # Na een HA-herstart of Zigbee-herstel maakt elke cover een
+        # unavailable->stand-flank. Stond HA even uit terwijl het advies
+        # veranderde (zon op/onder), dan wijkt de teruggekeerde stand af van
+        # het advies en zou dat hier als "iemand wilde dit zo" tellen - vier
+        # uur onterechte override, rolluiken de hele ochtend dicht. Een echte
+        # handbediening begint nooit in unknown/unavailable. Als template-
+        # conditie en niet als not_from op de triggers, omdat de eerste
+        # trigger op een attribuut staat en not_from daar naar de
+        # attribuutwaarde zou kijken.
+        - alias: Geen herstart- of herstel-flank
+          condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.to_state is not none
+               and trigger.from_state.state not in ['unknown', 'unavailable']
+               and trigger.to_state.state not in ['unknown', 'unavailable'] }}
       actions:
         - variables:
             zone: >-

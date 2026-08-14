@@ -316,7 +316,12 @@ klokken_package:
               {%- set vul = [[(soc * 9 / 100) | round(0) | int, 1] | max, 9] | min -%}
               {%- set vulkleur = '#FF3B30' if soc <= 10 else ('#32D74B' if laadt else ('#FF9F0A' if ontlaadt else '#0A84FF')) -%}
               {%- set label = soc | string ~ '%' -%}
-              {%- set tx = 32 - (label | length * 4) -%}
+              {#- 31 en niet 32: net als bij het zonneframe eindigt het label
+                  dan op x=30, vrij van de indicatorstipjes in de rechter
+                  bovenhoek. Met 32 viel de laatste kolom van het %-teken
+                  structureel onder de (vrijwel altijd brandende)
+                  prijsindicator. -#}
+              {%- set tx = 31 - (label | length * 4) -%}
               {%- set lengte = [[((pw | abs) * 32 / 2500) | round(0) | int, 32] | min, 1] | max -%}
               {"draw": [
               {"df": [0, 7, 32, 1, "#222222"]},
@@ -541,6 +546,12 @@ klokken_package:
             - arming
             - armed_home
             - armed_away
+            # De drie hieronder worden (nog) niet gebruikt, maar het script
+            # rekent ze al correct als "op scherp" - zonder trigger bleven de
+            # klokken dan branden tot de eerstvolgende lichtwissel.
+            - armed_night
+            - armed_vacation
+            - armed_custom_bypass
         - trigger: state
           entity_id: light.woonkamer_lampen
           to:
@@ -611,6 +622,10 @@ klokken_package:
             - arming
             - armed_home
             - armed_away
+            # Zelfde aanvulling als bij de keuken-/woonkamerklok hierboven.
+            - armed_night
+            - armed_vacation
+            - armed_custom_bypass
           id: alarm_aan
       # DE HOOFDSCHAKELAAR STAAT NU PER TAK EN NIET MEER HIER
       # `input_boolean.enable_pir_garage` is dezelfde schakelaar als bij de

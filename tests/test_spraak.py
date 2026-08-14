@@ -444,7 +444,51 @@ wereld()
 check("reistijd weg", zeg("ReistijdWerk"), "reistijd even niet ophalen")
 
 # ---------------------------------------------------------------------------
-# 11. Antwoorden
+# 11. Acties
+# ---------------------------------------------------------------------------
+print("\nActies")
+
+# De drempel komt van de auto zelf (live 8%), niet uit een eigen getal.
+wereld(**{"sensor.hrh85f_batterij": "22",
+          "sensor.hrh85f_hvac_soc_threshold": "8.0",
+          "binary_sensor.hrh85f_stekker": "on"})
+check("airco start", zeg("AutoAirco"), "airco van de auto start")
+
+# Zonder stekker gaat het van de accu, en dat hoor je te weten.
+wereld(**{"sensor.hrh85f_batterij": "22",
+          "sensor.hrh85f_hvac_soc_threshold": "8.0",
+          "binary_sensor.hrh85f_stekker": "off"})
+check("airco zonder stekker", zeg("AutoAirco"),
+      ["airco van de auto start", "stekker zit er niet in"])
+
+# Onder de drempel weigert de auto zelf; dan mag de stem geen "doe ik" zeggen.
+wereld(**{"sensor.hrh85f_batterij": "5",
+          "sensor.hrh85f_hvac_soc_threshold": "8.0"})
+check("airco te leeg", zeg("AutoAirco"), "pas boven 8 procent")
+
+wereld()
+check("auto weg", zeg("AutoAirco"), "auto even niet te pakken")
+
+# Het alarm kan met de stem alleen AAN. Thuis of afwezig hangt aan de groep.
+wereld(**{"alarm_control_panel.alarmo": "disarmed", "group.all_adults": "home"})
+check("alarm thuis", zeg("AlarmAan"), "alarm gaat op thuis")
+
+wereld(**{"alarm_control_panel.alarmo": "disarmed", "group.all_adults": "not_home"})
+check("alarm afwezig", zeg("AlarmAan"), "alarm gaat op afwezig")
+
+wereld(**{"alarm_control_panel.alarmo": "armed_home", "group.all_adults": "home"})
+check("alarm stond al aan", zeg("AlarmAan"), "staat al aan")
+
+wereld()
+check("alarm onbereikbaar", zeg("AlarmAan"), "even niet bereiken")
+
+# De routines hebben geen sensoren nodig, maar moeten wel iets terugzeggen.
+wereld()
+check("avondroutine", zeg("RoutineAvond"), "Welterusten")
+check("ochtendroutine", zeg("RoutineOchtend"), "Goedemorgen")
+
+# ---------------------------------------------------------------------------
+# 12. Antwoorden
 # ---------------------------------------------------------------------------
 print("\nAntwoorden")
 

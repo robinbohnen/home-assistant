@@ -181,6 +181,24 @@ anders geruisloos uit elkaar.
 - **De LED-ring als statuslamp.** De ring is een gewone light-entity; als er
   niet gepraat wordt kan hij het tariefniveau, het alarm of de bezetting op de
   kazerne laten zien.
-- **"Welterusten"** als zin bij `LichtenUit`. Bewust nog niet toegevoegd: het
-  is een woord dat hier ook zonder bedoeling valt, en dan gaat het licht uit
-  terwijl er nog iemand zit.
+- **"Welterusten"** als zin bij `LichtenUit` of `RoutineAvond`. Bewust nog
+  steeds niet toegevoegd, ook nu de routines er wél zijn: het is een woord dat
+  hier ook zonder bedoeling valt, en tijdens een open antwoordvenster luistert
+  de satelliet zonder wake word. Een welterusten tegen de kinderen zou dan het
+  huis op slot doen. Vandaar `ik ga slapen` en `start de avondroutine`, en om
+  dezelfde reden geen kaal `goedemorgen`.
+
+## Acties (sinds 14 augustus 2026)
+
+De intents hierboven lezen af; deze groep grijpt in.
+
+| Intent | Doet | Rem |
+| --- | --- | --- |
+| `RoutineAvond` / `RoutineOchtend` | Vuurt het event `huis_routine` | Geen eigen logica: de router in `packages/1 - First Floor/Bedroom/Buttons.yaml` blijft de enige plek waar staat wát een routine inhoudt, dus dit is per definitie gelijk aan de knop naast het bed |
+| `AutoAirco` | Drukt `button.hrh85f_start_air_conditioner` | Weigert onder de SoC-drempel die de auto zélf meldt (`sensor.hrh85f_hvac_soc_threshold`), en zegt het als de stekker er niet in zit |
+| `AlarmAan` | `alarmo.arm`, thuis of afwezig op basis van `group.all_adults` | — |
+
+**Het alarm kan met de stem alleen aan en nooit uit.** Een gesproken commando
+is niet te onderscheiden van iemand die door de brievenbus roept, en een
+satelliet hoort ook wat er op tv gebeurt. Uitzetten blijft aan het slot, de app
+en de code.

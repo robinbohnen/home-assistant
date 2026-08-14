@@ -1,9 +1,37 @@
-# sensor.slimhuys_zonneplan_tariefniveau_nu kent VIJF niveaus:
-# very_low | low | medium | high | very_high. Deze automation luisterde alleen
-# op low/medium/high, waardoor een sprong van medium naar very_low geen enkele
-# trigger raakte: de batterij begon dan juist op het allergoedkoopste moment
-# niet te laden. very_low telt daarom als low en very_high als high.
+##############################################################################
+## TWEE REGIMES, NOOIT TEGELIJK
+##
+## Standaard stuurt `battery_disable_charging` hieronder op het GROVE
+## tariefniveau van de dag (very_low..very_high). Sinds 2026-08-14 kan het ook
+## op de KWARTIERBLOKKEN van SlimHuys: dan laadt de accu in de N goedkoopste
+## kwartieren van de komende 24 uur en ontlaadt hij in de M duurste, in plaats
+## van in een hele "dure periode".
+##
+## `input_boolean.batterij_kwartierregie` bepaalt wie de baas is. Staat hij
+## aan, dan slaan alle prijs-takken van de oude automatisering over (zie de
+## conditie die daar bij elke tak staat) en stuurt `battery_kwartierregie`.
+## Het vangnet onderaan de oude automatisering blijft in BEIDE regimes lopen -
+## dat is de rem die geforceerd ontladen stopt bij een lege accu, een negatieve
+## prijs of een weggevallen tariefsensor, en die hoort nooit uit te staan.
+##
+## De schakelaar staat na aanmaken UIT. Dit stuurt echte hardware op prijzen
+## die per dag verschillen; eerst een dag meekijken op de kaart is verstandiger
+## dan hem blind aanzetten.
+##
+## LET OP bij het oude regime: sensor.slimhuys_zonneplan_tariefniveau_nu kent
+## VIJF niveaus (very_low | low | medium | high | very_high). De automatisering
+## luisterde ooit alleen op low/medium/high, waardoor een sprong van medium
+## naar very_low geen enkele trigger raakte: de accu begon dan juist op het
+## allergoedkoopste moment niet te laden. very_low telt daarom als low en
+## very_high als high.
+##############################################################################
+
 battery_package:
+
+  input_boolean:
+    batterij_kwartierregie:
+      name: "Batterij - Sturen op kwartierprijzen"
+      icon: mdi:chart-timeline-variant
 
   input_number:
     # Geen `initial:`: dat zet je eigen instelling bij elke herstart terug.
@@ -18,7 +46,306 @@ battery_package:
       unit_of_measurement: "%"
       mode: box
 
+    # Aantal kwartierblokken uit de komende 24 uur. Vier blokken = één uur.
+    # Ook hier geen `initial:`, dus ze starten op hun minimum: één uur laden en
+    # één uur ontladen per etmaal is de voorzichtige kant.
+    batterij_laad_kwartieren:
+      name: "Batterij - Laden in de X goedkoopste kwartieren"
+      icon: mdi:battery-arrow-up
+      min: 4
+      max: 40
+      step: 4
+      unit_of_measurement: "blokken"
+      mode: box
+
+    batterij_ontlaad_kwartieren:
+      name: "Batterij - Ontladen in de X duurste kwartieren"
+      icon: mdi:battery-arrow-down
+      min: 4
+      max: 40
+      step: 4
+      unit_of_measurement: "blokken"
+      mode: box
+
+  template:
+    - trigger:
+        # Kwartieren wisselen op :00, :15, :30 en :45 - allemaal veelvouden van
+        # vijf, dus dit loopt nooit achter. Vaker dan nodig is hier gratis: het
+        # rekenwerk is één keer door ~96 blokken.
+        - trigger: time_pattern
+          minutes: "/5"
+        # Zonder deze staat het plan na een herstart tot het volgende
+        # vijfminutenpunt op unknown, en dan zou de regie even stuurloos zijn.
+        - trigger: homeassistant
+          event: start
+        # Nieuwe prijzen (rond 13:00 komt morgen binnen) mogen meteen mee.
+        - trigger: state
+          entity_id:
+            - sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
+            - sensor.slimhuys_zonneplan_prijzen_morgen
+      # Het rekenwerk staat in een `action`-variabele en niet in de sensor
+      # zelf: zo wordt het één keer gedaan en lezen alle attributen dezelfde
+      # uitkomst. Zelfde opzet als de advies-sensoren in Klimaat Zonwering.yaml.
+      action:
+        - variables:
+            plan: >-
+              {#- De kwartierblokken, met de uurblokken als terugval en de
+                  blokken van morgen erbij zodat het rond middernacht klopt.
+                  Zelfde bronvolgorde als sensor.stroomprijs_volgend_uur in
+                  Stroomprijs.yaml. -#}
+              {%- set kw = state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier', 'raw_today') -%}
+              {%- set vandaag = kw if kw else (state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today') or []) -%}
+              {%- set morgen = state_attr('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow') or [] -%}
+              {%- set ns = namespace(v=[]) -%}
+              {%- for b in (vandaag + morgen) -%}
+                {%- set s = b.start | as_datetime -%}
+                {%- set e = b.end | as_datetime -%}
+                {#- Alleen wat nog komt (of nu loopt), en niet verder dan een
+                    etmaal vooruit: anders zou "de goedkoopste vier blokken"
+                    op een dag met morgen erbij ineens over 48 uur gaan. -#}
+                {%- if s is not none and e is not none
+                       and e > now() and s < now() + timedelta(hours=24) -%}
+                  {%- set ns.v = ns.v + [{'start': s, 'end': e, 'value': b.value | float(0)}] -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {%- set prijzen = ns.v | map(attribute='value') | list -%}
+              {%- set spreiding = (prijzen | max - prijzen | min) if prijzen else 0 -%}
+              {#- DE SETS MOGEN ELKAAR NOOIT RAKEN. Vraag je 40 laad- en 40
+                  ontlaadblokken terwijl er nog maar 55 blokken over zijn, dan
+                  zit hetzelfde kwartier in allebei: de laadgrens komt dan
+                  BOVEN de ontlaadgrens te liggen en de accu zou duur laden en
+                  goedkoop ontladen. Elke kant krijgt daarom hoogstens de helft
+                  van wat er ligt, waarmee "de goedkoopste k" en "de duurste m"
+                  per definitie los van elkaar staan. Aan het eind van de dag
+                  slinken beide sets dus vanzelf mee. -#}
+              {%- set helft = (ns.v | count) // 2 -%}
+              {%- set n_laad = [states('input_number.batterij_laad_kwartieren') | int(4), helft] | min -%}
+              {%- set n_ontlaad = [states('input_number.batterij_ontlaad_kwartieren') | int(4), helft] | min -%}
+              {%- set oplopend = ns.v | sort(attribute='value') -%}
+              {%- set laadset = oplopend[:n_laad] -%}
+              {%- set ontlaadset = (oplopend | reverse | list)[:n_ontlaad] -%}
+              {%- set laad_starts = laadset | map(attribute='start') | list -%}
+              {%- set ontlaad_starts = ontlaadset | map(attribute='start') | list -%}
+              {#- Overal `lijst[0] if lijst else none` en NIET `| first`: die
+                  filter gooit "No first item, sequence was empty" zodra de
+                  lijst leeg is, en dat gebeurt gewoon in de praktijk - later
+                  op de avond zijn alle goedkope blokken van het venster al
+                  voorbij en is er geen volgend laadblok meer. Dan zou het hele
+                  plan op unavailable vallen precies als de accu nog moet
+                  ontladen. -#}
+              {%- set nu_lijst = ns.v | selectattr('start', 'le', now())
+                                      | selectattr('end', 'gt', now()) | list -%}
+              {%- set nu_blok = nu_lijst[0] if nu_lijst else none -%}
+              {%- set laad_komt = laadset | sort(attribute='start')
+                                  | selectattr('start', 'gt', now()) | list -%}
+              {%- set komende_laad = laad_komt[0] if laad_komt else none -%}
+              {%- set ontlaad_komt = ontlaadset | sort(attribute='start')
+                                     | selectattr('start', 'gt', now()) | list -%}
+              {%- set komende_ontlaad = ontlaad_komt[0] if ontlaad_komt else none -%}
+              {%- if not ns.v or nu_blok is none -%}
+                {%- set stand = 'rust' -%}
+                {%- set reden = 'geen prijsblokken beschikbaar' -%}
+              {#- Een vlakke dag is de slijtage niet waard: onder 2 cent
+                  verschil valt er niets te verdienen en laadt de accu heen en
+                  weer voor niets. Zelfde ondergrens als de driedeling in
+                  Stroomprijs.yaml. -#}
+              {%- elif spreiding < 0.02 -%}
+                {%- set stand = 'rust' -%}
+                {%- set reden = 'vlakke prijs, minder dan 2 cent verschil' -%}
+              {%- elif nu_blok.start in laad_starts -%}
+                {%- set stand = 'laden' -%}
+                {%- set reden = 'een van de ' ~ n_laad ~ ' goedkoopste kwartieren' -%}
+              {%- elif nu_blok.start in ontlaad_starts -%}
+                {%- set stand = 'ontladen' -%}
+                {%- set reden = 'een van de ' ~ n_ontlaad ~ ' duurste kwartieren' -%}
+              {%- else -%}
+                {%- set stand = 'rust' -%}
+                {%- set reden = 'gewoon tarief' -%}
+              {%- endif -%}
+              {{ {'stand': stand,
+                  'reden': reden,
+                  'blokken': ns.v | count,
+                  'prijs_nu': (nu_blok.value | round(4)) if nu_blok is not none else none,
+                  'laad_grens': (laadset | map(attribute='value') | max | round(4)) if laadset else none,
+                  'ontlaad_grens': (ontlaadset | map(attribute='value') | min | round(4)) if ontlaadset else none,
+                  'volgend_laadblok': komende_laad.start.strftime('%H:%M') if komende_laad is not none else '-',
+                  'volgend_ontlaadblok': komende_ontlaad.start.strftime('%H:%M') if komende_ontlaad is not none else '-'} }}
+
+      sensor:
+        - name: "Batterij kwartierplan"
+          unique_id: batterij_kwartierplan
+          icon: mdi:chart-timeline-variant
+          # `laden` | `ontladen` | `rust` voor het kwartier waar we NU in
+          # zitten. De automatisering eronder doet er iets mee; deze sensor
+          # weet niets van de accu zelf en is dus ook los te lezen op het
+          # dashboard voordat je de regie aanzet.
+          state: "{{ plan.stand }}"
+          attributes:
+            reden: "{{ plan.reden }}"
+            prijs_nu: "{{ plan.prijs_nu }}"
+            laad_grens: "{{ plan.laad_grens }}"
+            ontlaad_grens: "{{ plan.ontlaad_grens }}"
+            volgend_laadblok: "{{ plan.volgend_laadblok }}"
+            volgend_ontlaadblok: "{{ plan.volgend_ontlaadblok }}"
+            blokken_bekend: "{{ plan.blokken }}"
+
   automation:
+    ###########################################################################
+    ## Kwartierregie: laden in de goedkoopste blokken, ontladen in de duurste
+    ###########################################################################
+    # Stuurt op sensor.batterij_kwartierplan. Dezelfde drie service-calls als
+    # de oude automatisering hieronder gebruikt, zodat er maar één manier is
+    # waarop deze accu bediend wordt:
+    #   eigen programma  = control_mode disable
+    #   geforceerd       = control_mode enable + forcible charge/discharge
+    - id: battery_kwartierregie
+      alias: Battery - Sturen op kwartierprijzen
+      description: >-
+        Laadt de thuisaccu in de goedkoopste kwartieren van de komende 24 uur
+        en ontlaadt hem in de duurste. Alleen actief als
+        input_boolean.batterij_kwartierregie aan staat; de prijs-takken van
+        "Disable charging when no low pricing" slaan dan over.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: state
+          entity_id: sensor.batterij_kwartierplan
+          # Een herstart brengt de sensor via unknown binnen; dat is geen
+          # nieuwe stand maar dezelfde ronde opnieuw.
+          not_from:
+            - unknown
+            - unavailable
+          not_to:
+            - unknown
+            - unavailable
+        # Aanzetten van de regie moet meteen effect hebben, anders staat de
+        # accu tot het volgende kwartier nog op zijn eigen programma.
+        - trigger: state
+          entity_id: input_boolean.batterij_kwartierregie
+          to: "on"
+      conditions:
+        - condition: state
+          entity_id: input_boolean.batterij_kwartierregie
+          state: "on"
+      actions:
+        - choose:
+            - alias: Laden in een goedkoop kwartier
+              conditions:
+                - condition: state
+                  entity_id: sensor.batterij_kwartierplan
+                  state: laden
+                # Een volle accu hoeft niet geforceerd geladen te worden; de
+                # 95% laat ruimte zodat hij niet om de kilowattuur aan- en
+                # uitklapt rond de bovengrens.
+                - condition: numeric_state
+                  entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
+                  below: 95
+              sequence:
+                - action: select.select_option
+                  data:
+                    option: enable
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+                - action: select.select_option
+                  data:
+                    option: charge
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+                - action: number.set_value
+                  data:
+                    value: "2500"
+                  target:
+                    entity_id: number.lilygo_rs485_marstek_forcible_charge_power
+            - alias: Ontladen in een duur kwartier
+              conditions:
+                - condition: state
+                  entity_id: sensor.batterij_kwartierplan
+                  state: ontladen
+                # Dezelfde twee remmen als de high_price-tak hieronder: niet
+                # onder de eigen ondergrens leegtrekken, en niet terugleveren
+                # als het totaaltarief negatief is (dan kost dat geld). Een
+                # unavailable sensor is niet 'off' en houdt dus tegen.
+                - condition: numeric_state
+                  entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
+                  above: input_number.batterij_min_soc
+                - condition: state
+                  entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu
+                  state: "off"
+              sequence:
+                - action: select.select_option
+                  data:
+                    option: enable
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+                - action: select.select_option
+                  data:
+                    option: discharge
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+                - action: number.set_value
+                  data:
+                    value: "2500"
+                  target:
+                    entity_id: number.lilygo_rs485_marstek_forcible_discharge_power
+          # Alles wat geen laad- of ontlaadblok is - inclusief een tak
+          # hierboven die op zijn eigen rem stukliep - gaat terug naar het
+          # eigen programma van de accu. Dat is bewust de default en niet een
+          # aparte `rust`-tak: blijft er ooit een stand over die hier niet
+          # genoemd staat, dan is "de accu doet het zelf" de veilige uitkomst.
+          # Geen sluiproute dus, maar de enige veilige eindstand.
+          default:
+            - action: select.select_option
+              data:
+                option: stop
+              target:
+                entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+            - action: select.select_option
+              data:
+                option: disable
+              target:
+                entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+
+    # Zet je de regie uit terwijl hij net staat te laden of te ontladen, dan
+    # blijft die geforceerde stand staan: de oude automatisering wacht op een
+    # tariefwissel en die kan uren wegblijven. Terug naar het eigen programma
+    # is de enige nette overdracht. Aparte automatisering en geen extra tak
+    # hierboven, omdat die juist alleen mag lopen als de regie AAN staat.
+    - id: battery_kwartierregie_uit
+      alias: Battery - Kwartierregie uitgezet
+      description: >-
+        Zet de accu terug op zijn eigen programma zodra de kwartierregie uit
+        gaat, zodat er geen geforceerde stand blijft hangen.
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: input_boolean.batterij_kwartierregie
+          to: "off"
+          not_from:
+            - unknown
+            - unavailable
+      conditions:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+              state: stop
+      actions:
+        - action: select.select_option
+          data:
+            option: stop
+          target:
+            entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+        - action: select.select_option
+          data:
+            option: disable
+          target:
+            entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+        - action: logbook.log
+          data:
+            name: Batterij
+            message: >-
+              Kwartierregie uit; accu terug op zijn eigen programma.
+
     - id: battery_disable_charging
       alias: Battery - Disable charging when no low pricing
       description: Change modes on battery when needed; to create low charing points
@@ -85,6 +412,9 @@ battery_package:
                 - condition: trigger
                   id:
                     - low_price
+                - condition: state
+                  entity_id: input_boolean.batterij_kwartierregie
+                  state: "off"
               sequence:
                 - action: select.select_option
                   metadata: {}
@@ -97,6 +427,9 @@ battery_package:
                 - condition: trigger
                   id:
                     - morning
+                - condition: state
+                  entity_id: input_boolean.batterij_kwartierregie
+                  state: "off"
                 - condition: numeric_state
                   entity_id: sensor.forecast_solar_production_today
                   above: 20
@@ -121,6 +454,9 @@ battery_package:
                 - condition: trigger
                   id:
                     - afternoon
+                - condition: state
+                  entity_id: input_boolean.batterij_kwartierregie
+                  state: "off"
               sequence:
                 - action: select.select_option
                   metadata: {}
@@ -133,6 +469,9 @@ battery_package:
                 - condition: trigger
                   id:
                     - medium_price
+                - condition: state
+                  entity_id: input_boolean.batterij_kwartierregie
+                  state: "off"
                 - condition: state
                   entity_id: select.lilygo_rs485_marstek_rs485_control_mode
                   state: enable
@@ -148,6 +487,9 @@ battery_package:
                 - condition: trigger
                   id:
                     - high_price
+                - condition: state
+                  entity_id: input_boolean.batterij_kwartierregie
+                  state: "off"
                 # Niet onder de ondergrens leegtrekken: geforceerd ontladen
                 # stopt hier niet uit zichzelf, dus zonder deze conditie loopt
                 # de batterij bij een lange dure periode helemaal leeg en staat

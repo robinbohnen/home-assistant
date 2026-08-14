@@ -213,6 +213,14 @@ triggers:
     entity_id: !input bewegingssensor
     to: "on"
     id: beweging
+    # Ook op de aan-kant: een PIR die na een Zigbee-uitval terugkomt maakt
+    # een unavailable->on-flank, en dat is geen beweging - wel een lamp die
+    # om 03:00 aangaat in een lege kamer. Zelfde guard als op de uit-trigger
+    # hieronder, zelfde prijs: heel af en toe een gemiste eerste flank direct
+    # na een herstel, en dan vangt de volgende echte beweging het op.
+    not_from:
+      - unknown
+      - unavailable
   - trigger: state
     entity_id: !input bewegingssensor
     to: "off"
@@ -237,6 +245,11 @@ triggers:
     entity_id: !input deur_contacten
     to: "on"
     id: beweging
+    # Zelfde reden als bij de bewegingssensor hierboven: een deur die na een
+    # herstart of Zigbee-herstel op `on` terugkomt is niet net opengegaan.
+    not_from:
+      - unknown
+      - unavailable
   - trigger: state
     entity_id: !input alarm_paneel
     to:
@@ -358,7 +371,14 @@ actions:
                         {% set ns.recent = true %}
                       {% endif %}
                     {% endfor %}
-                    {{ trigger.id != 'uit' and ns.recent }}
+                    {# De repeat.index-cap is de noodrem die de tweede lus
+                       hieronder al had en deze nog niet: last_changed
+                       verspringt ook op een wissel van/naar unavailable, dus
+                       een deurcontact met een zwakke batterij dat blijft
+                       klapperen hield deze lus - en daarmee de lamp - anders
+                       eeuwig in leven. #}
+                    {{ trigger.id != 'uit' and ns.recent
+                       and repeat.index <= 120 }}
               sequence:
                 - wait_for_trigger:
                     - trigger: state
