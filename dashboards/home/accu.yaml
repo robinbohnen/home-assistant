@@ -387,17 +387,26 @@ cards:
           if (g === null || g === undefined || g === 'None' || g === '') return [];
           const w = Number(g);
           if (isNaN(w)) return [];
-          // EEN PUNT PER UUR EN NIET TWEE AAN DE UITEINDEN
-          // Met alleen een begin- en eindpunt vlák buiten het venster viel er
-          // binnen de grafiek niets te tekenen: de lijn verdween en de legenda
-          // zei N/A. Een reeks punten over het hele zichtbare bereik heeft dat
-          // probleem niet en geeft de legenda meteen een waarde bij `nu`.
-          const start = new Date(); start.setMinutes(0, 0, 0);
-          const punten = [];
-          for (let i = 0; i <= 24; i++) {
-            punten.push([start.getTime() + i * 3600 * 1000, w]);
-          }
-          return punten;
+          // DE LIJN VOLGT DE BALKEN, NIET DE KLOK
+          // Eerst stonden hier twee punten op zelfbedachte tijdstippen, en die
+          // vielen net buiten het zichtbare venster: de lijn verdween en de
+          // legenda zei N/A terwijl het attribuut gewoon 0,14 was. Door
+          // dezelfde blokken te gebruiken als de prijsreeks ligt er per balk
+          // een punt, valt de lijn per definitie binnen het venster en heeft
+          // de legenda altijd een waarde bij `nu`.
+          const bron = st['sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier']
+                    || st['sensor.slimhuys_zonneplan_prijzen_vandaag'];
+          const vandaag = (bron && bron.attributes && bron.attributes.raw_today) || [];
+          const mor = st['sensor.slimhuys_zonneplan_prijzen_morgen'];
+          const morgen = (mor && mor.attributes && mor.attributes.raw_tomorrow) || [];
+          return vandaag.concat(morgen)
+            .map((e) => {
+              const a = new Date(e.start).getTime();
+              const b = new Date(e.end).getTime();
+              return [isFinite(b) ? (a + b) / 2 : a, w];
+            })
+            .filter((d) => isFinite(d[0]))
+            .sort((x, y) => x[0] - y[0]);
         yaxis_id: kwh_prijs
       - entity: sensor.batterij_kwartierplan
         name: Ontlaadgrens
@@ -415,15 +424,24 @@ cards:
           if (g === null || g === undefined || g === 'None' || g === '') return [];
           const w = Number(g);
           if (isNaN(w)) return [];
-          // EEN PUNT PER UUR EN NIET TWEE AAN DE UITEINDEN
-          // Met alleen een begin- en eindpunt vlák buiten het venster viel er
-          // binnen de grafiek niets te tekenen: de lijn verdween en de legenda
-          // zei N/A. Een reeks punten over het hele zichtbare bereik heeft dat
-          // probleem niet en geeft de legenda meteen een waarde bij `nu`.
-          const start = new Date(); start.setMinutes(0, 0, 0);
-          const punten = [];
-          for (let i = 0; i <= 24; i++) {
-            punten.push([start.getTime() + i * 3600 * 1000, w]);
-          }
-          return punten;
+          // DE LIJN VOLGT DE BALKEN, NIET DE KLOK
+          // Eerst stonden hier twee punten op zelfbedachte tijdstippen, en die
+          // vielen net buiten het zichtbare venster: de lijn verdween en de
+          // legenda zei N/A terwijl het attribuut gewoon 0,14 was. Door
+          // dezelfde blokken te gebruiken als de prijsreeks ligt er per balk
+          // een punt, valt de lijn per definitie binnen het venster en heeft
+          // de legenda altijd een waarde bij `nu`.
+          const bron = st['sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier']
+                    || st['sensor.slimhuys_zonneplan_prijzen_vandaag'];
+          const vandaag = (bron && bron.attributes && bron.attributes.raw_today) || [];
+          const mor = st['sensor.slimhuys_zonneplan_prijzen_morgen'];
+          const morgen = (mor && mor.attributes && mor.attributes.raw_tomorrow) || [];
+          return vandaag.concat(morgen)
+            .map((e) => {
+              const a = new Date(e.start).getTime();
+              const b = new Date(e.end).getTime();
+              return [isFinite(b) ? (a + b) / 2 : a, w];
+            })
+            .filter((d) => isFinite(d[0]))
+            .sort((x, y) => x[0] - y[0]);
         yaxis_id: kwh_prijs
