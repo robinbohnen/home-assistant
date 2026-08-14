@@ -230,6 +230,15 @@ battery_package:
         - trigger: state
           entity_id: input_boolean.batterij_kwartierregie
           to: "on"
+        # Overschot komt en gaat sneller dan een kwartier. Zonder deze trigger
+        # zou een laadblok dat begon terwijl de zon leverde nooit alsnog uit
+        # het net gaan laden als er een wolk voorbij komt - de tak hieronder
+        # wordt alleen bij een trigger opnieuw gewogen.
+        - trigger: state
+          entity_id: switch.live_energieverbruik_totaal_negatief
+          not_from:
+            - unknown
+            - unavailable
       conditions:
         - condition: state
           entity_id: input_boolean.batterij_kwartierregie
@@ -247,6 +256,17 @@ battery_package:
                 - condition: numeric_state
                   entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
                   below: 95
+                # NIET UIT HET NET LADEN TERWIJL DE ZON AL OVERSCHOT LEVERT.
+                # De goedkope blokken liggen midden op de dag, precies wanneer
+                # de panelen leveren. Geforceerd laden koopt dan stroom die we
+                # net gratis het net op sturen. Staat deze vlag aan, dan valt
+                # de tak door naar `default` en doet de accu zijn eigen
+                # programma - en dat is anti-feed, dus die vult zich vanzelf
+                # met het overschot. Zelfde bron als de gratis-stoken-regel
+                # van de jacuzzi (packages/3 - Outside/Backyard/Spa.yaml).
+                - condition: state
+                  entity_id: switch.live_energieverbruik_totaal_negatief
+                  state: "off"
               sequence:
                 - action: select.select_option
                   data:

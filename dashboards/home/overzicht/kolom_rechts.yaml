@@ -409,31 +409,80 @@ cards:
         - type: custom:button-card
           template: ov_title
           variables:
-            title: SCHAKELAARS
-        # Warmhouden is iets anders dan de spa aan/uit: deze vlag laat de
-        # automatisering in packages/3 - Outside/Backyard/Spa.yaml de
-        # temperatuur vasthouden. De spa zelf staat als climate-regel in het
-        # KLIMAAT-paneel hierboven.
+            title: JACUZZI
+        # Vier knoppen die samen horen. `power` is de stekker, `keep_warm` is
+        # de automatisering in packages/3 - Outside/Backyard/Spa.yaml die de
+        # temperatuur vasthoudt - twee verschillende dingen, dus allebei een
+        # eigen regel. De spa staat óók als climate-regel in het KLIMAAT-paneel
+        # hierboven; dat is de temperatuur, dit is de bediening.
         - type: custom:button-card
           template: ov_toggle
-          entity: input_boolean.backyard_spa_keep_warm
-          name: Jacuzzi warmhouden
+          entity: switch.intex_purespa_power
+          name: Jacuzzi aan
           variables:
-            mdi: mdi:hot-tub
+            mdi: mdi:power
             aan_kleur: "#38bdf8"
             sub: |
               [[[
                 var spa = states['climate.intex_purespa'];
                 if(!spa || ['unavailable','unknown'].indexOf(spa.state) !== -1)
-                  return 'spa niet bereikbaar';
+                  return 'niet bereikbaar';
                 var cur = spa.attributes.current_temperature;
                 var tgt = spa.attributes.temperature;
-                if(cur == null) return spa.state === 'off' ? 'spa staat uit' : '';
+                if(cur == null) return '';
                 var s = Number(cur).toFixed(1).replace('.',',') + '°';
                 if(spa.state !== 'off' && tgt != null)
                   s += ' · doel ' + Number(tgt).toFixed(1).replace('.',',') + '°';
                 return s;
               ]]]
+        - type: custom:button-card
+          template: ov_toggle
+          entity: input_boolean.backyard_spa_keep_warm
+          name: Warmhouden
+          variables:
+            mdi: mdi:hot-tub
+            aan_kleur: "#38bdf8"
+            sub: houdt de temperatuur vast
+        - type: custom:button-card
+          template: ov_toggle
+          entity: switch.intex_purespa_filter
+          name: Filter
+          variables:
+            mdi: mdi:air-filter
+            aan_kleur: "#38bdf8"
+        - type: custom:button-card
+          template: ov_toggle
+          entity: switch.intex_purespa_sanitizer
+          name: Sanitizer
+          variables:
+            mdi: mdi:water-opacity
+            aan_kleur: "#38bdf8"
+
+  # SCHAKELAARS
+  # De losse knoppen die op de oude dashboard-view zaten en hier ontbraken
+  # (Robin, 14 augustus 2026). Bewust een korte, met de hand aangewezen lijst
+  # en geen automatische scan op "alle switches": op dit paneel hoort alleen
+  # wat je echt met een tik wilt kunnen omzetten.
+  - type: custom:mod-card
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--ov-panel-bg) !important;
+          border: var(--ov-panel-border) !important;
+          border-radius: var(--ov-panel-radius) !important;
+          box-shadow: none !important;
+          padding: var(--ov-panel-padding) !important;
+        }
+    card:
+      type: vertical-stack
+      card_mod:
+        style: |
+          #root > *:nth-child(n+2) { border-top: 1px solid rgba(255,255,255,0.06) !important; }
+      cards:
+        - type: custom:button-card
+          template: ov_title
+          variables:
+            title: SCHAKELAARS
         - type: custom:button-card
           template: ov_toggle
           entity: switch.linea_micra_kroon_18
@@ -460,6 +509,55 @@ cards:
           # aan" dagen staan op een wandpaneel dat altijd openstaat.
           triggers_update:
             - sensor.time
+        - type: custom:button-card
+          template: ov_toggle
+          entity: switch.woonkamer_woonkamer_stopcontact_luchtreiniger
+          name: Luchtreiniger woonkamer
+          variables:
+            mdi: mdi:air-purifier
+        - type: custom:button-card
+          template: ov_toggle
+          entity: switch.eettafel_eettafel_stopcontact_luchtreiniger
+          name: Luchtreiniger eettafel
+          variables:
+            mdi: mdi:air-purifier
+        - type: custom:button-card
+          template: ov_toggle
+          entity: switch.achtertuin_schuur_lampen
+          name: Schuurlampen
+          variables:
+            mdi: mdi:lightbulb-outline
+            aan_kleur: "#f59e0b"
+        - type: custom:button-card
+          template: ov_toggle
+          entity: switch.meterkast_meterkast_stopcontact_ledstrip
+          name: Ledstrip meterkast
+          variables:
+            mdi: mdi:led-strip-variant
+            aan_kleur: "#f59e0b"
+        # Alle lichten in één tik. Staat onderaan en niet bovenaan: dit is de
+        # knop met de grootste gevolgen, en die wil je niet als eerste raken
+        # als je langs het paneel veegt.
+        - type: custom:button-card
+          template: ov_toggle
+          entity: light.all_lights
+          name: Alle lichten
+          variables:
+            mdi: mdi:lightbulb-group
+            aan_kleur: "#f59e0b"
+            sub: |
+              [[[
+                // Hoeveel er echt branden; "aan" zegt bij een groep alleen
+                // dat er minstens één aan staat.
+                var g = states['light.all_lights'];
+                if(!g || ['unavailable','unknown'].indexOf(g.state) !== -1) return '';
+                var leden = g.attributes.entity_id || [];
+                var n = leden.filter(function(e){
+                  return states[e] && states[e].state === 'on'; }).length;
+                if(!leden.length) return '';
+                return n === 0 ? 'alles uit'
+                     : (n === 1 ? '1 lamp aan' : n + ' lampen aan');
+              ]]]
 
   # BRANDWEER
   - type: custom:mod-card
