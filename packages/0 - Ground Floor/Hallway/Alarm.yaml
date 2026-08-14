@@ -10,6 +10,14 @@ hallway_alarm_package:
           entity_id:
             - group.all_adults
           to: not_home
+          # Zonder deze guard kan een herstart of een reload van de
+          # tracker-integratie het huis op scherp zetten mét bewoners erin:
+          # de persons komen dan als unknown terug en de (trage) router-
+          # tracker meldt not_home vóór de telefoons weer gezien zijn. De
+          # eerstvolgende deur zet dan de volledige afschrikking af.
+          not_from:
+            - unknown
+            - unavailable
       conditions: []
       actions:
         - data:
@@ -34,14 +42,26 @@ hallway_alarm_package:
       mode: single
       max_exceeded: silent
       triggers:
+        # De not_from-guards: na een HA-herstart of een Z-Wave-reconnect komt
+        # het slot terug als unavailable -> unlocked (zijn gewone stand) en de
+        # groep als unknown -> home. Zonder guard is dat 's nachts om 03:00
+        # een disarm terwijl iedereen slaapt - het huis staat dan de rest van
+        # de nacht onbewaakt. De zone-triggers hieronder hebben dit probleem
+        # niet: die vuren alleen op een echte zone-overgang.
         - trigger: state
           entity_id:
             - lock.kroon18voordeur
           to: unlocked
+          not_from:
+            - unknown
+            - unavailable
         - trigger: state
           entity_id:
             - group.all_adults
           to: home
+          not_from:
+            - unknown
+            - unavailable
         - trigger: zone
           entity_id: !secret person_maxi
           zone: zone.home
@@ -256,14 +276,23 @@ hallway_alarm_package:
       description: "Turn off the alarm Automatically when someone wakes up"
       mode: single
       triggers:
+        # Zelfde guards als bij Off Automatically hierboven: een sensor die na
+        # een Zigbee-blip of herstart op `on` terugkomt is geen wakker huis en
+        # mag armed_home niet ontwapenen.
         - trigger: state
           entity_id:
             - binary_sensor.entree_deur_contact
           to: "on"
+          not_from:
+            - unknown
+            - unavailable
         - trigger: state
           entity_id:
             - binary_sensor.woonkamer_beweging_voor_occupancy
           to: "on"
+          not_from:
+            - unknown
+            - unavailable
       conditions:
         - condition: state
           entity_id: group.all_adults

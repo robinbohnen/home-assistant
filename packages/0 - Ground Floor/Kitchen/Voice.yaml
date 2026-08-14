@@ -67,6 +67,13 @@ keuken_voice_package:
       # Zonder venster blijft "ja" uren geldig en beantwoord je 's avonds nog
       # de vraag van vanmiddag. Loopt hij af, dan ruimt de automation onderaan
       # de openstaande vraag op.
+      #
+      # De restore is voor een herstart bínnen het venster: zonder komt de
+      # timer op idle terug zonder actief->idle-flank, vuurt de opruim-
+      # automation nooit en blijft input_text.spraak_openstaande_vraag
+      # eeuwig staan. Antwoorden faalde al veilig (conditie "timer active"),
+      # dit ruimt alleen de hangende vraag netjes op.
+      restore: true
 
   script:
     ###########################################################################
@@ -390,7 +397,11 @@ keuken_voice_package:
                   de sets pieken op verschillende momenten. -#}
               {%- set cap = (states('sensor.inverter_kroon_18_achtertuin_capacity') | float(5))
                           + (states('sensor.inverter_kroon_18_zolder_capacity') | float(3)) -%}
-              {%- set pct = (nu / (cap * 1000) * 100) | round(0) | int -%}
+              {#- De `| max` met 1: float(5)/float(3) vangt alleen een
+                  niet-numerieke sensor op; meldt een omvormer numeriek 0,
+                  dan zou dit delen door nul zijn en faalt de hele
+                  spraakreactie. Zelfde guard als in Klokken.yaml. -#}
+              {%- set pct = (nu / ([cap * 1000, 1] | max) * 100) | round(0) | int -%}
               {%- if nu >= 1000 -%}
                 De panelen leveren nu {{ (nu / 1000) | round(1) | string | replace('.', ',') }} kilowatt, {{ pct }} procent van wat ze kunnen.
               {%- else -%}

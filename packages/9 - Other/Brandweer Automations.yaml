@@ -703,6 +703,25 @@ brandweer_package:
                         "rtttl": "siren:d=8,o=5,b=50:b,e,b,e,b,e",
                         "text": {{ (' ' ~ states('input_text.brandweer_laatste_melding')) | to_json }}}
             - if:
+                # DE MOMENTOPNAME, NIET DE LIVE STAND
+                # Hier stond een live check op `light.woonkamer_lampen == on`,
+                # en dat was 's nachts een race: het ontwapenen is het
+                # thuiskomst-signaal van het hele huis en zet die lampen ~1 s
+                # na de trigger alsnog aan. Of het effect kwam hing dus af van
+                # wie er eerder was (op 9 augustus scheelde het 3 seconden).
+                # De momentopname bovenaan is genomen vóór het ontwapenen en
+                # ligt vast: brandden de lampen al, dan is er iemand op en mag
+                # het effect komen. En dat de tak 's nachts overslaat is de
+                # bedoeling - bij een nachtelijke uitruk wil je gewoon licht
+                # om je spullen te vinden, geen rood/blauw ademende lampen
+                # (Robin, 14 augustus 2026).
+                - condition: template
+                  alias: Woonkamerlampen brandden al vóór de melding
+                  value_template: >-
+                    {{ 'light.woonkamer_lampen' not in lampen_vooraf_uit }}
+                # De live check blijft er alleen bij voor `unavailable`: een
+                # weggevallen groep staat niet in de uit-lijst en zou anders
+                # als "aan" doortellen.
                 - condition: state
                   entity_id: light.woonkamer_lampen
                   state: "on"
