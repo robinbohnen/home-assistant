@@ -67,6 +67,22 @@ battery_package:
       unit_of_measurement: "blokken"
       mode: box
 
+    # Boven deze verwachte opbrengst slaat de regie het netladen over: de zon
+    # vult de accu die dag toch wel. Het getal moet dus dekken wat het huis op
+    # een dag gebruikt PLUS wat er in de accu moet - vandaar dat 5 kWh (het
+    # minimum, waar hij op start) bijna altijd "sla maar over" betekent en
+    # 40 kWh neerkomt op "doe toch maar gewoon laden". Het oude regime
+    # hieronder gebruikt 20 kWh voor dezelfde afweging; dat is een goed
+    # startpunt om vanaf te schuiven.
+    batterij_zon_drempel:
+      name: "Batterij - Niet netladen bij meer zon dan"
+      icon: mdi:weather-sunny
+      min: 5
+      max: 50
+      step: 5
+      unit_of_measurement: "kWh"
+      mode: box
+
   template:
     - trigger:
         # Kwartieren wisselen op :00, :15, :30 en :45 - allemaal veelvouden van
@@ -239,6 +255,16 @@ battery_package:
           not_from:
             - unknown
             - unavailable
+        # De zonverwachting wordt door de dag heen bijgesteld. Zonder deze
+        # triggers zou een laadblok dat begon toen de voorspelling nog mager
+        # was, blijven laden nadat hij is opgeschroefd (en omgekeerd).
+        - trigger: state
+          entity_id:
+            - sensor.energy_production_today_remaining
+            - sensor.energy_production_tomorrow
+          not_from:
+            - unknown
+            - unavailable
       conditions:
         - condition: state
           entity_id: input_boolean.batterij_kwartierregie
@@ -267,6 +293,31 @@ battery_package:
                 - condition: state
                   entity_id: switch.live_energieverbruik_totaal_negatief
                   state: "off"
+                # EN NIET LADEN ALS DE ZON HET MORGEN TOCH DOET.
+                # Welke voorspelling telt, hangt van de klok af:
+                #   overdag en 's nachts vóór twaalven -> wat er vandaag nog
+                #     moet komen (`today_remaining` is dan de hele dag)
+                #   na zonsondergang -> de opbrengst van morgen
+                # Zonder die splitsing zou je om 02:00 naar de verkeerde dag
+                # kijken: `tomorrow` slaat dan op overmorgen-in-de-praktijk,
+                # terwijl de zon die deze accu vult over een paar uur opkomt.
+                # Dezelfde uur>=12-truc als in Kitchen/Covers.yaml.
+                #
+                # De SoC-ondergrens is het vangnet onder de voorspelling: is de
+                # accu bijna leeg, dan laden we sowieso bij. Een misgelopen
+                # weersverwachting kost je anders de hele avondpiek, en dat is
+                # precies het uur waarvoor deze accu bedoeld is.
+                - alias: Niet genoeg zon op komst, of de accu is te leeg om te gokken
+                  condition: template
+                  value_template: >-
+                    {% set na_zonsondergang = is_state('sun.sun', 'below_horizon')
+                                              and now().hour >= 12 %}
+                    {% set zon = states('sensor.energy_production_tomorrow') | float(0)
+                                 if na_zonsondergang
+                                 else states('sensor.energy_production_today_remaining') | float(0) %}
+                    {% set soc = states('sensor.lilygo_rs485_marstek_battery_state_of_charge') | float(0) %}
+                    {{ zon < (states('input_number.batterij_zon_drempel') | float(20))
+                       or soc < 30 }}
               sequence:
                 - action: select.select_option
                   data:

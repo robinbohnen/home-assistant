@@ -103,6 +103,29 @@ cards:
               var p = entity.attributes.prijs_nu;
               var pr = (p === null || p === undefined || p === 'None')
                 ? '' : ' · nu ' + Number(p).toFixed(3).replace('.',',') + ' €/kWh';
+              // HET PLAN IS DE PRIJS, DE REGIE KIJKT VERDER
+              // De sensor rekent alleen met tarieven. Twee remmen zitten in de
+              // automatisering en niet in de sensor, en zonder deze regel zou
+              // de kaart "laden" zeggen terwijl er niets gebeurt - precies het
+              // soort verschil waar je een half uur naar staat te kijken.
+              if(entity.state === 'laden'){
+                var exp = states['switch.live_energieverbruik_totaal_negatief'];
+                if(exp && exp.state === 'on')
+                  return 'overgeslagen: de zon levert nu al overschot' + pr;
+                var soc = states['sensor.lilygo_rs485_marstek_battery_state_of_charge'];
+                soc = soc ? Number(soc.state) : 0;
+                var zon = states[
+                  (states['sun.sun'] && states['sun.sun'].state === 'below_horizon'
+                   && new Date().getHours() >= 12)
+                    ? 'sensor.energy_production_tomorrow'
+                    : 'sensor.energy_production_today_remaining'];
+                var drempel = states['input_number.batterij_zon_drempel'];
+                if(zon && drempel && soc >= 30
+                   && Number(zon.state) >= Number(drempel.state))
+                  return 'overgeslagen: ' + Number(zon.state).toFixed(1).replace('.',',')
+                       + ' kWh zon verwacht' + pr;
+                if(soc >= 95) return 'accu is vol' + pr;
+              }
               return r + pr;
             ]]]
           badge: |
@@ -239,6 +262,12 @@ cards:
             name: Ontladen in de X duurste kwartieren
           - entity: input_number.batterij_min_soc
             name: Niet verder ontladen dan
+          - entity: input_number.batterij_zon_drempel
+            name: Niet netladen bij meer zon dan
+          - type: attribute
+            entity: sensor.batterij_kwartierplan
+            attribute: blokken_bekend
+            name: Prijsblokken in het venster
           - type: divider
           # Wat de accu op dit moment ècht doet. Deze twee worden door de
           # regie gezet; staan ze anders dan je verwacht, dan is dit de plek
