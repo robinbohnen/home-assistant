@@ -385,6 +385,82 @@ cards:
                 icon:
                   - color: rgba(255,255,255,0.8)
                   - width: 22px
+  # SCHAKELAARS
+  # De twee knoppen die op de oude dashboard-view zaten en hier ontbraken
+  # (Robin, 14 augustus 2026). Bewust een korte, met de hand aangewezen lijst
+  # en geen automatische scan op "alle switches": op dit paneel hoort alleen
+  # wat je echt met een tik wilt kunnen omzetten.
+  - type: custom:mod-card
+    card_mod:
+      style: |
+        ha-card {
+          background: var(--ov-panel-bg) !important;
+          border: var(--ov-panel-border) !important;
+          border-radius: var(--ov-panel-radius) !important;
+          box-shadow: none !important;
+          padding: var(--ov-panel-padding) !important;
+        }
+    card:
+      type: vertical-stack
+      card_mod:
+        style: |
+          #root > *:nth-child(n+2) { border-top: 1px solid rgba(255,255,255,0.06) !important; }
+      cards:
+        - type: custom:button-card
+          template: ov_title
+          variables:
+            title: SCHAKELAARS
+        # Warmhouden is iets anders dan de spa aan/uit: deze vlag laat de
+        # automatisering in packages/3 - Outside/Backyard/Spa.yaml de
+        # temperatuur vasthouden. De spa zelf staat als climate-regel in het
+        # KLIMAAT-paneel hierboven.
+        - type: custom:button-card
+          template: ov_toggle
+          entity: input_boolean.backyard_spa_keep_warm
+          name: Jacuzzi warmhouden
+          variables:
+            mdi: mdi:hot-tub
+            aan_kleur: "#38bdf8"
+            sub: |
+              [[[
+                var spa = states['climate.intex_purespa'];
+                if(!spa || ['unavailable','unknown'].indexOf(spa.state) !== -1)
+                  return 'spa niet bereikbaar';
+                var cur = spa.attributes.current_temperature;
+                var tgt = spa.attributes.temperature;
+                if(cur == null) return spa.state === 'off' ? 'spa staat uit' : '';
+                var s = Number(cur).toFixed(1).replace('.',',') + '°';
+                if(spa.state !== 'off' && tgt != null)
+                  s += ' · doel ' + Number(tgt).toFixed(1).replace('.',',') + '°';
+                return s;
+              ]]]
+        - type: custom:button-card
+          template: ov_toggle
+          entity: switch.linea_micra_kroon_18
+          name: Koffiemachine
+          variables:
+            mdi: mdi:coffee
+            aan_kleur: "#f59e0b"
+            sub: |
+              [[[
+                // De machine gaat ook vanzelf aan en uit (Kitchen/Coffee.yaml
+                // stuurt op thuiskomen, het alarm en de klok). Daarom hier de
+                // tijd sinds de laatste wissel: dan zie je of je hem net zelf
+                // hebt omgezet of dat het huis dat deed.
+                var e = states['switch.linea_micra_kroon_18'];
+                if(!e || ['unavailable','unknown'].indexOf(e.state) !== -1) return '';
+                var m = Math.round((Date.now() - new Date(e.last_changed).getTime())/60000);
+                if(m < 1) return 'net omgezet';
+                if(m < 60) return m + ' min ' + (e.state === 'on' ? 'aan' : 'uit');
+                var u = Math.round(m/60);
+                return u + ' uur ' + (e.state === 'on' ? 'aan' : 'uit');
+              ]]]
+          # De subregel rekent met de klok, en button-card rendert alleen
+          # opnieuw als zijn entity verandert. Zonder deze tik blijft "12 min
+          # aan" dagen staan op een wandpaneel dat altijd openstaat.
+          triggers_update:
+            - sensor.time
+
   # BRANDWEER
   - type: custom:mod-card
     card_mod:

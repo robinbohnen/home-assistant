@@ -280,6 +280,77 @@ ov_climate:
         return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:${m[1]};background:${m[2]}">${m[0]}</span>`;
       ]]]
 
+# --- Aan/uit-schakelaar: icoon, naam, subregel en een aan/uit-badge --------
+# Tikken schakelt meteen, vasthouden geeft more-info. Bewust `toggle` en niet
+# turn_on/turn_off: dit is een knop die de stand omklapt, en de badge laat
+# zien welke kant je op gaat.
+#
+# Werkt voor elk domein met een aan/uit-stand (switch, input_boolean, light).
+# `variables.sub` is optioneel; laat je hem leeg, dan valt de subregel weg.
+ov_toggle:
+  show_name: true
+  show_icon: false
+  show_state: false
+  tap_action:
+    action: toggle
+  hold_action:
+    action: more-info
+  variables:
+    mdi: mdi:toggle-switch
+    sub: ""
+    aan_kleur: "#4ade80"
+  styles:
+    grid:
+      - grid-template-areas: '"ic n badge" "ic sub badge"'
+      - grid-template-columns: 34px 1fr auto
+      - align-items: center
+      - column-gap: 12px
+    card:
+      - background: none
+      - border: none
+      - box-shadow: none
+      - padding: 11px 2px
+    name:
+      - grid-area: n
+      - justify-self: start
+      - font-size: 14.5px
+      - font-weight: "600"
+      - color: white
+    custom_fields:
+      ic:
+        - grid-area: ic
+      sub:
+        - grid-area: sub
+        - justify-self: start
+        - font-size: 12.5px
+        - color: rgba(255,255,255,0.58)
+        - padding-top: 2px
+      badge:
+        - grid-area: badge
+        - justify-self: end
+  custom_fields:
+    ic: |
+      [[[
+        var aan = entity && entity.state === 'on';
+        var weg = !entity || ['unavailable','unknown'].indexOf(entity.state) !== -1;
+        var col = weg ? 'rgba(255,255,255,0.25)'
+                      : (aan ? variables.aan_kleur : 'rgba(255,255,255,0.35)');
+        return `<ha-icon icon="${variables.mdi}" style="--mdc-icon-size:22px;color:${col}"></ha-icon>`;
+      ]]]
+    sub: |
+      [[[ return variables.sub || ''; ]]]
+    badge: |
+      [[[
+        // Een weggevallen schakelaar krijgt bewust geen "uit"-badge: dan lijkt
+        // hij bediend terwijl er niets te bedienen valt.
+        if(!entity || ['unavailable','unknown'].indexOf(entity.state) !== -1)
+          return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:rgba(255,255,255,0.5);background:rgba(255,255,255,0.06)">geen verbinding</span>`;
+        var aan = entity.state === 'on';
+        var kleur = aan ? variables.aan_kleur : 'rgba(255,255,255,0.5)';
+        var vlak = aan ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.06)';
+        return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:${kleur};background:${vlak}">${aan ? 'aan' : 'uit'}</span>`;
+      ]]]
+
 # --- Vandaag / list row: icon, title, subtitle -----------------------------
 ov_listrow:
   show_icon: false

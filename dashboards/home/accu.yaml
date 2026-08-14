@@ -1,0 +1,371 @@
+# Thuisaccu: wat de kwartierregie van plan is en waarom.
+#
+# De regie zelf staat in packages/9 - Other/Battery.yaml. Twee regimes die
+# elkaar uitsluiten: `input_boolean.batterij_kwartierregie` uit = sturen op het
+# grove tariefniveau van de dag, aan = laden in de N goedkoopste kwartieren van
+# de komende 24 uur en ontladen in de M duurste. Deze pagina laat vooral het
+# tweede zien, want dat is het regime dat je wil kunnen controleren.
+#
+# WAAROM DE GRAFIEK DE GRENZEN TOONT EN NIET DE BLOKKEN ZELF
+# De sensor rekent per ronde uit welke kwartieren in de laad- en ontlaadset
+# zitten, maar geeft alleen de grenswaarden terug (`laad_grens` /
+# `ontlaad_grens`), niet de hele lijst - dat zou een attribuut van kilobytes
+# worden dat elke vijf minuten in de recorder belandt. Met die twee lijnen over
+# de prijsbalken heen zie je hetzelfde: elke balk onder de onderste lijn is een
+# laadblok, elke balk boven de bovenste een ontlaadblok.
+title: Accu
+path: accu
+icon: mdi:home-battery
+
+cards:
+  # ---------------------------------------------------------------- regie
+  - type: vertical-stack
+    cards:
+      - type: custom:button-card
+        template: ov_title
+        variables:
+          title: KWARTIERREGIE
+
+      - type: custom:button-card
+        template: ov_toggle
+        entity: input_boolean.batterij_kwartierregie
+        name: Sturen op kwartierprijzen
+        variables:
+          mdi: mdi:chart-timeline-variant
+          sub: |
+            [[[
+              // Uit betekent niet "niets doet iets": dan stuurt de oude
+              // automatisering op het tariefniveau van de dag. Dat verschil
+              // hoort hier te staan, anders lijkt uit gelijk aan stuurloos.
+              return states['input_boolean.batterij_kwartierregie'] &&
+                     states['input_boolean.batterij_kwartierregie'].state === 'on'
+                ? 'de goedkoopste en duurste kwartieren'
+                : 'uit — de accu volgt het tariefniveau van de dag';
+            ]]]
+
+      # Wat het plan nu zegt. Losse kaart en geen badge op de schakelaar:
+      # dit is de regel die je leest als je je afvraagt waarom hij niets doet.
+      - type: custom:button-card
+        entity: sensor.batterij_kwartierplan
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: more-info
+        styles:
+          grid:
+            - grid-template-areas: '"ic t badge" "ic sub badge"'
+            - grid-template-columns: 34px 1fr auto
+            - align-items: center
+            - column-gap: 12px
+          card:
+            - background: none
+            - border: none
+            - box-shadow: none
+            - padding: 11px 2px
+          custom_fields:
+            ic:
+              - grid-area: ic
+            t:
+              - grid-area: t
+              - justify-self: start
+              - font-size: 14.5px
+              - font-weight: "600"
+              - color: white
+            sub:
+              - grid-area: sub
+              - justify-self: start
+              - font-size: 12.5px
+              - color: rgba(255,255,255,0.58)
+              - padding-top: 2px
+            badge:
+              - grid-area: badge
+              - justify-self: end
+        custom_fields:
+          ic: |
+            [[[
+              var s = entity ? entity.state : 'unknown';
+              var m = {laden:  ['mdi:battery-arrow-up','#4ade80'],
+                       ontladen:['mdi:battery-arrow-down','#f59e0b'],
+                       rust:   ['mdi:battery-clock','rgba(255,255,255,0.35)']};
+              var v = m[s] || ['mdi:help-circle-outline','rgba(255,255,255,0.25)'];
+              return `<ha-icon icon="${v[0]}" style="--mdc-icon-size:22px;color:${v[1]}"></ha-icon>`;
+            ]]]
+          t: |
+            [[[
+              var m = {laden:'Laden uit het net', ontladen:'Ontladen naar het huis', rust:'Nu even niets'};
+              return m[entity ? entity.state : ''] || 'Plan onbekend';
+            ]]]
+          sub: |
+            [[[
+              if(!entity || !entity.attributes) return '';
+              var r = entity.attributes.reden || '';
+              var p = entity.attributes.prijs_nu;
+              var pr = (p === null || p === undefined || p === 'None')
+                ? '' : ' · nu ' + Number(p).toFixed(3).replace('.',',') + ' €/kWh';
+              return r + pr;
+            ]]]
+          badge: |
+            [[[
+              // Het aantal blokken waar het plan mee rekent. Staat dit op 0,
+              // dan zijn de prijzen weg en is `rust` een gebrek aan gegevens
+              // en niet een keuze - dat verschil moet zichtbaar zijn.
+              if(!entity || !entity.attributes) return '';
+              var n = Number(entity.attributes.blokken_bekend || 0);
+              var kleur = n > 0 ? 'rgba(255,255,255,0.6)' : '#f59e0b';
+              var vlak = n > 0 ? 'rgba(255,255,255,0.08)' : 'rgba(245,158,11,0.15)';
+              return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:${kleur};background:${vlak}">${n} blokken</span>`;
+            ]]]
+
+      # De eerstvolgende momenten, zodat je weet wanneer er iets gebeurt.
+      - type: custom:button-card
+        template: ov_listrow
+        entity: sensor.batterij_kwartierplan
+        variables:
+          mdi: mdi:battery-arrow-up
+          kleur: "#4ade80"
+          title: Volgend laadblok
+        custom_fields:
+          s: |
+            [[[
+              var a = entity && entity.attributes ? entity.attributes : {};
+              var t = a.volgend_laadblok;
+              var g = a.laad_grens;
+              if(!t || t === '-') return 'geen laadblok meer in het venster';
+              var grens = (g === null || g === undefined || g === 'None')
+                ? '' : ' · tot ' + Number(g).toFixed(3).replace('.',',') + ' €/kWh';
+              return t + grens;
+            ]]]
+      - type: custom:button-card
+        template: ov_listrow
+        entity: sensor.batterij_kwartierplan
+        variables:
+          mdi: mdi:battery-arrow-down
+          kleur: "#f59e0b"
+          title: Volgend ontlaadblok
+        custom_fields:
+          s: |
+            [[[
+              var a = entity && entity.attributes ? entity.attributes : {};
+              var t = a.volgend_ontlaadblok;
+              var g = a.ontlaad_grens;
+              if(!t || t === '-') return 'geen ontlaadblok meer in het venster';
+              var grens = (g === null || g === undefined || g === 'None')
+                ? '' : ' · vanaf ' + Number(g).toFixed(3).replace('.',',') + ' €/kWh';
+              return t + grens;
+            ]]]
+
+  # ------------------------------------------------------------- de accu zelf
+  - type: vertical-stack
+    cards:
+      - type: custom:button-card
+        template: ov_title
+        variables:
+          title: DE ACCU
+      - type: custom:button-card
+        entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
+        show_icon: false
+        show_name: false
+        show_state: false
+        tap_action:
+          action: more-info
+        styles:
+          grid:
+            - grid-template-areas: '"t badge" "sub badge"'
+            - grid-template-columns: 1fr auto
+            - align-items: center
+            - column-gap: 10px
+          card:
+            - background: none
+            - border: none
+            - box-shadow: none
+            - padding: 11px 2px
+          custom_fields:
+            t:
+              - grid-area: t
+              - justify-self: start
+              - font-size: 14.5px
+              - font-weight: "600"
+              - color: white
+            sub:
+              - grid-area: sub
+              - justify-self: start
+              - font-size: 12.5px
+              - color: rgba(255,255,255,0.58)
+              - padding-top: 2px
+            badge:
+              - grid-area: badge
+              - justify-self: end
+        custom_fields:
+          t: |
+            [[[
+              if(!entity || ['unavailable','unknown'].indexOf(entity.state) !== -1)
+                return 'Accu niet bereikbaar';
+              return 'Lading ' + Math.round(Number(entity.state)) + '%';
+            ]]]
+          sub: |
+            [[[
+              // Zelfde afleiding als de accu-app op de klokken en het
+              // ThuisAccu-intent: de inverter-state is leidend, het vermogen
+              // is de terugval met een dode zone van 20 W.
+              var pwE = states['sensor.lilygo_rs485_marstek_battery_power'];
+              var invE = states['sensor.lilygo_rs485_marstek_inverter_state'];
+              if(!pwE) return '';
+              var pw = Number(pwE.state);
+              var inv = invE ? invE.state : '';
+              if(isNaN(pw)) return '';
+              var laadt = inv === 'Charge' || (['Charge','Discharge'].indexOf(inv) === -1 && pw > 20);
+              var ontlaadt = inv === 'Discharge' || (['Charge','Discharge'].indexOf(inv) === -1 && pw < -20);
+              if(laadt) return 'laadt met ' + Math.abs(Math.round(pw)) + ' W';
+              if(ontlaadt) return 'levert ' + Math.abs(Math.round(pw)) + ' W aan het huis';
+              return 'staat stil';
+            ]]]
+          badge: |
+            [[[
+              // De ondergrens erbij: een accu die op 11% "niets doet" terwijl
+              // de ondergrens 10 is, is niet stuk maar leeg.
+              var g = states['input_number.batterij_min_soc'];
+              if(!g) return '';
+              return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.08)">grens ${Math.round(Number(g.state))}%</span>`;
+            ]]]
+      - type: entities
+        card_mod:
+          style: |
+            ha-card { background: none !important; border: none !important; box-shadow: none !important; }
+        entities:
+          - entity: input_number.batterij_laad_kwartieren
+            name: Laden in de X goedkoopste kwartieren
+          - entity: input_number.batterij_ontlaad_kwartieren
+            name: Ontladen in de X duurste kwartieren
+          - entity: input_number.batterij_min_soc
+            name: Niet verder ontladen dan
+          - type: divider
+          # Wat de accu op dit moment ècht doet. Deze twee worden door de
+          # regie gezet; staan ze anders dan je verwacht, dan is dit de plek
+          # waar je dat ziet. Let op: de Marstek-selects lopen ~15 seconden
+          # achter op een commando (RS485-poll), dus even wachten voor je
+          # concludeert dat er iets misgaat.
+          - entity: select.lilygo_rs485_marstek_rs485_control_mode
+            name: Regelmodus (enable = geforceerd)
+          - entity: select.lilygo_rs485_marstek_forcible_charge_discharge
+            name: Geforceerd laden/ontladen
+          # Het vermogen waarmee geforceerd wordt. De regie zet deze twee zelf
+          # op 2500 W bij elk laad- of ontlaadblok, dus een handmatige
+          # aanpassing houdt het maar tot het volgende blok vol. Ze stonden
+          # alleen op de oude dashboard-view; hier horen ze thuis.
+          - entity: number.lilygo_rs485_marstek_forcible_charge_power
+            name: Laadvermogen (geforceerd)
+          - entity: number.lilygo_rs485_marstek_forcible_discharge_power
+            name: Ontlaadvermogen (geforceerd)
+
+  # ------------------------------------------------------------- de prijzen
+  - type: custom:apexcharts-card
+    update_interval: 5m
+    experimental:
+      color_threshold: true
+    graph_span: 24h
+    span:
+      start: day
+    now:
+      show: true
+      label: nu
+      color: white
+    header:
+      show: true
+      title: Kwartierprijzen vandaag met de laad- en ontlaadgrens
+    yaxis:
+      - id: kwh_prijs
+        min: ~0
+        max: ~0.4
+        decimals: 2
+        apex_config:
+          title:
+            text: Prijs €/kWh
+    apex_config:
+      tooltip:
+        x:
+          show: false
+      plotOptions:
+        bar:
+          # 96 balken op een dag; met de standaardbreedte streept dat. Zelfde
+          # keuze als de stroomprijskaart op de oude view en het Overzicht.
+          columnWidth: 96%
+    series:
+      - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
+        name: Prijs
+        stroke_width: 0
+        float_precision: 3
+        type: column
+        color: "#3f5a70"
+        show:
+          legend_value: false
+        data_generator: |
+          const blokken = (ent, key) => (ent && ent.attributes && ent.attributes[key]) || [];
+          const st = (typeof hass !== 'undefined' && hass.states) ? hass.states : {};
+          const vandaag = blokken(entity, 'raw_today').length
+            ? blokken(entity, 'raw_today')
+            : blokken(st['sensor.slimhuys_zonneplan_prijzen_vandaag'], 'raw_today');
+          return vandaag
+            .map((e) => {
+              const s = new Date(e.start).getTime();
+              const t = new Date(e.end).getTime();
+              const p = Number(e.value);
+              // ApexCharts centreert een kolom op zijn timestamp; plotten op
+              // het midden van [start, end) laat de balk zijn eigen blok
+              // dekken in plaats van een half blok ernaast.
+              return [isFinite(t) ? (s + t) / 2 : s, isNaN(p) ? null : p];
+            })
+            .filter((d) => isFinite(d[0]))
+            .sort((a, b) => a[0] - b[0]);
+        yaxis_id: kwh_prijs
+      # De twee grenzen als vlakke lijnen. Ze komen uit het plan en niet uit
+      # een eigen berekening, zodat de grafiek per definitie hetzelfde zegt
+      # als de regie doet. Ze gelden voor het venster van 24 uur vooruit, dus
+      # ze schuiven in de loop van de dag mee - dat is geen fout maar precies
+      # wat de accu op dat moment als goedkoop en duur beschouwt.
+      - entity: sensor.batterij_kwartierplan
+        name: Laadgrens
+        stroke_width: 2
+        color: "#4ade80"
+        type: line
+        float_precision: 3
+        show:
+          legend_value: true
+          in_header: false
+        data_generator: |
+          const st = (typeof hass !== 'undefined' && hass.states) ? hass.states : {};
+          const a = (entity && entity.attributes) || {};
+          const g = a.laad_grens;
+          if (g === null || g === undefined || g === 'None' || g === '') return [];
+          const w = Number(g);
+          if (isNaN(w)) return [];
+          const bron = st['sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier']
+                    || st['sensor.slimhuys_zonneplan_prijzen_vandaag'];
+          const blk = (bron && bron.attributes && bron.attributes.raw_today) || [];
+          if (!blk.length) return [];
+          return [[new Date(blk[0].start).getTime(), w],
+                  [new Date(blk[blk.length - 1].end).getTime(), w]];
+        yaxis_id: kwh_prijs
+      - entity: sensor.batterij_kwartierplan
+        name: Ontlaadgrens
+        stroke_width: 2
+        color: "#f59e0b"
+        type: line
+        float_precision: 3
+        show:
+          legend_value: true
+          in_header: false
+        data_generator: |
+          const st = (typeof hass !== 'undefined' && hass.states) ? hass.states : {};
+          const a = (entity && entity.attributes) || {};
+          const g = a.ontlaad_grens;
+          if (g === null || g === undefined || g === 'None' || g === '') return [];
+          const w = Number(g);
+          if (isNaN(w)) return [];
+          const bron = st['sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier']
+                    || st['sensor.slimhuys_zonneplan_prijzen_vandaag'];
+          const blk = (bron && bron.attributes && bron.attributes.raw_today) || [];
+          if (!blk.length) return [];
+          return [[new Date(blk[0].start).getTime(), w],
+                  [new Date(blk[blk.length - 1].end).getTime(), w]];
+        yaxis_id: kwh_prijs
