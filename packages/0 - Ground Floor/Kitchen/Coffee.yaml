@@ -1,5 +1,14 @@
 coffee_package:
 
+  input_boolean:
+    # "Geen koffie meer vandaag." Gaat vanzelf aan als je de machine met de
+    # hand uitzet en vervalt om 07:00 of zodra je hem weer aanzet; zie de
+    # toelichting bij `turn_on_coffee_machine`. Los te bedienen vanaf het
+    # dashboard, zodat je hem ook vooraf kunt zetten.
+    koffie_pauze:
+      name: "Koffie - Geen koffie meer vandaag"
+      icon: mdi:coffee-off-outline
+
   input_datetime:
     coffee_backflush_date:
       name: "Kitchen Coffee - Backflush Date"
@@ -13,100 +22,204 @@ coffee_package:
       icon: mdi:coffee-to-go
 
   automation:
+    ###########################################################################
+    ## DE MACHINE HOORT AAN TE STAAN ALS ER KOFFIE GEDRONKEN KAN WORDEN
+    ##
+    ## De regel is simpel: tussen 07:00 en 19:00 met minstens één volwassene
+    ## thuis staat hij aan, daarbuiten uit. `group.all_adults` is `home` zodra
+    ## er één thuis is, dus die ene conditie dekt zowel "iemand is er" als
+    ## "iedereen is weg".
+    ##
+    ## WAAROM DE `ging_uit`-TRIGGER BESTAAT
+    ## De machine zet zichzelf na verloop van tijd uit (zijn eigen auto-aan/uit-
+    ## schema, `switch.linea_micra_kroon_18_auto_on_off_klpggoz`). Binnen het
+    ## venster zetten we hem dan gewoon weer aan.
+    ##
+    ## EN HOE JE HEM DAN ALSNOG UIT KRIJGT
+    ## Precies dát maakte hem eerder onuitzetbaar: elke handmatige uit werd
+    ## binnen een seconde teruggedraaid. Het verschil zit in de context van de
+    ## statuswissel. Zet jij hem uit via het dashboard, de app of de stem, dan
+    ## staat er een `user_id` bij; doet de machine het zelf, dan niet. Bij een
+    ## menselijke uit gaat `input_boolean.koffie_pauze` aan en blijft hij uit.
+    ## Zet je hem met de hand weer aan, dan vervalt de pauze meteen - "uit" is
+    ## dus "geen koffie meer" en "aan" is "toch weer koffie".
+    ##
+    ## De pauze vervalt sowieso om 07:00, anders zou één keer uitzetten alle
+    ## volgende ochtenden meenemen.
+    ##
+    ## LET OP: de knop op de machine zelf geeft géén user_id (die wissel komt
+    ## via de integratie binnen en is niet te onderscheiden van de automatische
+    ## uitschakeling). Zet hem dus uit via het dashboard of de pauzeschakelaar,
+    ## niet op het apparaat, anders staat hij zo weer aan.
+    ###########################################################################
     - id: turn_on_coffee_machine
       alias: Kitchen - Coffee
-      description: Turn on/off the coffee machine when someone is or comes or leaves home
-      mode: single
+      description: >-
+        Zet de koffiemachine aan tussen 07:00 en 19:00 zolang er een volwassene
+        thuis is, zet hem uit om 19:00 en als iedereen weg is, en respecteert
+        een handmatige uitschakeling via input_boolean.koffie_pauze.
+      # queued en niet single: de triggers kunnen elkaar in dezelfde seconde
+      # raken (iedereen weg -> wij zetten uit -> dat is zelf weer een trigger)
+      # en dan mag er geen run wegvallen.
+      mode: queued
+      max: 10
+      max_exceeded: silent
       triggers:
         - trigger: time
           at: "07:00:00"
-          id: time_0700
-        - trigger: state
-          entity_id:
-            - switch.linea_micra_kroon_18
-          to: "off"
-          id: unexepected_off
-        - trigger: zone
-          entity_id: person.robin_bohnen
-          zone: zone.home
-          event: enter
-          id: person_enters_zone
-        - trigger: zone
-          entity_id: person.samantha_henkelman
-          zone: zone.home
-          event: enter
-          id: partner_enters_zone
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_away
-          id: alarm_on_not_home
-        - trigger: state
-          entity_id:
-            - alarm_control_panel.alarmo
-          to: armed_home
-          id: alarm_on_home
-        - trigger: state
-          entity_id:
-            - lock.kroon18voordeur
-          to: locked
-          for:
-            hours: 0
-            minutes: 2
-            seconds: 0
-          id: lock_locked
+          id: ochtend
         - trigger: time
           at: "19:00:00"
-          id: time_1900
+          id: avond
+        # De groep is `home` zodra er één volwassene thuis is.
+        - trigger: state
+          entity_id: group.all_adults
+          to: home
+          not_from:
+            - unknown
+            - unavailable
+          id: iemand_thuis
+        - trigger: state
+          entity_id: group.all_adults
+          to: not_home
+          not_from:
+            - unknown
+            - unavailable
+          id: iedereen_weg
+        # Het alarm op afwezig is een snellere "iedereen is weg" dan de groep:
+        # person.robin_bohnen hangt ook aan de router-tracker en die blijft na
+        # vertrek nog 7 tot 12 minuten `home` melden. Alarmo gaat alleen op
+        # away als er niemand in zone.home is, dus dit kan niet afgaan terwijl
+        # er nog iemand thuis koffie staat te zetten.
+        - trigger: state
+          entity_id: alarm_control_panel.alarmo
+          to: armed_away
+          not_from:
+            - unknown
+            - unavailable
+          id: iedereen_weg
+        - trigger: state
+          entity_id: switch.linea_micra_kroon_18
+          to: "off"
+          not_from:
+            - unknown
+            - unavailable
+          id: ging_uit
+        - trigger: state
+          entity_id: switch.linea_micra_kroon_18
+          to: "on"
+          not_from:
+            - unknown
+            - unavailable
+          id: ging_aan
+        - trigger: state
+          entity_id: input_boolean.koffie_pauze
+          to: "on"
+          id: pauze_aan
+        - trigger: state
+          entity_id: input_boolean.koffie_pauze
+          to: "off"
+          id: pauze_af
       conditions: []
       actions:
+        # Een nieuwe dag begint zonder pauze van gisteren.
+        - if:
+            - condition: trigger
+              id: ochtend
+          then:
+            - action: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.koffie_pauze
+
+        - variables:
+            # Heeft een mens deze wissel veroorzaakt? Een service-call vanuit
+            # een automatisering of een update van de integratie heeft geen
+            # user_id; het dashboard, de app en de spraakassistent wel.
+            door_mens: >-
+              {{ trigger.to_state is defined
+                 and trigger.to_state.context.user_id is not none }}
+            # Het venster waarin er koffie gedronken wordt.
+            koffietijd: >-
+              {{ today_at('07:00') <= now() < today_at('19:00')
+                 and is_state('group.all_adults', 'home') }}
+
         - choose:
-            - conditions:
-                - condition: and
-                  conditions:
-                    - condition: trigger
-                      id:
-                        - time_0700
-                        - unexepected_off
-                        - person_enters_zone
-                        - partner_enters_zone
-                    - condition: time
-                      after: "07:00:00"
-                      before: "19:00:00"
-                    - condition: state
-                      entity_id: group.all_adults
-                      state: home
+            # Met de hand uitgezet = geen koffie meer. De pauze houdt de
+            # aan-tak hieronder tegen tot je hem weer aanzet of tot 07:00.
+            - alias: Handmatig uitgezet, dus laat hem uit
+              conditions:
+                - condition: trigger
+                  id: ging_uit
+                - condition: template
+                  value_template: "{{ door_mens }}"
+                # Zet jij de pauze zelf aan, dan zet de tak onderaan de machine
+                # uit - en die uitschakeling erft jouw user_id, dus zonder deze
+                # regel zou hij hier binnenlopen en de pauze nog eens aanzetten
+                # met een tweede logboekregel erbij.
+                - condition: state
+                  entity_id: input_boolean.koffie_pauze
+                  state: "off"
               sequence:
-                - action: switch.turn_on
-                  metadata: {}
-                  data: {}
+                - action: input_boolean.turn_on
                   target:
-                    entity_id: switch.linea_micra_kroon_18
-            - conditions:
+                    entity_id: input_boolean.koffie_pauze
+                - action: logbook.log
+                  data:
+                    name: Koffiemachine
+                    message: >-
+                      Met de hand uitgezet; blijft uit tot je hem weer aanzet
+                      of tot morgenochtend 07:00.
+
+            # Met de hand aangezet = toch weer koffie.
+            - alias: Handmatig aangezet, dus pauze vervalt
+              conditions:
+                - condition: trigger
+                  id: ging_aan
+                - condition: template
+                  value_template: "{{ door_mens }}"
+                - condition: state
+                  entity_id: input_boolean.koffie_pauze
+                  state: "on"
+              sequence:
+                - action: input_boolean.turn_off
+                  target:
+                    entity_id: input_boolean.koffie_pauze
+
+            - alias: Aanzetten binnen het koffievenster
+              conditions:
                 - condition: trigger
                   id:
-                    - alarm_on_not_home
-                    - alarm_on_home
-                    - lock_locked
-                    - time_1900
+                    - ochtend
+                    - iemand_thuis
+                    - ging_uit
+                    - pauze_af
+                - condition: template
+                  value_template: "{{ koffietijd }}"
+                - condition: state
+                  entity_id: input_boolean.koffie_pauze
+                  state: "off"
+                - condition: state
+                  entity_id: switch.linea_micra_kroon_18
+                  state: "off"
               sequence:
-                - if:
-                    - condition: and
-                      conditions:
-                        - condition: not
-                          conditions:
-                            - condition: state
-                              entity_id: group.all_adults
-                              state: home
-                        - condition: state
-                          entity_id: switch.linea_micra_kroon_18
-                          state: "on"
-                  then:
-                    - action: switch.turn_off
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: switch.linea_micra_kroon_18
+                - action: switch.turn_on
+                  target:
+                    entity_id: switch.linea_micra_kroon_18
+
+            - alias: Uitzetten na negenen, als iedereen weg is of op pauze
+              conditions:
+                - condition: trigger
+                  id:
+                    - avond
+                    - iedereen_weg
+                    - pauze_aan
+                - condition: state
+                  entity_id: switch.linea_micra_kroon_18
+                  state: "on"
+              sequence:
+                - action: switch.turn_off
+                  target:
+                    entity_id: switch.linea_micra_kroon_18
 
     - id: backflush_coffee
       alias: Kitchen - Coffee Backflushed

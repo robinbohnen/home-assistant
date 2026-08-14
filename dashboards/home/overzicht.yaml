@@ -1871,6 +1871,26 @@ cards:
                 icon_color: "{{ 'orange' if is_state('switch.linea_micra_kroon_18','on') else 'grey' }}"
                 tap_action:
                   action: toggle
+              # Zonder deze regel is een uitgestaan koffieapparaat midden op de
+              # dag niet te verklaren: de automatisering zet hem normaal binnen
+              # een tel weer aan, dus "uit" betekent hier altijd dat de pauze
+              # loopt. Hier zie je dat, en zet je hem in één tik weer vrij.
+              - type: custom:mushroom-template-card
+                entity: input_boolean.koffie_pauze
+                primary: Geen koffie meer
+                secondary: >-
+                  {% if is_state('input_boolean.koffie_pauze','on') %}
+                    Blijft uit tot 07:00
+                  {% elif today_at('07:00') <= now() < today_at('19:00')
+                          and is_state('group.all_adults','home') %}
+                    Machine hoort nu aan te staan
+                  {% else %}
+                    Buiten koffietijd
+                  {% endif %}
+                icon: mdi:coffee-off-outline
+                icon_color: "{{ 'red' if is_state('input_boolean.koffie_pauze','on') else 'grey' }}"
+                tap_action:
+                  action: toggle
               - type: custom:mushroom-template-card
                 entity: switch.woonkamer_woonkamer_stopcontact_luchtreiniger
                 primary: Luchtreiniger woonkamer
