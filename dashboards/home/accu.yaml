@@ -387,12 +387,17 @@ cards:
           if (g === null || g === undefined || g === 'None' || g === '') return [];
           const w = Number(g);
           if (isNaN(w)) return [];
-          // De lijn loopt over het hele zichtbare venster (het lopende uur
-          // tot 24 uur later) en niet over de blokken van vandaag: sinds de
-          // grafiek meeschuift zou hij anders halverwege ophouden.
+          // EEN PUNT PER UUR EN NIET TWEE AAN DE UITEINDEN
+          // Met alleen een begin- en eindpunt vlák buiten het venster viel er
+          // binnen de grafiek niets te tekenen: de lijn verdween en de legenda
+          // zei N/A. Een reeks punten over het hele zichtbare bereik heeft dat
+          // probleem niet en geeft de legenda meteen een waarde bij `nu`.
           const start = new Date(); start.setMinutes(0, 0, 0);
-          const eind = new Date(start.getTime() + 25 * 3600 * 1000);
-          return [[start.getTime() - 3600 * 1000, w], [eind.getTime(), w]];
+          const punten = [];
+          for (let i = 0; i <= 24; i++) {
+            punten.push([start.getTime() + i * 3600 * 1000, w]);
+          }
+          return punten;
         yaxis_id: kwh_prijs
       - entity: sensor.batterij_kwartierplan
         name: Ontlaadgrens
@@ -410,10 +415,15 @@ cards:
           if (g === null || g === undefined || g === 'None' || g === '') return [];
           const w = Number(g);
           if (isNaN(w)) return [];
-          // De lijn loopt over het hele zichtbare venster (het lopende uur
-          // tot 24 uur later) en niet over de blokken van vandaag: sinds de
-          // grafiek meeschuift zou hij anders halverwege ophouden.
+          // EEN PUNT PER UUR EN NIET TWEE AAN DE UITEINDEN
+          // Met alleen een begin- en eindpunt vlák buiten het venster viel er
+          // binnen de grafiek niets te tekenen: de lijn verdween en de legenda
+          // zei N/A. Een reeks punten over het hele zichtbare bereik heeft dat
+          // probleem niet en geeft de legenda meteen een waarde bij `nu`.
           const start = new Date(); start.setMinutes(0, 0, 0);
-          const eind = new Date(start.getTime() + 25 * 3600 * 1000);
-          return [[start.getTime() - 3600 * 1000, w], [eind.getTime(), w]];
+          const punten = [];
+          for (let i = 0; i <= 24; i++) {
+            punten.push([start.getTime() + i * 3600 * 1000, w]);
+          }
+          return punten;
         yaxis_id: kwh_prijs
