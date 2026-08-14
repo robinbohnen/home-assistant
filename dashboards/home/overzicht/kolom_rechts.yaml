@@ -386,10 +386,11 @@ cards:
                   - color: rgba(255,255,255,0.8)
                   - width: 22px
   # SCHAKELAARS
-  # De twee knoppen die op de oude dashboard-view zaten en hier ontbraken
-  # (Robin, 14 augustus 2026). Bewust een korte, met de hand aangewezen lijst
-  # en geen automatische scan op "alle switches": op dit paneel hoort alleen
-  # wat je echt met een tik wilt kunnen omzetten.
+  # Eén regel in plaats van twee panelen met tien losse rijen (Robin,
+  # 14 augustus 2026: "dit neemt veel te veel ruimte in"). De volledige lijst
+  # zit achter #ov-schakelaars; hier staan alleen een samenvatting en de twee
+  # knoppen die het vaakst gebruikt worden. Zelfde opzet als de
+  # zonnescherm-regel hierboven: tekst links, mini-knoppen rechts.
   - type: custom:mod-card
     card_mod:
       style: |
@@ -401,163 +402,110 @@ cards:
           padding: var(--ov-panel-padding) !important;
         }
     card:
-      type: vertical-stack
+      type: horizontal-stack
       card_mod:
         style: |
-          #root > *:nth-child(n+2) { border-top: 1px solid rgba(255,255,255,0.06) !important; }
+          #root {
+            display: grid !important;
+            grid-template-columns: 1fr auto auto !important;
+            align-items: center !important;
+            gap: 8px !important;
+          }
       cards:
         - type: custom:button-card
-          template: ov_title
-          variables:
-            title: JACUZZI
-        # Vier knoppen die samen horen. `power` is de stekker, `keep_warm` is
-        # de automatisering in packages/3 - Outside/Backyard/Spa.yaml die de
-        # temperatuur vasthoudt - twee verschillende dingen, dus allebei een
-        # eigen regel. De spa staat óók als climate-regel in het KLIMAAT-paneel
-        # hierboven; dat is de temperatuur, dit is de bediening.
-        - type: custom:button-card
-          template: ov_toggle
-          entity: switch.intex_purespa_power
-          name: Jacuzzi aan
-          variables:
-            mdi: mdi:power
-            aan_kleur: "#38bdf8"
-            sub: |
+          entity: sensor.time
+          show_icon: false
+          show_name: false
+          show_state: false
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-schakelaars"
+          styles:
+            card:
+              - background: none
+              - border: none
+              - box-shadow: none
+              - padding: 2px
+            grid:
+              - grid-template-areas: '"n" "s"'
+              - justify-items: start
+          custom_fields:
+            n: |
+              [[[ return `<span style="font-size:14.5px;font-weight:600;color:white">Schakelaars</span>`; ]]]
+            s: |
               [[[
-                var spa = states['climate.intex_purespa'];
-                if(!spa || ['unavailable','unknown'].indexOf(spa.state) !== -1)
-                  return 'niet bereikbaar';
-                var cur = spa.attributes.current_temperature;
-                var tgt = spa.attributes.temperature;
-                if(cur == null) return '';
-                var s = Number(cur).toFixed(1).replace('.',',') + '°';
-                if(spa.state !== 'off' && tgt != null)
-                  s += ' · doel ' + Number(tgt).toFixed(1).replace('.',',') + '°';
-                return s;
+                // Alleen tellen wat je hier ook echt kunt omzetten - dezelfde
+                // met de hand aangewezen lijst als in de popup, geen scan over
+                // alle switches.
+                var lijst = ['switch.intex_purespa_power','input_boolean.backyard_spa_keep_warm',
+                             'switch.intex_purespa_filter','switch.intex_purespa_sanitizer',
+                             'switch.linea_micra_kroon_18',
+                             'switch.woonkamer_woonkamer_stopcontact_luchtreiniger',
+                             'switch.eettafel_eettafel_stopcontact_luchtreiniger',
+                             'switch.achtertuin_schuur_lampen',
+                             'switch.meterkast_meterkast_stopcontact_ledstrip'];
+                var aan = lijst.filter(function(e){ return states[e] && states[e].state === 'on'; });
+                var weg = lijst.filter(function(e){
+                  return !states[e] || ['unavailable','unknown'].indexOf(states[e].state) !== -1; }).length;
+                var t = aan.length === 0 ? 'alles uit'
+                      : (aan.length === 1 ? '1 aan' : aan.length + ' aan');
+                if(weg) t += ' · ' + weg + ' onbereikbaar';
+                return `<span style="font-size:12.5px;color:rgba(255,255,255,0.58)">${t}</span>`;
               ]]]
+        # Koffie en alle lichten staan hier los omdat dat de twee zijn die je
+        # in het voorbijgaan omzet; de rest is een tik extra waard.
         - type: custom:button-card
-          template: ov_toggle
-          entity: input_boolean.backyard_spa_keep_warm
-          name: Warmhouden
-          variables:
-            mdi: mdi:hot-tub
-            aan_kleur: "#38bdf8"
-            sub: houdt de temperatuur vast
-        - type: custom:button-card
-          template: ov_toggle
-          entity: switch.intex_purespa_filter
-          name: Filter
-          variables:
-            mdi: mdi:air-filter
-            aan_kleur: "#38bdf8"
-        - type: custom:button-card
-          template: ov_toggle
-          entity: switch.intex_purespa_sanitizer
-          name: Sanitizer
-          variables:
-            mdi: mdi:water-opacity
-            aan_kleur: "#38bdf8"
-
-  # SCHAKELAARS
-  # De losse knoppen die op de oude dashboard-view zaten en hier ontbraken
-  # (Robin, 14 augustus 2026). Bewust een korte, met de hand aangewezen lijst
-  # en geen automatische scan op "alle switches": op dit paneel hoort alleen
-  # wat je echt met een tik wilt kunnen omzetten.
-  - type: custom:mod-card
-    card_mod:
-      style: |
-        ha-card {
-          background: var(--ov-panel-bg) !important;
-          border: var(--ov-panel-border) !important;
-          border-radius: var(--ov-panel-radius) !important;
-          box-shadow: none !important;
-          padding: var(--ov-panel-padding) !important;
-        }
-    card:
-      type: vertical-stack
-      card_mod:
-        style: |
-          #root > *:nth-child(n+2) { border-top: 1px solid rgba(255,255,255,0.06) !important; }
-      cards:
-        - type: custom:button-card
-          template: ov_title
-          variables:
-            title: SCHAKELAARS
-        - type: custom:button-card
-          template: ov_toggle
           entity: switch.linea_micra_kroon_18
-          name: Koffiemachine
-          variables:
-            mdi: mdi:coffee
-            aan_kleur: "#f59e0b"
-            sub: |
-              [[[
-                // De machine gaat ook vanzelf aan en uit (Kitchen/Coffee.yaml
-                // stuurt op thuiskomen, het alarm en de klok). Daarom hier de
-                // tijd sinds de laatste wissel: dan zie je of je hem net zelf
-                // hebt omgezet of dat het huis dat deed.
-                var e = states['switch.linea_micra_kroon_18'];
-                if(!e || ['unavailable','unknown'].indexOf(e.state) !== -1) return '';
-                var m = Math.round((Date.now() - new Date(e.last_changed).getTime())/60000);
-                if(m < 1) return 'net omgezet';
-                if(m < 60) return m + ' min ' + (e.state === 'on' ? 'aan' : 'uit');
-                var u = Math.round(m/60);
-                return u + ' uur ' + (e.state === 'on' ? 'aan' : 'uit');
-              ]]]
-          # De subregel rekent met de klok, en button-card rendert alleen
-          # opnieuw als zijn entity verandert. Zonder deze tik blijft "12 min
-          # aan" dagen staan op een wandpaneel dat altijd openstaat.
-          triggers_update:
-            - sensor.time
+          icon: mdi:coffee
+          show_name: false
+          show_state: false
+          tap_action:
+            action: toggle
+          hold_action:
+            action: more-info
+          styles:
+            card:
+              - background: rgba(255,255,255,0.05)
+              - border: 1px solid rgba(255,255,255,0.08)
+              - border-radius: 12px
+              - padding: 8px
+              - width: 42px
+              - height: 42px
+            icon:
+              - width: 22px
+              - color: |
+                  [[[
+                    var e = states['switch.linea_micra_kroon_18'];
+                    if(!e || ['unavailable','unknown'].indexOf(e.state) !== -1)
+                      return 'rgba(255,255,255,0.25)';
+                    return e.state === 'on' ? '#f59e0b' : 'rgba(255,255,255,0.35)';
+                  ]]]
         - type: custom:button-card
-          template: ov_toggle
-          entity: switch.woonkamer_woonkamer_stopcontact_luchtreiniger
-          name: Luchtreiniger woonkamer
-          variables:
-            mdi: mdi:air-purifier
-        - type: custom:button-card
-          template: ov_toggle
-          entity: switch.eettafel_eettafel_stopcontact_luchtreiniger
-          name: Luchtreiniger eettafel
-          variables:
-            mdi: mdi:air-purifier
-        - type: custom:button-card
-          template: ov_toggle
-          entity: switch.achtertuin_schuur_lampen
-          name: Schuurlampen
-          variables:
-            mdi: mdi:lightbulb-outline
-            aan_kleur: "#f59e0b"
-        - type: custom:button-card
-          template: ov_toggle
-          entity: switch.meterkast_meterkast_stopcontact_ledstrip
-          name: Ledstrip meterkast
-          variables:
-            mdi: mdi:led-strip-variant
-            aan_kleur: "#f59e0b"
-        # Alle lichten in één tik. Staat onderaan en niet bovenaan: dit is de
-        # knop met de grootste gevolgen, en die wil je niet als eerste raken
-        # als je langs het paneel veegt.
-        - type: custom:button-card
-          template: ov_toggle
           entity: light.all_lights
-          name: Alle lichten
-          variables:
-            mdi: mdi:lightbulb-group
-            aan_kleur: "#f59e0b"
-            sub: |
-              [[[
-                // Hoeveel er echt branden; "aan" zegt bij een groep alleen
-                // dat er minstens één aan staat.
-                var g = states['light.all_lights'];
-                if(!g || ['unavailable','unknown'].indexOf(g.state) !== -1) return '';
-                var leden = g.attributes.entity_id || [];
-                var n = leden.filter(function(e){
-                  return states[e] && states[e].state === 'on'; }).length;
-                if(!leden.length) return '';
-                return n === 0 ? 'alles uit'
-                     : (n === 1 ? '1 lamp aan' : n + ' lampen aan');
-              ]]]
+          icon: mdi:lightbulb-group
+          show_name: false
+          show_state: false
+          tap_action:
+            action: toggle
+          hold_action:
+            action: more-info
+          styles:
+            card:
+              - background: rgba(255,255,255,0.05)
+              - border: 1px solid rgba(255,255,255,0.08)
+              - border-radius: 12px
+              - padding: 8px
+              - width: 42px
+              - height: 42px
+            icon:
+              - width: 22px
+              - color: |
+                  [[[
+                    var e = states['light.all_lights'];
+                    if(!e || ['unavailable','unknown'].indexOf(e.state) !== -1)
+                      return 'rgba(255,255,255,0.25)';
+                    return e.state === 'on' ? '#f59e0b' : 'rgba(255,255,255,0.35)';
+                  ]]]
 
   # BRANDWEER
   - type: custom:mod-card

@@ -1779,6 +1779,161 @@ cards:
                 icon_color: "{{ 'orange' if is_state('switch.speelkamer_stopcontact_verwarming','on') else 'grey' }}"
                 tap_action:
                   action: toggle
+      # De losse knoppen die vroeger op de oude dashboard-view stonden. Ze
+      # zaten eerst als twee panelen in de rechterkolom, maar dat waren tien
+      # rijen op de belangrijkste kolom van het paneel - hier staan ze net zo
+      # goed en kost het niets (Robin, 14 augustus 2026).
+      #
+      # Waarom hier en niet in #ov-outside: de jacuzzi hoort buiten, maar de
+      # koffiemachine en de luchtreinigers niet. Eén plek waar álle losse
+      # schakelaars staan is makkelijker te onthouden dan vier popups waar er
+      # telkens één tussen de kamerkaarten verstopt zit.
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-schakelaars"
+        name: Schakelaars
+        icon: mdi:toggle-switch-outline
+        width_desktop: *ov_popup_width
+        styles: *ov_popup
+        cards:
+          # ----- 1. Jacuzzi -----
+          # `power` is de stekker, `keep_warm` is de automatisering in
+          # packages/3 - Outside/Backyard/Spa.yaml die de temperatuur
+          # vasthoudt. Twee verschillende dingen, dus allebei een eigen knop.
+          - type: custom:mushroom-title-card
+            subtitle: Jacuzzi
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: switch.intex_purespa_power
+                primary: Jacuzzi
+                secondary: >-
+                  {% if is_state('switch.intex_purespa_power','on') %}
+                    {% set t = state_attr('climate.intex_purespa','current_temperature') | float(none) %}
+                    Aan{{ (' · ' ~ (t | round(1) | string | replace('.', ',')) ~ ' °C') if t is not none else '' }}
+                  {% else %}Uit{% endif %}
+                icon: mdi:hot-tub
+                icon_color: "{{ 'blue' if is_state('switch.intex_purespa_power','on') else 'grey' }}"
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-template-card
+                entity: input_boolean.backyard_spa_keep_warm
+                primary: Warmhouden
+                secondary: >-
+                  {{ 'Houdt de temperatuur vast'
+                     if is_state('input_boolean.backyard_spa_keep_warm','on') else 'Uit' }}
+                icon: mdi:thermometer-check
+                icon_color: "{{ 'blue' if is_state('input_boolean.backyard_spa_keep_warm','on') else 'grey' }}"
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-template-card
+                entity: switch.intex_purespa_filter
+                primary: Filter
+                secondary: "{{ 'Aan' if is_state('switch.intex_purespa_filter','on') else 'Uit' }}"
+                icon: mdi:air-filter
+                icon_color: "{{ 'blue' if is_state('switch.intex_purespa_filter','on') else 'grey' }}"
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-template-card
+                entity: switch.intex_purespa_sanitizer
+                primary: Sanitizer
+                secondary: "{{ 'Aan' if is_state('switch.intex_purespa_sanitizer','on') else 'Uit' }}"
+                icon: mdi:water-opacity
+                icon_color: "{{ 'blue' if is_state('switch.intex_purespa_sanitizer','on') else 'grey' }}"
+                tap_action:
+                  action: toggle
+
+          # ----- 2. In huis -----
+          - type: custom:mushroom-title-card
+            subtitle: In huis
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              # De koffiemachine gaat ook vanzelf aan en uit (Kitchen/
+              # Coffee.yaml stuurt op thuiskomen, het alarm en de klok).
+              # Vandaar hoe lang hij al zo staat: dan zie je of jij dat was
+              # of het huis.
+              - type: custom:mushroom-template-card
+                entity: switch.linea_micra_kroon_18
+                primary: Koffiemachine
+                secondary: >-
+                  {% set e = states.switch.linea_micra_kroon_18 %}
+                  {% if e is none or e.state in ['unavailable','unknown'] %}Geen verbinding
+                  {% else %}
+                    {% set m = ((now() - e.last_changed).total_seconds() / 60) | round(0) | int %}
+                    {{ 'Aan' if e.state == 'on' else 'Uit' }} ·
+                    {{ (m ~ ' min') if m < 60 else ((m / 60) | round(0) | int ~ ' uur') }}
+                  {% endif %}
+                icon: mdi:coffee
+                icon_color: "{{ 'orange' if is_state('switch.linea_micra_kroon_18','on') else 'grey' }}"
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-template-card
+                entity: switch.woonkamer_woonkamer_stopcontact_luchtreiniger
+                primary: Luchtreiniger woonkamer
+                secondary: >-
+                  {{ 'Aan' if is_state('switch.woonkamer_woonkamer_stopcontact_luchtreiniger','on') else 'Uit' }}
+                icon: mdi:air-purifier
+                icon_color: >-
+                  {{ 'green' if is_state('switch.woonkamer_woonkamer_stopcontact_luchtreiniger','on') else 'grey' }}
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-template-card
+                entity: switch.eettafel_eettafel_stopcontact_luchtreiniger
+                primary: Luchtreiniger eettafel
+                secondary: >-
+                  {{ 'Aan' if is_state('switch.eettafel_eettafel_stopcontact_luchtreiniger','on') else 'Uit' }}
+                icon: mdi:air-purifier
+                icon_color: >-
+                  {{ 'green' if is_state('switch.eettafel_eettafel_stopcontact_luchtreiniger','on') else 'grey' }}
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-template-card
+                entity: switch.meterkast_meterkast_stopcontact_ledstrip
+                primary: Ledstrip meterkast
+                secondary: >-
+                  {{ 'Aan' if is_state('switch.meterkast_meterkast_stopcontact_ledstrip','on') else 'Uit' }}
+                icon: mdi:led-strip-variant
+                icon_color: >-
+                  {{ 'orange' if is_state('switch.meterkast_meterkast_stopcontact_ledstrip','on') else 'grey' }}
+                tap_action:
+                  action: toggle
+
+          # ----- 3. Buiten en alles -----
+          - type: custom:mushroom-title-card
+            subtitle: Buiten en alles
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: switch.achtertuin_schuur_lampen
+                primary: Schuurlampen
+                secondary: "{{ 'Aan' if is_state('switch.achtertuin_schuur_lampen','on') else 'Uit' }}"
+                icon: mdi:lightbulb-outline
+                icon_color: "{{ 'orange' if is_state('switch.achtertuin_schuur_lampen','on') else 'grey' }}"
+                tap_action:
+                  action: toggle
+              # "Aan" zegt bij een groep alleen dat er minstens één brandt,
+              # dus hier het echte aantal.
+              - type: custom:mushroom-template-card
+                entity: light.all_lights
+                primary: Alle lichten
+                secondary: >-
+                  {% set leden = state_attr('light.all_lights','entity_id') or [] %}
+                  {% set n = leden | select('is_state','on') | list | count %}
+                  {% if leden | count == 0 %}Onbekend
+                  {% elif n == 0 %}Alles uit
+                  {% elif n == 1 %}1 lamp aan
+                  {% else %}{{ n }} lampen aan{% endif %}
+                icon: mdi:lightbulb-group
+                icon_color: "{{ 'orange' if is_state('light.all_lights','on') else 'grey' }}"
+                tap_action:
+                  action: toggle
+
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-outside"
