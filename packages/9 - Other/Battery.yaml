@@ -112,6 +112,17 @@ battery_package:
       action:
         - variables:
             plan: >-
+              {#- Een blok mag tot 24 uur vooruit liggen, dus alleen "12:45"
+                  tonen is misleidend: op 14 augustus om 15:58 lagen de zes
+                  goedkoopste blokken allemaal de volgende middag, en dan lijkt
+                  het net alsof het laadmoment al voorbij is. Verder dan morgen
+                  kan het venster niet reiken, dus één woord volstaat. -#}
+              {%- macro tijdstip(blok) -%}
+                {%- if blok is none -%}-
+                {%- elif blok.start.date() == now().date() -%}{{ blok.start.strftime('%H:%M') }}
+                {%- else -%}morgen {{ blok.start.strftime('%H:%M') }}
+                {%- endif -%}
+              {%- endmacro -%}
               {#- De kwartierblokken, met de uurblokken als terugval en de
                   blokken van morgen erbij zodat het rond middernacht klopt.
                   Zelfde bronvolgorde als sensor.stroomprijs_volgend_uur in
@@ -191,8 +202,8 @@ battery_package:
                   'prijs_nu': (nu_blok.value | round(4)) if nu_blok is not none else none,
                   'laad_grens': (laadset | map(attribute='value') | max | round(4)) if laadset else none,
                   'ontlaad_grens': (ontlaadset | map(attribute='value') | min | round(4)) if ontlaadset else none,
-                  'volgend_laadblok': komende_laad.start.strftime('%H:%M') if komende_laad is not none else '-',
-                  'volgend_ontlaadblok': komende_ontlaad.start.strftime('%H:%M') if komende_ontlaad is not none else '-'} }}
+                  'volgend_laadblok': tijdstip(komende_laad) | trim,
+                  'volgend_ontlaadblok': tijdstip(komende_ontlaad) | trim} }}
 
       sensor:
         - name: "Batterij kwartierplan"

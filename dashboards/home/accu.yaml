@@ -299,16 +299,24 @@ cards:
     update_interval: 1m
     experimental:
       color_threshold: true
+    # HETZELFDE VENSTER ALS HET PLAN, EN DAAROM NIET "VANDAAG"
+    # De regie kijkt 24 uur vooruit, dus de grenzen worden over nu..+24u
+    # berekend. Stond hier `start: day`, dan zag je vandaag 00:00-24:00: de
+    # halve grafiek was verleden tijd, en op 14 augustus om 16:00 lag de
+    # laadgrens onder álle zichtbare balken omdat de zes goedkoopste blokken
+    # de volgende middag lagen. Met `start: hour` loopt de grafiek van het
+    # lopende uur tot 24 uur later en hoort elke balk onder de groene lijn
+    # echt bij een laadblok.
     graph_span: 24h
     span:
-      start: day
+      start: hour
     now:
       show: true
       label: nu
       color: white
     header:
       show: true
-      title: Kwartierprijzen vandaag met de laad- en ontlaadgrens
+      title: Kwartierprijzen komende 24 uur met de laad- en ontlaadgrens
     yaxis:
       - id: kwh_prijs
         min: ~0
@@ -341,7 +349,11 @@ cards:
           const vandaag = blokken(entity, 'raw_today').length
             ? blokken(entity, 'raw_today')
             : blokken(st['sensor.slimhuys_zonneplan_prijzen_vandaag'], 'raw_today');
-          return vandaag
+          // Morgen erbij, anders houdt de grafiek om middernacht op terwijl het
+          // venster van het plan doorloopt. Die blokken komen 's middags binnen;
+          // tot die tijd is de rechterhelft gewoon leeg.
+          const morgen = blokken(st['sensor.slimhuys_zonneplan_prijzen_morgen'], 'raw_tomorrow');
+          return vandaag.concat(morgen)
             .map((e) => {
               const s = new Date(e.start).getTime();
               const t = new Date(e.end).getTime();
@@ -375,12 +387,12 @@ cards:
           if (g === null || g === undefined || g === 'None' || g === '') return [];
           const w = Number(g);
           if (isNaN(w)) return [];
-          const bron = st['sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier']
-                    || st['sensor.slimhuys_zonneplan_prijzen_vandaag'];
-          const blk = (bron && bron.attributes && bron.attributes.raw_today) || [];
-          if (!blk.length) return [];
-          return [[new Date(blk[0].start).getTime(), w],
-                  [new Date(blk[blk.length - 1].end).getTime(), w]];
+          // De lijn loopt over het hele zichtbare venster (het lopende uur
+          // tot 24 uur later) en niet over de blokken van vandaag: sinds de
+          // grafiek meeschuift zou hij anders halverwege ophouden.
+          const start = new Date(); start.setMinutes(0, 0, 0);
+          const eind = new Date(start.getTime() + 25 * 3600 * 1000);
+          return [[start.getTime() - 3600 * 1000, w], [eind.getTime(), w]];
         yaxis_id: kwh_prijs
       - entity: sensor.batterij_kwartierplan
         name: Ontlaadgrens
@@ -398,10 +410,10 @@ cards:
           if (g === null || g === undefined || g === 'None' || g === '') return [];
           const w = Number(g);
           if (isNaN(w)) return [];
-          const bron = st['sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier']
-                    || st['sensor.slimhuys_zonneplan_prijzen_vandaag'];
-          const blk = (bron && bron.attributes && bron.attributes.raw_today) || [];
-          if (!blk.length) return [];
-          return [[new Date(blk[0].start).getTime(), w],
-                  [new Date(blk[blk.length - 1].end).getTime(), w]];
+          // De lijn loopt over het hele zichtbare venster (het lopende uur
+          // tot 24 uur later) en niet over de blokken van vandaag: sinds de
+          // grafiek meeschuift zou hij anders halverwege ophouden.
+          const start = new Date(); start.setMinutes(0, 0, 0);
+          const eind = new Date(start.getTime() + 25 * 3600 * 1000);
+          return [[start.getTime() - 3600 * 1000, w], [eind.getTime(), w]];
         yaxis_id: kwh_prijs
