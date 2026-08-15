@@ -21,31 +21,123 @@ backyard_spa_package:
   automation:
     - id: backyard_spa_error
       alias: Backyard - Spa Error
-      description: When an error occurs at the spa; notify parents
-      mode: single
+      description: >-
+        Meldt spa-storingen in gewone taal. Er zijn twee soorten: de spa is
+        bereikbaar en meldt zelf een code, of de spa is helemaal van het net
+        (wifi-module). Dat laatste gebeurt regelmatig en kwam er eerst niet
+        door: de oude conditie was "niet melden als climate.intex_purespa
+        unavailable is", en juist bij verbindingsverlies vallen de errorcode
+        en de climate-entiteit op dezelfde seconde om. Op 15-08-2026 om 02:50
+        stond er e81 en ging er dus geen melding uit.
+      mode: queued
+      max: 5
+      variables:
+        code: "{{ states('sensor.intex_purespa_error_code') }}"
+        # De *_error_description sensor levert alleen de sleutel ("e81"); de
+        # leesbare tekst zit in de vertaling van de integratie en komt dus niet
+        # mee in een notificatie. Daarom hier in het Nederlands, ontleend aan
+        # de en.json van mathieu-mp/homeassistant-intex-spa.
+        uitleg: >-
+          {% set teksten = {
+            'e81': 'geen verbinding met de spa - controleer of hij aan staat en of de wifi-module bereik heeft',
+            'e90': 'te weinig of geen doorstroming - filtercartridge en circulatie nakijken',
+            'e91': 'te weinig zout - zout bijvullen en de kabel van de zoutcel controleren',
+            'e92': 'te veel zout - deels aftappen en met schoon water bijvullen',
+            'e94': 'water te koud (onder 5 graden) - warm water bijvullen',
+            'e95': 'water te heet - verwarming uit, filter en circulatie nakijken',
+            'e96': 'systeemfout in de besturing - spa uitzetten en de stekker eruit',
+            'e97': 'droogkookbeveiliging - meteen de stekker eruit en Intex bellen',
+            'e99': 'temperatuursensor stuk - meteen de stekker eruit en Intex bellen' } %}
+          {{ teksten.get(code, 'onbekende code, kijk op het bedieningspaneel') }}
       triggers:
+        # De spa is bereikbaar en meldt zelf iets.
         - trigger: state
-          entity_id:
-            - sensor.intex_purespa_error
+          entity_id: sensor.intex_purespa_error_code
+          not_to:
+            - none
+            - unknown
+            - unavailable
+          id: errorcode
+        # De spa is weg. Een kwartier wachten: korte hikjes (wifi, een
+        # herstartende module) herstellen vanzelf en zijn geen melding waard.
+        - trigger: state
+          entity_id: climate.intex_purespa
+          to: unavailable
+          for: "00:15:00"
+          id: offline
+        - trigger: state
+          entity_id: climate.intex_purespa
+          from: unavailable
+          id: hersteld
       conditions:
-        - condition: not
-          conditions:
-            - condition: state
-              entity_id: climate.intex_purespa
-              state: unavailable
+        # Na een herstart komt alles kort als unavailable binnen; dat is geen
+        # storing. Zie sensor.home_assistant_gestart in Dashboard Context.yaml.
+        - condition: template
+          value_template: >-
+            {% set start = states('sensor.home_assistant_gestart') %}
+            {{ start in ['unknown', 'unavailable']
+               or (now() - (start | as_datetime)) > timedelta(minutes = 10) }}
       actions:
-        - if:
-            - condition: not
+        - choose:
+            - alias: Spa is van het net
               conditions:
-                - condition: state
-                  entity_id: sensor.intex_purespa_error_description
-                  state: none
-          then:
-            - action: notify.mobile_devices_adults
-              metadata: {}
-              data:
-                title: Intex Spa geeft een error
-                message: "{{ states['sensor.intex_purespa_error_description'].state }}"
+                - condition: trigger
+                  id: offline
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    title: Jacuzzi reageert niet meer
+                    message: >-
+                      Geen contact sinds
+                      {{ trigger.to_state.last_changed | as_local
+                         | as_timestamp | timestamp_custom('%H:%M') }}
+                      {%- if code not in ['none', 'unknown', 'unavailable'] %},
+                      laatste melding {{ code | upper }} ({{ uitleg }}){%- endif %}.
+                      Verwarmen en de gratis-stroomregeling doen tot die tijd
+                      niets. Meestal helpt de spa een halve minuut van het net
+                      halen.
+            - alias: Spa is er weer
+              conditions:
+                - condition: trigger
+                  id: hersteld
+                # Alleen als er ook een offline-melding uit is gegaan; onder
+                # het kwartier van die trigger heeft "hij is er weer" geen
+                # betekenis.
+                - condition: template
+                  value_template: >-
+                    {{ (now() - trigger.from_state.last_changed).total_seconds() >= 900 }}
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    title: Jacuzzi is er weer
+                    message: >-
+                      {% set temp = state_attr('climate.intex_purespa', 'current_temperature') %}
+                      De spa reageert weer na
+                      {{ ((now() - trigger.from_state.last_changed).total_seconds()
+                          / 60) | round }} minuten. Verwarming staat
+                      {{ 'aan' if is_state('switch.intex_purespa_power', 'on') else 'uit' }}
+                      {%- if temp is number %}, water {{ temp | round(1) }} graden
+                      {%- endif %}.
+            - alias: Spa is bereikbaar en meldt een code
+              conditions:
+                - condition: trigger
+                  id: errorcode
+                # Bij verbindingsverlies verschijnt e81 terwijl de climate
+                # omvalt; die kant hoort bij de offline-tak hierboven, die
+                # eerst een kwartier wacht.
+                - condition: not
+                  conditions:
+                    - condition: state
+                      entity_id: climate.intex_purespa
+                      state: unavailable
+              sequence:
+                - action: notify.mobile_devices_adults
+                  metadata: {}
+                  data:
+                    title: "Jacuzzi meldt {{ code | upper }}"
+                    message: "{{ uitleg | capitalize }}."
 
     - id: backyard_spa_temperature
       alias: Backyard - Spa Temperature
