@@ -41,15 +41,25 @@ bathroom_media_package:
     ## per dag. De rest zijn passages van een paar seconden. Die twee minuten
     ## zijn dus een echte zeef en geen vertraging.
     ##
-    ## WAAROM DE NACHTREM
+    ## WAAROM DE NACHTREM, EN WAAROM HET EEN KLOK IS EN GEEN SENSOR
     ## In diezelfde meting stond de deur op 15 augustus vanaf 01:56 ruim vier
     ## uur open. Een stem in de badkamer om twee uur 's nachts maakt het halve
     ## huis wakker voor een deur waar op dat moment niemand bij staat.
-    ## `binary_sensor.huis_slaapt` (Bedroom Maxi/Bedtime.yaml) is precies het
-    ## venster dat de rest van het huis daar ook voor gebruikt: aan vanaf de
-    ## laatste kinderbedtijd tot iemand 's ochtends de slaapkamerknop indrukt.
-    ## Staat die sensor op `unknown`, dan zwijgt hij ook - bij een omroep is
-    ## twijfel een reden om je mond te houden.
+    ##
+    ## Hier stond eerst `binary_sensor.huis_slaapt`, het huisbrede nachtvenster
+    ## dat de overlopen ook gebruiken. Dat is voor deze melding te ruim, aan
+    ## allebei de kanten:
+    ##   - 's avonds slaat hij om op de laatste kinderbedtijd. In de historie
+    ##     van 12 t/m 14 augustus was dat 19:00, 19:00 en 19:34 - een
+    ##     badkamerbezoek om acht uur zou dus al zwijgen.
+    ##   - 's ochtends blijft hij `on` tot iemand de slaapkamerknop indrukt.
+    ##     Op 15 augustus stond de deur vanaf 06:33 zesendertig minuten open
+    ##     terwijl de sensor `on` was (pas om 07:08 wakker). Juist de
+    ##     doucheochtend waar je dit voor wilt.
+    ##
+    ## Van de elf lange openingen in die drie dagen valt er precies één buiten
+    ## 06:30-22:30, en dat is die van 01:56. Een kale klok haalt er dus alleen
+    ## uit wat eruit moet. Verzet de grenzen gerust; er hangt verder niets aan.
     ##########################################################################
     - id: bathroom_door_open_announce
       alias: Badkamer - Deur staat open
@@ -72,9 +82,10 @@ bathroom_media_package:
             - unavailable
           for: "00:02:00"
       conditions:
-        - condition: state
-          entity_id: binary_sensor.huis_slaapt
-          state: "off"
+        - alias: Niet midden in de nacht
+          condition: time
+          after: "06:30:00"
+          before: "22:30:00"
       actions:
         # Zelfde vorm als de douchemeldingen in Douche.yaml: `announce: true`
         # duikt onder de muziek door op déze speaker (de badkamer hangt tijdens
