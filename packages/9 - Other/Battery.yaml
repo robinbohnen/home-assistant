@@ -68,12 +68,36 @@ battery_package:
       mode: box
 
     # Boven deze verwachte opbrengst slaat de regie het netladen over: de zon
-    # vult de accu die dag toch wel. Het getal moet dus dekken wat het huis op
-    # een dag gebruikt PLUS wat er in de accu moet - vandaar dat 5 kWh (het
-    # minimum, waar hij op start) bijna altijd "sla maar over" betekent en
-    # 40 kWh neerkomt op "doe toch maar gewoon laden". Het oude regime
-    # hieronder gebruikt 20 kWh voor dezelfde afweging; dat is een goed
-    # startpunt om vanaf te schuiven.
+    # vult de accu die dag toch wel.
+    #
+    # DIT IS GEEN "OPWEK MIN VERBRUIK"-SOM. Dat is geprobeerd en het klopt
+    # niet: het huis gebruikt 40 kWh op een dag (mediaan over de laatste 30
+    # dagen, auto er al af) en de auto komt daar op ruim een derde van de
+    # dagen nog eens 23 kWh bovenop, 71% daarvan tussen 09:00 en 17:00 - dus
+    # precies in het zonvenster. Reserveer je zon voor die twee, dan wordt de
+    # drempel nooit gehaald en laadt een accu van 5 kWh permanent uit het net.
+    #
+    # Wat telt is niet de dagbalans maar het OVERSCHOT op het moment, en dat
+    # is er ook op dagen dat het verbruik boven de opwek ligt. Gemeten over
+    # 182 dagen, teruglevering NADAT de auto en de accu hun deel al hadden:
+    #   opwek 20-30 kWh -> 7 van de 22 dagen hielden 5 kWh over
+    #   opwek 30-40 kWh -> 28 van de 34
+    #   opwek 40-50 kWh -> 36 van de 38
+    # Het kantelpunt ligt dus rond 30 kWh ECHTE opbrengst. De forecast loopt
+    # daar zo'n 25% onder (38,7 voorspeld tegen 46,7 gemeten op 13 augustus,
+    # vijf dagen op rij hetzelfde beeld), dus 30 kWh VOORSPELD komt neer op
+    # ~37 kWh echt: ruim in de bak waar het overschot er vrijwel altijd is.
+    # Dat is bewust de voorzichtige kant - liever een keer te veel goedkoop
+    # inkopen dan op een misgelopen voorspelling de avondpiek verliezen.
+    #
+    # Hoger zetten = vaker netladen (veiliger, duurder), lager = vaker op de
+    # zon gokken. In de winter doet de drempel vanzelf zijn werk: 22 van de
+    # 182 dagen hadden minder dan 1 kWh teruglevering.
+    #
+    # LET OP: het oude regime hieronder gebruikt nog `> 20` op
+    # sensor.forecast_solar_production_today voor zijn ochtendtak. Dat is de
+    # hele dag in plaats van wat er nog komt, en het staat los van deze knop.
+    # Zolang de kwartierregie aan staat is die tak toch dood.
     batterij_zon_drempel:
       name: "Batterij - Niet netladen bij meer zon dan"
       icon: mdi:weather-sunny
@@ -331,8 +355,8 @@ battery_package:
         # was, blijven laden nadat hij is opgeschroefd (en omgekeerd).
         - trigger: state
           entity_id:
-            - sensor.energy_production_today_remaining
-            - sensor.energy_production_tomorrow
+            - sensor.forecast_solar_production_today_remaining
+            - sensor.forecast_solar_production_tomorrow
           not_from:
             - unknown
             - unavailable
@@ -394,13 +418,27 @@ battery_package:
                     {% if 'bijvullen' in (state_attr('sensor.batterij_kwartierplan', 'reden') | default('', true)) %}
                       {{ true }}
                     {% else %}
+                    {#- BEIDE ARRAYS, niet alleen de overkapping.
+                        `sensor.energy_production_*` stond hier tot 2026-08-15,
+                        en dat is ondanks de generieke naam maar één van de
+                        twee velden: de zolder voorzijde ontbrak, zo'n 35% van
+                        de verwachting. De regie zag daardoor structureel te
+                        weinig zon aankomen en kocht stroom in op dagen dat de
+                        panelen het zelf deden. De optellingen staan in
+                        packages/3 - Outside/Backyard/Solarpanels.yaml, naast
+                        de bestaande dagtotaal-sensor.
+                        Valt een van de twee bronnen weg, dan is de som
+                        unavailable en levert `| float(0)` een 0 op - dat leest
+                        als "geen zon op komst" en laat netladen dus toe. Dat
+                        is de veilige kant: goedkoop inkopen kost geld, een
+                        lege accu in de avondpiek kost meer. -#}
                     {% set na_zonsondergang = is_state('sun.sun', 'below_horizon')
                                               and now().hour >= 12 %}
-                    {% set zon = states('sensor.energy_production_tomorrow') | float(0)
+                    {% set zon = states('sensor.forecast_solar_production_tomorrow') | float(0)
                                  if na_zonsondergang
-                                 else states('sensor.energy_production_today_remaining') | float(0) %}
+                                 else states('sensor.forecast_solar_production_today_remaining') | float(0) %}
                     {% set soc = states('sensor.lilygo_rs485_marstek_battery_state_of_charge') | float(0) %}
-                    {{ zon < (states('input_number.batterij_zon_drempel') | float(20))
+                    {{ zon < (states('input_number.batterij_zon_drempel') | float(30))
                        or soc < 30 }}
                     {% endif %}
               sequence:

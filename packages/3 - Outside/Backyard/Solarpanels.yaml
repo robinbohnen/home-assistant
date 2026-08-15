@@ -18,6 +18,45 @@ backyard_solarpanels_package:
             {{ states('sensor.overloop_zolder_zonnepanelen_schatting_geschatte_energieproductie_vandaag') | float(0)
                + states('sensor.energy_production_today') | float(0) }}
 
+        ######################################################################
+        ## DE TWEE ARRAYS HEBBEN ELK HUN EIGEN FORECAST.SOLAR-SENSOREN
+        ##
+        ## `sensor.energy_production_*` klinkt als het hele huis, maar dat is
+        ## alleen de OVERKAPPING - zie de friendly name, die begint met
+        ## "Overkapping Zonnepanelen Schatting". De zolder voorzijde zit in
+        ## `sensor.overloop_zolder_zonnepanelen_schatting_*`.
+        ##
+        ## Dat is een makkelijke val: de batterijregie keek tot 2026-08-15
+        ## alleen naar de overkapping en zag daardoor structureel zo'n 35% te
+        ## weinig zon aankomen (op 15 augustus 11,4 kWh terwijl er 17,7
+        ## verwacht werd). Elke drempel die je daarop zet is dus verkeerd
+        ## geijkt. Alles wat over "de zonverwachting" gaat hoort daarom deze
+        ## drie sensoren te gebruiken en nooit één array los.
+        ######################################################################
+        - name: Forecast Solar Production Today Remaining
+          unique_id: forecast_solar_production_today_remaining
+          unit_of_measurement: kWh
+          state_class: total
+          device_class: energy
+          availability: >-
+            {{ has_value('sensor.overloop_zolder_zonnepanelen_schatting_geschatte_energieproductie_resterend_vandaag')
+               and has_value('sensor.energy_production_today_remaining') }}
+          state: >-
+            {{ states('sensor.overloop_zolder_zonnepanelen_schatting_geschatte_energieproductie_resterend_vandaag') | float(0)
+               + states('sensor.energy_production_today_remaining') | float(0) }}
+
+        - name: Forecast Solar Production Tomorrow
+          unique_id: forecast_solar_production_tomorrow
+          unit_of_measurement: kWh
+          state_class: total
+          device_class: energy
+          availability: >-
+            {{ has_value('sensor.overloop_zolder_zonnepanelen_schatting_geschatte_energieproductie_morgen')
+               and has_value('sensor.energy_production_tomorrow') }}
+          state: >-
+            {{ states('sensor.overloop_zolder_zonnepanelen_schatting_geschatte_energieproductie_morgen') | float(0)
+               + states('sensor.energy_production_tomorrow') | float(0) }}
+
   automation:
     - id: notification_backyard_solarpanels_error
       alias: Backyard Solarpanels - Inverter Error

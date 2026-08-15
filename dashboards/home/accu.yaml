@@ -114,11 +114,15 @@ cards:
                   return 'overgeslagen: de zon levert nu al overschot' + pr;
                 var soc = states['sensor.lilygo_rs485_marstek_battery_state_of_charge'];
                 soc = soc ? Number(soc.state) : 0;
+                // Dezelfde twee sensoren als de conditie in Battery.yaml, en
+                // dat moet zo blijven: stond hier de losse overkapping-array
+                // terwijl de regie beide optelt, dan meldt de kaart een ander
+                // getal dan waar de beslissing op viel.
                 var zon = states[
                   (states['sun.sun'] && states['sun.sun'].state === 'below_horizon'
                    && new Date().getHours() >= 12)
-                    ? 'sensor.energy_production_tomorrow'
-                    : 'sensor.energy_production_today_remaining'];
+                    ? 'sensor.forecast_solar_production_tomorrow'
+                    : 'sensor.forecast_solar_production_today_remaining'];
                 var drempel = states['input_number.batterij_zon_drempel'];
                 // Bijvullen voor de piek gaat vóór de zonverwachting; zie de
                 // toelichting bij die conditie in Battery.yaml. Zonder deze
