@@ -437,19 +437,31 @@ cards:
                 // Alleen tellen wat je hier ook echt kunt omzetten - dezelfde
                 // met de hand aangewezen lijst als in de popup, geen scan over
                 // alle switches.
-                var lijst = ['switch.intex_purespa_power','input_boolean.backyard_spa_keep_warm',
-                             'switch.intex_purespa_filter','switch.intex_purespa_sanitizer',
-                             'switch.linea_micra_kroon_18',
-                             'switch.woonkamer_woonkamer_stopcontact_luchtreiniger',
-                             'switch.eettafel_eettafel_stopcontact_luchtreiniger',
-                             'switch.achtertuin_schuur_lampen',
-                             'switch.meterkast_meterkast_stopcontact_ledstrip'];
-                var aan = lijst.filter(function(e){ return states[e] && states[e].state === 'on'; });
-                var weg = lijst.filter(function(e){
-                  return !states[e] || ['unavailable','unknown'].indexOf(states[e].state) !== -1; }).length;
-                var t = aan.length === 0 ? 'alles uit'
-                      : (aan.length === 1 ? '1 aan' : aan.length + ' aan');
-                if(weg) t += ' · ' + weg + ' onbereikbaar';
+                //
+                // De drie spa-schakelaars staan apart omdat ze nooit los
+                // wegvallen: de wifi-module van de jacuzzi is er of niet, en
+                // dan gaan ze alle drie tegelijk (15-08-2026 02:50, code e81).
+                // "3 onbereikbaar" liet je dan zoeken welke drie; "spa offline"
+                // zegt meteen dat het één apparaat is en welk.
+                var spa = ['switch.intex_purespa_power','switch.intex_purespa_filter',
+                           'switch.intex_purespa_sanitizer'];
+                var rest = ['input_boolean.backyard_spa_keep_warm',
+                            'switch.linea_micra_kroon_18',
+                            'switch.woonkamer_woonkamer_stopcontact_luchtreiniger',
+                            'switch.eettafel_eettafel_stopcontact_luchtreiniger',
+                            'switch.achtertuin_schuur_lampen',
+                            'switch.meterkast_meterkast_stopcontact_ledstrip'];
+                var weg = function(e){
+                  return !states[e] || ['unavailable','unknown'].indexOf(states[e].state) !== -1; };
+                var aan = spa.concat(rest).filter(function(e){
+                  return states[e] && states[e].state === 'on'; }).length;
+                var spa_weg = spa.filter(weg).length;
+                var t = aan === 0 ? 'alles uit' : aan + ' aan';
+                // Valt maar een deel van de spa weg, dan is het geen offline
+                // module en telt hij gewoon mee in het aantal.
+                var los = rest.filter(weg).length + (spa_weg === spa.length ? 0 : spa_weg);
+                if(spa_weg === spa.length) t += ' · spa offline';
+                if(los) t += ' · ' + los + ' onbereikbaar';
                 return `<span style="font-size:12.5px;color:rgba(255,255,255,0.58)">${t}</span>`;
               ]]]
         # Koffie en alle lichten staan hier los omdat dat de twee zijn die je
