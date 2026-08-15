@@ -18,6 +18,20 @@
 ## eerst `is_state(lamp, 'on')` vraagt - de slaapronde hierboven voorop - kijkt
 ## dan langs de storing heen. Alleen een commando dat sowieso vertrekt, krijgt
 ## zo'n lamp alsnog uit.
+##
+## TWEE LIJSTEN, ELK OP ÉÉN PLEK (15 augustus 2026)
+## `&binnen_lampen` (wat er uit gaat) en `&binnen_melders` (waar we eerst naar
+## kijken) staan hieronder als YAML-anker bij de slaapronde en worden door de
+## sweep met `*` overgenomen. Ze stonden allebei dubbel, en daar is precies uit
+## voortgekomen wat op 15 augustus gevonden werd: de garage, de trapkast en de
+## rechterhelft van de speelkamer gingen wél uit, maar hun bewegingsmelders
+## zaten in geen van beide lijsten. Sta je 's nachts in de garage, dan werd het
+## donker. De melderslijst dekt nu elke ruimte waarvan het licht uitgaat.
+##
+## Wat de twee er verschillend mee doen, blijft verschillend en dat is opzet:
+## de slaapronde eist dat elke melder `off` is (een weggevallen melder houdt
+## hem dus tegen), de sweep telt een weggevallen melder als rustig en draait
+## juist door. Strenge hoofdregel, tolerant vangnet.
 ##############################################################################
 
 light_package:
@@ -49,65 +63,58 @@ light_package:
                       entity_id: media_player.woonkamer_appletv
                       state: playing
                   alias: Apple TV is not playing
-                - alias: No movement downtairs
-                  condition: and
-                  conditions:
-                    - condition: state
-                      entity_id: binary_sensor.woonkamer_beweging_achter_occupancy
-                      state: "off"
-                      for:
-                        hours: 0
-                        minutes: 15
-                        seconds: 0
-                    - condition: state
-                      entity_id: binary_sensor.woonkamer_beweging_voor_occupancy
-                      state: "off"
-                      for:
-                        hours: 0
-                        minutes: 15
-                        seconds: 0
-                    - condition: state
-                      entity_id: binary_sensor.entree_beweging_occupancy
-                      state: "off"
-                      for:
-                        hours: 0
-                        minutes: 15
-                        seconds: 0
-                    - condition: state
-                      entity_id: binary_sensor.speelkamer_beweging_links_occupancy
-                      state: "off"
-                      for:
-                        hours: 0
-                        minutes: 15
-                        seconds: 0
-                    - condition: state
-                      entity_id: binary_sensor.toilet_beweging_occupancy
-                      state: "off"
-                      for:
-                        hours: 0
-                        minutes: 15
-                        seconds: 0
-                    - condition: state
-                      entity_id: binary_sensor.g4_instant_woonkamer_motion
-                      state: "off"
-                      for:
-                        hours: 0
-                        minutes: 15
-                        seconds: 0
-                    - condition: state
-                      entity_id: binary_sensor.g4_instant_keuken_motion
-                      state: "off"
-                      for:
-                        hours: 0
-                        minutes: 15
-                        seconds: 0
+                # EÉN CONDITIE MET EEN LIJST, EN NIET ZEVEN LOSSE
+                # `condition: state` met meerdere entiteiten eist dat ze
+                # ALLEMAAL `off` zijn, en `for` geldt per entiteit - dus dit
+                # doet exact wat de zeven aparte blokken hier deden. De winst
+                # is dat de lijst nu één keer bestaat en de sweep hieronder
+                # dezelfde overneemt.
+                #
+                # Nieuw sinds 15 augustus 2026: garage (twee melders),
+                # trapkast en de rechterhelft van de speelkamer. Die drie
+                # ruimtes gingen hieronder wel uit maar werden niet gecheckt.
+                # Speelkamer links en rechts lopen echt uiteen - op 15
+                # augustus stond rechts `on` terwijl links `off` gaf.
+                #
+                # Let op: hier blokkeert een weggevallen melder de hele ronde
+                # (een `condition: state` op `unavailable` is onwaar). Dat is
+                # bij de slaapronde de juiste kant - hij doet het licht uit én
+                # zet het alarm aan - en het is nu ook niet meer erg, want de
+                # sweep hieronder vangt die nacht dan vier keer af.
+                - alias: No movement downstairs
+                  condition: state
+                  entity_id: &binnen_melders
+                    - binary_sensor.woonkamer_beweging_achter_occupancy
+                    - binary_sensor.woonkamer_beweging_voor_occupancy
+                    - binary_sensor.entree_beweging_occupancy
+                    - binary_sensor.speelkamer_beweging_links_occupancy
+                    - binary_sensor.speelkamer_beweging_rechts_occupancy
+                    - binary_sensor.toilet_beweging_occupancy
+                    - binary_sensor.trapkast_beweging_occupancy
+                    - binary_sensor.garage_beweging_voor_occupancy
+                    - binary_sensor.garage_beweging_achter_occupancy
+                    - binary_sensor.g4_instant_woonkamer_motion
+                    - binary_sensor.g4_instant_keuken_motion
+                    # De twee overlopen horen erbij sinds de lijst gedeeld
+                    # wordt: hun licht staat in dezelfde doellijst. Voor de
+                    # slaapronde is dat strenger dan het was, en terecht -
+                    # wie op de trap loopt, ligt niet in bed.
+                    - binary_sensor.overloop_beweging_occupancy
+                    - binary_sensor.overloop_zolder_beweging_occupancy
+                  state: "off"
+                  for: "00:15:00"
               alias: Everyone is sleeping
       actions:
         - action: light.turn_off
           metadata: {}
           data: {}
           target:
-            entity_id:
+            # De doellijst van het huis. De sweep hieronder pakt hem met
+            # `*binnen_lampen` over, zodat de twee niet uit elkaar kunnen
+            # lopen; wat hier bij komt, gaat 's nachts dus ook mee in het
+            # vangnet - en hoort dan ook een melder in `&binnen_melders` te
+            # krijgen.
+            entity_id: &binnen_lampen
               - light.woonkamer_lampen
               - light.garage_lampen
               - light.speelkamer_lampen
@@ -172,6 +179,13 @@ light_package:
             - "01:45:00"
             - "03:45:00"
             - "05:45:00"
+      # DEZELFDE MELDERS ALS DE SLAAPRONDE, LETTERLIJK
+      # Het anker staat bij die conditie hierboven. Een tweede kopie was hoe de
+      # garage en de trapkast konden ontbreken terwijl hun licht wel uitging.
+      # De badkamer- en slaapkamermelders zitten er bewust niet in: die lampen
+      # staan ook niet in de doellijst.
+      variables:
+        melders: *binnen_melders
       conditions:
         # LET OP WAT HIER NIET STAAT
         # Geen enkele conditie op een lámp. Dat is de hele reden van bestaan:
@@ -181,24 +195,6 @@ light_package:
         - alias: "Niemand beneden of op de overloop in beweging geweest"
           condition: template
           value_template: >-
-            {# De lijst dekt elke ruimte waarvan hieronder het licht uitgaat.
-               De slaapronde hierboven kijkt alleen naar beneden, en dat mag
-               daar: die draait op een brandende woonkamer. Deze sweep vuurt op
-               de klok, dus de twee overlopen moeten er ook in - anders staat
-               wie om kwart voor vier naar de badkamer loopt ineens in het
-               donker op de trap. De badkamer- en slaapkamermelders hoeven niet:
-               die lampen staan bewust niet in de doellijst. #}
-            {% set melders = [
-                 'binary_sensor.woonkamer_beweging_achter_occupancy',
-                 'binary_sensor.woonkamer_beweging_voor_occupancy',
-                 'binary_sensor.entree_beweging_occupancy',
-                 'binary_sensor.speelkamer_beweging_links_occupancy',
-                 'binary_sensor.toilet_beweging_occupancy',
-                 'binary_sensor.g4_instant_woonkamer_motion',
-                 'binary_sensor.g4_instant_keuken_motion',
-                 'binary_sensor.overloop_beweging_occupancy',
-                 'binary_sensor.overloop_zolder_beweging_occupancy'
-               ] %}
             {# Een melder die weg is (unavailable) of niet meer bestaat (een
                hernoemde entiteit) telt hier als "rustig" en blokkeert de sweep
                dus niet. Dat is de omgekeerde keuze van de waakhond in
@@ -243,7 +239,7 @@ light_package:
               entity_id: media_player.woonkamer_appletv
               state: playing
       actions:
-        # Bewust dezelfde lijst als de slaapronde hierboven, en bewust
+        # Letterlijk de lijst van de slaapronde (`&binnen_lampen`), en bewust
         # uitgeschreven in plaats van "alle lampen behalve": zie de rest van
         # deze config. Wat er niet in staat is net zo goed een keuze -
         # slaapkamers (daar mag een nachtlampje branden), de badkamer (daar kan
@@ -257,14 +253,4 @@ light_package:
         - action: light.turn_off
           data: {}
           target:
-            entity_id:
-              - light.woonkamer_lampen
-              - light.garage_lampen
-              - light.speelkamer_lampen
-              - light.keuken_lampen
-              - light.eettafel_lampen
-              - light.entree_lampen
-              - light.toilet_lampen
-              - light.trapkast_lampen
-              - light.overloop_lampen
-              - light.overloop_zolder_lampen
+            entity_id: *binnen_lampen

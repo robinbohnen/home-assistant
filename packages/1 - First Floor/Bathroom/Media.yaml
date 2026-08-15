@@ -28,3 +28,70 @@ bathroom_media_package:
             - condition: time
               after: "07:15:00"
               before: input_datetime.bedtime_mini
+
+    ##########################################################################
+    ## DEUR STAAT OPEN
+    ##########################################################################
+    ##
+    ## Twee minuten open en dan één keer omroepen op de badkamerspeaker.
+    ##
+    ## HOE VAAK DIT GAAT AFGAAN
+    ## Nagemeten over 12 t/m 15 augustus 2026: de deur ging 61 keer open, maar
+    ## bleef maar 11 keer langer dan twee minuten open - zo'n drie of vier keer
+    ## per dag. De rest zijn passages van een paar seconden. Die twee minuten
+    ## zijn dus een echte zeef en geen vertraging.
+    ##
+    ## WAAROM DE NACHTREM
+    ## In diezelfde meting stond de deur op 15 augustus vanaf 01:56 ruim vier
+    ## uur open. Een stem in de badkamer om twee uur 's nachts maakt het halve
+    ## huis wakker voor een deur waar op dat moment niemand bij staat.
+    ## `binary_sensor.huis_slaapt` (Bedroom Maxi/Bedtime.yaml) is precies het
+    ## venster dat de rest van het huis daar ook voor gebruikt: aan vanaf de
+    ## laatste kinderbedtijd tot iemand 's ochtends de slaapkamerknop indrukt.
+    ## Staat die sensor op `unknown`, dan zwijgt hij ook - bij een omroep is
+    ## twijfel een reden om je mond te houden.
+    ##########################################################################
+    - id: bathroom_door_open_announce
+      alias: Badkamer - Deur staat open
+      description: >-
+        Roept eenmalig op de badkamerspeaker om dat de badkamerdeur openstaat,
+        twee minuten nadat hij is opengegaan.
+      # Eenmalig zit al in de trigger: die vuurt één keer per keer-open. Single
+      # + silent dekt alleen het geval dat de vorige omroep nog bezig is.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.badkamer_deur_contact
+          to: "on"
+          # Komt het contact na een storing of herstart terug op `on`, dan is
+          # dat geen deur die opengaat. Zelfde guard als op de bewegings- en
+          # deurtriggers elders in dit huis.
+          not_from:
+            - unknown
+            - unavailable
+          for: "00:02:00"
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.huis_slaapt
+          state: "off"
+      actions:
+        # Zelfde vorm als de douchemeldingen in Douche.yaml: `announce: true`
+        # duikt onder de muziek door op déze speaker (de badkamer hangt tijdens
+        # het douchen meestal aan de woonkamergroep, zie hierboven), de
+        # clipvolume van 50 staat los van het speakervolume, en
+        # `continue_on_error` houdt een weggevallen Sonos uit het log.
+        - alias: Omroepen op de badkamerspeaker
+          action: media_player.play_media
+          continue_on_error: true
+          target:
+            entity_id: media_player.badkamer_sonos
+          data:
+            announce: true
+            extra:
+              volume: 50
+            media:
+              media_content_type: music
+              media_content_id: >-
+                media-source://tts/tts.google_translate_nl_nl?message={{
+                'De badkamerdeur staat open.' | urlencode }}

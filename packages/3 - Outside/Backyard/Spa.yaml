@@ -51,12 +51,29 @@ backyard_spa_package:
           {{ teksten.get(code, 'onbekende code, kijk op het bedieningspaneel') }}
       triggers:
         # De spa is bereikbaar en meldt zelf iets.
+        #
+        # DIE HALVE MINUUT IS GEEN BEDENKTIJD MAAR EEN VOLGORDEKWESTIE
+        # De tak hieronder mag alleen af als de spa écht bereikbaar is, en dat
+        # leest hij aan `climate.intex_purespa`. Bij verbindingsverlies zetten
+        # allebei die entiteiten in dezelfde update om: in de historie van 15
+        # augustus 2026 staan e81 en unavailable allebei op 00:50:41, tot op de
+        # seconde. Wie van de twee de automatisering het eerst wakker maakt, is
+        # dan niet iets om op te bouwen - kwam de errorcode eerst binnen, dan
+        # stond de climate nog op `off` en ging er meteen een melding uit die
+        # juist een kwartier had moeten wachten (en een kwartier later nog een
+        # keer, voor hetzelfde voorval). Na dertig seconden staat het stof neer
+        # en klopt de conditie hoe dan ook.
+        #
+        # Prijs: een echte spa-code komt een halve minuut later binnen dan hij
+        # zou kunnen. Voor een melding over zout of doorstroming maakt dat
+        # niets uit.
         - trigger: state
           entity_id: sensor.intex_purespa_error_code
           not_to:
             - none
             - unknown
             - unavailable
+          for: "00:00:30"
           id: errorcode
         # De spa is weg. Een kwartier wachten: korte hikjes (wifi, een
         # herstartende module) herstellen vanzelf en zijn geen melding waard.
@@ -126,7 +143,9 @@ backyard_spa_package:
                   id: errorcode
                 # Bij verbindingsverlies verschijnt e81 terwijl de climate
                 # omvalt; die kant hoort bij de offline-tak hierboven, die
-                # eerst een kwartier wacht.
+                # eerst een kwartier wacht. Deze conditie kan daar alleen op
+                # vertrouwen doordat de trigger een halve minuut wacht - zie
+                # de toelichting daar.
                 - condition: not
                   conditions:
                     - condition: state
