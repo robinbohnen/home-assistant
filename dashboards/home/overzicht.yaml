@@ -319,6 +319,51 @@ cards:
                      if has_value('sensor.hrh85f_charge_state') else '—' }}
                 icon: mdi:ev-station
                 icon_color: "{{ 'green' if is_state('sensor.hrh85f_charge_state','charge_in_progress') else 'grey' }}"
+          # ----- Leasekilometers -----
+          # Staat direct onder de kilometerstand, want dat is precies het
+          # getal waar dit mee vergeleken wordt. Het contract staat 41 km per
+          # dag toe; `input_number.lease_contract_kms` telt die elke nacht op
+          # (packages/9 - Other/Car.yaml) en het verschil met de echte stand
+          # maal € 0,12 is de rekening tot nu toe.
+          #
+          # Onder het budget is de sensor negatief, en dat is géén geld terug
+          # maar ruimte om te rijden - vandaar dat deze kaart dan de
+          # overgebleven kilometers toont en geen bedrag. Twee kleuren en geen
+          # derde: boven contract kost geld (amber), eronder niet (groen). Een
+          # rode grens zou een bedrag moeten verzinnen dat "te veel" heet, en
+          # dat hangt aan een contracteinde dat hier nergens staat.
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.car_price_additional_km_s
+                primary: >-
+                  {% set p = states('sensor.car_price_additional_km_s') | float(none) %}
+                  {% if p is none %}Leasekilometers
+                  {% elif p > 0 %}€ {{ '%.2f' | format(p) | replace('.', ',') }} extra
+                  {% else %}Binnen het contract{% endif %}
+                secondary: >-
+                  {% set km = states('sensor.hrh85f_kilometerstand') | float(none) %}
+                  {% set budget = states('input_number.lease_contract_kms') | float(none) %}
+                  {% if km is none or budget is none %}
+                    kilometerstand of contractbudget onbekend
+                  {% else %}
+                    {% set over = (km - budget) | round(0) | int %}
+                    {% if over > 0 %}
+                      {{ '{:,}'.format(over) | replace(',', '.') }} km boven contract · € 0,12 per km
+                    {% elif over == 0 %}
+                      precies op het contractbudget
+                    {% else %}
+                      nog {{ '{:,}'.format(over | abs) | replace(',', '.') }} km speling
+                    {% endif %}
+                  {% endif %}
+                icon: mdi:car-info
+                icon_color: >-
+                  {% set p = states('sensor.car_price_additional_km_s') | float(none) %}
+                  {{ 'grey' if p is none else ('orange' if p > 0 else 'green') }}
+                tap_action:
+                  action: more-info
           - type: horizontal-stack
             cards:
               - type: custom:mushroom-template-card

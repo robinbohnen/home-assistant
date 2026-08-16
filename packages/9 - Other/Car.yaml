@@ -20,9 +20,23 @@ car_package:
           # Zelfde opzet als "Car - Departing in hours" hieronder.
           availability: >-
             {{ state_attr('calendar.auto', 'location') not in [none, ''] }}
+        # Wat de gereden kilometers tot nu toe extra kosten: het verschil
+        # tussen de echte kilometerstand en het budget dat het contract tot
+        # vandaag toestaat (`lease_contract_kms`, elke nacht +41 door
+        # `car_lease_allowed_kms` hieronder), maal € 0,12 per kilometer.
+        # Negatief = je zit eronder; dat is speling, geen geld terug.
+        #
+        # Dezelfde availability-guard als de twee sensoren hieromheen: zonder
+        # die guard maakt `| int` van een `unavailable` kilometerstand er stil
+        # een 0 van, en dan staat er ineens een rekening van ruim tweeduizend
+        # euro omdat het hele budget als overschrijding wordt gelezen.
         - name: "Car - Price additional KM's"
-          state: "{{ ((states('sensor.hrh85f_kilometerstand') | int - states('input_number.lease_contract_kms') | int) * 0.12) }}"
+          state: "{{ ((states('sensor.hrh85f_kilometerstand') | int - states('input_number.lease_contract_kms') | int) * 0.12) | round(2) }}"
           unique_id: car_price_add_kms
+          unit_of_measurement: EUR
+          availability: >-
+            {{ has_value('sensor.hrh85f_kilometerstand')
+               and has_value('input_number.lease_contract_kms') }}
         - name: "Car - Departing in hours"
           state: >-
             {% set start = state_attr('calendar.auto', 'start_time') %}
