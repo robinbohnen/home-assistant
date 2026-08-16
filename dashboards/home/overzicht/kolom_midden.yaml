@@ -62,10 +62,16 @@ cards:
         # waarden staan er nog (zon/net/accu links, verbruik bij het huis),
         # maar de richting hoef je niet meer uit voortekens af te leiden.
         #
-        # Eén SVG met een vaste viewBox die met de kolom meeschaalt; tekst
-        # staat ín de SVG zodat lijnen en labels nooit uit elkaar schuiven
-        # (zelfde aanpak als de auto-illustratie in kolom_links). De
-        # dash-animatie is SMIL (<animate>), geen CSS: die werkt ook binnen
+        # VASTE TEKST, REKBARE LIJNEN
+        # Eerste versie was één SVG met de tekst erin; die schaalde alles mee
+        # met de kolombreedte en op het wandpaneel werden de cijfers dan
+        # groter dan de rest van het paneel ("verhoudingen zoek", Robin
+        # 16-08-2026). Nu is het een grid van drie kolommen: tekst links en
+        # rechts in gewone pixels (zelfde maten als de andere panelen), en
+        # alleen het lijnenveld ertussen is SVG met preserveAspectRatio=none -
+        # dat mag uitrekken, want het bevat niets dan de drie paden.
+        # vector-effect=non-scaling-stroke houdt de lijndikte daarbij op 2px.
+        # De dash-animatie is SMIL (<animate>), geen CSS: die werkt ook binnen
         # de shadow-DOM van button-card zonder <style>-tag.
         #
         # KLEUR VOLGT DE BRON, RICHTING VOLGT DE ANIMATIE
@@ -109,7 +115,7 @@ cards:
               - background: none
               - border: none
               - box-shadow: none
-              - padding: 4px 2px 6px 2px
+              - padding: 6px 2px 8px 2px
             grid:
               - grid-template-areas: '"flow"'
             custom_fields:
@@ -150,53 +156,59 @@ cards:
                              'sensor.inverter_kroon_18_zolder_capacity', 3);
                 var kw = function(v){ return v === null ? '—' : v.toFixed(2).replace('.',','); };
 
-                // ---------- opbouw ----------
+                // ---------- teksten ----------
                 var GROEN = '#4ade80', BLAUW = '#3b82f6', GEEL = '#FFD60A';
                 var WIT = 'rgba(255,255,255,0.85)', GRIJS = 'rgba(255,255,255,0.55)';
-                var LIJN_UIT = 'rgba(255,255,255,0.10)';
-                // Lijn met optionele stroom-animatie. richting: 1 = naar het
-                // huis, -1 = van het huis terug naar de bron.
-                var lijn = function(d, kleur, actief, richting){
-                  var basis = `<path d="${d}" fill="none" stroke="${LIJN_UIT}" stroke-width="2"/>`;
-                  if(!actief) return basis;
-                  var van = richting === -1 ? 0 : 24, naar = richting === -1 ? 24 : 0;
-                  return basis + `<path d="${d}" fill="none" stroke="${kleur}" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 9" opacity="0.9">`
-                    + `<animate attributeName="stroke-dashoffset" from="${van}" to="${naar}" dur="1.4s" repeatCount="indefinite"/></path>`;
-                };
-                // Bron-knoop links: waarde + label, verticaal rond cy.
-                var knoop = function(cy, waarde, waardeKleur, label){
-                  return `<text x="8" y="${cy - 1}" font-size="15" font-weight="700" fill="${waardeKleur}">${waarde}</text>`
-                       + `<text x="8" y="${cy + 13}" font-size="9.5" fill="${GRIJS}">${label}</text>`;
-                };
-
-                // zon (vanaf ~50 W echt aan het leveren, anders schemerruis)
                 var zonActief = zonKw !== null && zonKw * 1000 > 50;
                 var deel = function(naam, p){
                   if(p === null) return '';
-                  return ` · <tspan fill="${p >= 98 ? GEEL : GRIJS}">${naam} ${p}%</tspan>`;
+                  return ` · <span style="color:${p >= 98 ? GEEL : GRIJS}">${naam} ${p}%</span>`;
                 };
                 var zonLabel = 'zon' + deel('ZW', zw) + deel('O', oo);
-                // net
                 var terug = netto !== null && netto < 0;
                 var netActief = netto !== null && netto !== 0;
                 var netWaarde = netto === null ? '—' : kw(Math.abs(netto)) + ' kW';
                 var netLabel = 'net' + (netto === null ? '' : (terug ? ' · teruglevering' : (netto === 0 ? '' : ' · afname')));
-                // accu
                 var accuActief = accuMode === 'laadt' || accuMode === 'ontlaadt';
                 var accuWaarde = accuPv === null ? '—' : Math.abs(accuPv) + ' W';
                 var accuLabel = 'accu' + (accuMode ? ' · ' + accuMode : '') + (soc === null ? '' : ' · ' + Math.round(soc) + '%');
 
-                return `<svg viewBox="0 0 520 120" width="100%" xmlns="http://www.w3.org/2000/svg" style="display:block">
-                  ${lijn('M150,24 C 250,24 280,52 358,54', GROEN, zonActief, 1)}
-                  ${lijn('M150,60 L358,60', BLAUW, netActief, terug ? -1 : 1)}
-                  ${lijn('M150,96 C 250,96 280,68 358,66', WIT, accuActief, accuMode === 'ontlaadt' ? 1 : -1)}
-                  ${knoop(24, kw(zonKw) + ' kW', GROEN, zonLabel)}
-                  ${knoop(60, netWaarde, terug ? GROEN : 'white', netLabel)}
-                  ${knoop(96, accuWaarde, 'white', accuLabel)}
-                  <text x="372" y="66" font-size="27" font-weight="700" fill="white">${kw(verbruik)}<tspan font-size="13" font-weight="400" fill="${GRIJS}"> kW</tspan></text>
-                  <text x="372" y="82" font-size="9.5" fill="${GRIJS}">huis · verbruik</text>
-                  <path d="M380,30 l9,-9 9,9 M382,28 v10 h14 v-10" fill="none" stroke="${WIT}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
-                </svg>`;
+                // Bron-knoop links: vaste hoogte 34px zodat de middens exact op
+                // y = 17/53/89 van het lijnenveld liggen (3×34 + 2×2 gap = 106).
+                var knoop = function(waarde, waardeKleur, label){
+                  return `<div style="height:34px;display:flex;flex-direction:column;justify-content:center">`
+                    + `<div style="font-size:17px;font-weight:700;line-height:1.15;color:${waardeKleur};white-space:nowrap">${waarde}</div>`
+                    + `<div style="font-size:11.5px;color:${GRIJS};white-space:nowrap">${label}</div></div>`;
+                };
+
+                // ---------- lijnenveld ----------
+                // Alleen paden, dus dit mag horizontaal uitrekken
+                // (preserveAspectRatio=none); non-scaling-stroke houdt ze 2px.
+                var LIJN_UIT = 'rgba(255,255,255,0.10)';
+                var lijn = function(d, kleur, actief, richting){
+                  var basis = `<path d="${d}" fill="none" stroke="${LIJN_UIT}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+                  if(!actief) return basis;
+                  var van = richting === -1 ? 0 : 28, naar = richting === -1 ? 28 : 0;
+                  return basis + `<path d="${d}" fill="none" stroke="${kleur}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-dasharray="4 10" opacity="0.9">`
+                    + `<animate attributeName="stroke-dashoffset" from="${van}" to="${naar}" dur="1.6s" repeatCount="indefinite"/></path>`;
+                };
+
+                return `<div style="display:grid;grid-template-columns:auto minmax(60px,1fr) auto;align-items:center;column-gap:14px;width:100%">
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    ${knoop(kw(zonKw) + ' kW', GROEN, zonLabel)}
+                    ${knoop(netWaarde, terug ? GROEN : 'white', netLabel)}
+                    ${knoop(accuWaarde, 'white', accuLabel)}
+                  </div>
+                  <svg viewBox="0 0 300 106" preserveAspectRatio="none" style="display:block;width:100%;height:106px">
+                    ${lijn('M2,17 C 120,17 180,45 298,45', GROEN, zonActief, 1)}
+                    ${lijn('M2,53 L298,53', BLAUW, netActief, terug ? -1 : 1)}
+                    ${lijn('M2,89 C 120,89 180,61 298,61', WIT, accuActief, accuMode === 'ontlaadt' ? 1 : -1)}
+                  </svg>
+                  <div style="display:flex;flex-direction:column;justify-content:center">
+                    <div style="line-height:1;white-space:nowrap"><span style="font-size:30px;font-weight:700;color:white">${kw(verbruik)}</span> <span style="font-size:13px;color:${GRIJS}">kW</span></div>
+                    <div style="font-size:11.5px;color:${GRIJS};padding-top:3px;white-space:nowrap"><ha-icon icon="mdi:home-lightning-bolt-outline" style="--mdc-icon-size:13px;vertical-align:-2px;color:${GRIJS}"></ha-icon> huis · verbruik</div>
+                  </div>
+                </div>`;
               ]]]
         # live chart
         - type: custom:apexcharts-card
