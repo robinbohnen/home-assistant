@@ -214,10 +214,19 @@ cards:
           template: ov_climate
           entity: climate.airco_zolder
           name: Airco zolder
+        # De jacuzzi staat 's winters in de schuur. Dan valt deze regel weg in
+        # plaats van een half jaar op `unavailable` te staan; hij komt vanzelf
+        # terug zodra de spa weer een waarde geeft. Zie de toelichting bij
+        # binary_sensor.backyard_spa_aanwezig in
+        # packages/3 - Outside/Backyard/Spa.yaml.
         - type: custom:button-card
           template: ov_climate
           entity: climate.intex_purespa
           name: Intex PureSpa
+          visibility:
+            - condition: state
+              entity: binary_sensor.backyard_spa_aanwezig
+              state: "on"
         # Lucht woonkamer (multisensor): CO2, fijnstof en vocht op één regel,
         # met de luchtkwaliteitsklasse als badge. Zelfde grid als ov_climate,
         # maar de subregel bouwt zijn eigen waarden op dus geen template.
@@ -443,24 +452,39 @@ cards:
                 // dan gaan ze alle drie tegelijk (15-08-2026 02:50, code e81).
                 // "3 onbereikbaar" liet je dan zoeken welke drie; "spa offline"
                 // zegt meteen dat het één apparaat is en welk.
-                var spa = ['switch.intex_purespa_power','switch.intex_purespa_filter',
-                           'switch.intex_purespa_sanitizer'];
-                var rest = ['input_boolean.backyard_spa_keep_warm',
-                            'switch.linea_micra_kroon_18',
+                // EN "OFFLINE" GELDT ALLEEN ZOLANG DE SPA HIER HOORT TE STAAN
+                // Anders is een opgeruimde jacuzzi niet van een kapotte te
+                // onderscheiden en blijft hier de hele winter "spa offline"
+                // staan - een storingsmelding over iets wat gewoon in de schuur
+                // ligt. De vier spa-schakelaars vallen dan uit beide lijsten,
+                // net als de kaarten in de popup hiernaast. Zie
+                // binary_sensor.backyard_spa_aanwezig in
+                // packages/3 - Outside/Backyard/Spa.yaml.
+                //
+                // Kent de sensor zichzelf nog niet (verse install, herstart
+                // halverwege), dan tellen we de spa gewoon mee: liever een
+                // regel te veel dan een knop die stilletjes weg is.
+                var er = states['binary_sensor.backyard_spa_aanwezig'];
+                var spa_er = !er || er.state !== 'off';
+                var spa = spa_er ? ['switch.intex_purespa_power','switch.intex_purespa_filter',
+                                    'switch.intex_purespa_sanitizer'] : [];
+                var rest = ['switch.linea_micra_kroon_18',
                             'switch.woonkamer_woonkamer_stopcontact_luchtreiniger',
                             'switch.eettafel_eettafel_stopcontact_luchtreiniger',
                             'switch.achtertuin_schuur_lampen',
                             'switch.meterkast_meterkast_stopcontact_ledstrip'];
+                if(spa_er) rest.unshift('input_boolean.backyard_spa_keep_warm');
                 var weg = function(e){
                   return !states[e] || ['unavailable','unknown'].indexOf(states[e].state) !== -1; };
                 var aan = spa.concat(rest).filter(function(e){
                   return states[e] && states[e].state === 'on'; }).length;
                 var spa_weg = spa.filter(weg).length;
+                var spa_offline = spa.length > 0 && spa_weg === spa.length;
                 var t = aan === 0 ? 'alles uit' : aan + ' aan';
                 // Valt maar een deel van de spa weg, dan is het geen offline
                 // module en telt hij gewoon mee in het aantal.
-                var los = rest.filter(weg).length + (spa_weg === spa.length ? 0 : spa_weg);
-                if(spa_weg === spa.length) t += ' · spa offline';
+                var los = rest.filter(weg).length + (spa_offline ? 0 : spa_weg);
+                if(spa_offline) t += ' · spa offline';
                 if(los) t += ' · ' + los + ' onbereikbaar';
                 return `<span style="font-size:12.5px;color:rgba(255,255,255,0.58)">${t}</span>`;
               ]]]

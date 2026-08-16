@@ -18,7 +18,91 @@ backyard_spa_package:
       name: "Backyard Spa - Free Heating Enabled"
       icon: mdi:currency-eur
 
+  ###########################################################################
+  ## STAAT DE SPA ER NOG, OF IS HIJ OPGERUIMD
+  ###########################################################################
+  # De jacuzzi is een zomerding: hij gaat in het najaar het schuurtje in en in
+  # het voorjaar weer op het terras. In de tussentijd blijft deze hele config
+  # gewoon staan - er hoeft niets weg en niets terug. Wat wél weg moet is de
+  # rommel die een opgeruimde spa achterlaat:
+  #
+  #   * de kaarten op het overzicht (een mushroom-kaart van een verdwenen
+  #     entiteit wordt een rode foutkaart, en het Jacuzzi-blok in de
+  #     Schakelaars-popup staat er een half jaar grijs bij)
+  #   * de samenvatting onder de Schakelaars-tegel, die "spa offline" blijft
+  #     melden zolang de wifi-module weg is
+  #   * de melding "Jacuzzi reageert niet meer". Die is bedoeld voor een
+  #     wifi-module die eruit klapt terwijl de spa gewoon buiten staat, en gaat
+  #     dan één keer af. Maar hij hangt aan een state-trigger op `unavailable`
+  #     met `for: 15 minuten`, en bij een herstart van Home Assistant komt de
+  #     entiteit opnieuw als `unavailable` binnen. Dus kreeg je 'm ELKE
+  #     HERSTART opnieuw, de hele winter door.
+  #
+  # Vandaar deze binaire sensor. Alles hierboven hangt eraan; dat is de enige
+  # plek waar "is de spa er nog" wordt vastgesteld.
+  #
+  # WAAROM EEN INPUT_DATETIME EN NIET `delay_off: 24:00:00`
+  # Dat laatste is één regel en zou hier precies het verkeerde doen: de
+  # afteltijd van een template-binarysensor overleeft een herstart niet. Na
+  # elke reboot begint hij opnieuw aan zijn 24 uur, dus zou de spa er telkens
+  # een dag lang weer "zijn" - inclusief de kaarten en de melding die we juist
+  # kwijt wilden. Een input_datetime overleeft wél, dus die houdt vast wanneer
+  # de spa voor het laatst een waarde gaf.
+  input_datetime:
+    backyard_spa_laatst_gezien:
+      name: "Backyard Spa - Laatst gezien"
+      has_date: true
+      has_time: true
+      icon: mdi:hot-tub
+
+  template:
+    - binary_sensor:
+        - name: Backyard Spa - Aanwezig
+          unique_id: backyard_spa_aanwezig
+          icon: mdi:hot-tub
+          # `has_value` dekt allebei de manieren waarop de spa kan verdwijnen:
+          # de wifi-module die wegvalt (entiteit blijft bestaan, staat op
+          # `unavailable`) en de integratie die eruit gaat (entiteit bestaat
+          # niet meer). In allebei de gevallen onwaar.
+          #
+          # De 24 uur zijn ruim bemeten met opzet: een spa die een nacht van
+          # het net is, is stuk en geen opgeruimde spa. Pas als hij een etmaal
+          # niets heeft gezegd gaan we ervan uit dat hij is opgeborgen.
+          state: >-
+            {% set gezien = state_attr('input_datetime.backyard_spa_laatst_gezien',
+                                       'timestamp') | float(0) %}
+            {{ has_value('climate.intex_purespa')
+               or (gezien > 0 and (now().timestamp() - gezien) < 86400) }}
+
   automation:
+    # Het stempel bijhouden zolang de spa leeft. De tijdtrigger is de echte
+    # motor - een spa die uren stil op temperatuur staat verandert van state
+    # bijna niets, en dan zou het stempel verlopen terwijl hij er gewoon staat.
+    # De starttrigger is er voor de allereerste keer: zonder stempel staat een
+    # verse input_datetime op 1970 en zou de spa meteen als opgeruimd gelden.
+    - id: backyard_spa_laatst_gezien
+      alias: Backyard - Spa laatst gezien
+      description: >-
+        Houdt bij wanneer de spa voor het laatst een waarde gaf. Zie de
+        toelichting bij binary_sensor.backyard_spa_aanwezig.
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: climate.intex_purespa
+        - trigger: time_pattern
+          minutes: "/30"
+        - trigger: homeassistant
+          event: start
+      conditions:
+        - condition: template
+          value_template: "{{ has_value('climate.intex_purespa') }}"
+      actions:
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.backyard_spa_laatst_gezien
+          data:
+            timestamp: "{{ now().timestamp() }}"
+
     - id: backyard_spa_error
       alias: Backyard - Spa Error
       description: >-
@@ -100,6 +184,20 @@ backyard_spa_package:
               conditions:
                 - condition: trigger
                   id: offline
+                # EEN OPGERUIMDE SPA REAGEERT NIET, EN DAT IS GOED NIEUWS
+                # Deze trigger hangt aan `unavailable` met `for: 15 minuten`,
+                # en na een herstart van Home Assistant komt de entiteit
+                # opnieuw als `unavailable` binnen. Zonder deze conditie kwam
+                # deze melding er dus bij elke reboot weer uit, de hele winter
+                # dat de spa in de schuur staat.
+                #
+                # De eerste keer gaat hij nog gewoon af: het stempel is dan een
+                # kwartier oud en de sensor staat nog `on`. Pas na een etmaal
+                # stilte valt hij om en houdt het op.
+                - alias: Alleen als de spa hier hoort te staan
+                  condition: state
+                  entity_id: binary_sensor.backyard_spa_aanwezig
+                  state: "on"
               sequence:
                 - action: notify.mobile_devices_adults
                   metadata: {}

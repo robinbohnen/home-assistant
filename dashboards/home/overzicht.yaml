@@ -447,11 +447,19 @@ cards:
               - fan_only
             show_temperature_control: true
             collapsible_controls: true
+          # Valt weg zolang de spa opgeruimd is - een mushroom-kaart van een
+          # entiteit die niet meer bestaat wordt een rode foutkaart. Zie
+          # binary_sensor.backyard_spa_aanwezig in
+          # packages/3 - Outside/Backyard/Spa.yaml.
           - type: custom:mushroom-climate-card
             entity: climate.intex_purespa
             name: Intex PureSpa
             show_temperature_control: true
             collapsible_controls: true
+            visibility:
+              - condition: state
+                entity: binary_sensor.backyard_spa_aanwezig
+                state: "on"
           - type: custom:mushroom-cover-card
             entity: cover.achtertuin_zonnescherm
             name: Zonnescherm achtertuin
@@ -1800,11 +1808,21 @@ cards:
           # `power` is de stekker, `keep_warm` is de automatisering in
           # packages/3 - Outside/Backyard/Spa.yaml die de temperatuur
           # vasthoudt. Twee verschillende dingen, dus allebei een eigen knop.
+          # Het hele blok verdwijnt zodra de spa is opgeruimd, kop en al -
+          # anders staan hier een half jaar vier grijze knoppen die niets doen,
+          # met een kop erboven die suggereert dat er een jacuzzi is. Komt
+          # vanzelf terug in het voorjaar. Zie binary_sensor.
+          # backyard_spa_aanwezig in packages/3 - Outside/Backyard/Spa.yaml.
           - type: custom:mushroom-title-card
             subtitle: Jacuzzi
+            visibility: &spa_aanwezig
+              - condition: state
+                entity: binary_sensor.backyard_spa_aanwezig
+                state: "on"
           - type: grid
             columns: 2
             square: false
+            visibility: *spa_aanwezig
             cards:
               - type: custom:mushroom-template-card
                 entity: switch.intex_purespa_power
