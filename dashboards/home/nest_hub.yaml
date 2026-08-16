@@ -622,7 +622,20 @@ cards:
                   var kleurVan = function(v){ for(var i=0;i<soorten.length;i++) if(soorten[i][0].test(v)) return soorten[i][1]; return 'rgba(255,255,255,0.35)'; };
                   var regel = function(id, label){
                     var e = states[id];
-                    var v = e && e.state && e.state !== 'Geen' ? e.state : null;
+                    // Hier stond `!== 'Geen'` met een hoofdletter terwijl de
+                    // sensor 'geen' teruggeeft, dus stond er op een rustige dag
+                    // letterlijk "geen" in plaats van "geen ophaal" - en in de
+                    // kleur van een afvalsoort. Zelfde fout als op het
+                    // overzicht, zie overzicht/kolom_rechts.yaml.
+                    //
+                    // `unknown` telt als niets: dat is de halve minuut die de
+                    // integratie bij elke verversing op onbekend staat. Alleen
+                    // een sensor die écht weg is (`unavailable`) heet hier
+                    // onbekend, anders leest een storing als een rustige dag.
+                    var raw = e && e.state ? String(e.state).trim() : '';
+                    var stuk = !raw || /^unavailable$/i.test(raw);
+                    var v = (stuk || /^(geen|unknown)$/i.test(raw)) ? null : raw;
+                    var leeg = stuk ? 'onbekend' : 'geen ophaal';
                     var kl = v ? kleurVan(v) : 'rgba(255,255,255,0.3)';
                     if(v && v.length > 30) v = v.slice(0,29) + '…';
                     // Grid met vaste kolommen + expliciete text-align: flexbox in
@@ -631,7 +644,7 @@ cards:
                     return `<div style="display:grid;grid-template-columns:auto 9vh 1fr;align-items:center;column-gap:1.2vh;width:100%;text-align:left">
                       <ha-icon icon="mdi:trash-can-outline" style="--mdc-icon-size:3.1vh;color:${kl}"></ha-icon>
                       <span style="font-size:2.2vh;color:rgba(255,255,255,0.7);text-align:left">${label}</span>
-                      <span style="font-size:2.6vh;font-weight:600;text-align:left;color:${v ? kl : 'rgba(255,255,255,0.35)'}">${v || 'geen ophaal'}</span></div>`;
+                      <span style="font-size:2.6vh;font-weight:600;text-align:left;color:${v ? kl : 'rgba(255,255,255,0.35)'}">${v || leeg}</span></div>`;
                   };
                   return `<div style="display:grid;row-gap:0.9vh;width:100%;text-align:left">
                     ${regel('sensor.afvalinfo_home_trash_type_today','vandaag')}

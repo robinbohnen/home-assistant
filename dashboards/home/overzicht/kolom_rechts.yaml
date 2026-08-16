@@ -28,19 +28,69 @@ cards:
             navigation_path: "#ov-vandaag"
           variables:
             title: VANDAAG
+        # TWEE LEGE REGELS ZIJN ÉÉN MEDEDELING
+        # Verreweg de meeste dagen staat er niets op de stoep, en dan vulden
+        # "Afval vandaag · geen" en "Afval morgen · geen" samen twee regels van
+        # het paneel met dezelfde niet-informatie. Zodra er wél iets opgehaald
+        # wordt vallen de twee losse regels hieronder weer in - dan wil je juist
+        # per dag zien wat er buiten moet.
+        #
+        # De vergelijking staat op 'geen' met een kleine g: dat is wat de
+        # afvalinfo-integratie werkelijk teruggeeft (nagemeten op beide
+        # sensoren, 16 augustus 2026). Blijft de merge ooit uit doordat er
+        # 'Geen' uitkomt, dan zie je gewoon de twee losse regels van vroeger -
+        # de tekst eronder leest hoofdletterongevoelig, dus die klopt hoe dan
+        # ook.
         - type: custom:button-card
           template: ov_listrow
           entity: sensor.afvalinfo_home_trash_type_today
           tap_action:
             action: navigate
             navigation_path: "#ov-vandaag"
+          # `unknown` telt hier als "niets op te halen" en `unavailable`
+          # bewust niet. De integratie zet deze sensoren bij elke verversing
+          # een halve minuut op `unknown` en daarna weer terug: over 11 dagen
+          # gemeten 50 keer, samen 0,2 van de 241 uur. Zonder dat erbij zou de
+          # samengevoegde regel bij elke verversing even uit elkaar klappen in
+          # twee regels en weer terug. Een sensor die écht weg is meldt zich
+          # als `unavailable`, en die valt hier dus buiten - dan zie je de twee
+          # losse regels met "onbekend", precies zoals hoort.
+          visibility:
+            - condition: state
+              entity: sensor.afvalinfo_home_trash_type_today
+              state: &afval_leeg ["geen", "unknown"]
+            - condition: state
+              entity: sensor.afvalinfo_home_trash_type_tomorrow
+              state: *afval_leeg
+          variables:
+            title: Afval
+            mdi: mdi:trash-can-outline
+            kleur: rgba(255,255,255,0.35)
+          custom_fields:
+            s: |
+              [[[ return 'geen ophaal vandaag en morgen'; ]]]
+        - type: custom:button-card
+          template: ov_listrow
+          entity: sensor.afvalinfo_home_trash_type_today
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-vandaag"
+          visibility: &afval_iets
+            - condition: or
+              conditions:
+                - condition: state
+                  entity: sensor.afvalinfo_home_trash_type_today
+                  state_not: *afval_leeg
+                - condition: state
+                  entity: sensor.afvalinfo_home_trash_type_tomorrow
+                  state_not: *afval_leeg
           variables:
             title: Afval vandaag
             mdi: mdi:trash-can-outline
             kleur: |
               [[[
                 var e = states['sensor.afvalinfo_home_trash_type_today'];
-                var v = e && e.state && e.state !== 'Geen' ? e.state : '';
+                var v = e && e.state && !/^(geen|unknown|unavailable)$/i.test(e.state) ? e.state : '';
                 // PBD vóór papier: "Drinkkartons" bevat 'karton'
                 var soorten = [[/gft|groente|tuin/i,'#4ade80'], [/pbd|plastic|blik|drank/i,'#f59e0b'],
                                [/papier/i,'#38bdf8'], [/rest/i,'rgba(255,255,255,0.6)']];
@@ -51,7 +101,17 @@ cards:
             s: |
               [[[
                 var e = states['sensor.afvalinfo_home_trash_type_today'];
-                var v = e && e.state && e.state !== 'Geen' ? e.state : null;
+                // Hier stond `!== 'Geen'` met een hoofdletter, en de sensor
+                // levert 'geen'. Deze regel is dus nooit gehaald: op een dag
+                // zonder ophaal stond er letterlijk "geen" op het paneel,
+                // gekleurd alsof het een afvalsoort was.
+                //
+                // "niets op te halen" en "ik weet het niet" blijven uit elkaar:
+                // een stille sensor die als een rustige dag leest, is precies
+                // hoe je een gemiste ophaaldag krijgt.
+                var raw = e && e.state ? String(e.state).trim() : '';
+                if(!raw || /^(unknown|unavailable)$/i.test(raw)) return 'onbekend';
+                var v = /^geen$/i.test(raw) ? null : raw;
                 if(!v) return 'geen ophaal vandaag';
                 // Kleur per soort, zodat je in één oogopslag ziet wat er buiten moet
                 // PBD vóór papier: "Drinkkartons" bevat 'karton'
@@ -67,13 +127,14 @@ cards:
           tap_action:
             action: navigate
             navigation_path: "#ov-vandaag"
+          visibility: *afval_iets
           variables:
             title: Afval morgen
             mdi: mdi:recycle
             kleur: |
               [[[
                 var e = states['sensor.afvalinfo_home_trash_type_tomorrow'];
-                var v = e && e.state && e.state !== 'Geen' ? e.state : '';
+                var v = e && e.state && !/^(geen|unknown|unavailable)$/i.test(e.state) ? e.state : '';
                 // PBD vóór papier: "Drinkkartons" bevat 'karton'
                 var soorten = [[/gft|groente|tuin/i,'#4ade80'], [/pbd|plastic|blik|drank/i,'#f59e0b'],
                                [/papier/i,'#38bdf8'], [/rest/i,'rgba(255,255,255,0.6)']];
@@ -84,7 +145,11 @@ cards:
             s: |
               [[[
                 var e = states['sensor.afvalinfo_home_trash_type_tomorrow'];
-                var v = e && e.state && e.state !== 'Geen' ? e.state : null;
+                // Zelfde hoofdletterfout als bij `vandaag` hierboven, en
+                // dezelfde scheiding tussen "niets" en "onbekend".
+                var raw = e && e.state ? String(e.state).trim() : '';
+                if(!raw || /^(unknown|unavailable)$/i.test(raw)) return 'onbekend';
+                var v = /^geen$/i.test(raw) ? null : raw;
                 if(!v) return 'geen ophaal morgen';
                 // Kleur per soort, zodat je in één oogopslag ziet wat er buiten moet
                 // PBD vóór papier: "Drinkkartons" bevat 'karton'
