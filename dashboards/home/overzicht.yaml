@@ -931,6 +931,91 @@ cards:
               # daadwerkelijk iemand binnen is gekomen, dit wel.
               - binary_sensor.entree_entree_voordeur_deur
 
+      # --------- Openstaande vraag ---------
+      # De vraag-pil in de kopbalk opent deze popup. Ja/Nee loopt via
+      # script.spraak_antwoord_geven (Kitchen/Voice.yaml): dat vuurt hetzelfde
+      # `spraak_antwoord`-event als de satelliet-intents en de telefoonknoppen
+      # voeden, dus de afhandelende automatisering (bv. Klimaat - Zonnescherm
+      # antwoord) ziet geen verschil tussen paneel, telefoon en stem. Na een
+      # tik leegt het script de input_text; de knoppen hieronder klappen dan
+      # in en de "geen vraag"-kaart komt terug. De popup sluit zichzelf niet -
+      # dat kan bubble-card niet zonder browser_mod - maar er valt daarna ook
+      # niets verkeerds meer te tikken (het script stopt stil als er niets
+      # open staat).
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-vraag"
+        name: Vraag van het huis
+        icon: mdi:comment-question-outline
+        width_desktop: *ov_popup_width
+        styles: *ov_popup
+        cards:
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: input_text.spraak_openstaande_vraag
+                primary: >-
+                  {% set m = {'zonnescherm': 'Zal ik het zonnescherm uitzetten?'} %}
+                  {% set s = states('input_text.spraak_openstaande_vraag') %}
+                  {{ m.get(s, (s | replace('_', ' ') | capitalize) ~ '?') }}
+                secondary: >-
+                  {% set f = state_attr('timer.spraak_antwoordvenster', 'finishes_at') %}
+                  {% if is_state('timer.spraak_antwoordvenster', 'active') and f %}
+                    antwoorden kan nog tot {{ (f | as_datetime | as_local).strftime('%H:%M') }}
+                  {% else %}
+                    het antwoordvenster is gesloten
+                  {% endif %}
+                icon: mdi:comment-question-outline
+                icon_color: blue
+                visibility: &vraag_open
+                  - condition: state
+                    entity: input_text.spraak_openstaande_vraag
+                    state_not: ""
+          - type: grid
+            columns: 2
+            square: false
+            visibility: *vraag_open
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Ja
+                secondary: doe het
+                icon: mdi:check-circle
+                icon_color: green
+                tap_action:
+                  action: perform-action
+                  perform_action: script.spraak_antwoord_geven
+                  data:
+                    antwoord: ja
+              - type: custom:mushroom-template-card
+                primary: Nee
+                secondary: laat maar
+                icon: mdi:close-circle
+                icon_color: red
+                tap_action:
+                  action: perform-action
+                  perform_action: script.spraak_antwoord_geven
+                  data:
+                    antwoord: nee
+          # Zonder openstaande vraag legt deze kaart uit wat hier normaal
+          # staat; een lege popup leest als een storing.
+          - type: grid
+            columns: 1
+            square: false
+            visibility:
+              - condition: state
+                entity: input_text.spraak_openstaande_vraag
+                state: ""
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Geen openstaande vraag
+                secondary: >-
+                  Als het huis iets wil weten (zonnescherm uit? airco aan?)
+                  verschijnt hier de vraag, met dezelfde Ja/Nee als op de
+                  telefoon en de satelliet.
+                icon: mdi:comment-check-outline
+                icon_color: grey
       # --------- Deuren & ramen ---------
       # De rij in de RUIMTES-kaart zegt alleen dát er iets open staat. Hier
       # staat wélk contact dat is: gesorteerd op state (reverse, dus "on" boven

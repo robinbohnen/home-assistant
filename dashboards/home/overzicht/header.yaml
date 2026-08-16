@@ -105,6 +105,42 @@ cards:
               var klok = (t && !isNaN(t.getTime())) ? ('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2) : '';
               return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:doorbell-video" style="--mdc-icon-size:16px"></ha-icon>er is aangebeld${klok ? ' · ' + klok : ''}</span>`;
             ]]]
+      # Conditioneel: het huis heeft een vraag gesteld (satelliet + telefoon,
+      # zie script.spraak_vraag_stellen in Kitchen/Voice.yaml) en het
+      # antwoordvenster loopt nog. Tik opent #ov-vraag met Ja/Nee-knoppen -
+      # het derde antwoordkanaal, zodat ook wie zijn telefoon niet bij zich
+      # heeft kan antwoorden. Verdwijnt vanzelf zodra er geantwoord is of het
+      # venster verloopt (de opruim-automatisering leegt dan de input_text).
+      - type: custom:button-card
+        template: ov_pill
+        entity: input_text.spraak_openstaande_vraag
+        triggers_update:
+          - timer.spraak_antwoordvenster
+        tap_action:
+          action: navigate
+          navigation_path: "#ov-vraag"
+        visibility:
+          - condition: state
+            entity: timer.spraak_antwoordvenster
+            state: active
+          - condition: state
+            entity: input_text.spraak_openstaande_vraag
+            state_not: ""
+        styles:
+          card:
+            - background: rgba(56,189,248,0.14)
+            - border: 1px solid rgba(56,189,248,0.32)
+        custom_fields:
+          c: |
+            [[[
+              var v = states['input_text.spraak_openstaande_vraag'];
+              var sleutel = v ? String(v.state) : '';
+              // Sleutel -> leesbare vraag; een onbekende sleutel toont
+              // zichzelf, zodat een nieuwe vraagsoort nooit onzichtbaar is.
+              var tekst = ({zonnescherm: 'zonnescherm uitzetten?'})[sleutel]
+                          || (sleutel.replace(/_/g, ' ') + '?');
+              return `<span style="display:flex;align-items:center;gap:7px;color:#38bdf8"><ha-icon icon="mdi:comment-question-outline" style="--mdc-icon-size:16px"></ha-icon>vraag · ${tekst}</span>`;
+            ]]]
       # Conditioneel: er is iets stuk in huis. Tikken gaat naar het
       # systeem-dashboard, waar de volledige lijst per integratie staat.
       - type: custom:button-card

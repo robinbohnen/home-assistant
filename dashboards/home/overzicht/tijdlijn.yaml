@@ -47,6 +47,8 @@ card:
       triggers_update:
         - sensor.time
         - sensor.slimhuys_zonneplan_huidige_prijs
+        - sensor.goedkoopste_laadvenster
+        - sensor.droger_status
       # Tik = agenda/afval (daar staat de volledige lijst, ook wat achter "+N meer"
       # zit); lang indrukken = de prijsdetails. Hover bestaat niet op het wandpaneel.
       tap_action:
@@ -58,7 +60,8 @@ card:
       variables:
         uren_terug: 1
         uren_vooruit: 11
-        laadvenster_uren: 3
+        # laadvenster_uren is vervallen: de vensterlengte staat nu op één
+        # plek, in sensor.goedkoopste_laadvenster (Stroomprijs.yaml).
       styles:
         card:
           - background: none
@@ -229,25 +232,20 @@ card:
               if(!perDag[k]) perDag[k] = {min: s.p, max: s.p};
               else { perDag[k].min = Math.min(perDag[k].min, s.p); perDag[k].max = Math.max(perDag[k].max, s.p); }
             });
-            // ---------- goedkoopste laadvenster bepalen ----------
+            // ---------- goedkoopste laadvenster ----------
             // Vóór het tekenen van de blokken, want binnen de beugel laten we het
             // prijsje weg (daar staat "LADEN" al, en 12px hoog past niet twee keer).
+            // De berekening zelf staat sinds 2026-08-16 in
+            // sensor.goedkoopste_laadvenster (packages/9 - Other/Stroomprijs.yaml);
+            // de laadkaart onder AUTO leest dezelfde sensor, dus die twee kunnen
+            // niet meer van elkaar afwijken.
             var beste = null;
-            if(slots.length > 1){
-              var nodig = Math.max(1, Math.round(variables.laadvenster_uren * 3600000 / stap));
-              for(var len = nodig; len >= 1 && beste === null; len--){
-                for(var i = 0; i + len <= slots.length; i++){
-                  if(slots[i].t + stap <= nu) continue;
-                  var som = 0, aaneen = true;
-                  for(var j = 0; j < len; j++){
-                    if(j > 0 && slots[i+j].t - slots[i+j-1].t !== stap){ aaneen = false; break; }
-                    som += slots[i+j].p;
-                  }
-                  if(!aaneen) continue;
-                  var gem = som / len;
-                  if(beste === null || gem < beste.gem) beste = {gem: gem, van: slots[i].t, tot: slots[i+len-1].t + stap};
-                }
-              }
+            var lv = states['sensor.goedkoopste_laadvenster'];
+            if(lv && ['unavailable','unknown',''].indexOf(lv.state) === -1 && lv.attributes){
+              var lvVan = new Date(lv.state).getTime();
+              var lvTot = new Date(lv.attributes.tot).getTime();
+              var lvGem = Number(lv.attributes.gemiddelde);
+              if(!isNaN(lvVan) && !isNaN(lvTot) && !isNaN(lvGem)) beste = {gem: lvGem, van: lvVan, tot: lvTot};
             }
 
             // Prijs als tekst in het blok: op een touchscreen is een title=-tooltip
@@ -316,6 +314,37 @@ card:
               var kl = 'rgba(255,255,255,0.7)';
               for(var i=0;i<soorten.length;i++) if(soorten[i][0].test(afval.state)) { kl = soorten[i][1]; break; }
               markers.push({t: m.getTime(), icon: 'mdi:trash-can-outline', kleur: kl, tekst: afval.state});
+            }
+            // Bedtijd van de kinderen. Doordeweeks de gewone helper, op
+            // vrijdag- en zaterdagavond de weekendvariant (de bedtijd-
+            // automatiseringen triggeren op allebei de tijdstippen; dit is
+            // het tijdstip dat die avond in de praktijk geldt). Hebben Logan
+            // en Emma dezelfde tijd, dan wordt het één marker - twee iconen
+            // op exact hetzelfde punt duwen elkaar alleen maar naar rij twee.
+            var bedTijd = function(gewoon, weekend){
+              var wd = new Date().getDay();
+              var e = states[(wd === 5 || wd === 6) ? weekend : gewoon] || states[gewoon];
+              if(!e || !/^\d{2}:\d{2}/.test(String(e.state))) return null;
+              var d = new Date();
+              d.setHours(Number(String(e.state).slice(0,2)), Number(String(e.state).slice(3,5)), 0, 0);
+              return d.getTime();
+            };
+            var bedLogan = bedTijd('input_datetime.bedtime_maxi', 'input_datetime.bedtime_maxi_weekend');
+            var bedEmma = bedTijd('input_datetime.bedtime_mini', 'input_datetime.bedtime_mini_weekend');
+            if(bedLogan !== null && bedLogan === bedEmma){
+              markers.push({t: bedLogan, icon: 'mdi:sleep', kleur: '#a78bfa', tekst: 'bedtijd Logan & Emma'});
+            } else {
+              if(bedLogan !== null) markers.push({t: bedLogan, icon: 'mdi:sleep', kleur: '#a78bfa', tekst: 'bedtijd Logan'});
+              if(bedEmma !== null) markers.push({t: bedEmma, icon: 'mdi:sleep', kleur: '#a78bfa', tekst: 'bedtijd Emma'});
+            }
+            // Droger: wanneer het programma klaar is, zolang er echt één
+            // loopt. De eindtijd-sensor houdt buiten een programma zijn oude
+            // tijdstip vast, vandaar de check op de status.
+            var drS = states['sensor.droger_status'];
+            var drE = states['sensor.droger_programma_eindtijd'];
+            if(drS && drS.state === 'run' && drE && drE.state){
+              var drT = new Date(drE.state).getTime();
+              if(!isNaN(drT)) markers.push({t: drT, icon: 'mdi:tumble-dryer', kleur: '#38bdf8', tekst: 'droger klaar'});
             }
 
             markers = markers.filter(function(m){ return m.t >= start && m.t <= eind; })

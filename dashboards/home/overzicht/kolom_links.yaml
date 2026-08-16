@@ -212,16 +212,32 @@ cards:
                 var open = [];
                 if(d && d.state === 'on') open.push('deur');
                 if(r && r.state === 'on') open.push('raam');
-                if(!d && !r) return `<span style="color:rgba(255,255,255,0.60)">onbekend</span>`;
-                if(!open.length) return `<span style="color:rgba(255,255,255,0.60)">alles dicht</span>`;
-                return `<span style="color:#f59e0b;font-weight:600">${open.join(' &amp; ')} open</span>`;
+                // Het voordeurslot hoort bij "is het huis dicht", maar een
+                // ontgrendeld slot overdag is normaal (er is iemand thuis) en
+                // mag de regel niet oranje maken. Grijs "niet op slot" is
+                // informatie, geen alarm; alleen een klemmend slot is er een.
+                var l = states['lock.kroon18voordeur'];
+                var slot = '';
+                if(l && ['unavailable','unknown'].indexOf(l.state) === -1){
+                  var m = {locked:'op slot', unlocked:'niet op slot', open:'niet op slot',
+                           locking:'gaat op slot', unlocking:'gaat van slot'};
+                  slot = l.state === 'jammed'
+                    ? ` <span style="color:rgba(255,255,255,0.2)">·</span> <span style="color:#ef4444;font-weight:600">slot klemt</span>`
+                    : ` <span style="color:rgba(255,255,255,0.2)">·</span> <span style="color:rgba(255,255,255,0.60)">${m[l.state] || l.state}</span>`;
+                }
+                if(!d && !r) return `<span style="color:rgba(255,255,255,0.60)">onbekend</span>${slot}`;
+                if(!open.length) return `<span style="color:rgba(255,255,255,0.60)">alles dicht</span>${slot}`;
+                return `<span style="color:#f59e0b;font-weight:600">${open.join(' &amp; ')} open</span>${slot}`;
               ]]]
             dot: |
               [[[
                 var d = states['binary_sensor.all_doors'];
                 var r = states['binary_sensor.all_windows'];
+                var l = states['lock.kroon18voordeur'];
                 var iets = (d && d.state === 'on') || (r && r.state === 'on');
-                return `<div style="width:9px;height:9px;border-radius:50%;background:${iets ? '#f59e0b' : 'rgba(255,255,255,0.14)'}"></div>`;
+                var klemt = l && l.state === 'jammed';
+                var kleur = klemt ? '#ef4444' : (iets ? '#f59e0b' : 'rgba(255,255,255,0.14)');
+                return `<div style="width:9px;height:9px;border-radius:50%;background:${kleur}"></div>`;
               ]]]
   # AUTO
   - type: custom:mod-card
@@ -409,10 +425,11 @@ cards:
                         return `<span style="display:flex;align-items:baseline;gap:7px"><span style="font-size:14px;font-weight:600;color:white">${lbl}</span>${suf}</span>`;
                       ]]]
         # Goedkoopste aaneengesloten laadvenster uit de prijsvoorspelling.
-        # Bloklengte wordt uit de data afgeleid, dus dit werkt met uur- én
-        # kwartierprijzen zonder aanpassing.
+        # De berekening staat sinds 2026-08-16 in sensor.goedkoopste_laadvenster
+        # (packages/9 - Other/Stroomprijs.yaml); de tijdlijn leest dezelfde
+        # sensor, dus deze kaart en de beugel daar kunnen niet meer verschillen.
         - type: custom:button-card
-          entity: sensor.slimhuys_zonneplan_huidige_prijs
+          entity: sensor.goedkoopste_laadvenster
           show_icon: false
           show_name: false
           show_state: false
@@ -420,50 +437,22 @@ cards:
             action: navigate
             navigation_path: "#ov-auto"
           variables:
-            uren: 3
-            # Eén keer rekenen; de drie velden lezen het resultaat uit.
-            # button-card evalueert variabelen opnieuw bij elke render.
+            # Eén keer uitpakken; de drie velden lezen het resultaat uit.
+            # State = start (ISO), attributen: tot/gemiddelde/uren/nu/winst.
             venster: |
               [[[
-                // Prijsblokken uit SlimHuys: kwartieren als die er zijn, anders uren,
-                // plus die van morgen. 't' is de START van een blok; de code hieronder
-                // leidt de bloklengte af uit het verschil tussen twee starts.
-                var blok = function(eid, sleutel){ var e = states[eid]; return (e && e.attributes && e.attributes[sleutel]) || []; };
-                var kw = blok('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier', 'raw_today');
-                var raw = (kw.length ? kw : blok('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today'))
-                  .concat(blok('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow'));
-                var punten = raw.map(function(e){
-                  var d = new Date(e.start), p = Number(e.value);
-                  return (isNaN(d.getTime()) || isNaN(p)) ? null : {t: d.getTime(), p: p};
-                }).filter(Boolean).sort(function(a,b){ return a.t - b.t; });
-                if(punten.length < 2) return null;
-                // Bloklengte uit de data zelf: 60 min nu, 15 min na de overgang.
-                var stap = punten[1].t - punten[0].t;
-                var nodig = Math.max(1, Math.round((variables.uren * 3600000) / stap));
-                var nu = Date.now();
-                var beste = null;
-                // Past het gevraagde venster niet meer in de horizon (bv. 's avonds
-                // voordat de prijzen van morgen er zijn), dan het langste dat wél past.
-                for(var lengte = nodig; lengte >= 1 && beste === null; lengte--){
-                  for(var i = 0; i + lengte <= punten.length; i++){
-                    if(punten[i].t + stap <= nu) continue;
-                    var som = 0, aaneen = true;
-                    for(var j = 0; j < lengte; j++){
-                      if(j > 0 && punten[i+j].t - punten[i+j-1].t !== stap) { aaneen = false; break; }
-                      som += punten[i+j].p;
-                    }
-                    if(!aaneen) continue;
-                    var gem = som / lengte;
-                    if(beste === null || gem < beste.gem) beste = {gem: gem, van: punten[i].t, tot: punten[i+lengte-1].t + stap};
-                  }
-                }
-                if(!beste) return null;
-                beste.uren = (beste.tot - beste.van) / 3600000;
-                var prijsNu = states['sensor.slimhuys_zonneplan_huidige_prijs'];
-                var huidig = prijsNu && !isNaN(Number(prijsNu.state)) ? Number(prijsNu.state) : null;
-                beste.nu = beste.van <= nu + stap;
-                beste.winst = huidig === null ? null : huidig - beste.gem;
-                return beste;
+                var s = states['sensor.goedkoopste_laadvenster'];
+                if(!s || ['unavailable','unknown',''].indexOf(s.state) !== -1) return null;
+                var a = s.attributes || {};
+                var van = new Date(s.state), tot = new Date(a.tot);
+                if(isNaN(van.getTime()) || isNaN(tot.getTime())) return null;
+                var gem = Number(a.gemiddelde);
+                if(isNaN(gem)) return null;
+                var winst = Number(a.winst);
+                return {van: van.getTime(), tot: tot.getTime(), gem: gem,
+                        uren: Number(a.uren) || (tot - van) / 3600000,
+                        nu: a.nu === true,
+                        winst: isNaN(winst) ? null : winst};
               ]]]
           styles:
             card:

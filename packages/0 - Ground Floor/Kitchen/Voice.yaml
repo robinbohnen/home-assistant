@@ -209,6 +209,53 @@ keuken_voice_package:
             value: ""
 
     ###########################################################################
+    ## Antwoord geven zonder te praten (wandpaneel)
+    ###########################################################################
+    # Derde antwoordkanaal naast de satelliet (AntwoordJa/AntwoordNee-intents)
+    # en de telefoonknoppen: de vraag-pil op het Overzicht-dashboard opent
+    # #ov-vraag en de Ja/Nee-knoppen daar roepen dit script aan. Het doet
+    # exact wat de intents doen - event `spraak_antwoord` met de openstaande
+    # vraag erin, daarna de vraag sluiten - zodat de afhandelende
+    # automatisering (bv. `klimaat_zonnescherm_antwoord`) niets van het paneel
+    # hoeft te weten.
+    #
+    # De conditie hieronder is het vangnet voor twee tikken vlak na elkaar of
+    # een popup die nog open stond toen het venster verliep: staat er niets
+    # meer open, dan stopt het script stil in plaats van een leeg event te
+    # sturen waar een handler 'ja' uit zou kunnen lezen.
+    spraak_antwoord_geven:
+      alias: Spraak - Antwoord geven (paneel)
+      description: >-
+        Beantwoordt de openstaande vraag met ja of nee, alsof het tegen de
+        satelliet gezegd is. Voor de knoppen op het wandpaneel.
+      icon: mdi:gesture-tap-button
+      mode: single
+      max_exceeded: silent
+      fields:
+        antwoord:
+          name: Antwoord
+          required: true
+          example: ja
+          selector:
+            select:
+              options:
+                - ja
+                - nee
+      sequence:
+        - variables:
+            vraag: "{{ states('input_text.spraak_openstaande_vraag') }}"
+        - alias: Er staat echt nog een vraag open
+          condition: template
+          value_template: >-
+            {{ vraag not in ['', 'unknown', 'unavailable']
+               and is_state('timer.spraak_antwoordvenster', 'active') }}
+        - event: spraak_antwoord
+          event_data:
+            vraag: "{{ vraag }}"
+            antwoord: "{{ antwoord }}"
+        - action: script.spraak_vraag_sluiten
+
+    ###########################################################################
     ## Het huis zegt iets, zonder te vragen
     ###########################################################################
     # De satelliet heeft een klein speakertje: prima voor één zin in de keuken,

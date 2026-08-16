@@ -56,83 +56,89 @@ cards:
                 }
                 return `<span style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:${col}"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span>${txt}</span>`;
               ]]]
-        # stats row
+        # Energiestroom: zon, net en accu links, het huis rechts, met
+        # geanimeerde lijnen die laten zien wat er nú loopt en welke kant op.
+        # Verving op 2026-08-16 de rij van vier losse getallen; alle vier de
+        # waarden staan er nog (zon/net/accu links, verbruik bij het huis),
+        # maar de richting hoef je niet meer uit voortekens af te leiden.
+        #
+        # Eén SVG met een vaste viewBox die met de kolom meeschaalt; tekst
+        # staat ín de SVG zodat lijnen en labels nooit uit elkaar schuiven
+        # (zelfde aanpak als de auto-illustratie in kolom_links). De
+        # dash-animatie is SMIL (<animate>), geen CSS: die werkt ook binnen
+        # de shadow-DOM van button-card zonder <style>-tag.
+        #
+        # KLEUR VOLGT DE BRON, RICHTING VOLGT DE ANIMATIE
+        # zon groen, net blauw (de verbruikskleur van de grafiek eronder),
+        # accu wit. Bij teruglevering blijft de netlijn dus blauw en loopt de
+        # animatie naar het net toe; alleen het getal kleurt groen, net als op
+        # de oude tegel. Gecontroleerd met de dataviz-validator: CVD- en
+        # normaalzicht-afstanden en contrast op deze achtergrond zijn ruim
+        # voldoende, en elke lijn heeft zijn eigen tekstlabel.
+        #
+        # PER SET, NIET SAMEN (ZW/O-percentages, overgenomen van de oude
+        # productietegel): één percentage over beide omvormers haalt nooit
+        # 100% - de sets pieken op verschillende momenten. Per set gedeeld
+        # door zijn eigen capaciteit klopt het wel, en zie je de zuidwest op
+        # een heldere middag ook echt klippen (geel bij >= 98). ZW =
+        # achtertuin (sensor heet `overkapping`), O = zolder; plafonds uit de
+        # capaciteitssensoren, terugval 5/3 kW.
+        #
+        # ACCU: ONDER 15 W GEBEURT ER NIETS - dat is de Marstek zelf (rust-
+        # verbruik van de elektronica; band gemeten 15-16 aug 2026: 65% van
+        # alle metingen zat op 0-15 W). Dan dus "standby" en geen animatie,
+        # anders leek de accu twee derde van de dag leeg te lopen.
+        #
+        # button-card rendert alleen opnieuw als zijn entity verandert; de
+        # triggers_update-lijst dekt de andere bronnen.
         - type: custom:button-card
+          entity: sensor.live_energieverbruik_totaal
+          triggers_update:
+            - sensor.solar_power_generated_now
+            - sensor.electricity_meter_energieverbruik
+            - sensor.lilygo_rs485_marstek_battery_power
+            - sensor.lilygo_rs485_marstek_battery_state_of_charge
+          show_icon: false
+          show_name: false
+          show_state: false
           tap_action:
             action: navigate
             navigation_path: "#ov-energie"
-          card_mod:
-            style: |
-              @media (max-width: 800px) {
-                #container {
-                  grid-template-columns: 1fr 1fr !important;
-                  grid-template-areas: "net prod" "cons batt" !important;
-                  row-gap: 18px !important;
-                }
-              }
           styles:
             card:
               - background: none
               - border: none
               - box-shadow: none
-              - padding: 6px 2px 10px 2px
+              - padding: 4px 2px 6px 2px
             grid:
-              - grid-template-areas: '"net prod cons batt"'
-              # Productie kreeg er breedte bij voor de twee percentages op zijn
-              # onderste regel ("productie · ZW 37% · O 40%"); netto verbruik en
-              # verbruik hebben een korte tweede regel en konden dat missen.
-              - grid-template-columns: 1.3fr 1.4fr 0.9fr 1.1fr
-              - align-items: end
-              - column-gap: 10px
-              - row-gap: 16px
+              - grid-template-areas: '"flow"'
             custom_fields:
-              net:
-                - justify-self: start
-              prod:
-                - justify-self: start
-              cons:
-                - justify-self: start
-              batt:
-                - justify-self: start
+              flow:
+                - width: 100%
           custom_fields:
-            net: |
+            flow: |
               [[[
-                var e = states['sensor.live_energieverbruik_totaal'];
-                var raw = e && !isNaN(Number(e.state)) ? Number(e.state) : null;
-                if(raw !== null && Math.abs(raw) < 0.005) raw = 0;
-                var v = raw !== null ? raw.toFixed(2).replace('.',',') : '—';
-                var u = e ? (e.attributes.unit_of_measurement || 'kW') : 'kW';
-                // Negatief netto = teruglevering aan het net; groen, gelijk aan productie.
-                var netKleur = (raw !== null && raw < 0) ? '#4ade80' : 'white';
-                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:38px;font-weight:700;color:${netKleur};line-height:1">${v}</span> <span style="font-size:15px;color:rgba(255,255,255,0.60)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">netto verbruik</div></div>`;
-              ]]]
-            prod: |
-              [[[
-                var e = states['sensor.solar_power_generated_now'];
-                var v = '—', kw = null;
-                if(e && !isNaN(Number(e.state))) {
-                  var raw = Number(e.state);
-                  var u = e.attributes.unit_of_measurement || '';
-                  kw = (u === 'W') ? raw / 1000 : raw;
-                  v = kw.toFixed(2).replace('.',',');
-                }
-                // PER SET, NIET SAMEN
-                // Eén percentage over beide omvormers haalt nooit 100%: de sets
-                // pieken op verschillende momenten (oost 's ochtends, zuidwest
-                // 's middags), dus samen blijf je rond de 85% steken en lijkt de
-                // tegel altijd halfleeg. Per set gedeeld door zijn eigen
-                // omvormer klopt het wel, en dan zie je de zuidwest op een
-                // heldere middag ook echt 100% raken - dat is de omvormer die
-                // staat te klippen. Zelfde verdeling als de twee balken op de
-                // AWTRIX-klok (packages/0 - Ground Floor/Kitchen/Clock Display.yaml).
-                //
-                // ZW = achtertuin, 16 panelen, 10 graden zuidwest, GW5000N-EH.
-                // O  = zolder, 12 panelen, 45 graden oost, GW3000D-NS.
-                // Let op de namen: de sensor heet `overkapping` maar hoort bij
-                // het apparaat "Achtertuin". De plafonds komen uit de
-                // capaciteitssensoren (kW), niet uit een getal hier.
+                // ---------- waarden (zelfde regels als de oude vier tegels) ----------
                 var num = function(id){ var s = states[id];
                   return (s && !isNaN(Number(s.state))) ? Number(s.state) : null; };
+                // zon: sensor staat in W tenzij hij expliciet kW zegt
+                var zonS = states['sensor.solar_power_generated_now'];
+                var zonKw = null;
+                if(zonS && !isNaN(Number(zonS.state))){
+                  var zu = zonS.attributes.unit_of_measurement || '';
+                  zonKw = (zu === 'kW') ? Number(zonS.state) : Number(zonS.state) / 1000;
+                }
+                // netto: negatief = teruglevering; ruis rond nul plat slaan
+                var netto = num('sensor.live_energieverbruik_totaal');
+                if(netto !== null && Math.abs(netto) < 0.005) netto = 0;
+                // verbruik van het huis zelf
+                var verbruik = num('sensor.electricity_meter_energieverbruik');
+                var accuW = num('sensor.lilygo_rs485_marstek_battery_power');
+                var accuPv = accuW === null ? null : Math.round(accuW);
+                var soc = num('sensor.lilygo_rs485_marstek_battery_state_of_charge');
+                var accuMode = accuPv === null ? ''
+                             : (Math.abs(accuPv) <= 15 ? 'standby'
+                             : (accuPv < 0 ? 'ontlaadt' : 'laadt'));
                 var pct = function(vermogenId, capId, terugval){
                   var p = num(vermogenId), c = num(capId);
                   c = (c === null ? terugval : c) * 1000;
@@ -142,56 +148,55 @@ cards:
                              'sensor.inverter_kroon_18_achtertuin_capacity', 5);
                 var oo = pct('sensor.inverter_kroon_18_zolder_voorzijde',
                              'sensor.inverter_kroon_18_zolder_capacity', 3);
-                // Op de ONDERSTE regel, achter het woord "productie". Naast het
-                // getal pasten ze niet: dan liep "· ZW 37% · O 40%" de kolom uit
-                // en schoof het over de verbruikstegel heen. Hier is het net als
-                // "batterij · laadt" hiernaast, en die regel heeft ruimte zat.
-                // Vol = klippen; zelfde geel als op de klok, zodat het opvalt.
+                var kw = function(v){ return v === null ? '—' : v.toFixed(2).replace('.',','); };
+
+                // ---------- opbouw ----------
+                var GROEN = '#4ade80', BLAUW = '#3b82f6', GEEL = '#FFD60A';
+                var WIT = 'rgba(255,255,255,0.85)', GRIJS = 'rgba(255,255,255,0.55)';
+                var LIJN_UIT = 'rgba(255,255,255,0.10)';
+                // Lijn met optionele stroom-animatie. richting: 1 = naar het
+                // huis, -1 = van het huis terug naar de bron.
+                var lijn = function(d, kleur, actief, richting){
+                  var basis = `<path d="${d}" fill="none" stroke="${LIJN_UIT}" stroke-width="2"/>`;
+                  if(!actief) return basis;
+                  var van = richting === -1 ? 0 : 24, naar = richting === -1 ? 24 : 0;
+                  return basis + `<path d="${d}" fill="none" stroke="${kleur}" stroke-width="2" stroke-linecap="round" stroke-dasharray="3 9" opacity="0.9">`
+                    + `<animate attributeName="stroke-dashoffset" from="${van}" to="${naar}" dur="1.4s" repeatCount="indefinite"/></path>`;
+                };
+                // Bron-knoop links: waarde + label, verticaal rond cy.
+                var knoop = function(cy, waarde, waardeKleur, label){
+                  return `<text x="8" y="${cy - 1}" font-size="15" font-weight="700" fill="${waardeKleur}">${waarde}</text>`
+                       + `<text x="8" y="${cy + 13}" font-size="9.5" fill="${GRIJS}">${label}</text>`;
+                };
+
+                // zon (vanaf ~50 W echt aan het leveren, anders schemerruis)
+                var zonActief = zonKw !== null && zonKw * 1000 > 50;
                 var deel = function(naam, p){
                   if(p === null) return '';
-                  var kleur = p >= 98 ? '#FFD60A' : 'rgba(255,255,255,0.55)';
-                  return ` <span style="color:${kleur}">· ${naam} ${p}%</span>`;
+                  return ` · <tspan fill="${p >= 98 ? GEEL : GRIJS}">${naam} ${p}%</tspan>`;
                 };
-                var pctStr = deel('ZW', zw) + deel('O', oo);
-                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:#4ade80;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.60)">kW</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.55);white-space:nowrap">productie${pctStr}</div></div>`;
-              ]]]
-            cons: |
-              [[[
-                var e = states['sensor.electricity_meter_energieverbruik'];
-                var v = e && !isNaN(Number(e.state)) ? Number(e.state).toFixed(2).replace('.',',') : '—';
-                var u = e ? (e.attributes.unit_of_measurement || 'kW') : 'kW';
-                // #3b82f6 = dezelfde kleur als de verbruikslijn in de grafiek eronder
-                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:#3b82f6;line-height:1">${v}</span> <span style="font-size:13px;color:rgba(255,255,255,0.60)">${u}</span></div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">verbruik</div></div>`;
-              ]]]
-            batt: |
-              [[[
-                var p = states['sensor.lilygo_rs485_marstek_battery_power'];
-                var soc = states['sensor.lilygo_rs485_marstek_battery_state_of_charge'];
-                var pv = p && !isNaN(Number(p.state)) ? Math.round(Number(p.state)) : null;
-                var socv = soc && !isNaN(Number(soc.state)) ? Math.round(Number(soc.state)) : null;
-                // ONDER 15 W GEBEURT ER NIETS - DAT IS DE OMVORMER ZELF
-                // De Marstek trekt in rust een watt of tien uit de accu voor
-                // zijn eigen elektronica. Dat is standby, geen ontladen, maar
-                // het stond hier wel als "ontlaadt". En dat is niet zeldzaam:
-                // van de 4365 metingen over 15-16 augustus 2026 vielen er 2831
-                // in de band 0-15 W. Twee derde van de dag meldde deze tegel
-                // dus dat de accu leegliep terwijl er niets gebeurde.
-                //
-                // 15 W en niet een ander getal omdat de meting daar een gat
-                // heeft: 0-15 W is 65% van alle metingen, 15-50 W samen 1,2%,
-                // en boven de 100 W zit 34% - het echte laden en ontladen.
-                // Tussen die twee zit vrijwel niets, dus de grens hakt nergens
-                // een zinnige waarde doormidden.
-                //
-                // De oude `pv > 0`-tak hield ook een 'idle' over voor precies
-                // nul. Die is vervallen: exact 0 W kwam in die 24 uur geen
-                // enkele keer voor, dus die stand heeft nooit iets getoond.
-                var mode = pv === null ? ''
-                         : (Math.abs(pv) <= 15 ? 'standby'
-                         : (pv < 0 ? 'ontlaadt' : 'laadt'));
-                var disp = pv === null ? '—' : pv + ' W';
-                var socStr = socv === null ? '' : ` <span style="font-size:13px;color:rgba(255,255,255,0.60)">· ${socv}%</span>`;
-                return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:white;line-height:1">${disp}</span>${socStr}</div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">batterij${mode ? ' · ' + mode : ''}</div></div>`;
+                var zonLabel = 'zon' + deel('ZW', zw) + deel('O', oo);
+                // net
+                var terug = netto !== null && netto < 0;
+                var netActief = netto !== null && netto !== 0;
+                var netWaarde = netto === null ? '—' : kw(Math.abs(netto)) + ' kW';
+                var netLabel = 'net' + (netto === null ? '' : (terug ? ' · teruglevering' : (netto === 0 ? '' : ' · afname')));
+                // accu
+                var accuActief = accuMode === 'laadt' || accuMode === 'ontlaadt';
+                var accuWaarde = accuPv === null ? '—' : Math.abs(accuPv) + ' W';
+                var accuLabel = 'accu' + (accuMode ? ' · ' + accuMode : '') + (soc === null ? '' : ' · ' + Math.round(soc) + '%');
+
+                return `<svg viewBox="0 0 520 120" width="100%" xmlns="http://www.w3.org/2000/svg" style="display:block">
+                  ${lijn('M150,24 C 250,24 280,52 358,54', GROEN, zonActief, 1)}
+                  ${lijn('M150,60 L358,60', BLAUW, netActief, terug ? -1 : 1)}
+                  ${lijn('M150,96 C 250,96 280,68 358,66', WIT, accuActief, accuMode === 'ontlaadt' ? 1 : -1)}
+                  ${knoop(24, kw(zonKw) + ' kW', GROEN, zonLabel)}
+                  ${knoop(60, netWaarde, terug ? GROEN : 'white', netLabel)}
+                  ${knoop(96, accuWaarde, 'white', accuLabel)}
+                  <text x="372" y="66" font-size="27" font-weight="700" fill="white">${kw(verbruik)}<tspan font-size="13" font-weight="400" fill="${GRIJS}"> kW</tspan></text>
+                  <text x="372" y="82" font-size="9.5" fill="${GRIJS}">huis · verbruik</text>
+                  <path d="M380,30 l9,-9 9,9 M382,28 v10 h14 v-10" fill="none" stroke="${WIT}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+                </svg>`;
               ]]]
         # live chart
         - type: custom:apexcharts-card
@@ -742,12 +747,10 @@ cards:
                 };
                 var ico = function(n, extra){ return `<ha-icon icon="${n}" style="--mdc-icon-size:14px;vertical-align:-3px;${extra||'opacity:0.45'}"></ha-icon>`; };
                 var delen = [];
-                var blok = lees('sensor.slimhuys_zonneplan_goedkoopste_blok_start');
-                if(blok) {
-                  var p = states['sensor.slimhuys_zonneplan_goedkoopste_blok_gemiddelde'];
-                  var pTxt = p && !isNaN(Number(p.state)) ? ` <span style="color:#4ade80">€ ${Number(p.state).toFixed(3).replace('.',',')}</span>` : '';
-                  delen.push(`<span>${ico('mdi:clock-check-outline')} goedkoopste blok <span style="color:white">${wanneer(blok)}</span>${pTxt}</span>`);
-                }
+                // De "goedkoopste blok"-tip die hier stond is 2026-08-16
+                // vervallen: hetzelfde moment staat al in de titel van deze
+                // kaart ("laagste 14:30") én als LADEN-beugel op de tijdlijn.
+                // Drie keer dezelfde mededeling was er twee te veel.
                 // TWEE SENSOREN DIE BIJNA HETZELFDE HETEN
                 //   ..._negatieve_all_in_prijs_nu  -> markt + inkoop +
                 //      energiebelasting + btw. Dít is wat je betaalt, en alleen

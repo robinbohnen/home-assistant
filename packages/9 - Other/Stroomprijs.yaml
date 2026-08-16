@@ -75,3 +75,100 @@ stroomprijs_package:
             {% set r = 0.5 if (p is none or spread is none or spread < 0.02)
                        else [[(p - mn) / spread, 0] | max, 1] | min %}
             {{ 'low' if r <= 0.33 else ('high' if r >= 0.66 else 'medium') }}
+
+    # -------------------------------------------------------------------------
+    # GOEDKOOPSTE LAADVENSTER - één berekening voor alle kaarten
+    #
+    # Het goedkoopste aaneengesloten blok van (standaard) 3 uur in de
+    # prijsvoorspelling. Deze berekening stond twee keer als JS op het
+    # Overzicht-dashboard (de laadkaart onder AUTO in kolom_links.yaml en de
+    # beugel in tijdlijn.yaml) en kon daar in theorie uit elkaar gaan lopen;
+    # nu lezen beide kaarten deze sensor.
+    #
+    # Werkwijze gelijk aan de oude JS: kwartierblokken als die er zijn, anders
+    # uurblokken, plus die van morgen; de bloklengte komt uit het verschil
+    # tussen twee starts. Past het volle venster niet meer in de horizon
+    # ('s avonds voordat de prijzen van morgen er zijn), dan het langste
+    # venster dat wél past. Een venster telt zolang zijn eerste blok nog niet
+    # voorbij is, dus het lopende blok doet mee.
+    #
+    # Trigger-based met een minuut-tik: zo schuift "komt nog / loopt nu" mee
+    # met de klok en rekenen state en attributen gegarandeerd over hetzelfde
+    # venster (de berekening staat één keer, in `variables`).
+    - triggers:
+        - trigger: time_pattern
+          minutes: "/1"
+        - trigger: state
+          entity_id:
+            - sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
+            - sensor.slimhuys_zonneplan_prijzen_morgen
+      variables:
+        venster: >-
+          {% set uren = 3 %}
+          {% set kw = state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier', 'raw_today') %}
+          {% set vandaag = kw if kw else (state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today') or []) %}
+          {% set morgen = state_attr('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow') or [] %}
+          {% set ns = namespace(punten=[]) %}
+          {% for b in vandaag + morgen %}
+            {% set s = b.start | as_datetime %}
+            {% set p = b.value | float(none) %}
+            {% if s is not none and p is not none %}
+              {% set ns.punten = ns.punten + [{'t': as_timestamp(s), 'p': p}] %}
+            {% endif %}
+          {% endfor %}
+          {% set punten = ns.punten | sort(attribute='t') %}
+          {% if (punten | count) < 2 %}
+            {{ none }}
+          {% else %}
+            {% set stap = punten[1].t - punten[0].t %}
+            {% set nodig = [1, ((uren * 3600) / stap) | round | int] | max %}
+            {% set nu = as_timestamp(now()) %}
+            {% set best = namespace(gem=none, van=none, tot=none) %}
+            {% for lengte in range(nodig, 0, -1) %}
+              {% if best.gem is none %}
+                {% for i in range(0, (punten | count) - lengte + 1) %}
+                  {% if punten[i].t + stap > nu %}
+                    {% set w = namespace(som=0.0, ok=true) %}
+                    {% for j in range(lengte) %}
+                      {% if j > 0 and (punten[i + j].t - punten[i + j - 1].t) != stap %}
+                        {% set w.ok = false %}
+                      {% endif %}
+                      {% set w.som = w.som + punten[i + j].p %}
+                    {% endfor %}
+                    {% if w.ok %}
+                      {% set gem = w.som / lengte %}
+                      {% if best.gem is none or gem < best.gem %}
+                        {% set best.gem = gem %}
+                        {% set best.van = punten[i].t %}
+                        {% set best.tot = punten[i + lengte - 1].t + stap %}
+                      {% endif %}
+                    {% endif %}
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+            {% endfor %}
+            {% if best.gem is none %}
+              {{ none }}
+            {% else %}
+              {% set prijs_nu = states('sensor.slimhuys_zonneplan_huidige_prijs') | float(none) %}
+              {{ {'van': (best.van | as_datetime | as_local).isoformat(),
+                  'tot': (best.tot | as_datetime | as_local).isoformat(),
+                  'gemiddelde': best.gem | round(4),
+                  'uren': ((best.tot - best.van) / 3600) | round(2),
+                  'nu': best.van <= nu + stap,
+                  'winst': ((prijs_nu - best.gem) | round(4)) if prijs_nu is not none else none} }}
+            {% endif %}
+          {% endif %}
+      sensor:
+        - name: "Goedkoopste laadvenster"
+          unique_id: goedkoopste_laadvenster
+          device_class: timestamp
+          icon: mdi:cash-clock
+          availability: "{{ venster is not none and venster != 'None' }}"
+          state: "{{ venster.van if venster is mapping else none }}"
+          attributes:
+            tot: "{{ venster.tot if venster is mapping else none }}"
+            gemiddelde: "{{ venster.gemiddelde if venster is mapping else none }}"
+            uren: "{{ venster.uren if venster is mapping else none }}"
+            nu: "{{ venster.nu if venster is mapping else none }}"
+            winst: "{{ venster.winst if venster is mapping else none }}"
