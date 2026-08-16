@@ -800,6 +800,28 @@ brandweer_package:
                           - light.woonkamer_tv_kast_hue_bar_links
                           - light.woonkamer_tv_kast_hue_bar_rechts
                           - light.woonkamer_ledstrip_tv_kast
+                          # DE TAFELLAMP LIFT MEE, HOEWEL DEZE TAK HEM NIET KLEURT
+                          # Dat doet `brandweer_light_p1_p2` onderaan dit
+                          # bestand, met een eigen momentopname en een eigen
+                          # herstel na 30 seconden. Die 30 vielen dus ná het
+                          # media-script hieronder, en daardoor sprong die ene
+                          # lamp veertien seconden na de rest alsnog terug -
+                          # op 15 augustus 2026 om 21:49:12, terwijl de rest
+                          # om 21:48:58 klaar was.
+                          #
+                          # Allebei de momentopnames worden op dezelfde
+                          # seconde gemaakt (beide automatiseringen triggeren
+                          # op `brandweer_laatste_melding`) en houden dus
+                          # dezelfde stand vast. Hem hier meenemen zet de
+                          # tafellamp gelijk met de tv-kast terug; het herstel
+                          # van 30 seconden schrijft daarna dezelfde waarde
+                          # nog een keer en is niet meer te zien.
+                          #
+                          # Die 30 seconden blijven daar wel staan: in de
+                          # dienst-tak hierboven zit de tafellamp in geen
+                          # enkele momentopname, en daar is dat late herstel
+                          # het enige dat hem terugzet.
+                          - light.woonkamer_hue_tafellamp
                       alias: TV Kast scene aanmaken
                       action: scene.create
                     - metadata: {}
@@ -827,14 +849,30 @@ brandweer_package:
                         minutes: 0
                         seconds: 15
                         milliseconds: 0
-                    - metadata: {}
-                      target:
-                        entity_id: scene.brandweer_tv_kast_lampen
-                      action: scene.turn_on
-                      data: {}
-                    # Zelfde omzetting als in de dienst-tak hierboven: geen
-                    # automation.trigger met skip_condition meer, maar het
-                    # script dat de twee lichtstanden beschrijft.
+                    # EERST HET SCRIPT, DAN PAS DE MOMENTOPNAME TERUG
+                    # Deze twee stonden hier andersom dan in de dienst-tak
+                    # hierboven, waar de toelichting staat waarom die volgorde
+                    # klopt. Dat was geen stijlverschil maar een bug.
+                    #
+                    # `script.woonkamer_media_licht` zet in de `pauze`-stand
+                    # `light.woonkamer_lampen` op het avondniveau, en in die
+                    # groep zitten allebei de Hue Play bars én de tafellamp -
+                    # precies de lampen die de scene er net op hun stand van
+                    # vóór de melding had teruggezet. Het script liep dus over
+                    # het herstel heen en de woonkamer bleef op 80% staan.
+                    #
+                    # Nagemeten op de melding van 15 augustus 2026 om 21:48:42
+                    # (geen dienst, dus deze tak): om 21:48:57 activeerde de
+                    # scene en startte in dezelfde seconde het script. Wat je
+                    # in de kamer zag was blauw/rood, terug, en meteen weer
+                    # iets anders - met de tafellamp die er om 21:49:12 nog
+                    # eens overheen sprong.
+                    #
+                    # Omgedraaid doet elk van de twee waar hij voor is: het
+                    # script vult aan wat niet in de momentopname zat (keuken,
+                    # eettafel, awtrix, de meelift-lampen), en de scene heeft
+                    # daarna het laatste woord over de lampen die er wél in
+                    # zitten.
                     - alias: Apple TV aan of uit, juiste lichtstand
                       if:
                         - condition: state
@@ -848,6 +886,13 @@ brandweer_package:
                         - action: script.woonkamer_media_licht
                           data:
                             stand: pauze
+                    - metadata: {}
+                      target:
+                        entity_id: scene.brandweer_tv_kast_lampen
+                      action: scene.turn_on
+                      alias: Alle lampen terug op eerdere instellingen
+                      data:
+                        transition: 3
               alias: Stel lampen in op kleur
             - alias: Slaapkamer licht weer uit
               if:

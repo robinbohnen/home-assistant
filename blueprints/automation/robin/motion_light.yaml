@@ -280,6 +280,37 @@ conditions:
     condition: state
     entity_id: !input schakelaar
     state: "on"
+  # EEN VERTREK-TRIGGER DIE TOCH NIETS DOET MAG DE UIT-RUN NIET DOODMAKEN
+  # Dit is `mode: restart`, en de uit-tak hieronder is geen momentopname maar
+  # een run die minuten kan duren: eerst de deur-coulance, dan `uit_uitstel`
+  # (in de badkamer: zolang er water loopt). Elke trigger die langskomt breekt
+  # die run af.
+  #
+  # Het alarm op scherp zetten is zo'n trigger, en die komt juist op het
+  # verkeerde moment: bij het naar bed gaan. Op 15 augustus 2026 vuurde de
+  # badkamer om 22:33:34 zijn uit-trigger, ging de run de water-uitstellus in
+  # (het debiet was 94 seconden eerder op 0 gevallen, net binnen de twee
+  # minuten) en sprong Alarmo om 22:33:57 op `armed_home` - zeven seconden
+  # voordat de lamp uit zou gaan. De herstart doodde die run, de nieuwe run
+  # kwam in de `vertrokken`-tak, en die eist "geen volwassenen meer thuis".
+  # Iedereen lag boven, dus de tak matchte niet, er is bewust geen default, en
+  # de automatisering was klaar zonder iets te doen. De spots brandden tot
+  # 04:01 - tot een wc-bezoek een nieuwe cyclus startte.
+  #
+  # Die eis stond dus al in de tak zelf; hij stond alleen te laat. Hierboven
+  # gezet kost een vertrek-trigger waar niemand voor vertrokken is geen run
+  # meer: Home Assistant evalueert de automatisering-condities vóór
+  # `async_run`, en dus vóór de restart. Vertrekt er wél iemand, dan mag de
+  # uit-run gerust sneuvelen - die tak doet dan alsnog precies wat hij moet.
+  #
+  # Geldt voor alle acht kamers. Het bijt alleen als er toevallig een lamp in
+  # zijn uitloop staat op het moment van op scherp zetten, en dat is precies
+  # waarom het zo lang onopgemerkt bleef.
+  - alias: "Een vertrek-trigger telt alleen als er niemand meer thuis is"
+    condition: template
+    value_template: >-
+      {{ (trigger.id | default('')) != 'vertrokken'
+         or not is_state(volwassenen, 'home') }}
 
 actions:
   - choose:
