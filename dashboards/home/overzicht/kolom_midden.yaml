@@ -169,7 +169,26 @@ cards:
                 var soc = states['sensor.lilygo_rs485_marstek_battery_state_of_charge'];
                 var pv = p && !isNaN(Number(p.state)) ? Math.round(Number(p.state)) : null;
                 var socv = soc && !isNaN(Number(soc.state)) ? Math.round(Number(soc.state)) : null;
-                var mode = pv === null ? '' : (pv < 0 ? 'ontlaadt' : (pv > 0 ? 'laadt' : 'idle'));
+                // ONDER 15 W GEBEURT ER NIETS - DAT IS DE OMVORMER ZELF
+                // De Marstek trekt in rust een watt of tien uit de accu voor
+                // zijn eigen elektronica. Dat is standby, geen ontladen, maar
+                // het stond hier wel als "ontlaadt". En dat is niet zeldzaam:
+                // van de 4365 metingen over 15-16 augustus 2026 vielen er 2831
+                // in de band 0-15 W. Twee derde van de dag meldde deze tegel
+                // dus dat de accu leegliep terwijl er niets gebeurde.
+                //
+                // 15 W en niet een ander getal omdat de meting daar een gat
+                // heeft: 0-15 W is 65% van alle metingen, 15-50 W samen 1,2%,
+                // en boven de 100 W zit 34% - het echte laden en ontladen.
+                // Tussen die twee zit vrijwel niets, dus de grens hakt nergens
+                // een zinnige waarde doormidden.
+                //
+                // De oude `pv > 0`-tak hield ook een 'idle' over voor precies
+                // nul. Die is vervallen: exact 0 W kwam in die 24 uur geen
+                // enkele keer voor, dus die stand heeft nooit iets getoond.
+                var mode = pv === null ? ''
+                         : (Math.abs(pv) <= 15 ? 'standby'
+                         : (pv < 0 ? 'ontlaadt' : 'laadt'));
                 var disp = pv === null ? '—' : pv + ' W';
                 var socStr = socv === null ? '' : ` <span style="font-size:13px;color:rgba(255,255,255,0.60)">· ${socv}%</span>`;
                 return `<div style="display:flex;flex-direction:column;gap:3px"><div><span style="font-size:26px;font-weight:700;color:white;line-height:1">${disp}</span>${socStr}</div><div style="font-size:12.5px;color:rgba(255,255,255,0.55)">batterij${mode ? ' · ' + mode : ''}</div></div>`;

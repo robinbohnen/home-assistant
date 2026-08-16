@@ -439,6 +439,15 @@ cards:
                   var bp = states['sensor.lilygo_rs485_marstek_battery_power'];
                   var socv = soc && !isNaN(Number(soc.state)) ? Math.round(Number(soc.state)) : null;
                   var bpv = bp && !isNaN(Number(bp.state)) ? Math.round(Number(bp.state)) : null;
+                  // Zelfde standby-grens als op het overzicht (zie de
+                  // toelichting bij `batt` in overzicht/kolom_midden.yaml): de
+                  // omvormer trekt in rust tot 15 W uit de accu, en dat is
+                  // geen ontladen. Hier stond dezelfde `> 0 / < 0 / idle`-reeks
+                  // en dus dezelfde fout, op het scherm waar je er het hele
+                  // ontbijt tegenaan kijkt.
+                  var bmode = bpv === null ? ''
+                            : (Math.abs(bpv) <= 15 ? ' · standby'
+                            : (bpv < 0 ? ' · ontlaadt' : ' · laadt'));
                   var fmt = function(v){ return v === null ? '—' : v.toFixed(2).replace('.',','); };
                   var klein = function(waarde, label, kleur){
                     return `<div style="display:flex;flex-direction:column;gap:0.3vh">
@@ -453,7 +462,7 @@ cards:
                       <span style="font-size:2.1vh;color:rgba(255,255,255,0.7)">netto verbruik</span></div>
                     ${klein(fmt(prod), 'productie', '#4ade80')}
                     ${klein(fmt(verbr), 'verbruik', '#3b82f6')}
-                    ${klein(socv === null ? '—' : socv + '%', 'batterij' + (bpv === null ? '' : (bpv > 0 ? ' · laadt' : (bpv < 0 ? ' · ontlaadt' : ' · idle'))), 'white')}
+                    ${klein(socv === null ? '—' : socv + '%', 'batterij' + bmode, 'white')}
                   </div>`;
                 ]]]
               strook: |
