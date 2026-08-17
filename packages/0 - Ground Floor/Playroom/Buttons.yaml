@@ -8,7 +8,11 @@ playroom_button_package:
     # hieronder zet alles weer aan zodra hij afloopt.
     alarm_automations_pauze:
       name: "Alarm automations - Gepauzeerd"
-      duration: "00:10:00"
+      # 15 minuten, geen 10: op 2026-08-17 liep de pauze om 16:17:31 af en ging
+      # het alarm om 16:18:30 alsnog op scherp, omdat de tracker de laatste
+      # volwassene pas 11 minuten na de druk op de knop als weg zag. Het venster
+      # moet ruimer zijn dan de vertraging van de trackers, niet krapper.
+      duration: "00:15:00"
       restore: true
       icon: mdi:alarm-snooze
 
@@ -83,26 +87,51 @@ playroom_button_package:
                   target:
                     entity_id: timer.alarm_automations_pauze
               alias: Alarm is off
+            # 15 minuten, was 2. Dat venster is bewust eindig: zonder grens is
+            # dit een volwaardige uitschakelknop op kindhoogte, en die zet
+            # 's nachts ook armed_home uit. Een alarm dat net automatisch aan
+            # ging is hooguit minuten oud; armed_home van gisteravond niet.
             - conditions:
                 - condition: template
                   value_template: >-
                     {{ (is_state('alarm_control_panel.alarmo', 'armed_away') or
                     is_state('alarm_control_panel.alarmo', 'armed_home')) and (now() -
                     states.alarm_control_panel.alarmo.last_changed).total_seconds() <
-                    2*60 }}
+                    15*60 }}
               sequence:
                 - action: alarm_control_panel.alarm_disarm
                   metadata: {}
                   data: {}
                   target:
                     entity_id: alarm_control_panel.alarmo
-              alias: Alarm is on for max 2 min
+                # Alleen uitschakelen is niet genoeg: de automatisering die het
+                # alarm net aanzette staat nog scherp, dus de eerstvolgende
+                # tracker-hik zet hem meteen terug. Een druk op de knop betekent
+                # in beide takken hetzelfde: laat me 15 minuten met rust.
+                - action: automation.turn_off
+                  data:
+                    stop_actions: true
+                  target:
+                    entity_id:
+                      - automation.alarm_on_automatically
+                      - automation.hallway_alarm_on_automatically_robin_to_work
+                - action: timer.start
+                  target:
+                    entity_id: timer.alarm_automations_pauze
+              alias: Alarm is on for max 15 min
           default:
             - action: notify.mobile_devices_adults
               metadata: {}
               data:
-                title: Foutmelding
-                message: Knop speelkamer ingedrukt maar dit zou niet moeten kunnen
+                title: Knop speelkamer doet niets
+                message: >-
+                  Het alarm staat op
+                  {{ states('alarm_control_panel.alarmo') }}{% if
+                  is_state('alarm_control_panel.alarmo', 'triggered') or
+                  is_state('alarm_control_panel.alarmo', 'pending') %} - een
+                  afgaand alarm zet je bewust alleen via de app of het paneel
+                  uit{% else %} en al langer dan 15 minuten; de knop schakelt
+                  alleen een net ingeschakeld alarm uit{% endif %}.
 
     - id: playroom_button_enable_alarm
       alias: Playroom - Enable alarm after pause
@@ -129,3 +158,104 @@ playroom_button_package:
             entity_id:
               - automation.alarm_on_automatically
               - automation.hallway_alarm_on_automatically_robin_to_work
+
+    - id: playroom_button_alarm_armed_anyway
+      alias: Playroom - Alarm ging alsnog aan na knopdruk
+      description: >-
+        Vangnet voor het geval de pauze net te kort was: op 2026-08-17 liep hij
+        om 16:17:31 af en ging het alarm om 16:18:30 alsnog op scherp, omdat de
+        tracker de laatste volwassene pas 11 minuten na de knopdruk als weg zag.
+        Dat merk je verder nergens - je loopt terug naar binnen en het huis
+        staat op scherp. Deze melding zegt het, met een knop om het alsnog uit
+        te zetten zonder de automatisering op te hoeven zoeken.
+
+        Het venster is 20 minuten na de knopdruk: de pauze van 15 plus wat
+        speling voor een trage tracker. Ga je gewoon weg, dan is er geen
+        knopdruk geweest en blijft het stil.
+      mode: restart
+      triggers:
+        - trigger: state
+          entity_id: alarm_control_panel.alarmo
+          to:
+            - armed_away
+            - armed_home
+          not_from:
+            - unknown
+            - unavailable
+      conditions:
+        # last_triggered is in templates een datetime, geen string. De entity_id
+        # hieronder is geverifieerd tegen de draaiende HA op 2026-08-17.
+        - condition: template
+          value_template: >-
+            {% set t = state_attr('automation.playroom_disable_alarm_temporary',
+            'last_triggered') %}
+            {{ t is not none and (now() - t).total_seconds() < 20*60 }}
+      actions:
+        - variables:
+            minuten: >-
+              {{ ((now() - state_attr('automation.playroom_disable_alarm_temporary',
+                 'last_triggered')).total_seconds() / 60) | round(0) | int }}
+        - action: notify.mobile_devices_adults
+          data:
+            title: Alarm ging alsnog aan
+            message: >-
+              Je drukte {{ minuten }} minuten geleden op de knop in de
+              speelkamer, maar het alarm staat nu op
+              {{ states('alarm_control_panel.alarmo') | replace('armed_', '') }}.
+            data:
+              tag: speelkamer_knop_alarm
+              actions:
+                - action: SPEELKAMER_ALARM_UIT
+                  title: Alarm uit
+
+        # De melding blijft anders op beide telefoons staan met een knop die al
+        # niets meer doet - ook als je het alarm via de app of het paneel uitzet.
+        - wait_for_trigger:
+            - trigger: state
+              entity_id: alarm_control_panel.alarmo
+              to: disarmed
+          timeout: "00:20:00"
+          continue_on_timeout: true
+        - if:
+            - condition: state
+              entity_id: alarm_control_panel.alarmo
+              state: disarmed
+          then:
+            - action: notify.mobile_devices_adults
+              data:
+                message: clear_notification
+                data:
+                  tag: speelkamer_knop_alarm
+
+    - id: playroom_button_alarm_uit_via_melding
+      alias: Playroom - Alarm uit via de melding
+      description: >-
+        Zet het alarm uit als iemand op "Alarm uit" tikt in de melding
+        hierboven. De action-key is de lijm tussen die twee: verander je hem,
+        verander hem op beide plekken.
+
+        Doet daarna hetzelfde als een druk op de knop zelf - pauze starten -
+        want zonder dat zet de eerstvolgende tracker-overgang het alarm meteen
+        terug op scherp.
+      mode: single
+      triggers:
+        - trigger: event
+          event_type: mobile_app_notification_action
+          event_data:
+            action: SPEELKAMER_ALARM_UIT
+      conditions: []
+      actions:
+        - action: alarm_control_panel.alarm_disarm
+          data: {}
+          target:
+            entity_id: alarm_control_panel.alarmo
+        - action: automation.turn_off
+          data:
+            stop_actions: true
+          target:
+            entity_id:
+              - automation.alarm_on_automatically
+              - automation.hallway_alarm_on_automatically_robin_to_work
+        - action: timer.start
+          target:
+            entity_id: timer.alarm_automations_pauze
