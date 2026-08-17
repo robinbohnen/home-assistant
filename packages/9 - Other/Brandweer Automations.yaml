@@ -793,13 +793,35 @@ brandweer_package:
                       alias: Alle lampen terug op eerdere instellingen
                       action: scene.turn_on
                   else:
+                    # DE LEDSTRIP GAAT MET DE HAND TERUG, NIET VIA DE SCENE
+                    # (17 augustus 2026)
+                    # De Aqara LED Strip T1 onder de tv-kast houdt zijn
+                    # `effect`-attribuut vast: zet je er ooit één op, dan blijft
+                    # z2m dat rapporteren, ook als de strip gewoon warmwit
+                    # brandt. `light.turn_on` met een kleurtemperatuur wist het
+                    # niet - er is in de effectlijst van dit apparaat niet eens
+                    # een 'none' om naartoe te schakelen.
+                    #
+                    # `scene.create` legt álle attributen vast, dus ook dat
+                    # sluimerende `effect: rainbow1`, en `scene.turn_on` stuurt
+                    # het bij het herstel doodleuk weer mee. Dát is het moment
+                    # waarop de strip echt begint te knipperen: gemeten op de
+                    # melding van 17 augustus 2026 om 08:36:25, waar de scene om
+                    # 08:36:40 terugzette en de strip 1,9 s later op regenboog
+                    # stond. Elke melding haalde dat opnieuw op.
+                    #
+                    # Daarom hieronder de drie dingen die er wél toe doen apart
+                    # onthouden, en de strip uit de momentopname gehaald.
+                    - variables:
+                        strip_aan: "{{ is_state('light.woonkamer_ledstrip_tv_kast', 'on') }}"
+                        strip_helderheid: "{{ state_attr('light.woonkamer_ledstrip_tv_kast', 'brightness') }}"
+                        strip_kelvin: "{{ state_attr('light.woonkamer_ledstrip_tv_kast', 'color_temp_kelvin') }}"
                     - metadata: {}
                       data:
                         scene_id: brandweer_tv_kast_lampen
                         snapshot_entities:
                           - light.woonkamer_tv_kast_hue_bar_links
                           - light.woonkamer_tv_kast_hue_bar_rechts
-                          - light.woonkamer_ledstrip_tv_kast
                           # DE TAFELLAMP LIFT MEE, HOEWEL DEZE TAK HEM NIET KLEURT
                           # Dat doet `brandweer_light_p1_p2` onderaan dit
                           # bestand, met een eigen momentopname en een eigen
@@ -893,6 +915,28 @@ brandweer_package:
                       alias: Alle lampen terug op eerdere instellingen
                       data:
                         transition: 3
+                    # De ledstrip apart, met alleen aan/uit, helderheid en
+                    # kleurtemperatuur - zie de toelichting bovenaan deze tak.
+                    # Geen `effect` in de payload betekent dat de strip er ook
+                    # geen krijgt.
+                    - alias: Ledstrip tv-kast terug, zonder het sluimerende effect
+                      if:
+                        - condition: template
+                          value_template: "{{ strip_aan }}"
+                      then:
+                        - action: light.turn_on
+                          target:
+                            entity_id: light.woonkamer_ledstrip_tv_kast
+                          data:
+                            transition: 3
+                            brightness: "{{ strip_helderheid | int(13) }}"
+                            color_temp_kelvin: "{{ strip_kelvin | int(3984) }}"
+                      else:
+                        - action: light.turn_off
+                          target:
+                            entity_id: light.woonkamer_ledstrip_tv_kast
+                          data:
+                            transition: 3
               alias: Stel lampen in op kleur
             - alias: Slaapkamer licht weer uit
               if:
