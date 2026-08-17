@@ -38,6 +38,75 @@ cards:
       # =================== HEADER ===================
       - !include overzicht/header.yaml
 
+      # =================== ALARM AFGEGAAN ===================
+      # Een popup die zichzelf opent vraagt browser_mod (zie de comment bij de
+      # deurbel-popup verderop); dat zit niet in dashboards/resources.yaml.
+      # Dit is de vervanging: een balk die je niet kunt missen zodra Alarmo
+      # `pending` of `triggered` is, met één tik naar #ov-alarm waar de
+      # uit-knop staat. Een `conditional`-kaart zet zichzelf op display:none,
+      # dus in de rest van de tijd kost dit geen enkele pixel - ook geen gat
+      # in de `gap` van de vertical-stack.
+      #
+      # `pending` staat er bewust bij: dat is de entry delay, het moment dat je
+      # binnenkomt en het alarm nog NIET is afgegaan. Precies dan wil je die
+      # knop zien, niet pas als de sirene loopt.
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: alarm_control_panel.alarmo
+            state:
+              - triggered
+              - pending
+        card:
+          type: custom:button-card
+          entity: alarm_control_panel.alarmo
+          show_name: false
+          show_icon: false
+          show_state: false
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-alarm"
+          extra_styles: |
+            @keyframes ov_alarm_pulse {
+              0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.45); }
+              50%      { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+            }
+          styles:
+            card:
+              - background: rgba(220,38,38,0.20)
+              - border: 1px solid rgba(248,113,113,0.55)
+              - border-radius: 18px
+              - padding: 14px 18px
+              - height: auto
+              - animation: ov_alarm_pulse 1.8s ease-out infinite
+            grid:
+              - grid-template-areas: '"c"'
+            custom_fields:
+              c:
+                # Zonder expliciete breedte krijgt een custom_field de breedte
+                # van zijn inhoud, niet van de kaart - dan staat de balk links
+                # gepropt in plaats van over de volle breedte.
+                - width: 100%
+          custom_fields:
+            c: |
+              [[[
+                var s = entity.state;
+                var os = entity.attributes.open_sensors || {};
+                var namen = Object.keys(os).map(function(e){
+                  return (states[e] && states[e].attributes.friendly_name) || e;
+                }).join(', ');
+                var kop = (s === 'pending') ? 'Alarm gaat zo af' : 'ALARM AFGEGAAN';
+                var sub = namen || 'geen sensor gemeld';
+                return `<div style="display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:14px;width:100%">
+                  <ha-icon icon="mdi:shield-alert" style="--mdc-icon-size:30px;color:#fca5a5;justify-self:start"></ha-icon>
+                  <div style="min-width:0;text-align:left">
+                    <div style="font-size:19px;font-weight:800;color:#fff;letter-spacing:0.4px">${kop}</div>
+                    <div style="font-size:13px;color:rgba(255,255,255,0.72);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</div>
+                  </div>
+                  <div style="font-size:13px;font-weight:600;color:#fecaca;background:rgba(0,0,0,0.28);padding:8px 14px;border-radius:14px;white-space:nowrap;justify-self:end">Tik om uit te zetten</div>
+                </div>`;
+              ]]]
+
       # =================== BODY (3 columns) ===================
       - type: horizontal-stack
         card_mod:
@@ -975,6 +1044,112 @@ cards:
               # Het deurcontact erbij: bel, beweging en slot zeggen niet of er
               # daadwerkelijk iemand binnen is gekomen, dit wel.
               - binary_sensor.entree_entree_voordeur_deur
+
+      # --------- Alarm ---------
+      # Opent vanaf twee plekken: de rode balk bovenaan (alleen bij pending/
+      # triggered) en de amber pil in de kopbalk (zolang het alarm aan staat).
+      # De uit-knop staat bewust achter die ene tik in plaats van direct op de
+      # balk: een wandpaneel op looproute vangt makkelijk een toevallige tik,
+      # en dit is de knop die het huis onbewaakt achterlaat.
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-alarm"
+        name: Alarm
+        icon: mdi:shield-home
+        width_desktop: *ov_popup_width
+        styles: *ov_popup
+        cards:
+          # ----- Uitzetten (alles behalve disarmed) -----
+          - type: custom:mushroom-template-card
+            entity: alarm_control_panel.alarmo
+            primary: Alarm uitzetten
+            secondary: >-
+              {% set s = states('alarm_control_panel.alarmo') %}
+              {% set o = state_attr('alarm_control_panel.alarmo', 'open_sensors') %}
+              {% set namen = (expand(o | list) | map(attribute='name') | list | join(', ')) if o else '' %}
+              {% if s == 'triggered' %}
+                Afgegaan om
+                {{ states.alarm_control_panel.alarmo.last_changed | as_local | as_timestamp | timestamp_custom('%H:%M') }}{{
+                ' · ' ~ namen if namen }}
+              {% elif s == 'pending' %}
+                Aftellen loopt{{ ' · ' ~ namen if namen }} - nu uitzetten
+              {% else %}
+                Staat op {{ s | replace('armed_', '') | replace('_', ' ') }}
+              {% endif %}
+            icon: mdi:shield-off-outline
+            icon_color: red
+            tap_action:
+              action: perform-action
+              perform_action: alarm_control_panel.alarm_disarm
+              target:
+                entity_id: alarm_control_panel.alarmo
+            visibility:
+              # `state_not` in plaats van een opsomming van alle armed-standen:
+              # Alarmo kent er zes en die lijst loopt gegarandeerd een keer uit
+              # de pas met de werkelijkheid.
+              - condition: state
+                entity: alarm_control_panel.alarmo
+                state_not: disarmed
+
+          # ----- Aanzetten (alleen als hij uit staat) -----
+          - type: grid
+            columns: 2
+            square: false
+            visibility: &alarm_uit
+              - condition: state
+                entity: alarm_control_panel.alarmo
+                state: disarmed
+            cards:
+              - type: custom:mushroom-template-card
+                primary: Aan - thuis
+                secondary: iedereen is binnen
+                icon: mdi:shield-home
+                icon_color: amber
+                tap_action:
+                  action: perform-action
+                  perform_action: alarm_control_panel.alarm_arm_home
+                  target:
+                    entity_id: alarm_control_panel.alarmo
+              - type: custom:mushroom-template-card
+                primary: Aan - weg
+                secondary: niemand thuis
+                icon: mdi:shield-lock
+                icon_color: amber
+                tap_action:
+                  action: perform-action
+                  perform_action: alarm_control_panel.alarm_arm_away
+                  target:
+                    entity_id: alarm_control_panel.alarmo
+
+          # Zonder dit is de popup bij een uitgeschakeld alarm twee knoppen en
+          # verder niets - dat leest als een storing in plaats van als rust.
+          - type: custom:mushroom-template-card
+            primary: Alarm staat uit
+            secondary: >-
+              Sinds
+              {{ states.alarm_control_panel.alarmo.last_changed | as_local | as_timestamp | timestamp_custom('%H:%M') }}.
+              Het gaat vanzelf weer aan zodra iedereen weg is.
+            icon: mdi:shield-check
+            icon_color: green
+            visibility: *alarm_uit
+
+          # ----- Wie staat er voor de deur -----
+          # Dezelfde vraag als bij de deurbel: je zet een afgegaan alarm niet
+          # uit zonder eerst gekeken te hebben. Camera's laden pas als deze
+          # popup openstaat, dus dit kost het wandpaneel niets in rust.
+          - type: custom:advanced-camera-card
+            cameras:
+              - camera_entity: camera.g6_180_high_resolution_channel
+              - camera_entity: camera.g4_doorbell_pro_high_resolution_channel
+              - camera_entity: camera.g5_ultra_turret_overkapping_high_resolution_channel
+
+          - type: logbook
+            hours_to_show: 48
+            entities:
+              - alarm_control_panel.alarmo
+              - binary_sensor.entree_entree_voordeur_deur
+              - binary_sensor.achtertuin_achtertuin_schuur_deur_deur
+              - lock.kroon18voordeur
 
       # --------- Openstaande vraag ---------
       # De vraag-pil in de kopbalk opent deze popup. Ja/Nee loopt via
