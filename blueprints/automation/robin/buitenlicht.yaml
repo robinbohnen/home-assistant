@@ -1,0 +1,209 @@
+# Buitenlicht: de zon bepaalt de standaardtijden, de luxmeter mag daar
+# bovenop nog aan- en uitzetten.
+#
+# Gebruikt door (alle drie op dezelfde luxmeter, dus ze schakelen samen):
+#   packages/3 - Outside/Carport/Lights.yaml     (lights_carport)
+#   packages/3 - Outside/Frontyard/Lights.yaml   (lights_frontdoor)
+#   packages/3 - Outside/Backyard/Lights.yaml    (lights_backyard)
+#
+# WAAROM DE LUXMETER HIER ZIT EN NIET IN ÉÉN PAKKET (17 augustus 2026)
+# De achtertuin had als enige een luxtak; carport en voordeur draaiden puur op
+# de zon. Op de grauwe ochtend van 17 augustus liep dat zichtbaar uit elkaar:
+# om 07:26 gingen alle drie uit op zonsopkomst +1u, om 07:47 tikte de luxmeter
+# even 1086 aan en om 07:56 zakte hij terug naar 914 - die neergaande kruising
+# zette alleen de achtertuin weer aan. Buiten was het overal even donker.
+# Nu hangt elke groep aan dezelfde meter en dezelfde drempels.
+#
+# DRIE DINGEN DIE NIET WEG MOGEN:
+#
+#   1. Alle triggers hebben een `id`. Zonder id krijgt een trigger zijn
+#      volgnummer, terwijl de uit-tak op "uit" test - de lampen bleven toen de
+#      hele dag branden.
+#   2. Bewust geen `default:` onder de choose. Daar stond ooit `light.toggle`,
+#      en dat is wat die bug destijds verborg: elke niet-afgedekte trigger
+#      klapte de lamp gewoon om.
+#   3. De lux-UIT-tak heeft een zonconditie, de lux-AAN-tak niet. Dat is geen
+#      slordigheid maar de veilige kant: iets dat 's nachts fel in de meter
+#      schijnt (koplampen, het buitenlicht zelf) mag de verlichting niet
+#      uitzetten, terwijl "te donker" op elk moment gewoon licht mag geven.
+#
+# DE DREMPELS, GEMETEN (15-17 augustus 2026, max van de twee buitenmeters)
+# Nacht ligt op de bodem van de sensor, ~50 lux. Op een normale dag zakt de
+# max tussen zonsopkomst +1u en zonsondergang -1u niet onder ~2000. De grauwe
+# 17e bleef om 08:00 op 582 steken, waar de twee dagen ervoor 2500-49900
+# stonden. Vandaar 1000 (aan) en 2500 (uit): een gewone dag raakt geen van
+# beide, en de band ertussen is "geen mening" - dan beslist de zon.
+#
+# TWEE DINGEN OM NIET VAN TE SCHRIKKEN
+# - Een `numeric_state`-trigger vuurt op het KRUISEN van de drempel, niet op
+#   "staat er nu onder". Na een herstart of een reload midden op een grauwe dag
+#   gebeurt er dus niets tot de meter de drempel echt een keer passeert. Dat is
+#   met opzet zo gelaten: een inhaalslag bij het opstarten zou de achtertuin ook
+#   weer aanzetten nadat de avond-knop in de slaapkamer hem net had uitgedaan.
+# - Vallen beide meters weg, dan wordt de max-sensor unavailable en vuurt geen
+#   van beide luxtriggers meer. De verlichting valt dan stil terug op de zon,
+#   precies zoals voor 17 augustus 2026.
+blueprint:
+  name: Buitenlicht
+  description: >-
+    Buitenlamp aan rond zonsondergang en uit rond zonsopkomst, met een
+    luxmeter die daar bovenop mag ingrijpen als het overdag donker wordt of
+    juist eerder licht is. Helderheid en overgangstijd komen uit helpers,
+    zodat ze per lamp en vanaf het dashboard instelbaar blijven.
+  author: Robin Bohnen
+  domain: automation
+  input:
+    lamp:
+      name: Lamp
+      selector:
+        entity:
+          filter:
+            domain: light
+    helderheid:
+      name: Helderheid-helper
+      description: input_number met het percentage waarmee de lamp aangaat.
+      selector:
+        entity:
+          filter:
+            domain: input_number
+    overgang:
+      name: Overgangstijd-helper
+      description: input_number met de fade-tijd in seconden.
+      default: input_number.lights_transition_seconds
+      selector:
+        entity:
+          filter:
+            domain: input_number
+    aan_offset:
+      name: Aan-offset op zonsondergang
+      description: >-
+        Standaard een uur vóór zonsondergang: dan is het buiten al donker
+        genoeg om verschil te maken.
+      default: "-01:00:00"
+      selector:
+        text:
+    uit_offset:
+      name: Uit-offset op zonsopkomst
+      default: "+01:00:00"
+      selector:
+        text:
+    lux_sensor:
+      name: Luxmeter
+      description: >-
+        Standaard het maximum van de voortuin- en achtertuinmeter. Bewust het
+        maximum: de achtertuinmeter staat 's ochtends in de schaduw en zou in
+        zijn eentje beweren dat het nog nacht is. Pas als het aan de lichtste
+        kant van het huis donker is, is het overal donker.
+      default: sensor.buiten_zon_luminance_max
+      selector:
+        entity:
+          filter:
+            domain: sensor
+    lux_aan_onder:
+      name: Extra aan onder (lux)
+      description: Onder deze waarde gaat de lamp aan, ook midden op de dag.
+      default: 1000
+      selector:
+        number:
+          min: 0
+          max: 20000
+          step: 50
+          unit_of_measurement: lx
+          mode: box
+    lux_uit_boven:
+      name: Extra uit boven (lux)
+      description: >-
+        Boven deze waarde mag de lamp uit, maar alleen tussen de twee
+        zonmomenten hierboven. Ruim boven de aan-drempel, zodat een wolk die
+        heen en weer schuift de lamp niet laat knipperen.
+      default: 2500
+      selector:
+        number:
+          min: 0
+          max: 20000
+          step: 50
+          unit_of_measurement: lx
+          mode: box
+    lux_periode:
+      name: Hoe lang de lux dat moet volhouden
+      description: >-
+        Voorkomt dat één passerende wolk of één zonnestraal al schakelt. De
+        drempel moet deze tijd aaneengesloten overschreden blijven.
+      default: "00:05:00"
+      selector:
+        text:
+
+# Queued in plaats van single: de zonmomenten liggen een halve dag uit elkaar,
+# maar een luxtrigger kan er vlak achteraan komen en die mag niet wegvallen.
+mode: queued
+max: 5
+
+variables:
+  # Via variabelen zodat de templates hieronder gewone entity-id's lezen; een
+  # `!input` staat niet zomaar in een Jinja-expressie.
+  helderheid: !input helderheid
+  overgang: !input overgang
+
+triggers:
+  - id: aan
+    trigger: sun
+    event: sunset
+    offset: !input aan_offset
+  - id: uit
+    trigger: sun
+    event: sunrise
+    offset: !input uit_offset
+  - id: lux_donker
+    trigger: numeric_state
+    entity_id: !input lux_sensor
+    below: !input lux_aan_onder
+    for: !input lux_periode
+  - id: lux_licht
+    trigger: numeric_state
+    entity_id: !input lux_sensor
+    above: !input lux_uit_boven
+    for: !input lux_periode
+
+actions:
+  - choose:
+      # Zonsondergang, of het wordt overdag te donker.
+      - conditions:
+          - condition: trigger
+            id:
+              - aan
+              - lux_donker
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: !input lamp
+            data:
+              transition: "{{ states(overgang) | int(1) }}"
+              brightness_pct: "{{ states(helderheid) | int(100) }}"
+      # Zonsopkomst.
+      - conditions:
+          - condition: trigger
+            id:
+              - uit
+        sequence:
+          - action: light.turn_off
+            target:
+              entity_id: !input lamp
+            data:
+              transition: "{{ states(overgang) | int(1) }}"
+      # Het is licht genoeg - maar alleen geldig binnen de dag die de zon
+      # afbakent. Zie punt 3 in de kop van dit bestand.
+      - conditions:
+          - condition: trigger
+            id:
+              - lux_licht
+          - condition: sun
+            after: sunrise
+            after_offset: !input uit_offset
+            before: sunset
+            before_offset: !input aan_offset
+        sequence:
+          - action: light.turn_off
+            target:
+              entity_id: !input lamp
+            data:
+              transition: "{{ states(overgang) | int(1) }}"

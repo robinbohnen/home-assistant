@@ -8,111 +8,53 @@ backyard_lights_package:
       icon: mdi:lightbulb-on-70
 
   automation:
+    # Sinds 17 augustus 2026 op dezelfde blueprint als de carport en de
+    # voordeur. Hiervoor had de achtertuin als enige een eigen luxtak, en dat
+    # liep zichtbaar uit elkaar: op een grauwe ochtend gingen alle drie om
+    # 07:26 uit op zonsopkomst +1u, waarna de luxmeter alléén de achtertuin om
+    # 07:56 weer aanzette. De drempels en de reden erachter staan nu in de kop
+    # van blueprints/automation/robin/buitenlicht.yaml.
+    #
+    # Wat hier verdwenen is: de oude uit-tak mocht alleen tussen 09:00 en 17:00
+    # schakelen terwijl de aan-tak nergens aan gebonden was. Die scheefheid is
+    # precies waarom de lampen een hele grauwe dag konden blijven branden. De
+    # blueprint bakent nu beide kanten met dezelfde zonmomenten af.
     - id: lights_backyard
       alias: Backyard - Lights
       description: Turn on or off the lights at the backyard
+      use_blueprint:
+        path: robin/buitenlicht.yaml
+        input:
+          lamp: light.achtertuin_lampen
+          helderheid: input_number.lights_backyard_plants_percentage
+
+    # Het enige wat de achtertuin écht apart doet en dus buiten de blueprint
+    # blijft: thuiskomen in het donker. Ontwapen je het alarm tussen
+    # zonsondergang -1u en zonsopkomst +1u, dan staat de tuin meteen aan.
+    # Dezelfde twee zonmomenten als de blueprint gebruikt, met opzet.
+    - id: lights_backyard_alarm_disarmed
+      alias: Backyard - Lights - Alarm disarmed
+      description: Turn on the backyard lights when the alarm is disarmed after dark
+      mode: single
       triggers:
-        - id: sunset
-          trigger: sun
-          event: sunset
-          offset: "-01:00:00"
-        - id: sunrise
-          trigger: sun
-          event: sunrise
-          offset: "+01:00:00"
         - trigger: state
           entity_id:
             - alarm_control_panel.alarmo
           to: disarmed
-          id: alarm_off
-        - trigger: numeric_state
-          entity_id:
-            - sensor.achtertuin_zon_luminance
-          below: 1000
-          id: dark_outside
-        - trigger: numeric_state
-          entity_id:
-            - sensor.achtertuin_zon_luminance
-          above: 1000
-          id: light_outside
+      conditions:
+        - condition: sun
+          after: sunset
+          after_offset: "-01:00:00"
+          before: sunrise
+          before_offset: "+01:00:00"
       actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - sunset
-              sequence:
-                - action: light.turn_on
-                  metadata: {}
-                  data:
-                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                    brightness_pct: "{{ states('input_number.lights_backyard_plants_percentage')|int }}"
-                  target:
-                    entity_id:
-                      - light.achtertuin_lampen
-            - conditions:
-                - condition: trigger
-                  id:
-                    - sunrise
-              sequence:
-                - action: light.turn_off
-                  target:
-                    entity_id:
-                      - light.achtertuin_lampen
-                  data:
-                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-            - conditions:
-                - condition: trigger
-                  id:
-                    - alarm_off
-              sequence:
-                - if:
-                    - condition: sun
-                      after: sunset
-                      after_offset: "-01:00:00"
-                      before: sunrise
-                      before_offset: "+01:00:00"
-                  then:
-                    - action: light.turn_on
-                      metadata: {}
-                      data:
-                        transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                        brightness_pct: "{{ states('input_number.lights_backyard_plants_percentage')|int }}"
-                      target:
-                        entity_id:
-                          - light.achtertuin_lampen
-            - conditions:
-                - condition: trigger
-                  id:
-                    - dark_outside
-              sequence:
-                - action: light.turn_on
-                  metadata: {}
-                  data:
-                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                    brightness_pct: "{{ states('input_number.lights_backyard_plants_percentage')|int }}"
-                  target:
-                    entity_id:
-                      - light.achtertuin_lampen
-            - conditions:
-                - condition: trigger
-                  id:
-                    - light_outside
-                - condition: time
-                  after: "09:00:00"
-                  before: "17:00:00"
-              sequence:
-                - action: light.turn_off
-                  metadata: {}
-                  data:
-                    transition: "{{ states('input_number.lights_transition_seconds')|int }}"
-                  target:
-                    entity_id: light.achtertuin_lampen
-          # Bewust geen default. Hier stond light.toggle, en die was wél
-          # bereikbaar: een lux-stijging boven 1000 buiten het 09:00-17:00-
-          # venster (koplampen, het buitenlicht zelf) viel door de afgewezen
-          # tijdconditie hierboven in de default en toggelde de tuinverlichting
-          # 's avonds gewoon aan.
+        - action: light.turn_on
+          data:
+            transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+            brightness_pct: "{{ states('input_number.lights_backyard_plants_percentage')|int }}"
+          target:
+            entity_id:
+              - light.achtertuin_lampen
 
     - id: backyard_lights_bedroom_button_single_press
       alias: Backyard - Lights - Bedroom Buttons - Single Press
