@@ -2,8 +2,13 @@ livingroom_aircleaners_package:
   automation:
     - id: livingroom_aircleaners_onoff
       alias: Livingroom - Aircleaners
-      description: Automate aircleaners when certain conditions are met
-      mode: single
+      description: >-
+        Automate aircleaners when certain conditions are met. Basis is het
+        alarm (aan bij armed, uit bij disarmed). Daarbovenop een fijnstof-boost:
+        bij koken/bakken schiet PM2.5 omhoog terwijl het alarm juist disarmed
+        is, dus dan moeten ze alsnog aan tot de lucht weer schoon is.
+      mode: queued
+      max: 5
       triggers:
         - trigger: state
           entity_id:
@@ -20,6 +25,23 @@ livingroom_aircleaners_package:
             - alarm_control_panel.alarmo
           to: armed_home
           id: alarm_on_home
+        # Fijnstof. 35 µg/m3 is de rode grens die het dashboard ook gebruikt;
+        # normaal ligt de woonkamer op 1 a 3, dus dit is echt een kookpiek en
+        # geen ruis. De 2 minuten houden een enkele uitschieter tegen.
+        - trigger: numeric_state
+          entity_id: sensor.woonkamer_woonkamer_multisensor_pm2_5
+          above: 35
+          for:
+            minutes: 2
+          id: pm_high
+        # Uit pas onder de WHO-daggrens van 15, en pas als die 15 minuten
+        # standhoudt: anders stoppen ze halverwege het bakken alweer.
+        - trigger: numeric_state
+          entity_id: sensor.woonkamer_woonkamer_multisensor_pm2_5
+          below: 15
+          for:
+            minutes: 15
+          id: pm_clean
       conditions: []
       actions:
         - choose:
@@ -27,6 +49,14 @@ livingroom_aircleaners_package:
                 - condition: trigger
                   id:
                     - alarm_off
+                # Niet uitzetten als het op dat moment nog vies is: wie
+                # thuiskomt tijdens het koken zet ze anders precies verkeerd
+                # uit. De pm_clean-trigger ruimt ze later alsnog op.
+                # float(0) zorgt dat een dode sensor niet blokkeert.
+                - condition: template
+                  value_template: >-
+                    {{ states('sensor.woonkamer_woonkamer_multisensor_pm2_5')
+                       | float(0) < 15 }}
               sequence:
                 - action: switch.turn_off
                   metadata: {}
@@ -40,8 +70,26 @@ livingroom_aircleaners_package:
                   id:
                     - alarm_on_gone
                     - alarm_on_home
+                    - pm_high
               sequence:
                 - action: switch.turn_on
+                  metadata: {}
+                  data: {}
+                  target:
+                    entity_id:
+                      - switch.woonkamer_woonkamer_stopcontact_luchtreiniger
+                      - switch.eettafel_eettafel_stopcontact_luchtreiniger
+            - conditions:
+                - condition: trigger
+                  id:
+                    - pm_clean
+                # Staat het alarm aan, dan horen ze sowieso te draaien; dan is
+                # schone lucht geen reden om ze uit te zetten.
+                - condition: state
+                  entity_id: alarm_control_panel.alarmo
+                  state: disarmed
+              sequence:
+                - action: switch.turn_off
                   metadata: {}
                   data: {}
                   target:
