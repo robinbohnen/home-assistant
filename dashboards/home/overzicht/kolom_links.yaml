@@ -172,8 +172,28 @@ cards:
                 return `<div style="width:9px;height:9px;border-radius:50%;background:${act ? '#3b82f6' : 'rgba(255,255,255,0.14)'}"></div>`;
               ]]]
         # Deuren & ramen: één blik of het huis dicht is
+        #
+        # BUITENDEUREN, GEEN BINNENDEUREN
+        # Hier stond `binary_sensor.all_doors`, en daar zitten de slaapkamer-
+        # deuren, de speelkamer-tussendeur en de deur van de vaatwasser in. Op
+        # 18 augustus 2026 stond deze regel daardoor oranje op "deur & raam
+        # open" terwijl alle buitendeuren dicht waren en alleen de vaatwasser
+        # openstond. De lijst hieronder is dezelfde als in
+        # dashboards/home/nest_hub.yaml (custom_field `huis`), waar dit al goed
+        # ging - komt er een buitendeur bij, zet hem dan op BEIDE plekken.
         - type: custom:button-card
-          entity: binary_sensor.all_doors
+          entity: binary_sensor.all_windows
+          # De kaart hertekent alleen als zijn eigen entity verandert, en die
+          # is nu de ramengroep. De buitendeuren en het slot staan daarom
+          # expliciet als extra aanleiding erbij.
+          triggers_update:
+            - binary_sensor.all_windows
+            - binary_sensor.entree_entree_voordeur_deur
+            - binary_sensor.woonkamer_achterdeur_contact
+            - binary_sensor.woonkamer_openslaande_deuren_contact
+            - binary_sensor.speelkamer_openslaande_deuren_contact
+            - binary_sensor.garage_achterdeur_contact
+            - lock.kroon18voordeur
           # more-info gaf de geschiedenisgrafiek van de groep, en de ramen zaten
           # daar niet eens in; de popup noemt wél welk contact open staat.
           tap_action:
@@ -207,11 +227,36 @@ cards:
               [[[ return `<span style="font-size:14.5px;font-weight:500;color:white">Deuren & ramen</span>`; ]]]
             sum: |
               [[[
-                var d = states['binary_sensor.all_doors'];
-                var r = states['binary_sensor.all_windows'];
+                // `telOpen` slaat unavailable/unknown over en geeft null terug
+                // als er van de hele lijst niets bekend is: een contact dat van
+                // het net valt mag hier niet als "open" tellen (dat is precies
+                // de fout die de keukenrolgordijnen twee avonden omhoog hield),
+                // maar een lijst die volledig zwijgt mag ook geen "alles dicht"
+                // worden.
+                var buitendeuren = ['binary_sensor.entree_entree_voordeur_deur','binary_sensor.woonkamer_achterdeur_contact',
+                                    'binary_sensor.woonkamer_openslaande_deuren_contact','binary_sensor.speelkamer_openslaande_deuren_contact',
+                                    'binary_sensor.garage_achterdeur_contact'];
+                var telOpen = function(lijst){
+                  var n = 0, bekend = 0;
+                  lijst.forEach(function(id){
+                    var e = states[id];
+                    if(!e || e.state === 'unavailable' || e.state === 'unknown') return;
+                    bekend++;
+                    if(e.state === 'on') n++;
+                  });
+                  return bekend ? n : null;
+                };
+                var leden = function(id){
+                  var g = states[id];
+                  if(!g) return null;
+                  var l = g.attributes && g.attributes.entity_id;
+                  return Array.isArray(l) ? telOpen(l) : (g.state === 'on' ? 1 : 0);
+                };
+                var d = telOpen(buitendeuren);
+                var r = leden('binary_sensor.all_windows');
                 var open = [];
-                if(d && d.state === 'on') open.push('deur');
-                if(r && r.state === 'on') open.push('raam');
+                if(d) open.push(d + (d === 1 ? ' deur' : ' deuren'));
+                if(r) open.push(r + (r === 1 ? ' raam' : ' ramen'));
                 // Het voordeurslot hoort bij "is het huis dicht", maar een
                 // ontgrendeld slot overdag is normaal (er is iemand thuis) en
                 // mag de regel niet oranje maken. Grijs "niet op slot" is
@@ -225,16 +270,24 @@ cards:
                     ? ` <span style="color:rgba(255,255,255,0.2)">·</span> <span style="color:#ef4444;font-weight:600">slot klemt</span>`
                     : ` <span style="color:rgba(255,255,255,0.2)">·</span> <span style="color:rgba(255,255,255,0.60)">${m[l.state] || l.state}</span>`;
                 }
-                if(!d && !r) return `<span style="color:rgba(255,255,255,0.60)">onbekend</span>${slot}`;
+                if(d === null && r === null) return `<span style="color:rgba(255,255,255,0.60)">onbekend</span>${slot}`;
                 if(!open.length) return `<span style="color:rgba(255,255,255,0.60)">alles dicht</span>${slot}`;
                 return `<span style="color:#f59e0b;font-weight:600">${open.join(' &amp; ')} open</span>${slot}`;
               ]]]
             dot: |
               [[[
-                var d = states['binary_sensor.all_doors'];
+                // Zelfde buitendeurenlijst als hierboven; zie de toelichting
+                // bij deze kaart waarom het niet `binary_sensor.all_doors` is.
+                var buitendeuren = ['binary_sensor.entree_entree_voordeur_deur','binary_sensor.woonkamer_achterdeur_contact',
+                                    'binary_sensor.woonkamer_openslaande_deuren_contact','binary_sensor.speelkamer_openslaande_deuren_contact',
+                                    'binary_sensor.garage_achterdeur_contact'];
+                var deurOpen = buitendeuren.some(function(id){
+                  var e = states[id];
+                  return e && e.state === 'on';
+                });
                 var r = states['binary_sensor.all_windows'];
                 var l = states['lock.kroon18voordeur'];
-                var iets = (d && d.state === 'on') || (r && r.state === 'on');
+                var iets = deurOpen || (r && r.state === 'on');
                 var klemt = l && l.state === 'jammed';
                 var kleur = klemt ? '#ef4444' : (iets ? '#f59e0b' : 'rgba(255,255,255,0.14)');
                 return `<div style="width:9px;height:9px;border-radius:50%;background:${kleur}"></div>`;

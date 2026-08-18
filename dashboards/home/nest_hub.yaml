@@ -325,6 +325,17 @@ cards:
                   var m = tekst.match(/^\s*([A-Pa-p])\s*(\d)/);
                   var code = m ? (m[1] + m[2]).toUpperCase() : null;
                   var kort = tekst.replace(/^\s*[A-Pa-p]\s*\d\s*/, '');
+                  // De zescijferige getallen achteraan zijn de roepnummers van
+                  // de voertuigen die eropaf gaan ("213831" = 21-3831), soms
+                  // meerdere. Achter een straatnaam lazen ze als huisnummer -
+                  // "Industrielaan Uden 213831". Los eronder, in de notatie met
+                  // streepje, zijn ze meteen wat ze zijn.
+                  var voertuigen = [];
+                  var vm = kort.match(/(?:\s\d{6})+\s*$/);
+                  if(vm){
+                    voertuigen = vm[0].trim().split(/\s+/).map(function(n){ return n.slice(0,2) + '-' + n.slice(2); });
+                    kort = kort.slice(0, vm.index).trim();
+                  }
                   if(kort.length > 58) kort = kort.slice(0,57) + '…';
                   var d = states['input_datetime.brandweer_laatste_melding'];
                   var wanneer = '';
@@ -338,7 +349,9 @@ cards:
                   return `<div style="display:flex;align-items:center;justify-content:flex-start;width:100%;box-sizing:border-box;gap:1.4vh;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">${badge}
                     <div style="display:flex;flex-direction:column;gap:0.3vh;overflow:hidden">
                       <span style="font-size:2.5vh;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${kort}</span>
-                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.68)">${wanneer}</span></div></div>`;
+                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.68)">${wanneer}${voertuigen.length
+                        ? ` <span style="color:rgba(255,255,255,0.25)">·</span> <ha-icon icon="mdi:fire-truck" style="--mdc-icon-size:2.1vh;vertical-align:-0.4vh;color:rgba(255,255,255,0.5)"></ha-icon> ${voertuigen.join(', ')}`
+                        : ''}</span></div></div>`;
                 ]]]
 
         # ---------- ENERGIE ----------
@@ -434,11 +447,18 @@ cards:
                   var netto = lees('sensor.live_energieverbruik_totaal');
                   if(netto !== null && Math.abs(netto) < 0.005) netto = 0;
                   var prod = lees('sensor.solar_power_generated_now', true);
-                  var verbr = lees('sensor.electricity_meter_energieverbruik');
                   var soc = states['sensor.lilygo_rs485_marstek_battery_state_of_charge'];
                   var bp = states['sensor.lilygo_rs485_marstek_battery_power'];
                   var socv = soc && !isNaN(Number(soc.state)) ? Math.round(Number(soc.state)) : null;
                   var bpv = bp && !isNaN(Number(bp.state)) ? Math.round(Number(bp.state)) : null;
+                  // HUIS, NIET DE METERSTAND
+                  // Hier stond `sensor.electricity_meter_energieverbruik`, en dat
+                  // is de netafname - die staat links al als "netto verbruik".
+                  // Twee tegels naast elkaar met hetzelfde getal en een ander
+                  // label, en bij zon allebei te laag. Zie dezelfde som en
+                  // toelichting bij `verbruik` in overzicht/kolom_midden.yaml.
+                  var verbr = (netto === null || prod === null) ? null
+                            : Math.max(0, netto + prod - (bpv === null ? 0 : bpv / 1000));
                   // Zelfde standby-grens als op het overzicht (zie de
                   // toelichting bij `batt` in overzicht/kolom_midden.yaml): de
                   // omvormer trekt in rust tot 15 W uit de accu, en dat is
@@ -461,7 +481,7 @@ cards:
                       <span style="font-size:2.6vh;color:rgba(255,255,255,0.72)">kW</span></span>
                       <span style="font-size:2.1vh;color:rgba(255,255,255,0.7)">netto verbruik</span></div>
                     ${klein(fmt(prod), 'productie', '#4ade80')}
-                    ${klein(fmt(verbr), 'verbruik', '#3b82f6')}
+                    ${klein(fmt(verbr), 'huis verbruik', '#3b82f6')}
                     ${klein(socv === null ? '—' : socv + '%', 'batterij' + bmode, 'white')}
                   </div>`;
                 ]]]

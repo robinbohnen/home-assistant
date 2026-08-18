@@ -249,7 +249,17 @@ ov_climate:
   custom_fields:
     sub: |
       [[[
-        var cur = entity.attributes.current_temperature;
+        // DE KAMER, NIET DE BINNENUNIT
+        // Een airco meet bij zijn eigen unit en zat op 18 augustus 2026 1,3°
+        // naast de multisensor van de woonkamer: RUIMTES zei 25,3° en KLIMAAT
+        // 24,0° voor dezelfde kamer, op hetzelfde scherm. Zet `variables.temp`
+        // op de kamersensor en die wint; laat je hem leeg, dan blijft het de
+        // meting van het apparaat zelf (voor de zolder en de spa is dat de
+        // enige die er is).
+        var bron = (variables && variables.temp) ? states[variables.temp] : null;
+        var cur = (bron && !isNaN(Number(bron.state)))
+                ? Number(bron.state)
+                : entity.attributes.current_temperature;
         var tgt = entity.attributes.temperature;
         var off = entity.state === 'off' || entity.state === 'unavailable';
         if(cur != null) {

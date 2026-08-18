@@ -137,9 +137,18 @@ cards:
                 // netto: negatief = teruglevering; ruis rond nul plat slaan
                 var netto = num('sensor.live_energieverbruik_totaal');
                 if(netto !== null && Math.abs(netto) < 0.005) netto = 0;
-                // verbruik van het huis zelf
-                var verbruik = num('sensor.electricity_meter_energieverbruik');
                 var accuW = num('sensor.lilygo_rs485_marstek_battery_power');
+                // VERBRUIK VAN HET HUIS ZELF - NIET DE METERSTAND
+                // Hier stond `sensor.electricity_meter_energieverbruik`, en dat
+                // is de netafname: exact dezelfde bron als de netknoop hierboven.
+                // Op 18 augustus 2026 stond er daardoor twee keer 0,49 kW op één
+                // kaart terwijl de zon 0,25 kW leverde en het huis dus 0,74 kW
+                // trok. Bij teruglevering is het erger: dan wijst de huisknoop 0
+                // aan terwijl de vaatwasser draait.
+                // Het huis is wat er binnenkomt: net + zon, min wat de accu
+                // wegzet (laden is positief, ontladen negatief, dus aftrekken).
+                var verbruik = (netto === null || zonKw === null) ? null
+                             : Math.max(0, netto + zonKw - (accuW === null ? 0 : accuW / 1000));
                 var accuPv = accuW === null ? null : Math.round(accuW);
                 var soc = num('sensor.lilygo_rs485_marstek_battery_state_of_charge');
                 var accuMode = accuPv === null ? ''
@@ -822,37 +831,51 @@ cards:
           template: ov_title
           variables:
             title: VEELGEBRUIKERS
-        - type: custom:auto-entities
-          show_empty: false
-          card:
-            type: vertical-stack
-          card_param: cards
-          filter:
-            include:
-              - domain: sensor
-                name: "*Vermogen*"
-                options:
-                  type: custom:button-card
-                  template: ov_bar
-                  variables:
-                    scale: auto
-                  name: "[[[ return entity.attributes.friendly_name.replace(/ ?vermogen/i, '').replace(/ ?stopcontact/i, '').replace(/\\s+/g, ' ').trim(); ]]]"
-                  tap_action:
-                    action: more-info
-            exclude:
-              - name: Inverter*
-              - name: "*Zonnepanel*"
-              - name: "*zonneplan*"
-              - name: "*SlimHuys*"
-              - name: "*GoodWe*"
-              - name: "*mvormer*"
-              - state: "off"
-              - state: unavailable
-              - state: unknown
-              - state: "0"
-              - hidden_by: user
-          sort:
-            method: state
-            numeric: true
-            reverse: true
-            count: 5
+        # De top vijf komt uit sensor.veelgebruikers (packages/9 - Other/
+        # Veelgebruikers.yaml) en niet meer uit een `auto-entities`-filter op
+        # naam. Twee redenen, allebei nagemeten op 18 augustus 2026 en
+        # uitgeschreven in de kop van dat package: `*Vermogen*` pakte ook de
+        # VA- en var-sensoren van elke stekker (drie van de vijf rijen geen
+        # verbruik, en de tv-kast twee keer), en auto-entities hersorteert niet
+        # als een waarde bínnen de lijst verandert - de koffiemachine sprong van
+        # 8 naar 189 W en bleef onderaan staan.
+        #
+        # Eén kaart met vijf rijen in plaats van vijf kaarten: de rijen komen
+        # uit één attribuut, dus er is ook maar één entity om op te hertekenen.
+        # Tik erop voor de grafiek van alle stekkers bij elkaar.
+        - type: custom:button-card
+          entity: sensor.veelgebruikers
+          show_icon: false
+          show_name: false
+          show_state: false
+          tap_action:
+            action: more-info
+          styles:
+            card:
+              - background: none
+              - border: none
+              - box-shadow: none
+              - padding: 0
+            grid:
+              - grid-template-areas: '"rijen"'
+            custom_fields:
+              # Zonder deze breedte krijgt het veld de breedte van zijn inhoud
+              # en lopen de balken niet door tot de rand van de kolom.
+              rijen:
+                - width: 100%
+          custom_fields:
+            rijen: |
+              [[[
+                var top = (entity && entity.attributes && entity.attributes.top) || [];
+                if(!top.length) return `<div style="padding:7px 2px;font-size:13.5px;color:rgba(255,255,255,0.45)">niets noemenswaardigs aan</div>`;
+                // Schaal op de zwaarste van dit moment, anders zijn alle balkjes
+                // even kort zodra er niets groots aanstaat. Ondergrens 10 W.
+                var max = Math.max(10, top[0].watt);
+                return top.map(function(r){
+                  var pct = Math.max(2, Math.min(100, r.watt / max * 100));
+                  return `<div style="display:grid;grid-template-columns:205px 1fr 72px;column-gap:14px;align-items:center;padding:7px 2px">
+                    <span style="font-size:14px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.naam}</span>
+                    <div style="width:100%;height:6px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:#3b82f6;border-radius:3px"></div></div>
+                    <span style="font-size:14px;font-weight:600;color:white;text-align:right">${r.watt} W</span></div>`;
+                }).join('');
+              ]]]

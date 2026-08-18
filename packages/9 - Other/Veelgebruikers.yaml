@@ -1,0 +1,118 @@
+##############################################################################
+## VEELGEBRUIKERS - welke stekkers trekken er nu het meest
+##
+## Het paneel had hiervoor een `auto-entities`-kaart die op friendly name
+## `*Vermogen*` filterde met een uitsluitlijst eronder. Dat ging op twee
+## manieren mis, allebei nagemeten op 18 augustus 2026:
+##
+## 1. DE VERKEERDE GROOTHEID. Elke slimme stekker levert naast het echte
+##    vermogen (W) ook `Schijnbaar vermogen` (VA) en `Reactief vermogen`
+##    (var), en die matchen ook op `*Vermogen*`. Op het gemeten moment zou de
+##    top vijf zijn geweest: Meterkast 177 W, Woonkamer TV-kast 105 VA,
+##    Woonkamer TV-kast 100 var, Koelkast 84 W, Slaapkamer Maxi 50 VA - drie
+##    van de vijf rijen geen verbruik, en de tv-kast twee keer, met "W"
+##    erachter. Een uitsluitlijst repareert dat één keer; de volgende stekker
+##    met een nieuwe grootheid staat er zo weer tussen.
+##
+## 2. DE VOLGORDE LIEP ACHTER. `auto-entities` bouwt zijn lijst opnieuw als de
+##    UITKOMST VAN HET FILTER verandert, niet als een waarde binnen die lijst
+##    verandert. De koffiezetapparaat-stekker stond al in de lijst op 8 W,
+##    sprong naar 189 W en bleef gewoon onderaan staan: op de schermafdruk van
+##    08:12 stond 153, 84, 34, 21, 189 - de zwaarste verbruiker onderaan een
+##    aflopend gesorteerde lijst.
+##
+## Vandaar deze sensor: een expliciete lijst stekkers (zie
+## [[expliciet-koppelen]] - aanwijzen wat er wél in hoort, niet scannen en
+## uitsluiten), elke minuut opnieuw gesorteerd. De kaart in
+## dashboards/home/overzicht/kolom_midden.yaml leest alleen nog `top`.
+##
+## De state is het totaal van álle stekkers hieronder, niet alleen de top vijf:
+## zo is het een bruikbare grafiek in more-info ("wat trekt het klein spul bij
+## elkaar") en verspringt hij niet als er eentje de lijst in- of uitvalt.
+##
+## Nieuwe stekker erbij? Eén regel in `stekkers`. De naam links is wat er op
+## het paneel komt te staan; hou hem kort, de kolom is 205px.
+##############################################################################
+
+veelgebruikers_package:
+
+  template:
+    - trigger:
+        # Elke minuut is ruim voor een paneel waar je langsloopt, en het scheelt
+        # een render bij elke wattschommeling van 36 stekkers.
+        - trigger: time_pattern
+          minutes: "/1"
+        - trigger: homeassistant
+          event: start
+      action:
+        - variables:
+            stekkers:
+              sensor.meterkast_stopcontact_apparatuur_power: Meterkast apparatuur
+              sensor.meterkast_meterkast_stopcontact_ventilatoren_vermogen: Meterkast ventilatoren
+              sensor.meterkast_meterkast_stopcontact_ledstrip_vermogen: Meterkast ledstrip
+              sensor.woonkamer_woonkamer_stopcontact_tv_kast_vermogen: Woonkamer tv-kast
+              sensor.woonkamer_woonkamer_stopcontact_bank_vermogen: Woonkamer bank
+              sensor.woonkamer_woonkamer_stopcontact_rechtsachter_vermogen: Woonkamer rechtsachter
+              sensor.woonkamer_woonkamer_stopcontact_luchtreiniger_vermogen: Luchtreiniger woonkamer
+              sensor.eettafel_eettafel_stopcontact_laders_vermogen: Eettafel laders
+              sensor.eettafel_eettafel_stopcontact_luchtreiniger_vermogen: Luchtreiniger eettafel
+              sensor.keuken_stopcontact_koffiezetapparaat_power: Koffiezetapparaat
+              sensor.keuken_stopcontact_wijnklimaatkast_power: Wijnklimaatkast
+              sensor.keuken_stopcontact_laders_power: Keuken laders
+              sensor.keuken_keuken_stopcontact_vaatwasser_vermogen: Vaatwasser
+              sensor.keuken_keuken_stopcontact_koelkast_vermogen: Koelkast keuken
+              sensor.garage_stopcontact_koelkast_speelkamer_power: Koelkast speelkamer
+              sensor.garage_garage_stopcontact_droger_en_verlengsnoer_vermogen: Droger
+              sensor.garage_garage_stopcontact_wasmachine_vermogen: Wasmachine
+              sensor.garage_garage_stopcontact_boiler_vermogen: Boiler
+              sensor.kantoor_stopcontact_apparatuur_power: Kantoor apparatuur
+              sensor.speelkamer_stopcontact_apparatuur_power: Speelkamer apparatuur
+              sensor.speelkamer_stopcontact_verwarming_power: Speelkamer verwarming
+              sensor.aquarium_stopcontact_alles_power: Aquarium
+              sensor.aquarium_stopcontact_co2_power: Aquarium CO2
+              sensor.slaapkamer_slaapkamer_stopcontact_robin_vermogen: Slaapkamer Robin
+              sensor.slaapkamer_slaapkamer_stopcontact_samantha_vermogen: Slaapkamer Samantha
+              sensor.slaapkamer_logan_slaapkamer_maxi_stopcontact_apparatuur_vermogen: Slaapkamer Logan
+              sensor.slaapkamer_emma_slaapkamer_mini_stopcontact_vermogen: Slaapkamer Emma
+              sensor.overloop_zolder_overloop_zolder_stopcontact_airco_vermogen: Airco zolder
+              sensor.overloop_zolder_overloop_zolder_warmtepomp_kast_stopcontact_cv_vermogen: CV-ketel
+              sensor.overloop_zolder_overloop_zolder_warmtepomp_kast_stopcontact_luchtbox_vermogen: Luchtbox
+              sensor.overloop_zolder_overloop_zolder_warmtepomp_stopcontact_cube_vermogen: Warmtepomp cube
+              sensor.achtertuin_achtertuin_overkapping_stopcontact_box_vermogen: Overkapping box
+              sensor.achtertuin_achtertuin_overkapping_stopcontact_mini_spots_vermogen: Overkapping spots
+              sensor.achtertuin_achtertuin_schuur_stopcontact_raspberry_pi_vermogen: Raspberry Pi
+              sensor.achtertuin_achtertuin_schuur_stopcontact_ventilatoren_vermogen: Schuur ventilatoren
+              sensor.achtertuin_achtertuin_schutting_links_stopcontact_vermogen: Schutting links
+        - variables:
+            # Als JSON en niet als losse lijst: state en attributen worden ieder
+            # apart gerenderd, en zo staat de sortering maar op één plek. Zelfde
+            # aanpak als `adviezen` in Klimaat Zonwering.yaml.
+            #
+            # Een stekker die niets zegt (`unavailable`, of net weg) levert -1 op
+            # en valt daarmee buiten de lijst; 1 W is de ondergrens, anders staat
+            # er ruis van 0,6 W op het paneel.
+            gemeten: >-
+              {% set ns = namespace(l=[]) %}
+              {% for e, naam in stekkers.items() %}
+                {% set w = states(e) | float(-1) %}
+                {% if w >= 1 %}
+                  {% set ns.l = ns.l + [{'naam': naam, 'watt': w | round(0) | int, 'id': e}] %}
+                {% endif %}
+              {% endfor %}
+              {{ ns.l | sort(attribute='watt', reverse=true) | list | to_json }}
+      sensor:
+        - name: Veelgebruikers
+          unique_id: veelgebruikers
+          icon: mdi:power-plug-outline
+          device_class: power
+          state_class: measurement
+          unit_of_measurement: W
+          state: "{{ (gemeten | from_json) | map(attribute='watt') | sum }}"
+          attributes:
+            top: "{{ (gemeten | from_json)[:5] }}"
+            # Hoeveel er nu iets doen, van hoeveel er in de lijst staan. Handig
+            # als het paneel leeg blijft: staat `actief` op 0 en `stekkers` op
+            # 36, dan meet hij wel maar staat er niets aan; staan ze allebei op
+            # 0, dan klopt er iets niet aan de lijst.
+            actief: "{{ (gemeten | from_json) | count }}"
+            stekkers: "{{ stekkers | count }}"

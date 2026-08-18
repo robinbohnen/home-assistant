@@ -75,15 +75,15 @@ cards:
           tap_action:
             action: navigate
             navigation_path: "#ov-vandaag"
-          visibility: &afval_iets
-            - condition: or
-              conditions:
-                - condition: state
-                  entity: sensor.afvalinfo_home_trash_type_today
-                  state_not: *afval_leeg
-                - condition: state
-                  entity: sensor.afvalinfo_home_trash_type_tomorrow
-                  state_not: *afval_leeg
+          # Per dag, en niet allebei zodra er íets is: staat er morgen GFT en
+          # vandaag niets, dan kostte "Afval vandaag · geen ophaal vandaag" een
+          # volle regel om niets te melden. De samengevoegde regel hierboven
+          # dekt de dagen waarop geen van beide iets heeft; `unavailable` valt
+          # daar bewust buiten en houdt dus zijn eigen regel met "onbekend".
+          visibility:
+            - condition: state
+              entity: sensor.afvalinfo_home_trash_type_today
+              state_not: *afval_leeg
           variables:
             title: Afval vandaag
             mdi: mdi:trash-can-outline
@@ -127,7 +127,10 @@ cards:
           tap_action:
             action: navigate
             navigation_path: "#ov-vandaag"
-          visibility: *afval_iets
+          visibility:
+            - condition: state
+              entity: sensor.afvalinfo_home_trash_type_tomorrow
+              state_not: *afval_leeg
           variables:
             title: Afval morgen
             mdi: mdi:recycle
@@ -275,6 +278,13 @@ cards:
           template: ov_climate
           entity: climate.airco_woonkamer
           name: Airco woonkamer
+          # Dezelfde sensor als RUIMTES hierboven gebruikt voor de begane grond;
+          # zie de toelichting bij `sub` in overzicht_templates.yaml.
+          variables:
+            temp: sensor.woonkamer_woonkamer_multisensor_temperatuur
+          triggers_update:
+            - climate.airco_woonkamer
+            - sensor.woonkamer_woonkamer_multisensor_temperatuur
         - type: custom:button-card
           template: ov_climate
           entity: climate.airco_zolder
@@ -615,16 +625,29 @@ cards:
                 var e = states['input_text.brandweer_laatste_melding'];
                 var t = e && e.state ? e.state : 'Geen recente melding';
                 t = t.replace(/^\s*[A-Pa-p]\s*\d\s*/, '');
+                // De zescijferige getallen achteraan zijn roepnummers van
+                // voertuigen ("213831" = 21-3831); ze staan als 21-3831 op de
+                // subregel hieronder. Achter de straatnaam lazen ze als
+                // huisnummer, en ze vraten de 46 tekens op die deze regel heeft.
+                t = t.replace(/(?:\s\d{6})+\s*$/, '').trim();
                 if(t.length > 46) t = t.slice(0,45) + '…';
                 return `<span style="font-size:14px;font-weight:600;color:white">${t}</span>`;
               ]]]
             sub: |
               [[[
                 var d = states['input_datetime.brandweer_laatste_melding'];
-                if(!d || !d.state) return `<span style="font-size:12px;color:rgba(255,255,255,0.55)">—</span>`;
+                var e = states['input_text.brandweer_laatste_melding'];
+                var vm = (e && e.state ? e.state : '').match(/(?:\s\d{6})+\s*$/);
+                var voertuigen = vm
+                  ? vm[0].trim().split(/\s+/).map(function(n){ return n.slice(0,2) + '-' + n.slice(2); })
+                  : [];
+                var staart = voertuigen.length
+                  ? ` <span style="color:rgba(255,255,255,0.2)">·</span> <ha-icon icon="mdi:fire-truck" style="--mdc-icon-size:13px;vertical-align:-2px"></ha-icon> ${voertuigen.join(', ')}`
+                  : '';
+                if(!d || !d.state) return `<span style="font-size:12px;color:rgba(255,255,255,0.55)">—${staart}</span>`;
                 var dt = new Date(d.state.replace(' ','T'));
                 var s = dt.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}) + ' ' + dt.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
-                return `<span style="font-size:12px;color:rgba(255,255,255,0.55)">${s}</span>`;
+                return `<span style="font-size:12px;color:rgba(255,255,255,0.55)">${s}${staart}</span>`;
               ]]]
             badge: |
               [[[
