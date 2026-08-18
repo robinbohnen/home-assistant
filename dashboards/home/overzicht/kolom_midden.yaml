@@ -867,15 +867,27 @@ cards:
             rijen: |
               [[[
                 var top = (entity && entity.attributes && entity.attributes.top) || [];
-                if(!top.length) return `<div style="padding:7px 2px;font-size:13.5px;color:rgba(255,255,255,0.45)">niets noemenswaardigs aan</div>`;
+                if(!top.length){
+                  // Twee heel verschillende oorzaken, dus twee teksten: staat de
+                  // sensor zelf op unknown/unavailable dan is er iets mis met de
+                  // sensor (dat was op 18 augustus 2026 een sjabloonfout, zie de
+                  // kop van packages/9 - Other/Veelgebruikers.yaml); is de lijst
+                  // leeg dan meldt geen enkele stekker zich.
+                  var stil = !entity || entity.state === 'unavailable' || entity.state === 'unknown';
+                  return `<div style="padding:7px 2px;font-size:13.5px;color:rgba(255,255,255,0.45)">${stil ? 'nog geen meting' : 'geen stekker meldt zich'}</div>`;
+                }
                 // Schaal op de zwaarste van dit moment, anders zijn alle balkjes
                 // even kort zodra er niets groots aanstaat. Ondergrens 10 W.
                 var max = Math.max(10, top[0].watt);
                 return top.map(function(r){
                   var pct = Math.max(2, Math.min(100, r.watt / max * 100));
+                  // Zes regels staan er altijd; een stekker die niets trekt hoort
+                  // wel te zien te zijn maar mag niet even hard schreeuwen als
+                  // een koffiemachine van 1200 W.
+                  var uit = !r.watt;
                   return `<div style="display:grid;grid-template-columns:205px 1fr 72px;column-gap:14px;align-items:center;padding:7px 2px">
-                    <span style="font-size:14px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.naam}</span>
-                    <div style="width:100%;height:6px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:#3b82f6;border-radius:3px"></div></div>
-                    <span style="font-size:14px;font-weight:600;color:white;text-align:right">${r.watt} W</span></div>`;
+                    <span style="font-size:14px;color:rgba(255,255,255,${uit ? '0.5' : '0.85'});white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.naam}</span>
+                    <div style="width:100%;height:6px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${uit ? 'rgba(255,255,255,0.12)' : '#3b82f6'};border-radius:3px"></div></div>
+                    <span style="font-size:14px;font-weight:600;color:${uit ? 'rgba(255,255,255,0.45)' : 'white'};text-align:right">${r.watt} W</span></div>`;
                 }).join('');
               ]]]

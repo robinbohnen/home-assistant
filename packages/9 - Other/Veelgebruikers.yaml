@@ -84,22 +84,29 @@ veelgebruikers_package:
               sensor.achtertuin_achtertuin_schuur_stopcontact_ventilatoren_vermogen: Schuur ventilatoren
               sensor.achtertuin_achtertuin_schutting_links_stopcontact_vermogen: Schutting links
         - variables:
-            # Als JSON en niet als losse lijst: state en attributen worden ieder
-            # apart gerenderd, en zo staat de sortering maar op één plek. Zelfde
-            # aanpak als `adviezen` in Klimaat Zonwering.yaml.
+            # LET OP DE AFSLUITENDE `from_json` - DIE HOORT HIER EN NIET IN DE
+            # SENSOR. Hij stond eerst alleen op `to_json` en de sensor deed het
+            # ontpakken; toen bleef `sensor.veelgebruikers` na de herstart van
+            # 18 augustus 2026 op `unknown` staan, zónder ook maar één attribuut.
+            # Reden: een `variables:`-waarde wordt met native types gerenderd, dus
+            # HA maakte van die JSON-tekst zelf alweer een lijst, en `from_json`
+            # op een lijst is een fout - waarmee state én alle attributen in één
+            # klap wegvielen. Nu is `gemeten` gewoon een lijst en leest de sensor
+            # hem rechtstreeks, net als `adviezen` in Klimaat Zonwering.yaml.
             #
-            # Een stekker die niets zegt (`unavailable`, of net weg) levert -1 op
-            # en valt daarmee buiten de lijst; 1 W is de ondergrens, anders staat
-            # er ruis van 0,6 W op het paneel.
+            # Geen ondergrens in watt: het paneel toont altijd zes regels, ook
+            # als er weinig aanstaat (zo blijft de kaart even hoog en zie je wat
+            # er sluimert). Een stekker die niets zegt (`unavailable`, of net
+            # weg) levert -1 op en valt wél buiten de lijst.
             gemeten: >-
               {% set ns = namespace(l=[]) %}
               {% for e, naam in stekkers.items() %}
                 {% set w = states(e) | float(-1) %}
-                {% if w >= 1 %}
+                {% if w >= 0 %}
                   {% set ns.l = ns.l + [{'naam': naam, 'watt': w | round(0) | int, 'id': e}] %}
                 {% endif %}
               {% endfor %}
-              {{ ns.l | sort(attribute='watt', reverse=true) | list | to_json }}
+              {{ (ns.l | sort(attribute='watt', reverse=true) | list | to_json) | from_json }}
       sensor:
         - name: Veelgebruikers
           unique_id: veelgebruikers
@@ -107,12 +114,15 @@ veelgebruikers_package:
           device_class: power
           state_class: measurement
           unit_of_measurement: W
-          state: "{{ (gemeten | from_json) | map(attribute='watt') | sum }}"
+          state: "{{ gemeten | map(attribute='watt') | sum }}"
           attributes:
-            top: "{{ (gemeten | from_json)[:5] }}"
-            # Hoeveel er nu iets doen, van hoeveel er in de lijst staan. Handig
-            # als het paneel leeg blijft: staat `actief` op 0 en `stekkers` op
-            # 36, dan meet hij wel maar staat er niets aan; staan ze allebei op
-            # 0, dan klopt er iets niet aan de lijst.
-            actief: "{{ (gemeten | from_json) | count }}"
+            # Zes, want dat is wat er op het paneel hoort te staan.
+            top: "{{ gemeten[:6] }}"
+            # Drie tellers voor als het paneel er raar uitziet: hoeveel
+            # stekkers er nu écht iets trekken, hoeveel er zich melden, en
+            # hoeveel er in de lijst staan. `meldend` veel lager dan `stekkers`
+            # betekent stekkers die van het netwerk zijn (die tellen niet als 0
+            # mee, want dan zou een dode stekker als "uit" op het paneel staan).
+            actief: "{{ gemeten | selectattr('watt', '>', 0) | list | count }}"
+            meldend: "{{ gemeten | count }}"
             stekkers: "{{ stekkers | count }}"
