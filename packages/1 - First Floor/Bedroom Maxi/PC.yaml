@@ -80,11 +80,19 @@ pc_logan_package:
             - unknown
             - unavailable
           for: "01:30:00"
-      conditions:
-        # 's Nachts is dit geen mededeling maar een wekker: een pc die aan blijft
-        # staan haal je 's ochtends wel op. Het venster loopt van 07:00 tot
-        # Logans eigen bedtijd, dus een omroep om kwart over acht 's avonds gaat
-        # gewoon door - dat is juist het moment dat hij helpt.
+      # Geen conditie op automatiseringsniveau: het bericht aan de ouders gaat
+      # ALTIJD, ook 's nachts. Alleen de omroep hieronder heeft een tijdvenster,
+      # want die zou Logan wakker maken en een telefoonmelding niet.
+      conditions: []
+      variables:
+        # Wanneer de sessie begon. Dat is het moment waarop de sensor aanging,
+        # dus zo'n twee minuten ná de pc zelf (de `delay_on` hierboven).
+        gestart: >-
+          {{ trigger.to_state.last_changed | as_local
+             | as_timestamp | timestamp_custom('%H:%M') }}
+        # Het venster voor de omroep: van 07:00 tot Logans eigen bedtijd. Een
+        # omroep om kwart over acht 's avonds gaat dus gewoon door - dat is juist
+        # het moment dat hij helpt.
         #
         # NIET `binary_sensor.huis_slaapt`, hoe verleidelijk ook: die blijft
         # 's ochtends aan tot iemand het huis wakker meldt (de slaapkamerknop,
@@ -95,67 +103,87 @@ pc_logan_package:
         # als de bedtijd-markers op de tijdlijn (`wd === 5 || wd === 6` daar,
         # weekday() 4 en 5 hier - beide vrijdag en zaterdag). Staat een helper
         # op onzin, dan valt hij terug op 21:30.
-        - alias: Tussen 07:00 en de bedtijd van Logan
-          condition: template
-          value_template: >-
-            {% set helper = 'input_datetime.bedtime_maxi_weekend'
-                            if now().weekday() in [4, 5]
-                            else 'input_datetime.bedtime_maxi' %}
-            {% set bed = states(helper) %}
-            {% set bed = bed if ':' in bed else '21:30:00' %}
-            {{ now() >= today_at('07:00') and now() < today_at(bed) }}
+        omroepen: >-
+          {% set helper = 'input_datetime.bedtime_maxi_weekend'
+                          if now().weekday() in [4, 5]
+                          else 'input_datetime.bedtime_maxi' %}
+          {% set bed = states(helper) %}
+          {% set bed = bed if ':' in bed else '21:30:00' %}
+          {{ now() >= today_at('07:00') and now() < today_at(bed) }}
       actions:
-        # DE SPEAKER KAN GEMUTE ZIJN, EN STAAT VAAK ZACHT
-        # `announce: true` speelt een audioclip met een eigen volume (`extra`),
-        # los van het speakervolume - dat staat hier op 5%, dus zonder die clip
-        # zou dit niets worden. Wat die clip NIET met zekerheid overstemt is de
-        # mute-knop: afhankelijk van het model speelt Sonos een clip via de
-        # audioClip-API (mute maakt niet uit) of via snapshot-afspelen-herstellen
-        # (mute maakt wél uit). Daarom zetten we mute hier zelf even uit en
-        # daarna terug - dat kost twee commando's en haalt de twijfel weg.
-        - variables:
-            was_gemute: >-
-              {{ state_attr('media_player.slaapkamer_maxi_sonos',
-                            'is_volume_muted') | bool(false) }}
-        - if:
-            - condition: template
-              value_template: "{{ was_gemute }}"
-          then:
-            - action: media_player.volume_mute
-              continue_on_error: true
-              target:
-                entity_id: media_player.slaapkamer_maxi_sonos
-              data:
-                is_volume_muted: false
-            # Even lucht tussen ontdempen en de clip: Sonos neemt het commando
-            # aan voordat hij het uitgevoerd heeft.
-            - delay: "00:00:01"
-        - alias: Omroepen op de Sonos van Logan
-          action: media_player.play_media
-          # Een speaker die net van het net is mag de rest van deze run niet
-          # afbreken - dan blijft de mute hieronder namelijk uit staan.
-          continue_on_error: true
-          target:
-            entity_id: media_player.slaapkamer_maxi_sonos
+        # EERST DE OUDERS, DAN DE SPEAKER
+        # De omroep hieronder doet er met ontdempen en herstellen ruim tien
+        # seconden over; dat hoeft het bericht niet af te wachten. De vaste tag
+        # zorgt dat een volgende sessie de vorige melding vervangt in plaats van
+        # een stapel op te bouwen.
+        - alias: Bericht aan de ouders
+          action: notify.mobile_devices_adults
           data:
-            announce: true
-            extra:
-              volume: 50
-            media:
-              media_content_type: music
-              media_content_id: >-
-                media-source://tts/tts.google_translate_nl_nl?message={{
-                'Logan, je computer staat nu anderhalf uur aan.' | urlencode }}
-        - if:
+            title: Gametijd Logan - anderhalf uur
+            message: >-
+              De pc van Logan staat sinds {{ gestart }} aan, dat is nu
+              anderhalf uur.
+              {{ 'Hij heeft het net op zijn Sonos gehoord.' if omroepen
+                 else 'Het is buiten de omroeptijden, dus er is niets omgeroepen.' }}
+            data:
+              tag: pc-logan-gametijd
+              notification_icon: mdi:desktop-tower-monitor
+        - alias: Omroepen, maar niet 's nachts
+          if:
             - condition: template
-              value_template: "{{ was_gemute }}"
+              value_template: "{{ omroepen }}"
           then:
-            # Wachten tot de clip klaar is, anders dempen we onze eigen omroep.
-            # Tien seconden is ruim voor een zin van drie tellen.
-            - delay: "00:00:10"
-            - action: media_player.volume_mute
+            # DE SPEAKER KAN GEMUTE ZIJN, EN STAAT VAAK ZACHT
+            # `announce: true` speelt een audioclip met een eigen volume (`extra`),
+            # los van het speakervolume - dat staat hier op 5%, dus zonder die clip
+            # zou dit niets worden. Wat die clip NIET met zekerheid overstemt is de
+            # mute-knop: afhankelijk van het model speelt Sonos een clip via de
+            # audioClip-API (mute maakt niet uit) of via snapshot-afspelen-herstellen
+            # (mute maakt wél uit). Daarom zetten we mute hier zelf even uit en
+            # daarna terug - dat kost twee commando's en haalt de twijfel weg.
+            - variables:
+                was_gemute: >-
+                  {{ state_attr('media_player.slaapkamer_maxi_sonos',
+                                'is_volume_muted') | bool(false) }}
+            - if:
+                - condition: template
+                  value_template: "{{ was_gemute }}"
+              then:
+                - action: media_player.volume_mute
+                  continue_on_error: true
+                  target:
+                    entity_id: media_player.slaapkamer_maxi_sonos
+                  data:
+                    is_volume_muted: false
+                # Even lucht tussen ontdempen en de clip: Sonos neemt het commando
+                # aan voordat hij het uitgevoerd heeft.
+                - delay: "00:00:01"
+            - alias: Omroepen op de Sonos van Logan
+              action: media_player.play_media
+              # Een speaker die net van het net is mag de rest van deze run niet
+              # afbreken - dan blijft de mute hieronder namelijk uit staan.
               continue_on_error: true
               target:
                 entity_id: media_player.slaapkamer_maxi_sonos
               data:
-                is_volume_muted: true
+                announce: true
+                extra:
+                  volume: 50
+                media:
+                  media_content_type: music
+                  media_content_id: >-
+                    media-source://tts/tts.google_translate_nl_nl?message={{
+                    'Logan, je computer staat nu anderhalf uur aan.' | urlencode }}
+            - if:
+                - condition: template
+                  value_template: "{{ was_gemute }}"
+              then:
+                # Wachten tot de clip klaar is, anders dempen we onze eigen omroep.
+                # Tien seconden is ruim voor een zin van drie tellen.
+                - delay: "00:00:10"
+                - action: media_player.volume_mute
+                  continue_on_error: true
+                  target:
+                    entity_id: media_player.slaapkamer_maxi_sonos
+                  data:
+                    is_volume_muted: true
