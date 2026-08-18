@@ -118,7 +118,14 @@ kitchen_covers_package:
         het begin van de naar-bed-routine van de kinderen of een half uur voor
         zonsondergang. Een rolgordijn waarvan het raam openstaat blijft omhoog en
         gaat alsnog dicht zodra dat raam gesloten wordt.
-      mode: single
+      # `queued` en niet `single`: twee ramen die vlak na elkaar dichtgaan zijn
+      # twee triggers, en met `single` at de lopende run de tweede op. Dat
+      # gebeurde op 17 augustus 2026 (zie de uitleg hierboven): het kleine raam
+      # ging vijf seconden na het grote dicht, viel middenin de lopende run, en
+      # het kleine rolgordijn bleef de hele nacht omhoog. Ze horen achter elkaar
+      # afgehandeld te worden, niet weggegooid.
+      mode: queued
+      max: 5
       triggers:
         - trigger: sun
           event: sunset
@@ -127,14 +134,30 @@ kitchen_covers_package:
           at:
             - input_datetime.bedtime_maxi_1h_off
             - input_datetime.bedtime_mini_1h_off
-        # from/to expliciet, zodat een contact dat na een herstart uit
-        # 'unknown' komt opborrelen niet als "raam net dichtgedaan" telt.
+        # Op de `*_mag_dicht`-sensoren en NIET op de raamcontacten zelf: de
+        # sluiting hieronder beslist op die sensoren, en die lopen anderhalve
+        # milliseconde achter op het contact waar ze uit volgen. Trigger je op
+        # het contact, dan leest de run de sensor van vóór zijn eigen trigger en
+        # doet hij niets - precies wat op 17 augustus 2026 het grote rolgordijn
+        # eerst oversloeg (21:10:25,801 contact, 21:10:25,802 sensor) en daarna
+        # het kleine helemaal miste (21:10:30,410 het besluit, 21:10:30,412 de
+        # sensor). Trigger en besluit staan nu op dezelfde bron.
+        #
+        # Dit vangt ook het dode contact af: de sensor springt twee uur na de
+        # laatste melding vanzelf op 'on', en dan sluit het rolgordijn alsnog
+        # zodra we in het venster hieronder zitten.
+        #
+        # `not_from` expliciet, zodat een sensor die na een herstart uit
+        # 'unknown'/'unavailable' komt opborrelen niet als "raam net
+        # dichtgedaan" telt.
         - trigger: state
           entity_id:
-            - binary_sensor.keuken_raam_groot_contact
-            - binary_sensor.keuken_raam_klein_contact
-          from: "on"
-          to: "off"
+            - binary_sensor.keuken_rolgordijn_groot_mag_dicht
+            - binary_sensor.keuken_rolgordijn_klein_mag_dicht
+          to: "on"
+          not_from:
+            - unknown
+            - unavailable
           id: raam_dicht
       conditions:
         # Alleen de raamtrigger heeft een tijdvenster nodig; de twee andere
