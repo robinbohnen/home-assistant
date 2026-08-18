@@ -613,7 +613,7 @@ cards:
                   - padding: 6px 2px 2px 2px
                 grid:
                   - grid-template-areas: '"art info"'
-                  - grid-template-columns: 52px 1fr
+                  - grid-template-columns: 60px 1fr
                   - align-items: center
                   - column-gap: 14px
                 custom_fields:
@@ -631,8 +631,11 @@ cards:
                            || sp.find(function(e){ return states[e] && states[e].state === 'paused'; });
                     var s = act ? states[act] : null;
                     var pic = s && s.attributes.entity_picture ? s.attributes.entity_picture : null;
-                    if(pic) return `<div style="width:52px;height:52px;border-radius:10px;background-image:url('${pic}');background-size:cover;background-position:center"></div>`;
-                    return `<div style="width:52px;height:52px;border-radius:10px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:music" style="--mdc-icon-size:24px;color:rgba(255,255,255,0.60)"></ha-icon></div>`;
+                    // 60px en niet 52: de hoes is het enige beeld in deze kolom
+                    // en mag dat ook zijn. Het randje eromheen houdt een donkere
+                    // hoes van de donkere achtergrond gescheiden.
+                    if(pic) return `<div style="width:60px;height:60px;border-radius:10px;border:1px solid rgba(255,255,255,0.08);background-image:url('${pic}');background-size:cover;background-position:center"></div>`;
+                    return `<div style="width:60px;height:60px;border-radius:10px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center"><ha-icon icon="mdi:music" style="--mdc-icon-size:26px;color:rgba(255,255,255,0.60)"></ha-icon></div>`;
                   ]]]
                 info: |
                   [[[
@@ -645,14 +648,40 @@ cards:
                     // Radiostreams sturen tijdens de reclame technische markers mee
                     // ("commercial-in"), en soms een URL. Dan liever de zendernaam.
                     var titel = (s.attributes.media_title || '').trim();
+                    var artiest = (s.attributes.media_artist || s.attributes.media_album_name || '').trim();
                     var zender = (s.attributes.media_channel || s.attributes.app_name || s.attributes.source || '').trim();
                     var reclame = /^(commercial|advert(isement)?|adbreak|ad)[-_ ]?(in|out|start|end|break)?$/i.test(titel);
                     var onbruikbaar = !titel || reclame || /^https?:\/\//i.test(titel) || titel.toLowerCase() === 'unknown';
-                    if(onbruikbaar) titel = zender || 'Radio';
+                    if(onbruikbaar){ titel = zender || 'Radio'; artiest = ''; }
+
+                    // DE VELDEN VAN EEN RADIOSTREAM STAAN OMGEKEERD
+                    // Qmusic zet de ARTIEST in `media_title`, in kapitalen, en het
+                    // NUMMER in `media_artist`. Op het paneel stond daardoor
+                    // "ZARA LARSSON" als kop, met "Midnight Sun" weggestopt achter
+                    // de speakernaam op de tweede regel (18-08). Staat de titel
+                    // volledig in hoofdletters en het andere veld niet, dan is dat
+                    // wat er aan de hand is en draaien we ze terug. Een gewone
+                    // speler (Spotify, tv) raakt dit niet: die schrijft geen
+                    // kapitalen.
+                    var kapitalen = function(t){
+                      return !!t && t === t.toUpperCase() && t !== t.toLowerCase() && /[A-Z\u00c0-\u00de]{4}/.test(t);
+                    };
+                    if(kapitalen(titel) && artiest && !kapitalen(artiest)){
+                      var wissel = titel; titel = artiest; artiest = wissel;
+                    }
+                    // En wat er dan nog schreeuwt, temperen we. Woorden van één of
+                    // twee letters blijven staan, anders wordt DJ ineens Dj.
+                    var netjes = function(t){
+                      if(!kapitalen(t)) return t;
+                      return t.toLowerCase().split(' ').map(function(w){
+                        if(w.length <= 2) return w.toUpperCase();
+                        return w.charAt(0).toUpperCase() + w.slice(1);
+                      }).join(' ');
+                    };
+                    titel = netjes(titel); artiest = netjes(artiest);
                     var naam = s.attributes.friendly_name ? s.attributes.friendly_name.replace(/ ?Sonos/i,'').trim() : '';
                     var grp = s.attributes.group_members ? s.attributes.group_members.length : 1;
                     var extra = grp > 1 ? `<span style="color:#3b82f6;font-weight:600"> +${grp-1}</span>` : '';
-                    var artiest = onbruikbaar ? '' : (s.attributes.media_artist || s.attributes.media_album_name || '');
                     var kleur = pauze ? 'rgba(255,255,255,0.4)' : '#4ade80';
                     var staat = pauze ? '<span style="color:rgba(255,255,255,0.52)">gepauzeerd</span> <span style="color:rgba(255,255,255,0.25)">·</span> ' : '';
                     if(!pauze && reclame) staat = '<span style="color:rgba(255,255,255,0.52)">reclame</span> <span style="color:rgba(255,255,255,0.25)">·</span> ';
@@ -669,7 +698,11 @@ cards:
                     // op de baseline), een icoon met een expliciete box van 13px,
                     // en een vaste `line-height` op de regel zodat een icoon dat
                     // ooit groter wordt de hoogte niet meer kan bepalen.
-                    var sub = staat + `<ha-icon icon="mdi:speaker" style="--mdc-icon-size:13px;width:13px;height:13px;vertical-align:middle;color:${kleur}"></ha-icon> ${naam}${extra}` + (artiest ? ` <span style="color:rgba(255,255,255,0.25)">·</span> ${artiest}` : '');
+                    // Volgorde: eerst wát er speelt, dan pas wáár. De artiest hoort
+                    // bij het nummer erboven; de speaker is context en mag achteraan.
+                    var punt = ' <span style="color:rgba(255,255,255,0.25)">·</span> ';
+                    var sub = staat + (artiest ? artiest + punt : '')
+                            + `<ha-icon icon="mdi:speaker" style="--mdc-icon-size:13px;width:13px;height:13px;vertical-align:middle;color:${kleur}"></ha-icon> ${naam}${extra}`;
                     return `<div style="display:flex;flex-direction:column;gap:2px;overflow:hidden"><span style="font-size:14.5px;line-height:1.3;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${titel}</span><span style="font-size:12.5px;line-height:1.35;color:rgba(255,255,255,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</span></div>`;
                   ]]]
             # Afspelen / pauzeren van de actieve speaker (Sonos pauzeert de hele groep)
