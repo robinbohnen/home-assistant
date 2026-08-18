@@ -226,6 +226,23 @@ covers_package:
           event_data:
             routine: ochtend
       conditions: []
+      ##################################################################
+      ## DE KLIMAATREGIE MOET HIER EVEN AF BLIJVEN
+      ##
+      ## Dit is een knop die iemand indrukt, en tot nu toe won de
+      ## klimaatregie daar binnen twee minuten van: op 15 augustus 2026
+      ## ging om 09:08:32 alles boven naar 100, en om 09:10:21 trok
+      ## `klimaat_zonwering_uitvoeren` kantoor weer naar 0 en de
+      ## slaapkamer naar 15 ("zon op de voor/zijgevel"). Alles omhoog en
+      ## twee minuten later weer omlaag; ook gezien op 12 augustus.
+      ##
+      ## Daarom start deze automatisering dezelfde override-timers die de
+      ## avondsluiting al zet - maar op een half uur in plaats van de
+      ## vier uur van een echte handbediening. Lang genoeg om te
+      ## ontbijten met de rolluiken open, kort genoeg dat de zonwering op
+      ## een hittedag niet de hele ochtend uit staat. Wil je die
+      ## verhouding anders, dan is `duration` hieronder de enige knop.
+      ##################################################################
       actions:
         - if:
             - condition: numeric_state
@@ -244,6 +261,15 @@ covers_package:
                 entity_id:
                   - cover.keuken_screen_links
                   - cover.keuken_screen_rechts
+            - alias: Klimaatregie een half uur van deze zones af houden
+              action: timer.start
+              data:
+                duration: "00:30:00"
+              target:
+                entity_id:
+                  - timer.override_badkamer
+                  - timer.override_slaapkamer
+                  - timer.override_keuken_screens
           else:
             - action: cover.open_cover
               data: {}
@@ -264,6 +290,20 @@ covers_package:
                       variables:
                         cover: "{{ repeat.item }}"
                         doel: 100
+            - alias: Klimaatregie een half uur van deze zones af houden
+              action: timer.start
+              data:
+                duration: "00:30:00"
+              target:
+                entity_id:
+                  - timer.override_kantoor_links
+                  - timer.override_kantoor_rechts
+                  - timer.override_badkamer
+                  - timer.override_slaapkamer
+                  - timer.override_slaapkamer_logan
+                  - timer.override_slaapkamer_emma
+                  - timer.override_keuken_rolgordijn_groot
+                  - timer.override_keuken_rolgordijn_klein
 
     #################################################################
     ## Lock/alarm events - open/close kitchen rollerblinds

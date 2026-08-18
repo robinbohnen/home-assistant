@@ -55,8 +55,11 @@ env = Environment(loader=FileSystemLoader(f"{CONFIG}/custom_templates"))
 env.filters["float"] = f_float
 env.filters["to_json"] = lambda v, **k: json.dumps(v)
 env.filters["from_json"] = json.loads
+# `timedelta` is in Home Assistant een gewone template-global; hier moet hij er
+# los bij, anders klapt elke marge-berekening in klimaat.jinja op 'undefined'.
 env.globals.update(states=ha_states, state_attr=ha_state_attr, is_state=ha_is_state,
-                   has_value=ha_has_value, today_at=ha_today_at, now=lambda: NOW)
+                   has_value=ha_has_value, today_at=ha_today_at, now=lambda: NOW,
+                   timedelta=dt.timedelta)
 
 MOD = env.get_template("klimaat.jinja").module
 

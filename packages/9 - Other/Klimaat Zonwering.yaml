@@ -328,6 +328,7 @@ klimaat_zonwering_package:
             positie: "{{ adviezen.keuken_screens.positie }}"
             uitvoeren: "{{ adviezen.keuken_screens.uitvoeren }}"
             vraagt: "{{ adviezen.keuken_screens.vraagt }}"
+            spoed: "{{ adviezen.keuken_screens.spoed }}"
             reden: "{{ adviezen.keuken_screens.reden }}"
             blokkade: "{{ adviezen.keuken_screens.blokkade }}"
             cover: "{{ adviezen.keuken_screens.cover }}"
@@ -342,6 +343,7 @@ klimaat_zonwering_package:
             positie: "{{ adviezen.keuken_rolgordijn_groot.positie }}"
             uitvoeren: "{{ adviezen.keuken_rolgordijn_groot.uitvoeren }}"
             vraagt: "{{ adviezen.keuken_rolgordijn_groot.vraagt }}"
+            spoed: "{{ adviezen.keuken_rolgordijn_groot.spoed }}"
             reden: "{{ adviezen.keuken_rolgordijn_groot.reden }}"
             blokkade: "{{ adviezen.keuken_rolgordijn_groot.blokkade }}"
             cover: "{{ adviezen.keuken_rolgordijn_groot.cover }}"
@@ -354,6 +356,7 @@ klimaat_zonwering_package:
             positie: "{{ adviezen.keuken_rolgordijn_klein.positie }}"
             uitvoeren: "{{ adviezen.keuken_rolgordijn_klein.uitvoeren }}"
             vraagt: "{{ adviezen.keuken_rolgordijn_klein.vraagt }}"
+            spoed: "{{ adviezen.keuken_rolgordijn_klein.spoed }}"
             reden: "{{ adviezen.keuken_rolgordijn_klein.reden }}"
             blokkade: "{{ adviezen.keuken_rolgordijn_klein.blokkade }}"
             cover: "{{ adviezen.keuken_rolgordijn_klein.cover }}"
@@ -366,6 +369,7 @@ klimaat_zonwering_package:
             positie: "{{ adviezen.kantoor_links.positie }}"
             uitvoeren: "{{ adviezen.kantoor_links.uitvoeren }}"
             vraagt: "{{ adviezen.kantoor_links.vraagt }}"
+            spoed: "{{ adviezen.kantoor_links.spoed }}"
             reden: "{{ adviezen.kantoor_links.reden }}"
             blokkade: "{{ adviezen.kantoor_links.blokkade }}"
             cover: "{{ adviezen.kantoor_links.cover }}"
@@ -378,6 +382,7 @@ klimaat_zonwering_package:
             positie: "{{ adviezen.kantoor_rechts.positie }}"
             uitvoeren: "{{ adviezen.kantoor_rechts.uitvoeren }}"
             vraagt: "{{ adviezen.kantoor_rechts.vraagt }}"
+            spoed: "{{ adviezen.kantoor_rechts.spoed }}"
             reden: "{{ adviezen.kantoor_rechts.reden }}"
             blokkade: "{{ adviezen.kantoor_rechts.blokkade }}"
             cover: "{{ adviezen.kantoor_rechts.cover }}"
@@ -390,6 +395,7 @@ klimaat_zonwering_package:
             positie: "{{ adviezen.badkamer.positie }}"
             uitvoeren: "{{ adviezen.badkamer.uitvoeren }}"
             vraagt: "{{ adviezen.badkamer.vraagt }}"
+            spoed: "{{ adviezen.badkamer.spoed }}"
             reden: "{{ adviezen.badkamer.reden }}"
             blokkade: "{{ adviezen.badkamer.blokkade }}"
             cover: "{{ adviezen.badkamer.cover }}"
@@ -402,6 +408,7 @@ klimaat_zonwering_package:
             positie: "{{ adviezen.slaapkamer.positie }}"
             uitvoeren: "{{ adviezen.slaapkamer.uitvoeren }}"
             vraagt: "{{ adviezen.slaapkamer.vraagt }}"
+            spoed: "{{ adviezen.slaapkamer.spoed }}"
             reden: "{{ adviezen.slaapkamer.reden }}"
             blokkade: "{{ adviezen.slaapkamer.blokkade }}"
             cover: "{{ adviezen.slaapkamer.cover }}"
@@ -417,6 +424,7 @@ klimaat_zonwering_package:
             positie: "{{ adviezen.slaapkamer_logan.positie }}"
             uitvoeren: "{{ adviezen.slaapkamer_logan.uitvoeren }}"
             vraagt: "{{ adviezen.slaapkamer_logan.vraagt }}"
+            spoed: "{{ adviezen.slaapkamer_logan.spoed }}"
             reden: "{{ adviezen.slaapkamer_logan.reden }}"
             blokkade: "{{ adviezen.slaapkamer_logan.blokkade }}"
             cover: "{{ adviezen.slaapkamer_logan.cover }}"
@@ -430,6 +438,7 @@ klimaat_zonwering_package:
             positie: "{{ adviezen.slaapkamer_emma.positie }}"
             uitvoeren: "{{ adviezen.slaapkamer_emma.uitvoeren }}"
             vraagt: "{{ adviezen.slaapkamer_emma.vraagt }}"
+            spoed: "{{ adviezen.slaapkamer_emma.spoed }}"
             reden: "{{ adviezen.slaapkamer_emma.reden }}"
             blokkade: "{{ adviezen.slaapkamer_emma.blokkade }}"
             cover: "{{ adviezen.slaapkamer_emma.cover }}"
@@ -445,6 +454,7 @@ klimaat_zonwering_package:
             positie: "{{ adviezen.zonnescherm.positie }}"
             uitvoeren: "{{ adviezen.zonnescherm.uitvoeren }}"
             vraagt: "{{ adviezen.zonnescherm.vraagt }}"
+            spoed: "{{ adviezen.zonnescherm.spoed }}"
             reden: "{{ adviezen.zonnescherm.reden }}"
             blokkade: "{{ adviezen.zonnescherm.blokkade }}"
             cover: "{{ adviezen.zonnescherm.cover }}"
@@ -529,7 +539,14 @@ klimaat_zonwering_package:
         er niets te winnen valt. Zonwering die eerst toestemming vraagt (het
         zonnescherm) slaat hij over zolang het advies "naar buiten" is; het
         binnenhalen doet hij wél gewoon zelf.
-      mode: single
+      # `queued` en niet `single`: verandert het advies terwijl deze ronde
+      # loopt, dan is die wijziging een nieuwe trigger - en met `single` plus
+      # `max_exceeded: silent` verdween precies de correctie die de vorige
+      # ronde had moeten rechtzetten. Drie in de rij is ruim: een ronde is in
+      # een seconde klaar, en de rustpauze hieronder houdt een tweede ronde
+      # sowieso van een cover af die net bewogen heeft.
+      mode: queued
+      max: 3
       max_exceeded: silent
       triggers:
         # Alleen op de twee attributen die er echt toe doen; op de sensor zelf
@@ -552,14 +569,32 @@ klimaat_zonwering_package:
           attribute: uitvoeren
         # Vangnet: ook bijsturen als er niets veranderde maar de stand toch
         # afwijkt (cover was onbereikbaar, handbediening afgelopen, herstart).
+        #
+        # Op seconde 30 en niet op 0: de adviessensoren hierboven rekenen op
+        # `time_pattern /1` en schrijven dus precies op de minuutgrens. Tikte
+        # deze ronde daar bovenop, dan las hij het advies van de vórige minuut.
+        # Op 14 augustus 2026 om 19:30:00 sprong het advies naar 'rust' (de
+        # kinderen naar bed) en rolde deze automatisering het keukenrolgordijn
+        # om 19:30:06 alsnog helemaal open op het verlopen advies; om 19:30:14
+        # ging de deur op slot en trok `covers_lock_alarm_events` het weer
+        # dicht. Een halve minuut ertussen is genoeg: het advies staat dan.
         - trigger: time_pattern
           minutes: "/15"
+          seconds: 30
         - trigger: homeassistant
           event: start
       conditions:
         - condition: state
           entity_id: input_boolean.klimaatregie_actief
           state: "on"
+      variables:
+        # Na een herstart krijgt élke cover een verse `last_updated`, en dan
+        # zou de rustpauze hieronder het hele huis een kwartier stil zetten
+        # terwijl er juist bijgestuurd moet worden. De startronde slaat de
+        # pauze daarom over.
+        herstart: >-
+          {{ trigger is defined
+             and (trigger.platform | default('')) == 'homeassistant' }}
       actions:
         - repeat:
             for_each: >-
@@ -575,6 +610,10 @@ klimaat_zonwering_package:
                   # Zone die eerst toestemming vraagt en nu naar buiten zou
                   # gaan: die laat `klimaat_zonnescherm_vragen` afhandelen.
                   vraagt: "{{ state_attr(advies_sensor, 'vraagt') in [true, 'True', 'true'] }}"
+                  # Wind, regen of vorst op een screen: dat is het enige advies
+                  # dat niet op de rustpauze hieronder mag wachten. Zie blok 6
+                  # in custom_templates/klimaat.jinja.
+                  spoed: "{{ state_attr(advies_sensor, 'spoed') in [true, 'True', 'true'] }}"
               - variables:
                   # Covers zonder tussenstand (de screengroep) kennen geen
                   # current_position; die vertalen we naar 100 of 0.
@@ -582,12 +621,36 @@ klimaat_zonwering_package:
                     {% set p = state_attr(cover, 'current_position') %}
                     {{ p | int(0) if p is not none
                        else (100 if is_state(cover, 'open') else 0) }}
+                  # RUSTPAUZE - minstens een kwartier tussen twee bewegingen
+                  #
+                  # Het advies volgt de wolken, en de covers volgden het advies
+                  # op de seconde. Op 17 augustus 2026 gingen de keukenscreens
+                  # tussen 11:32 en 12:16 vier keer volledig op en neer omdat
+                  # `binary_sensor.zon_op_voorgevel` heen en weer sprong - en
+                  # dat ondanks de 2/10 minuten vertraging die daar al op zit.
+                  # Kantoor links wisselde diezelfde ochtend meermaals per
+                  # minuut tussen 'kier' (kamer 24.8°) en 'dicht' (zon op de
+                  # gevel); dat het stil bleef was toeval, want er stond net
+                  # een override op.
+                  #
+                  # Een cover die net bewogen heeft blijft daarom een kwartier
+                  # staan. `last_updated` is hier de juiste maat en niet
+                  # `last_changed`: een rolgordijn dat van 100 naar 15 gaat
+                  # blijft de hele rit 'open', dus `last_changed` verspringt
+                  # dan niet eens. Deze covers melden niets uit zichzelf, dus
+                  # `last_updated` ís het einde van de laatste beweging.
+                  mag_nu_bewegen: >-
+                    {% set c = states[cover]
+                       if cover is string and '.' in cover else none %}
+                    {{ spoed or herstart or c is none
+                       or (now() - c.last_updated).total_seconds() >= 900 }}
               - if:
                   - condition: template
                     value_template: >-
                       {{ mag and not vraagt and doel >= 0
                          and cover not in [none, 'None']
-                         and (huidig - doel) | abs > 5 }}
+                         and (huidig - doel) | abs > 5
+                         and mag_nu_bewegen }}
                 then:
                   - choose:
                       - conditions:
@@ -697,6 +760,25 @@ klimaat_zonwering_package:
             doel: "{{ state_attr(advies_sensor, 'positie') | int(-1) }}"
             # Openstaande vraag, geen handbediening: zie de kop hierboven.
             vraagt: "{{ state_attr(advies_sensor, 'vraagt') in [true, 'True', 'true'] }}"
+            # IS HET ADVIES ZELF NET VERSCHOVEN?
+            #
+            # De uitvoerder zet een cover op het advies van dát moment. Verandert
+            # het advies binnen de anderhalve minuut hieronder, dan staat die
+            # cover ineens naast het NIEUWE advies en telde zijn eigen zet als
+            # handbediening. Op 15 augustus 2026 zette de uitvoerder kantoor
+            # links om 09:11:08 op 0 (advies: dicht), sprong het advies om
+            # 09:12:30 naar kier 15, en stond er om 09:12:38 vier uur
+            # handbediening op een rolluik dat niemand had aangeraakt - op een
+            # hittedag, waardoor het de rest van de ochtend op 0 bleef staan.
+            #
+            # `last_changed` en niet `last_updated`: het advieswoord verspringt
+            # alleen als de gewenste stand verandert, terwijl `reden` bij elke
+            # tiende graad een nieuwe tekst krijgt. 150 seconden dekt de 90 uit
+            # de trigger plus de rit van de cover zelf. Een sensor die er niet
+            # is telt als stabiel - dan blijft het gedrag zoals het was.
+            advies_stabiel: >-
+              {% set s = states[advies_sensor] %}
+              {{ s is none or (now() - s.last_changed).total_seconds() > 150 }}
             huidig: >-
               {% set p = state_attr(trigger.entity_id, 'current_position') %}
               {{ p | int(0) if p is not none
@@ -707,7 +789,8 @@ klimaat_zonwering_package:
                 - condition: template
                   value_template: >-
                     {{ zone != '' and not vraagt and doel >= 0
-                       and (huidig - doel) | abs > 5 }}
+                       and (huidig - doel) | abs > 5
+                       and advies_stabiel }}
               sequence:
                 - action: timer.start
                   target:

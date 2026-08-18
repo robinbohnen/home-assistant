@@ -82,6 +82,22 @@
 {%- set BEDTIJD_TERUGVAL = '18:00' -%}
 {%- set BEDTIJD_VROEGST = '17:00' -%}
 
+{#- Gelijk aflopen is niet genoeg gebleken: de klimaatregie liet de rolgordijnen
+    exact op de bedtijd los, en in het laatste kwartier daarvóór vond ze een
+    volledig geopend rolgordijn nog steeds de beste stand. Op 15 augustus 2026
+    trok de uitvoerder ze daardoor om 19:15 helemaal open, waarna ze om 19:30
+    bij het op slot doen weer helemaal dicht gingen - twee volle slagen van een
+    motor die door het hele huis te horen is, vlak voordat de kinderen naar
+    boven gaan.
+
+    Daarom stopt de klimaatregie een marge vóór de avondroutine. Twintig minuten
+    en geen kwartier: een kwartier valt precies samen met de kwartierronde van
+    de uitvoerder (bedtijden staan op hele en halve uren), en geen half uur,
+    want dan is een late weekendbedtijd de hele avond al rust. Later loslaten
+    dan de avondroutine mag nooit - dan draait de uitvoerder terug wat
+    `kitchen_covers` net gesloten heeft. -#}
+{%- set BEDTIJD_MARGE = 20 -%}
+
 {#- ========================== ZONECONFIGURATIE ============================ -#}
 {#-
   naam       label op het dashboard
@@ -463,10 +479,11 @@
 {%- endfor -%}
 {#- De terugval geldt alleen als géén van de helpers een bruikbare avondtijd
     gaf; een latere bedtijd (weekend) hoort de rust juist op te schuiven. -#}
-{%- set na_bedtijd = now() >= (bed.t if bed.t is not none
-                               else today_at(BEDTIJD_TERUGVAL)) -%}
+{%- set na_bedtijd = now() >= ((bed.t if bed.t is not none
+                                else today_at(BEDTIJD_TERUGVAL))
+                               - timedelta(minutes=BEDTIJD_MARGE)) -%}
 
-{%- set ns = namespace(a='open', r='') -%}
+{%- set ns = namespace(a='open', r='', spoed=false) -%}
 
 {#- 1. Stille uren: alleen een kier om te spuien mag nog, verder niets.
       Behalve in een kinderkamer: die blijft tijdens het slaapvenster helemaal
@@ -641,7 +658,7 @@
     {%- set ns.r = 'avond en nacht gaan over inkijk, niet over warmte' -%}
   {%- elif na_bedtijd -%}
     {%- set ns.a = 'rust' -%}
-    {%- set ns.r = 'de kinderen gaan naar bed, rolgordijn is nu van de avondroutine' -%}
+    {%- set ns.r = 'de kinderen gaan zo naar bed, rolgordijn is nu van de avondroutine' -%}
   {%- elif regime == 'verwarmen' -%}
     {%- set ns.a = 'open' -%}
     {%- set ns.r = 'zon is welkom vandaag' -%}
@@ -682,6 +699,12 @@
 {%- if z.screen and (te_hard or stormalarm or nat
                      or (buiten is not none and buiten < 4)) -%}
   {%- set ns.a = 'open' -%}
+  {#- Spoed: dit is het enige advies dat niet mag wachten. De uitvoerder houdt
+      sinds 18 augustus 2026 een kwartier rust tussen twee bewegingen van
+      dezelfde cover (zie `mag_nu_bewegen` in packages/9 - Other/Klimaat
+      Zonwering.yaml); nat doek of doek in de wind is precies het geval waarin
+      die pauze niet hoort te gelden. -#}
+  {%- set ns.spoed = true -%}
   {%- set ns.r = 'screen ingetrokken: ' ~ ('wind ' ~ wind | round | int ~ ' km/u' if te_hard
                   else ('stormwaarschuwing' if stormalarm
                   else ('regen op komst (' ~ regen | round(1) ~ ' mm)' if nat
@@ -730,6 +753,7 @@
      'reden': ns.r,
      'uitvoeren': uitvoeren,
      'vraagt': vraagt,
+     'spoed': ns.spoed,
      'blokkade': blokkade,
      'cover': z.cover,
      'naam': z.naam,
