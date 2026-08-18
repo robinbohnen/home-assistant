@@ -602,6 +602,12 @@ cards:
               show_icon: false
               show_name: false
               show_state: false
+              # De voortgangsbalk hieronder rekent met `new Date()`, en een
+              # button-card hertekent niet uit zichzelf. `sensor.time` tikt elke
+              # minuut en houdt hem lopend, ook als er verder niets verandert.
+              # (De optie heet `triggers_update`, niet `update_timer` - die
+              # laatste bestaat niet en wordt stil genegeerd.)
+              triggers_update: sensor.time
               tap_action:
                 action: navigate
                 navigation_path: "#ov-media"
@@ -712,7 +718,47 @@ cards:
                     var punt = ' <span style="color:rgba(255,255,255,0.25)">·</span> ';
                     var sub = staat + (artiest ? artiest + punt : '')
                             + `<ha-icon icon="mdi:speaker" style="--mdc-icon-size:13px;width:13px;height:13px;vertical-align:middle;color:${kleur}"></ha-icon> ${naam}${extra}`;
-                    return `<div style="display:flex;flex-direction:column;gap:2px;overflow:hidden"><span style="font-size:14.5px;line-height:1.3;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${titel}</span><span style="font-size:12.5px;line-height:1.35;color:rgba(255,255,255,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</span></div>`;
+
+                    // DERDE REGEL: DE LEGE RUIMTE RECHTS OPVULLEN
+                    // Een korte titel liet de halve rij leeg staan. Deze balk loopt
+                    // over de volle breedte en zegt bij een nummer hoe ver het is,
+                    // en bij radio - dat geen lengte meestuurt - wat het volume van
+                    // die speaker is. Dat laatste is hier geen vulling maar nuttig:
+                    // deze Sonossen staan standaard op 5%, en dat verklaart menig
+                    // "hij doet het niet". Gedempt zegt hij dat met zoveel woorden.
+                    //
+                    // De balk is 4px hoog en de regel ~14px, dus het tekstblok blijft
+                    // onder de 60px van de hoes: de rij wordt er niet hoger van.
+                    var mmss = function(sec){
+                      sec = Math.max(0, Math.round(sec));
+                      var m = Math.floor(sec / 60), r = sec % 60;
+                      return m + ':' + (r < 10 ? '0' : '') + r;
+                    };
+                    var balk = function(pct, rechts, vulkleur){
+                      pct = Math.max(0, Math.min(100, pct));
+                      return `<div style="display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:8px;padding-top:6px">
+                        <div style="height:4px;border-radius:2px;background:rgba(255,255,255,0.10);overflow:hidden"><div style="width:${pct}%;height:100%;background:${vulkleur};border-radius:2px"></div></div>
+                        <span style="font-size:11px;line-height:1;color:rgba(255,255,255,0.45);white-space:nowrap">${rechts}</span></div>`;
+                    };
+                    var duur = Number(s.attributes.media_duration) || 0;
+                    var derde;
+                    if(duur > 0){
+                      // `media_position` is de stand op het moment van
+                      // `media_position_updated_at`; loopt het nummer, dan tellen we
+                      // de tijd sindsdien erbij op. Zo klopt de balk op elk moment
+                      // dat de kaart hertekent, ook als dat onregelmatig gebeurt.
+                      var pos = Number(s.attributes.media_position) || 0;
+                      var upd = s.attributes.media_position_updated_at;
+                      var sinds = (!pauze && upd) ? (Date.now() - new Date(upd).getTime()) / 1000 : 0;
+                      var nu = Math.max(0, Math.min(duur, pos + (isNaN(sinds) ? 0 : sinds)));
+                      derde = balk(nu / duur * 100, mmss(nu) + ' / ' + mmss(duur), '#3b82f6');
+                    } else if(s.attributes.is_volume_muted){
+                      derde = balk(0, 'gedempt', 'rgba(255,255,255,0.30)');
+                    } else {
+                      var vol = Math.round((Number(s.attributes.volume_level) || 0) * 100);
+                      derde = balk(vol, 'volume ' + vol + '%', 'rgba(255,255,255,0.30)');
+                    }
+                    return `<div style="display:flex;flex-direction:column;gap:2px;overflow:hidden"><span style="font-size:14.5px;line-height:1.3;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${titel}</span><span style="font-size:12.5px;line-height:1.35;color:rgba(255,255,255,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sub}</span>${derde}</div>`;
                   ]]]
             # Afspelen / pauzeren van de actieve speaker (Sonos pauzeert de hele groep)
             - type: custom:button-card
