@@ -708,21 +708,35 @@ cards:
                   return lo === null ? null : {lo: lo, hi: hi};
                 };
                 var klok = function(d){ return ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2); };
-                var f = function(x, col){ return `<span style="color:${col}">€ ${x.p.toFixed(3).replace('.',',')}</span><span style="color:rgba(255,255,255,0.35)"> ${klok(x.d)}</span>`; };
+                // Op een breed scherm paste alles op één regel, en stond dus ook
+                // alles even dicht op elkaar: prijs, tijd, laag en hoog liepen
+                // in elkaar over als één rij cijfers. De afstanden zijn nu
+                // getrapt - tijd hoort bij zijn prijs (4px), laag en hoog staan
+                // los (14px), vandaag en morgen het verst uit elkaar (34px) -
+                // en een pijltje zegt wat eerst alleen de kleur zei.
+                var f = function(x, col, pijl){
+                  return `<span style="display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap">`
+                    + `<span style="color:${col};font-size:10px;opacity:0.85">${pijl}</span>`
+                    + `<span style="color:${col};font-weight:600">€ ${x.p.toFixed(3).replace('.',',')}</span>`
+                    + `<span style="color:rgba(255,255,255,0.32);font-size:11px">${klok(x.d)}</span></span>`;
+                };
                 // nowrap per dagdeel, zodat een regel hoogstens tussen "vandaag"
                 // en "morgen" breekt en niet middenin een prijs.
                 var deel = function(lbl, x){
+                  var kop = `<span style="color:rgba(255,255,255,0.45);font-size:11px;letter-spacing:0.3px">${lbl}</span>`;
                   var inhoud = x
-                    ? `<span style="color:rgba(255,255,255,0.55)">${lbl}</span> ${f(x.lo,'#4ade80')} <span style="color:rgba(255,255,255,0.2)">·</span> ${f(x.hi,'#ef4444')}`
-                    : `<span style="color:rgba(255,255,255,0.55)">${lbl}</span> <span style="color:rgba(255,255,255,0.3)">nog niet bekend</span>`;
-                  return `<span style="white-space:nowrap">${inhoud}</span>`;
+                    ? `${kop}${f(x.lo,'#4ade80','▼')}${f(x.hi,'#ef4444','▲')}`
+                    : `${kop}<span style="color:rgba(255,255,255,0.3)">nog niet bekend</span>`;
+                  return `<span style="display:inline-flex;align-items:baseline;gap:14px;white-space:nowrap">${inhoud}</span>`;
                 };
                 var vandaag = extremen('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today');
                 var morgen = extremen('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow');
-                var dagen = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 14px;font-size:12px">${deel('vandaag', vandaag)}${deel('morgen', morgen)}</span>`;
+                var dagen = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 34px;font-size:12.5px">${deel('vandaag', vandaag)}${deel('morgen', morgen)}</span>`;
                 var dot = function(c, lbl){ return `<span style="display:inline-flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${lbl}</span>`; };
                 var legenda = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;font-size:11.5px;color:rgba(255,255,255,0.52)">${dot('#4ade80','goedkoop')}${dot('#f59e0b','gemiddeld')}${dot('#ef4444','duur')}</span>`;
-                return `<span style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px;width:100%">${dagen}${legenda}</span>`;
+                // space-between en niet margin-left:auto: zodra de legenda naar
+                // een eigen regel zakt, hoort hij daar links te beginnen.
+                return `<span style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 24px;width:100%">${dagen}${legenda}</span>`;
               ]]]
         # tips: goedkoopste blok, negatieve prijs, en hoe fijn de prijzen zijn
         - type: custom:button-card
