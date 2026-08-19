@@ -1,0 +1,132 @@
+##############################################################################
+## PROXMOX NUC - temperatuur en levenstekens van de host
+##
+## De NUC waar Home Assistant zelf op draait publiceert sinds 19-08-2026 zijn
+## eigen gezondheid over MQTT (script + timer in CT 108, gebruiker
+## `pve-thermal`, wachtwoord in /etc/nuc-thermal-mqtt.env op die host). De
+## sensoren komen binnen via MQTT-discovery en staan dus NIET in deze repo:
+##
+##   sensor.proxmox_nuc_intel_cpu_temperatuur    °C, elke minuut
+##   sensor.proxmox_nuc_intel_nvme_temperatuur   °C
+##   sensor.proxmox_nuc_intel_cpu_verbruik       W  (package power)
+##   sensor.proxmox_nuc_intel_load_average       1-minuut load
+##   sensor.proxmox_nuc_intel_throttle_events    teller, total_increasing
+##   sensor.proxmox_nuc_intel_uptime             s
+##
+## Twee dingen om te weten voor je hieronder iets verandert:
+##
+## 1. Alle zes hebben `expire_after: 300`. Valt de host, het script of de
+##    broker weg, dan springen ze na vijf minuten vanzelf op `unavailable`.
+##    Daarop leunt de derde automatisering: dit is meteen de down-detectie van
+##    de machine waar HA zelf op draait.
+## 2. De throttle-teller is het bewijs dat hitte écht pijn doet. 85 °C is warm
+##    maar niet erg; pas als de CPU terugklokt verlies je prestaties. Daarom
+##    staat die stand in de melding - loopt hij op, dan is het geen loos alarm.
+##
+## Ruwe historie (elke minuut, met logrotate) staat op de host zelf in
+## /var/log/nuc-thermal/thermal.csv; de recorder van HA bewaart de sensoren
+## niet zo lang.
+##
+## NIET HIER: de watchdog voor kritieke sensoren en backups, die staat in
+## packages/9 - Other/Watchdog.yaml. Deze host-sensoren zitten daar bewust
+## niet in - die lijst gaat over sensoren waar automatiseringen op leunen, en
+## valt de NUC weg dan draait HA sowieso niet meer mee.
+##############################################################################
+
+proxmox_nuc_package:
+
+  automation:
+    ###########################################################################
+    ## Warm
+    ###########################################################################
+    - id: proxmox_nuc_cpu_heet
+      alias: Proxmox NUC - CPU te heet
+      description: >-
+        Meldt als de CPU van de NUC vijf minuten boven de 85 °C blijft. Korte
+        pieken bij een backup of een update horen erbij en halen die vijf
+        minuten niet.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: numeric_state
+          entity_id: sensor.proxmox_nuc_intel_cpu_temperatuur
+          above: 85
+          for: "00:05:00"
+      conditions:
+        # Hooguit één melding per zes uur. Een NUC die in een warme meterkast
+        # staat blijft anders de hele middag piepen.
+        - condition: template
+          value_template: >-
+            {{ this.attributes.last_triggered is none
+               or now() - this.attributes.last_triggered > timedelta(hours=6) }}
+      actions:
+        - action: notify.mobile_devices_adults
+          data:
+            title: NUC wordt warm
+            message: >-
+              De Proxmox NUC draait al vijf minuten op
+              {{ states('sensor.proxmox_nuc_intel_cpu_temperatuur') }} °C
+              (load {{ states('sensor.proxmox_nuc_intel_load_average') }},
+              {{ states('sensor.proxmox_nuc_intel_throttle_events') }} throttle-events).
+
+    ###########################################################################
+    ## Kritiek
+    ###########################################################################
+    - id: proxmox_nuc_cpu_kritiek
+      alias: Proxmox NUC - CPU kritiek heet
+      description: >-
+        Meldt vrijwel meteen bij 92 °C. Daar begint de CPU terug te klokken en
+        loopt Home Assistant zelf vast te lopen; wachten heeft geen zin meer.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: numeric_state
+          entity_id: sensor.proxmox_nuc_intel_cpu_temperatuur
+          above: 92
+          for: "00:01:00"
+      conditions:
+        - condition: template
+          value_template: >-
+            {{ this.attributes.last_triggered is none
+               or now() - this.attributes.last_triggered > timedelta(hours=1) }}
+      actions:
+        - action: notify.mobile_devices_adults
+          data:
+            title: NUC kritiek heet
+            message: >-
+              De Proxmox NUC staat op
+              {{ states('sensor.proxmox_nuc_intel_cpu_temperatuur') }} °C. Kijk
+              of er een VM op hol is (load
+              {{ states('sensor.proxmox_nuc_intel_load_average') }}) of dat de
+              ventilatie dicht zit.
+
+    ###########################################################################
+    ## Host weg
+    ###########################################################################
+    - id: proxmox_nuc_host_weg
+      alias: Proxmox NUC - Geen levensteken meer
+      description: >-
+        De sensoren vervallen na vijf minuten stilte (expire_after). Blijft het
+        daarna nog vijf minuten stil, dan is niet de sensor stuk maar de
+        keten: het script, CT 108 met de broker, of de NUC zelf.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: state
+          entity_id: sensor.proxmox_nuc_intel_cpu_temperatuur
+          to:
+            - unavailable
+            - unknown
+          for: "00:05:00"
+      conditions:
+        - condition: template
+          value_template: >-
+            {{ this.attributes.last_triggered is none
+               or now() - this.attributes.last_triggered > timedelta(hours=6) }}
+      actions:
+        - action: notify.mobile_devices_adults
+          data:
+            title: NUC stuurt niets meer
+            message: >-
+              Al tien minuten geen temperatuur van de Proxmox NUC. Controleer
+              de timer op de host (nuc-thermal) en de MQTT-broker in CT 108.
