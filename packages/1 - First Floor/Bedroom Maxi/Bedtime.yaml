@@ -95,22 +95,91 @@ bedtime_maxi_package:
             {{ na_bedtijd or voor_opstaan }}
 
   automation:
+    ###########################################################################
+    ## LICHT UIT NA BEDTIJD - MET NABRANDER
+    ##
+    ## Het bedtijdstip is één moment. Staat het licht dán al tien minuten aan,
+    ## dan gaat het uit; wie in die laatste tien minuten nog op de knop drukt
+    ## viel er dwars doorheen en had de rest van de avond licht. Precies dat
+    ## gebeurde op 18 augustus 2026: Logan drukte om 21:21:29 het licht aan,
+    ## om 21:30 telde dat pas 8,5 minuut, de conditie klopte niet, en daarna
+    ## keek niets er meer naar - tot iemand om 21:57 zelf op de knop drukte.
+    ##
+    ## Vandaar de tweede trigger. Staat het licht binnen de nacht tien minuten
+    ## aan, dan gaat het alsnog uit, ongeacht hoe het aan is gekomen. Het
+    ## bedtijdstip zelf blijft staan: dat pakt het gewone geval (het licht
+    ## brandt al uren) op de seconde nauwkeurig, met dezelfde tien minuten
+    ## speling als altijd. De twee triggers overlappen dus bewust.
+    ##
+    ## Het nachtvenster loopt van de vroegste van de twee bedtijd-helpers tot
+    ## 07:00, en eerder als het huis zich voor die tijd wakker meldt
+    ## (`input_boolean.klimaat_wakker`, zie packages/9 - Other/Klimaat
+    ## Zonwering.yaml). Die 07:00 is een KEUZE en geen bijeffect: 's nachts is
+    ## brandend licht altijd fout, maar een kind dat 's ochtends zelf zijn licht
+    ## aandoet moet dat mogen houden - anders klapt het elke tien minuten uit
+    ## terwijl hij ligt te lezen. Deze automatisering is bewust strenger dan de
+    ## nachtrem op de overlopen, die tot 12:00 doorloopt: die houdt alleen
+    ## bewegingslicht tegen, deze zet iets uit dat iemand net zelf aanzette.
+    ## Wil je de grens verleggen, dan is dit het enige getal dat mee moet.
+    ##
+    ## `mode: restart` en niet `single`: de reeks hieronder duurt door de
+    ## nachtlamp een kwartier, en met `single` zou een druk binnen dat kwartier
+    ## precies weer stilletjes wegvallen - hetzelfde gat, andere oorzaak.
+    ###########################################################################
     - id: bedtime_for_maxi_lights_off
       alias: Bedroom Maxi - Bedtime Lights Off
       description: Turn off the lights at maxis bedroom after bedtime
       triggers:
         - at: input_datetime.bedtime_maxi
           trigger: time
+          id: bedtijd
         - at: input_datetime.bedtime_maxi_weekend
           trigger: time
-      conditions:
-        - condition: state
+          id: bedtijd
+        - trigger: state
           entity_id: light.slaapkamer_maxi_lampen
-          state: "on"
+          to: "on"
           for:
             hours: 0
             minutes: 10
             seconds: 0
+          id: nabrander
+      conditions:
+        - condition: or
+          conditions:
+            # Het bedtijdstip: alleen ingrijpen als het licht er al tien
+            # minuten aan staat, zodat een lamp die net aanging niet meteen
+            # onder je handen uitgaat.
+            - condition: and
+              conditions:
+                - condition: trigger
+                  id: bedtijd
+                - condition: state
+                  entity_id: light.slaapkamer_maxi_lampen
+                  state: "on"
+                  for:
+                    hours: 0
+                    minutes: 10
+                    seconds: 0
+            # De nabrander telt die tien minuten in de trigger zelf al af - die
+            # conditie hier nog eens herhalen zou op de seconde af een race
+            # zijn. Hier hoeft alleen te kloppen dat het nacht is.
+            - condition: and
+              conditions:
+                - condition: trigger
+                  id: nabrander
+                - condition: template
+                  value_template: >-
+                    {% set bedtijden = ['input_datetime.bedtime_maxi',
+                                        'input_datetime.bedtime_maxi_weekend']
+                                       | map('states')
+                                       | reject('in', ['unknown', 'unavailable', ''])
+                                       | list %}
+                    {% set na_bedtijd = bedtijden
+                       and now().strftime('%H:%M:%S') >= bedtijden | min %}
+                    {% set voor_opstaan = now().hour < 7
+                       and is_state('input_boolean.klimaat_wakker', 'off') %}
+                    {{ na_bedtijd or voor_opstaan }}
       actions:
         - action: light.turn_off
           metadata: {}
@@ -134,7 +203,7 @@ bedtime_maxi_package:
           target:
             entity_id: light.slaapkamer_losse_lamp_maxi
           data: {}
-      mode: single
+      mode: restart
 
     - id: bedtime_for_maxi_media_off
       alias: "Bedroom Maxi - Bedtime Media Off"

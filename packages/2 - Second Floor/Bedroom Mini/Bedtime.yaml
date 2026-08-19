@@ -15,22 +15,65 @@ bedtime_mini_package:
       icon: mdi:clock-time-nine
 
   automation:
+    ###########################################################################
+    ## LICHT UIT NA BEDTIJD - MET NABRANDER
+    ##
+    ## Zelfde constructie en dezelfde reden als bij Maxi; die kamer heeft het
+    ## verhaal erbij staan (packages/1 - First Floor/Bedroom Maxi/Bedtime.yaml).
+    ## Kort: het bedtijdstip is één moment, dus een druk op de knop in de tien
+    ## minuten ervóór glipt langs de conditie en dan brandt het licht door. De
+    ## tweede trigger doet het licht alsnog uit zodra het binnen de nacht tien
+    ## minuten aan staat. Bij Maxi ging het op 18 augustus 2026 mis; hier stond
+    ## exact hetzelfde gat, alleen viel het nog niet op.
+    ###########################################################################
     - id: bedtime_for_mini_lights_off
       alias: 'Bedroom Mini - Bedtime Lights Off'
       description: 'Turn off the lights at minis bedroom after bedtime'
       triggers:
         - at: input_datetime.bedtime_mini
           trigger: time
+          id: bedtijd
         - at: input_datetime.bedtime_mini_weekend
           trigger: time
+          id: bedtijd
+        - trigger: state
+          entity_id: light.slaapkamer_mini_lampen
+          to: "on"
+          for:
+            hours: 0
+            minutes: 10
+            seconds: 0
+          id: nabrander
       conditions:
-          - condition: state
-            entity_id: light.slaapkamer_mini_lampen
-            state: "on"
-            for:
-              hours: 0
-              minutes: 10
-              seconds: 0
+        - condition: or
+          conditions:
+            - condition: and
+              conditions:
+                - condition: trigger
+                  id: bedtijd
+                - condition: state
+                  entity_id: light.slaapkamer_mini_lampen
+                  state: "on"
+                  for:
+                    hours: 0
+                    minutes: 10
+                    seconds: 0
+            - condition: and
+              conditions:
+                - condition: trigger
+                  id: nabrander
+                - condition: template
+                  value_template: >-
+                    {% set bedtijden = ['input_datetime.bedtime_mini',
+                                        'input_datetime.bedtime_mini_weekend']
+                                       | map('states')
+                                       | reject('in', ['unknown', 'unavailable', ''])
+                                       | list %}
+                    {% set na_bedtijd = bedtijden
+                       and now().strftime('%H:%M:%S') >= bedtijden | min %}
+                    {% set voor_opstaan = now().hour < 7
+                       and is_state('input_boolean.klimaat_wakker', 'off') %}
+                    {{ na_bedtijd or voor_opstaan }}
       actions:
         - action: light.turn_off
           metadata: {}
