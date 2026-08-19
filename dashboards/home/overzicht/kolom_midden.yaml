@@ -664,7 +664,13 @@ cards:
                   const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
                   return [o.x, band === BAND ? o.p : null];
                 });
-        # samenvatting laagste / hoogste per dag + kleurlegenda (één regel)
+        # samenvatting laagste / hoogste per dag + kleurlegenda
+        #
+        # Eén custom_field in plaats van twee kolommen (dagen | legenda): een
+        # grid van `1fr auto` kan niet afbreken, dus op een telefoon schoof de
+        # legenda over de prijzen heen. Als flexbox met flex-wrap staat het op
+        # een breed scherm nog steeds links/rechts op één regel, en zakt de
+        # legenda eronder zodra het niet past.
         - type: custom:button-card
           tap_action:
             action: navigate
@@ -676,17 +682,13 @@ cards:
               - box-shadow: none
               - padding: 6px 2px 0 2px
             grid:
-              - grid-template-areas: '"dagen key"'
-              - grid-template-columns: 1fr auto
-              - align-items: center
-              - column-gap: 12px
+              - grid-template-areas: '"regel"'
             custom_fields:
-              dagen:
-                - justify-self: start
-              key:
-                - justify-self: end
+              regel:
+                - width: 100%
+                - justify-self: stretch
           custom_fields:
-            dagen: |
+            regel: |
               [[[
                 var blok = function(eid, key){ var e = states[eid]; return (e && e.attributes && e.attributes[key]) || []; };
                 var extremen = function(eid, key){
@@ -707,18 +709,20 @@ cards:
                 };
                 var klok = function(d){ return ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2); };
                 var f = function(x, col){ return `<span style="color:${col}">€ ${x.p.toFixed(3).replace('.',',')}</span><span style="color:rgba(255,255,255,0.35)"> ${klok(x.d)}</span>`; };
+                // nowrap per dagdeel, zodat een regel hoogstens tussen "vandaag"
+                // en "morgen" breekt en niet middenin een prijs.
                 var deel = function(lbl, x){
-                  if(!x) return `<span style="color:rgba(255,255,255,0.55)">${lbl}</span> <span style="color:rgba(255,255,255,0.3)">nog niet bekend</span>`;
-                  return `<span style="color:rgba(255,255,255,0.55)">${lbl}</span> ${f(x.lo,'#4ade80')} <span style="color:rgba(255,255,255,0.2)">·</span> ${f(x.hi,'#ef4444')}`;
+                  var inhoud = x
+                    ? `<span style="color:rgba(255,255,255,0.55)">${lbl}</span> ${f(x.lo,'#4ade80')} <span style="color:rgba(255,255,255,0.2)">·</span> ${f(x.hi,'#ef4444')}`
+                    : `<span style="color:rgba(255,255,255,0.55)">${lbl}</span> <span style="color:rgba(255,255,255,0.3)">nog niet bekend</span>`;
+                  return `<span style="white-space:nowrap">${inhoud}</span>`;
                 };
                 var vandaag = extremen('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today');
                 var morgen = extremen('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow');
-                return `<span style="display:flex;align-items:center;gap:14px;font-size:12px;white-space:nowrap">${deel('vandaag', vandaag)}${deel('morgen', morgen)}</span>`;
-              ]]]
-            key: |
-              [[[
-                var dot = function(c, lbl){ return `<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${lbl}</span>`; };
-                return `<span style="display:flex;align-items:center;gap:10px;font-size:11.5px;color:rgba(255,255,255,0.52)">${dot('#4ade80','goedkoop')}${dot('#f59e0b','gemiddeld')}${dot('#ef4444','duur')}</span>`;
+                var dagen = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 14px;font-size:12px">${deel('vandaag', vandaag)}${deel('morgen', morgen)}</span>`;
+                var dot = function(c, lbl){ return `<span style="display:inline-flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${lbl}</span>`; };
+                var legenda = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;font-size:11.5px;color:rgba(255,255,255,0.52)">${dot('#4ade80','goedkoop')}${dot('#f59e0b','gemiddeld')}${dot('#ef4444','duur')}</span>`;
+                return `<span style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px;width:100%">${dagen}${legenda}</span>`;
               ]]]
         # tips: goedkoopste blok, negatieve prijs, en hoe fijn de prijzen zijn
         - type: custom:button-card
@@ -732,17 +736,16 @@ cards:
               - box-shadow: none
               - padding: 2px 2px 0 2px
             grid:
-              - grid-template-areas: '"tips gran"'
-              - grid-template-columns: 1fr auto
-              - align-items: center
-              - column-gap: 12px
+              - grid-template-areas: '"regel"'
             custom_fields:
-              tips:
-                - justify-self: start
-              gran:
-                - justify-self: end
+              regel:
+                - width: 100%
+                - justify-self: stretch
           custom_fields:
-            tips: |
+            # Ook hier één veld in plaats van twee kolommen: de tip links en het
+            # prijsinterval rechts stonden in een `1fr auto`-grid en overlapten
+            # op een telefoon. Nu breekt het naar twee regels als het niet past.
+            regel: |
               [[[
                 var klok = function(d){ return ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2); };
                 // Safari struikelt over "2026-08-01 13:00"; met een T ertussen
@@ -802,16 +805,21 @@ cards:
                 } else if(straks) {
                   delen.push(`<span>${ico('mdi:flash-outline')} marktprijs negatief vanaf <span style="color:white">${wanneer(straks)}</span></span>`);
                 }
-                if(!delen.length) return '';
-                return `<span style="display:flex;align-items:center;gap:10px;font-size:12px;color:rgba(255,255,255,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${delen.join('<span style="opacity:0.25">·</span>')}</span>`;
-              ]]]
-            gran: |
-              [[[
-                var e = states['sensor.slimhuys_zonneplan_prijzen_vandaag'];
-                var m = e && e.attributes ? Number(e.attributes.granularity_minutes) : NaN;
-                if(!isFinite(m) || m <= 0) return '';
-                var lbl = m === 15 ? 'kwartierprijzen' : (m === 60 ? 'uurprijzen' : `prijzen per ${m} min`);
-                return `<span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${lbl}</span>`;
+                var tips = delen.length
+                  ? `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;font-size:12px;color:rgba(255,255,255,0.55)">${delen.map(function(d){ return `<span style="white-space:nowrap">${d}</span>`; }).join('<span style="opacity:0.25">·</span>')}</span>`
+                  : '';
+                // hoe fijn de prijsblokken zijn (kwartier of uur)
+                var pv = states['sensor.slimhuys_zonneplan_prijzen_vandaag'];
+                var m = pv && pv.attributes ? Number(pv.attributes.granularity_minutes) : NaN;
+                var gran = '';
+                if(isFinite(m) && m > 0) {
+                  var lbl = m === 15 ? 'kwartierprijzen' : (m === 60 ? 'uurprijzen' : `prijzen per ${m} min`);
+                  // margin-left:auto en niet space-between: zonder tip blijft het
+                  // label dan alsnog rechts staan in plaats van links.
+                  gran = `<span style="margin-left:auto;white-space:nowrap;font-size:11.5px;color:rgba(255,255,255,0.4)">${lbl}</span>`;
+                }
+                if(!tips && !gran) return '';
+                return `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px;width:100%">${tips}${gran}</span>`;
               ]]]
   # VEELGEBRUIKERS
   - type: custom:mod-card
