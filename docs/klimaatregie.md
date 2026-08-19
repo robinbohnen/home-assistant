@@ -177,6 +177,16 @@ De beslistabel, van hoog naar laag:
      Anders open voor het daglicht.
    - *Neutraal*: open, tenzij zon én een warme kamer.
 5. **Airco koelt** in die zone → geen open rolluik; anders koel je de straat.
+   Wel pas als hij het vijf minuten volhoudt (`AIRCO_KIER_NA` in
+   `klimaat.jinja`). Op 19 augustus 2026 viel de zolderairco steeds na een
+   kwartier uit op zijn eigen beveiliging, en omdat alle zes zones boven aan
+   `climate.airco_zolder` hangen trok elke koelpoging de hele verdieping naar
+   een kier en daarna weer omhoog. Een airco die net is aangeslagen zegt nog
+   niets; een kier wint in die paar minuten toch niets, want het rolluik doet
+   er veertig seconden over en de rustpauze van de uitvoerder houdt hem daarna
+   een kwartier vast. Direct na een herstart van Home Assistant telt de
+   huidige stand wél meteen — dan is `last_changed` van álles vers en zou een
+   airco die al uren draait onterecht als "net aan" gelden.
 6. **Screens** (de keukenscreens en het zonnescherm) beslissen opnieuw en
    overschrijven stap 4 en 5. Een screen houdt namelijk *straling* tegen en
    geen warmte die er al is, dus hij heeft alleen zin zolang de zon echt op de

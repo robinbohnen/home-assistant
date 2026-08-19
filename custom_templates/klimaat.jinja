@@ -98,6 +98,22 @@
     `kitchen_covers` net gesloten heeft. -#}
 {%- set BEDTIJD_MARGE = 20 -%}
 
+{#- Een airco die net is aangeslagen is nog geen reden om de bovenverdieping te
+    verzetten. Op 19 augustus 2026 viel de zolderairco steeds na tien tot
+    vijfentwintig minuten uit op zijn eigen beveiliging (foutcode E48: de
+    buitenventilator draaide niet). Elke koelpoging zette blok 4b hieronder aan
+    het werk en trok zes rolluiken naar een kier, en bij de uitval gingen ze
+    weer omhoog - vier keer op één middag, en de kamer werd er geen graad
+    koeler van.
+
+    Een airco telt daarom pas mee als hij AIRCO_KIER_NA minuten aaneengesloten
+    koelt. Vijf minuten: korter dan dat levert een kier niets op (het rolluik
+    doet er al veertig seconden over en de rustpauze van de uitvoerder houdt
+    hem daarna een kwartier vast), en veel langer laat op een echte hete dag de
+    zon onnodig lang naar binnen schijnen. Dit geldt alleen voor blok 4b - de
+    gewone zon-en-warmte-redenen hebben de airco niet nodig. -#}
+{%- set AIRCO_KIER_NA = 5 -%}
+
 {#- ========================== ZONECONFIGURATIE ============================ -#}
 {#-
   naam       label op het dashboard
@@ -438,7 +454,23 @@
 {%- set max_regen = states('input_number.klimaat_screen_max_regen') | float(0.1) -%}
 {%- set nat = regen >= max_regen -%}
 {%- set airco = z.get('airco') -%}
-{%- set airco_koelt = airco is not none and states(airco) in ['cool', 'dry'] -%}
+{#- De klok voor AIRCO_KIER_NA is `last_changed` van de airco zelf. Na een
+    herstart van Home Assistant staat die klok van élke entiteit op nul, en dan
+    zou een airco die al uren koelt vijf minuten lang niet meetellen: de
+    uitvoerder trekt de rolluiken open (zijn startronde slaat de rustpauze over)
+    en zet ze vijf minuten later weer terug. Draait HA zelf nog geen
+    AIRCO_KIER_NA minuten, dan telt de huidige stand daarom meteen. Ontbreekt de
+    starttijd, dan valt hij terug op de gewone meting - dat kost hooguit één
+    onnodige beweging na een herstart. -#}
+{%- set ha_start = states('sensor.home_assistant_gestart') | as_datetime -%}
+{%- set net_gestart = ha_start is not none
+                      and (now() - ha_start).total_seconds() < AIRCO_KIER_NA * 60 -%}
+{%- set airco_obj = states[airco] if airco is not none else none -%}
+{%- set airco_koelt = airco_obj is not none
+                      and airco_obj.state in ['cool', 'dry']
+                      and (net_gestart
+                           or (now() - airco_obj.last_changed).total_seconds()
+                              >= AIRCO_KIER_NA * 60) -%}
 
 {%- set nacht = elevatie < -3 -%}
 {%- set hittedag = max_vandaag is not none and max_vandaag >= hitte_vanaf -%}
@@ -564,7 +596,8 @@
 
 {#- 4b. Draait de airco om te koelen, dan de zon eruit houden: anders staat hij
        te betalen voor warmte die er zo weer in komt. Alleen bij 'open', want
-       'dicht' is al beter en 'rust' moet rust blijven. -#}
+       'dicht' is al beter en 'rust' moet rust blijven, en pas als hij het
+       AIRCO_KIER_NA minuten volhoudt - zie daar waarom. -#}
 {%- if airco_koelt and not nacht and ns.a == 'open' -%}
   {%- set ns.a = 'kier' -%}
   {%- set ns.r = 'airco koelt, zon eruit houden' -%}

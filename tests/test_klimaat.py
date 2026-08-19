@@ -20,9 +20,53 @@ STATES = {}
 NOW = dt.datetime(2026, 8, 1, 14, 0, 0)
 
 
-def ha_states(eid):
-    v = STATES.get(eid, "unknown")
-    return v if isinstance(v, str) else str(v)
+class HaState:
+    """Wat `states[entity_id]` in Home Assistant teruggeeft: een object met
+    `.state` en de tijdstempels. Alleen wat klimaat.jinja gebruikt."""
+
+    def __init__(self, eid, state, last_changed):
+        self.entity_id = eid
+        self.state = state
+        self.last_changed = last_changed
+        self.last_updated = last_changed
+
+
+class HaStates:
+    """`states` is in HA zowel een functie als een dict. Hier allebei, zodat
+    zowel `states('x.y')` als `states['x.y'].last_changed` werkt.
+
+    Een scenario zet `last_changed` mee met de sleutel
+    "<entity_id>.last_changed", net zoals attributen. Zonder die sleutel staat
+    hij een uur terug: bijna elk scenario gaat over een toestand die er al even
+    is, en dan hoeft niet elk scenario een tijdstempel te noemen."""
+
+    def __call__(self, eid):
+        v = STATES.get(eid, "unknown")
+        return v if isinstance(v, str) else str(v)
+
+    def __getitem__(self, eid):
+        # HA geeft None voor een entiteit die niet bestaat; klimaat.jinja
+        # rekent daarop.
+        if eid not in STATES:
+            return None
+        lc = STATES.get(f"{eid}.last_changed", NOW - dt.timedelta(hours=1))
+        return HaState(eid, self(eid), lc)
+
+
+ha_states = HaStates()
+
+
+def ha_as_datetime(value, default=None):
+    """`as_datetime` uit HA, voor zover klimaat.jinja hem nodig heeft."""
+    if isinstance(value, dt.datetime):
+        return value
+    try:
+        d = dt.datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return default
+    # De stub rekent in naive lokale tijd (zie NOW); een tijdzone erbij zou elke
+    # aftrekking met now() laten klappen op "offset-naive and offset-aware".
+    return d.replace(tzinfo=None)
 
 
 def ha_state_attr(eid, attr):
@@ -55,11 +99,12 @@ env = Environment(loader=FileSystemLoader(f"{CONFIG}/custom_templates"))
 env.filters["float"] = f_float
 env.filters["to_json"] = lambda v, **k: json.dumps(v)
 env.filters["from_json"] = json.loads
+env.filters["as_datetime"] = ha_as_datetime
 # `timedelta` is in Home Assistant een gewone template-global; hier moet hij er
 # los bij, anders klapt elke marge-berekening in klimaat.jinja op 'undefined'.
 env.globals.update(states=ha_states, state_attr=ha_state_attr, is_state=ha_is_state,
                    has_value=ha_has_value, today_at=ha_today_at, now=lambda: NOW,
-                   timedelta=dt.timedelta)
+                   timedelta=dt.timedelta, as_datetime=ha_as_datetime)
 
 MOD = env.get_template("klimaat.jinja").module
 
@@ -103,6 +148,10 @@ def scenario(naam, tijd, **kw):
         "binary_sensor.zon_richting_achtergevel": "off",
         "climate.airco_zolder": "off",
         "climate.airco_woonkamer": "off",
+        # Home Assistant draait al even. Zonder deze zou `net_gestart` in
+        # klimaat.jinja aanslaan en de drempel AIRCO_KIER_NA overslaan.
+        "sensor.home_assistant_gestart":
+            (NOW - dt.timedelta(hours=3)).isoformat(),
         # Basiswereld voor de binnenzonwering: ramen dicht en de keukenscreens
         # ingetrokken (er is in de basiswereld ook geen zon).
         "binary_sensor.keuken_raam_groot_contact": "off",
@@ -290,6 +339,57 @@ scenario("airco koelt, geen zon op de gevel", "11:00",
             "climate.airco_zolder": "cool"})
 check("airco koelt: niet de straat koelen", "badkamer", "kier")
 check("airco woonkamer staat uit", "keuken_screens", "open")
+
+# De drempel AIRCO_KIER_NA. Aanleiding: op 19 augustus 2026 viel de zolderairco
+# steeds na een kwartier uit op zijn beveiliging en trok elke poging de hele
+# bovenverdieping naar een kier en weer terug.
+
+
+def geleden(tijd, minuten):
+    """Tijdstempel `minuten` vóór het scenariotijdstip.
+
+    Niet NOW gebruiken in de argumenten van scenario(): die worden uitgerekend
+    vóórdat scenario() NOW op de nieuwe tijd zet, dus daar staat de klok van het
+    vórige scenario nog."""
+    u, m = (int(x) for x in tijd.split(":")[:2])
+    return dt.datetime(2026, 8, 1, u, m) - dt.timedelta(minutes=minuten)
+
+
+scenario("airco slaat net aan", "11:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "26",
+            "climate.airco_zolder": "cool",
+            "climate.airco_zolder.last_changed": geleden("11:00", 2)})
+check("twee minuten koelen is geen reden om te bewegen", "badkamer", "open")
+
+scenario("airco koelt al zes minuten", "11:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "26",
+            "climate.airco_zolder": "cool",
+            "climate.airco_zolder.last_changed": geleden("11:00", 6)})
+check("voorbij de drempel telt de airco weer mee", "badkamer", "kier")
+
+# Na een herstart is `last_changed` van élke entiteit vers. Zonder de
+# uitzondering in klimaat.jinja zou een airco die al uren koelt hier vijf
+# minuten lang niet meetellen en de uitvoerder de rolluiken twee keer verzetten.
+scenario("herstart terwijl de airco al uren koelt", "11:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "26",
+            "climate.airco_zolder": "cool",
+            "climate.airco_zolder.last_changed": geleden("11:00", 1),
+            "sensor.home_assistant_gestart": geleden("11:00", 1).isoformat()})
+check("verse tijdstempels na een herstart tellen niet als 'net aan'",
+      "badkamer", "kier")
+
+# Valt de starttijd weg, dan is de gewone meting de terugval - niet een airco
+# die opeens altijd of nooit meetelt.
+scenario("airco slaat net aan, starttijd onbekend", "11:00",
+         **{"input_select.klimaat_regime": "Koelen",
+            "input_number.klimaat_verwachte_max": "26",
+            "climate.airco_zolder": "cool",
+            "climate.airco_zolder.last_changed": geleden("11:00", 2),
+            "sensor.home_assistant_gestart": "unknown"})
+check("zonder starttijd geldt de drempel gewoon", "badkamer", "open")
 
 scenario("airco verwarmt in de winter", "11:00",
          **{"input_select.klimaat_regime": "Verwarmen",
