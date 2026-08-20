@@ -86,6 +86,138 @@ sections:
           - entity: input_number.klimaat_zon_min_elevatie
             name: Zon minimale hoogte
 
+      #########################################################################
+      ## Laag 5 - de airco's
+      ##
+      ## Deze kaarten stonden eerst in een eigen sectie, en dat was precies één
+      ## sectie te veel: met `max_columns: 3` wrapt de vierde naar een nieuwe
+      ## rij, waarna er een gat valt onder de twee kortste kolommen. Ze horen
+      ## hier ook inhoudelijk thuis - dit is de kolom waarin je iets instelt.
+      ##
+      ## Anders opgezet dan de zones hiernaast, en met reden: tien zones lees je
+      ## het makkelijkst als kolommen (alle adviezen onder elkaar, alle redenen
+      ## onder elkaar), maar bij twee units levert dat zeven kaartjes van twee
+      ## regels op waarin je steeds heen en weer moet springen. Eén kaart per
+      ## unit dus, met alles wat over die unit gaat bij elkaar.
+      #########################################################################
+
+      - type: heading
+        heading: Airco's
+        heading_style: title
+        icon: mdi:air-conditioner
+
+      - type: entities
+        title: Airco woonkamer
+        state_color: true
+        # Zonder dit staat er een schakelaar in de kaartkop die alles tegelijk
+        # omzet - inclusief de storingsvlag. Dat is geen knop die iemand bewust
+        # zoekt en wel een die je per ongeluk raakt.
+        show_header_toggle: false
+        entities:
+          - entity: sensor.airco_advies_woonkamer
+            name: Advies
+            secondary_info: last-changed
+          - entity: sensor.airco_advies_woonkamer
+            type: attribute
+            attribute: reden
+            name: Waarom
+          - entity: sensor.airco_advies_woonkamer
+            type: attribute
+            attribute: blokkade
+            name: Niet uitgevoerd omdat
+          - entity: sensor.airco_advies_woonkamer
+            type: attribute
+            attribute: doel
+            name: Doeltemperatuur
+          - type: divider
+          - entity: climate.airco_woonkamer
+            name: Staat nu
+          - entity: sensor.woonkamer_woonkamer_multisensor_temperatuur
+            name: Kamer nu
+          - type: divider
+          - entity: timer.airco_minimaal_aan_woonkamer
+            name: Minimale looptijd
+          - entity: timer.airco_rust_woonkamer
+            name: Rustpauze
+          - entity: timer.airco_override_woonkamer
+            name: Handbediening
+          - type: divider
+          - entity: input_boolean.airco_handmatig_woonkamer
+            name: Op handmatig (doet niet mee)
+          - entity: input_boolean.airco_storing_woonkamer
+            name: Storing, niet automatisch starten
+          - entity: counter.airco_storingen_woonkamer
+            name: Mislukte starts vandaag
+
+      - type: entities
+        title: Airco boven
+        state_color: true
+        show_header_toggle: false
+        entities:
+          - entity: sensor.airco_advies_zolder
+            name: Advies
+            secondary_info: last-changed
+          - entity: sensor.airco_advies_zolder
+            type: attribute
+            attribute: reden
+            name: Waarom
+          - entity: sensor.airco_advies_zolder
+            type: attribute
+            attribute: blokkade
+            name: Niet uitgevoerd omdat
+          - entity: sensor.airco_advies_zolder
+            type: attribute
+            attribute: doel
+            name: Doeltemperatuur
+          - type: divider
+          - entity: climate.airco_zolder
+            name: Staat nu
+          # Deze unit blaast op de overloop en bedient de hele verdieping, dus
+          # hij regelt op dit gemiddelde en niet op één kamer.
+          - entity: sensor.temperatuur_boven_gemiddeld
+            name: Boven nu (gemiddelde)
+          - type: divider
+          - entity: timer.airco_minimaal_aan_zolder
+            name: Minimale looptijd
+          - entity: timer.airco_rust_zolder
+            name: Rustpauze
+          - entity: timer.airco_override_zolder
+            name: Handbediening
+          - type: divider
+          - entity: input_boolean.airco_handmatig_zolder
+            name: Op handmatig (doet niet mee)
+          - entity: input_boolean.airco_storing_zolder
+            name: Storing, niet automatisch starten
+          - entity: counter.airco_storingen_zolder
+            name: Mislukte starts vandaag
+
+      - type: entities
+        title: Instellingen airco
+        state_color: true
+        show_header_toggle: false
+        entities:
+          - entity: input_boolean.aircoregie_actief
+            name: Airco's automatisch regelen
+            secondary_info: last-changed
+          - type: divider
+          # De comfortband: kamer_warm is de bovenkant (die staat hierboven bij
+          # de zonweringgrenzen, want de rolluiken gebruiken hem ook),
+          # kamer_koud de onderkant. De twee delta's eromheen zijn de dode zone
+          # die het pendelen tegenhoudt: aan op 23,5°, uit op 21,5°.
+          - entity: input_number.klimaat_kamer_koud
+            name: Kamer is koud onder
+          - entity: input_number.klimaat_airco_aan_delta
+            name: Aanzetten vanaf grens +
+          - entity: input_number.klimaat_airco_uit_delta
+            name: Uitzetten bij grens -
+          - type: divider
+          - entity: input_number.klimaat_airco_voorkoelen_min
+            name: Voorkoelen vanaf reistijd
+          - entity: sensor.robin_reistijd_naar_huis
+            name: Reistijd Robin
+          - entity: sensor.samantha_reistijd_naar_huis
+            name: Reistijd Samantha
+
   #############################################################################
   ## Wat wil elke zone
   #############################################################################
@@ -237,134 +369,6 @@ sections:
           # uitgeschoven. Zie docs/klimaatregie.md.
           - entity: cover.achtertuin_zonnescherm
             name: Zonnescherm achtertuin
-
-  #############################################################################
-  ## Laag 5 - de airco's
-  ##
-  ## Anders opgezet dan de zones hierboven, en met reden: tien zones lees je
-  ## het makkelijkst als kolommen (alle adviezen onder elkaar, alle redenen
-  ## onder elkaar), maar bij twee units levert dat zeven kaartjes van twee
-  ## regels op waarin je steeds heen en weer moet springen. Eén kaart per unit
-  ## dus, met alles wat over die unit gaat bij elkaar.
-  #############################################################################
-  - type: grid
-    cards:
-      - type: heading
-        heading: Airco's
-        heading_style: title
-        icon: mdi:air-conditioner
-
-      - type: entities
-        title: Airco woonkamer
-        state_color: true
-        # Zonder dit staat er een schakelaar in de kaartkop die alles tegelijk
-        # omzet - inclusief de storingsvlag. Dat is geen knop die iemand bewust
-        # zoekt en wel een die je per ongeluk raakt.
-        show_header_toggle: false
-        entities:
-          - entity: sensor.airco_advies_woonkamer
-            name: Advies
-            secondary_info: last-changed
-          - entity: sensor.airco_advies_woonkamer
-            type: attribute
-            attribute: reden
-            name: Waarom
-          - entity: sensor.airco_advies_woonkamer
-            type: attribute
-            attribute: blokkade
-            name: Niet uitgevoerd omdat
-          - entity: sensor.airco_advies_woonkamer
-            type: attribute
-            attribute: doel
-            name: Doeltemperatuur
-          - type: divider
-          - entity: climate.airco_woonkamer
-            name: Staat nu
-          - entity: sensor.woonkamer_woonkamer_multisensor_temperatuur
-            name: Kamer nu
-          - type: divider
-          - entity: timer.airco_minimaal_aan_woonkamer
-            name: Minimale looptijd
-          - entity: timer.airco_rust_woonkamer
-            name: Rustpauze
-          - entity: timer.airco_override_woonkamer
-            name: Handbediening
-          - type: divider
-          - entity: input_boolean.airco_handmatig_woonkamer
-            name: Op handmatig (doet niet mee)
-          - entity: input_boolean.airco_storing_woonkamer
-            name: Storing, niet automatisch starten
-          - entity: counter.airco_storingen_woonkamer
-            name: Mislukte starts vandaag
-
-      - type: entities
-        title: Airco boven
-        state_color: true
-        show_header_toggle: false
-        entities:
-          - entity: sensor.airco_advies_zolder
-            name: Advies
-            secondary_info: last-changed
-          - entity: sensor.airco_advies_zolder
-            type: attribute
-            attribute: reden
-            name: Waarom
-          - entity: sensor.airco_advies_zolder
-            type: attribute
-            attribute: blokkade
-            name: Niet uitgevoerd omdat
-          - entity: sensor.airco_advies_zolder
-            type: attribute
-            attribute: doel
-            name: Doeltemperatuur
-          - type: divider
-          - entity: climate.airco_zolder
-            name: Staat nu
-          # Deze unit blaast op de overloop en bedient de hele verdieping, dus
-          # hij regelt op dit gemiddelde en niet op één kamer.
-          - entity: sensor.temperatuur_boven_gemiddeld
-            name: Boven nu (gemiddelde)
-          - type: divider
-          - entity: timer.airco_minimaal_aan_zolder
-            name: Minimale looptijd
-          - entity: timer.airco_rust_zolder
-            name: Rustpauze
-          - entity: timer.airco_override_zolder
-            name: Handbediening
-          - type: divider
-          - entity: input_boolean.airco_handmatig_zolder
-            name: Op handmatig (doet niet mee)
-          - entity: input_boolean.airco_storing_zolder
-            name: Storing, niet automatisch starten
-          - entity: counter.airco_storingen_zolder
-            name: Mislukte starts vandaag
-
-      - type: entities
-        title: Instellingen airco
-        state_color: true
-        show_header_toggle: false
-        entities:
-          - entity: input_boolean.aircoregie_actief
-            name: Airco's automatisch regelen
-            secondary_info: last-changed
-          - type: divider
-          # De comfortband: kamer_warm is de bovenkant (die staat hierboven bij
-          # de zonweringgrenzen, want de rolluiken gebruiken hem ook),
-          # kamer_koud de onderkant. De twee delta's eromheen zijn de dode zone
-          # die het pendelen tegenhoudt: aan op 23,5°, uit op 21,5°.
-          - entity: input_number.klimaat_kamer_koud
-            name: Kamer is koud onder
-          - entity: input_number.klimaat_airco_aan_delta
-            name: Aan vanaf zoveel boven de grens
-          - entity: input_number.klimaat_airco_uit_delta
-            name: Uit bij zoveel onder de grens
-          - type: divider
-          - entity: input_number.klimaat_airco_voorkoelen_min
-            name: Voorkoelen vanaf reistijd
-          - entity: sensor.robin_reistijd_naar_huis
-            name: Reistijd Robin
-          - entity: sensor.samantha_reistijd_naar_huis
-            name: Reistijd Samantha
 
   #############################################################################
   ## Waarnemingen en uitzonderingen
