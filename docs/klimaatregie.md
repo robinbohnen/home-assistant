@@ -434,23 +434,24 @@ timer voor nodig.
    > contact blokkeert hier dus niet, maar wordt wél in de `reden` genoemd.
 
 2. **Storing gemeld** → niet automatisch starten. Zie hieronder.
-3. **Niemand thuis en niemand vlakbij** → uit.
-4. **Stille uren** (22:00–07:00) → niet uit zichzelf aanslaan. Uitgaan mag wel.
+3. **Kwam niet vooruit** → twee uur uit. Zie hieronder.
+4. **Niemand thuis en niemand vlakbij** → uit.
+5. **Stille uren** (22:00–07:00) → niet uit zichzelf aanslaan. Uitgaan mag wel.
    De zolderunit hangt op de overloop naast de slaapkamers; de woonkamerunit
    zou 's nachts een lege kamer koelen.
-5. **Kamertemperatuur onbekend** → `rust`. Niet uitzetten: dat zou een
+6. **Kamertemperatuur onbekend** → `rust`. Niet uitzetten: dat zou een
    draaiende airco stilleggen op een lege batterij.
-6. **Koelen** bij `kamer_warm + aan_delta`, behalve in het verwarmregime. Ook
+7. **Koelen** bij `kamer_warm + aan_delta`, behalve in het verwarmregime. Ook
    op een neutrale dag: het regime komt uit de verwachting van vanochtend, en
    een kamer van 23,5° is warm ongeacht wat het KNMI dacht.
-7. **Bijverwarmen** bij `kamer_koud - aan_delta` (17,5°), behalve in het
+8. **Bijverwarmen** bij `kamer_koud - aan_delta` (17,5°), behalve in het
    koelregime. De cv doet het gewone werk; de airco springt pas bij als een
    ruimte er echt onder zakt.
-8. **Draait al en het doel is nog niet gehaald** → doorgaan. Dit is de tak die
+9. **Draait al en het doel is nog niet gehaald** → doorgaan. Dit is de tak die
    de dode zone maakt.
-9. Daarna de twee timers uit rem 2 en 3.
+10. Daarna de twee timers uit rem 2 en 3.
 
-De eerste drie redenen staan op `spoed`: die breken de minimale looptijd af en
+De eerste vier redenen staan op `spoed`: die breken de minimale looptijd af en
 slaan de rustpauze van de uitvoerder over. Doorkoelen met een openstaand raam of
 in een leeg huis is geen comfort maar een rekening.
 
@@ -466,6 +467,72 @@ soms een minuut over voordat hij de nieuwe stand terugmeldt. En een advies van
 `rust` telt hier niet mee: zodra wij een unit aanzetten slaat het advies binnen
 een paar minuten om naar `rust` (minimale looptijd, of "koelt door"), en dan zou
 een draaiende airco zijn eigen start als handbediening zien.
+
+#### Als het doel niet gehaald wordt
+
+Dit is geen randgeval maar het normale geval op een hete dag, en het heeft twee
+heel verschillende oorzaken die van buiten identiek lijken.
+
+**De unit doet zijn werk maar wint het niet.** Dan is doordraaien het juiste
+antwoord: zonder hem zou het warmer zijn. De regeling laat hem dus lopen — het
+advies blijft `rust` ("koelt door") tot de stille uren, tot iedereen weg is of
+tot er een raam opengaat. Er is bewust geen maximale looptijd.
+
+**De unit draait ergens tegenop.** Een deur die openstaat naar een ruimte zonder
+raamcontact, een unit die het niet meer doet, of een doel dat op deze sensor
+simpelweg niet te halen is. Dan kost het 550 W voor niets.
+
+Het verschil is meetbaar, dus wordt het gemeten in plaats van aangenomen.
+`timer.airco_voortgang_<unit>` loopt vanaf het aanzetten; de temperatuur van dat
+moment staat in `input_number.airco_start_temp_<unit>`. Elke 45 minuten:
+
+- **minstens `AIRCO_VOORTGANG_MIN` (0,3 °C) opgeschoven** → hij wint. Het venster
+  begint opnieuw vanaf de huidige stand, zodat de volgende controle over de
+  vólgende drie kwartier gaat. Anders zou een unit die alleen in het eerste half
+  uur iets deed de rest van de dag als "in orde" blijven gelden.
+- **minder dan dat** → `timer.airco_kansloos_<unit>` gaat twee uur lopen, de unit
+  gaat uit, en je krijgt een melding met de gemeten cijfers. Na die twee uur
+  probeert hij het gewoon opnieuw; tegen die tijd staat de zon ergens anders of
+  is dat raam dicht.
+
+0,3 °C op drie kwartier is bewust laag. Een airco die het echt wint doet in die
+tijd een halve tot anderhalve graad; alles daaronder is ruis op een sensor die op
+een tiende meet.
+
+Dit is nadrukkelijk **geen storingsvlag**. De unit is waarschijnlijk in orde en
+vecht tegen iets anders; daarom blokkeert het ook niet tot de volgende ochtend
+maar twee uur, en daarom staat het los van `airco_storing_<unit>`.
+
+> **Waarom de unit boven een eigen band heeft.** Op 20 augustus 2026 stond de
+> zolderairco vier uur op 18°/high. Het gemiddelde boven ging van 22,4 naar 22,2
+> — en twee van de vijf kamers werden in die tijd wármer:
+>
+> | Kamer | Start | Na 4 uur | Δ |
+> |---|---|---|---|
+> | Emma (deur open) | 22,47 | 21,69 | −0,78 |
+> | Kantoor | 23,07 | 22,86 | −0,21 |
+> | Badkamer | 22,93 | 22,90 | −0,03 |
+> | Logan | 22,26 | 22,46 | +0,20 |
+> | Slaapkamer | 20,93 | 21,17 | +0,24 |
+>
+> Acht van de negen ramen boven stonden open — daar zou de regie hem dus
+> überhaupt niet hebben aangezet. Maar het patroon eronder blijft staan ook met
+> alles dicht: die unit hangt op de overloop en blaast niet door een dichte
+> slaapkamerdeur, terwijl hij wél wordt afgerekend op het gemiddelde van vijf
+> kamers. Een doel dat voor één kamer normaal is, is op dat gemiddelde
+> onhaalbaar — en een onhaalbaar doel betekent een unit die nooit uit zichzelf
+> stopt.
+>
+> Daarom heeft elke unit in `AIRCOS` een `band`: die schuift `kamer_warm` én
+> `kamer_koud` voor die unit op. De zolder staat op `+1` (aan vanaf 24,5°, doel
+> 23°), de woonkamer op `0`. Beide kanten schuiven mee, want zou alleen het doel
+> opschuiven, dan komt de aanzetgrens er vlak boven te liggen en pendelt hij
+> alsnog.
+>
+> Het koeldoel rondt af **naar boven** naar wat de unit kan (de zolderunit doet
+> hele graden), het verwarmdoel naar beneden. Met gewoon afronden zou 22,5 daar
+> 22 worden — een halve graad méér vragen van precies de unit die zijn doel toch
+> al niet haalt.
 
 #### Een unit die zichzelf uitschakelt
 
@@ -583,6 +650,10 @@ Aparte schakelaar, dus een aparte ronde:
    `climate.airco_woonkamer` horen blokken van een half uur of langer te staan.
    Zie je reeksen van precies dertig minuten, dan is de minimale looptijd de
    enige reden dat hij nog draait en mag `klimaat_airco_uit_delta` omhoog.
+5. **Let op de meldingen "komt niet vooruit".** Eén op een tropische dag is
+   informatie. Elke dag dezelfde unit betekent dat zijn doel niet te halen is;
+   dan gaat de `band` van die unit in `klimaat.jinja` omhoog, niet de drempel
+   omlaag.
 
 ## Instellingen
 
@@ -611,6 +682,11 @@ Aparte schakelaar, dus een aparte ronde:
 | `klimaat_airco_voorkoelen_min` | 20 min | vanaf deze reistijd telt iemand als "bijna thuis" |
 | `airco_handmatig_<unit>` | uit | uit = deze unit doet mee |
 | `airco_storing_<unit>` | uit | aan = niet automatisch starten (gaat vanzelf om en om 04:00 weer uit) |
+
+Twee getallen die niet als helper bestaan maar in `custom_templates/klimaat.jinja`:
+`band` per unit (zolder +1, woonkamer 0) en `AIRCO_VOORTGANG_MIN` (0,3 °C). Die
+horen bij het gedrag en niet bij de bediening, dus staan ze bij de rest van de
+beslistabel.
 
 Beide schakelaars (`klimaatregie_actief` en `klimaat_nachtspui`) staan na de
 eerste start uit; die zet je zelf aan. De tien

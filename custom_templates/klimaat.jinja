@@ -933,6 +933,19 @@
     komt. Ouder dan dit telt als onbruikbaar. -#}
 {%- set AIRCO_REISTIJD_VERS = 30 -%}
 
+{#- Zoveel graden moet een unit in een voortgangsvenster (de duur van
+    `timer.airco_voortgang_<unit>`, 45 minuten) opgeschoven zijn om te tellen
+    als "hij is aan het winnen". Haalt hij dat niet, dan draait hij ergens tegen
+    op - een open raam zonder contact, een deur, een unit die het niet meer
+    doet, of gewoon een doel dat niet te halen is - en dan is doordraaien 550 W
+    voor niets. `automation.klimaat_airco_voortgang_bewaken` zet hem dan een
+    paar uur stil en meldt de gemeten cijfers.
+
+    0,3° op drie kwartier is bewust laag. Een airco die het echt wint doet in
+    die tijd een halve tot anderhalve graad; alles daaronder is ruis op een
+    sensor die op een tiende meet. -#}
+{%- set AIRCO_VOORTGANG_MIN = 0.3 -%}
+
 {#- Wie er "bijna thuis" kan zijn. Bewust alleen de volwassenen, net als
     `group.all_adults` in de beslistabel hierboven: hun telefoons zijn de
     betrouwbare bron en zij zijn degenen die 's middags aankomen. -#}
@@ -949,6 +962,19 @@
              packages/2 - Second Floor/Attic/AC.yaml) en niet op één kamer.
   ramen      raamcontacten van het gebied dat deze unit bedient. Een
              AANTOONBAAR open raam zet hem uit.
+  band       verschuift de hele comfortband van deze unit, in graden. De
+             zolderunit regelt op het gemiddelde van vijf kamers terwijl hij
+             op de overloop hangt: achter een dichte slaapkamerdeur blaast hij
+             niet. Op 20 augustus 2026 koelde hij vier uur op 18°/high en ging
+             dat gemiddelde van 22,4 naar 22,2 - twee kamers werden zelfs
+             warmer. Een doel dat op één kamer normaal is, is op dat gemiddelde
+             dus onhaalbaar, en een onhaalbaar doel betekent een unit die nooit
+             uit zichzelf stopt.
+             `band` schuift daarom `kamer_warm` én `kamer_koud` voor deze unit
+             op, zodat de dode zone even breed blijft (anders staat de
+             aanzetgrens ineens een halve graad boven het doel en pendelt hij
+             alsnog). Blijkt +1 te ruim of te krap, dan is dit het enige getal
+             dat je hoeft te wijzigen.
   fan        ventilatorstand voor de automatische stand. Bewust niet 'high':
              dat is de stand van de handmatige "het is snikheet"-vraag, en die
              hoor je door het hele huis. De standen verschillen per merk
@@ -965,6 +991,7 @@
         'naam': 'Airco woonkamer',
         'entiteit': 'climate.airco_woonkamer',
         'temp': 'sensor.woonkamer_woonkamer_multisensor_temperatuur',
+        'band': 0,
         'ramen': ['binary_sensor.keuken_raam_groot_contact',
                   'binary_sensor.keuken_raam_klein_contact',
                   'binary_sensor.woonkamer_openslaande_deuren_contact',
@@ -977,6 +1004,7 @@
         'naam': 'Airco boven',
         'entiteit': 'climate.airco_zolder',
         'temp': 'sensor.temperatuur_boven_gemiddeld',
+        'band': 1,
         'ramen': ['binary_sensor.badkamer_raam_contact',
                   'binary_sensor.kantoor_raam_links_contact',
                   'binary_sensor.kantoor_raam_rechts_contact',
@@ -1060,8 +1088,12 @@
     waarom een template alleen volgt wat het echt gelezen heeft. -#}
 {%- set regime = states('input_select.klimaat_regime') | lower -%}
 {%- set binnen = states(u.temp) | float(none) -%}
-{%- set warm = states('input_number.klimaat_kamer_warm') | float(22) -%}
-{%- set koud = states('input_number.klimaat_kamer_koud') | float(19) -%}
+{#- De comfortband van DEZE unit: de huisbrede grenzen plus zijn eigen
+    verschuiving. Beide kanten schuiven mee, zodat de dode zone even breed
+    blijft. Zie `band` in de tabel hierboven. -#}
+{%- set band = u.get('band', 0) | float(0) -%}
+{%- set warm = (states('input_number.klimaat_kamer_warm') | float(22)) + band -%}
+{%- set koud = (states('input_number.klimaat_kamer_koud') | float(19)) + band -%}
 {%- set aan_delta = states('input_number.klimaat_airco_aan_delta') | float(1.5) -%}
 {%- set uit_delta = states('input_number.klimaat_airco_uit_delta') | float(0.5) -%}
 {%- set voorkoel_min = states('input_number.klimaat_airco_voorkoelen_min') | float(20) -%}
@@ -1073,6 +1105,7 @@
 {%- set storing = is_state('input_boolean.airco_storing_' ~ unit, 'on') -%}
 {%- set min_aan = is_state('timer.airco_minimaal_aan_' ~ unit, 'active') -%}
 {%- set rustpauze = is_state('timer.airco_rust_' ~ unit, 'active') -%}
+{%- set kansloos = is_state('timer.airco_kansloos_' ~ unit, 'active') -%}
 {%- set nu = states(e) -%}
 {%- set draait = nu in ['cool', 'heat', 'dry', 'heat_cool', 'fan_only'] -%}
 
@@ -1096,6 +1129,7 @@
               'timer.airco_override_' ~ unit,
               'timer.airco_minimaal_aan_' ~ unit,
               'timer.airco_rust_' ~ unit,
+              'timer.airco_kansloos_' ~ unit,
               'group.all_adults'] -%}
   {%- if bron.mist == '' and not has_value(x) -%}
     {%- set bron.mist = x -%}
@@ -1112,8 +1146,13 @@
 {%- set stap = stap if stap > 0 else 0.5 -%}
 {%- set emin = state_attr(e, 'min_temp') | float(16) -%}
 {%- set emax = state_attr(e, 'max_temp') | float(30) -%}
-{%- set koel_doel = [[((warm - uit_delta) / stap) | round(0, 'common') * stap, emin] | max, emax] | min -%}
-{%- set warm_doel = [[((koud + uit_delta) / stap) | round(0, 'common') * stap, emin] | max, emax] | min -%}
+{#- Afronden naar de kant die de unit kán halen: koelen omhoog, verwarmen
+    omlaag. Met 'common' rondt 22,5 op een unit die hele graden doet naar 22 af
+    (Python rondt .5 naar even), en dan vraag je een halve graad méér dan
+    bedoeld van precies de unit die zijn doel toch al niet haalt. Naar boven
+    afronden kost hooguit een halve graad comfort en scheelt uren draaien. -#}
+{%- set koel_doel = [[((warm - uit_delta) / stap) | round(0, 'ceil') * stap, emin] | max, emax] | min -%}
+{%- set warm_doel = [[((koud + uit_delta) / stap) | round(0, 'floor') * stap, emin] | max, emax] | min -%}
 
 {#- Wat wil de kamer? De dode zone zit tussen `te_warm` en `koel_klaar`. -#}
 {%- set te_warm = binnen is not none and binnen >= warm + aan_delta -%}
@@ -1160,6 +1199,17 @@
 {%- elif storing -%}
   {%- set ns.m = 'off' -%}
   {%- set ns.r = 'storing gemeld, automatisch starten staat uit' -%}
+  {%- set ns.spoed = true -%}
+
+{#- Hij heeft het net drie kwartier geprobeerd en kwam niet vooruit. Dan is er
+    iets waar deze regeling niet tegenop kan (een openstaande deur, een raam
+    zonder contact, een doel dat niet te halen is) en kost doordraaien alleen
+    stroom. Even stoppen, en over een paar uur opnieuw kijken - dan staat de zon
+    ergens anders of is dat raam dicht. Zie
+    `automation.klimaat_airco_voortgang_bewaken`. -#}
+{%- elif kansloos -%}
+  {%- set ns.m = 'off' -%}
+  {%- set ns.r = 'kwam niet vooruit, even gestopt (probeert later opnieuw)' -%}
   {%- set ns.spoed = true -%}
 
 {%- elif not (thuis or bt.bijna) -%}
@@ -1256,6 +1306,8 @@
      'spoed': ns.spoed,
      'blokkade': blokkade,
      'entiteit': e,
+     'temp': u.temp,
+     'voortgang_min': AIRCO_VOORTGANG_MIN,
      'naam': u.naam,
      'uit_script': u.uit_script,
      'rustpauze_min': AIRCO_RUSTPAUZE,

@@ -94,6 +94,27 @@ klimaat_airco_package:
       unit_of_measurement: "min"
       mode: box
 
+    # De kamertemperatuur op het moment dat wij de unit aanzetten. Daar legt
+    # `klimaat_airco_voortgang_bewaken` de meting van drie kwartier later naast.
+    # Een input_number en geen variabele: dit moet een herstart overleven en het
+    # is prettig om op het dashboard te kunnen zien waar hij vandaan kwam.
+    airco_start_temp_woonkamer:
+      name: "Airco woonkamer - temperatuur bij starten"
+      icon: mdi:thermometer-chevron-down
+      min: -20
+      max: 50
+      step: 0.1
+      unit_of_measurement: "°C"
+      mode: box
+    airco_start_temp_zolder:
+      name: "Airco boven - temperatuur bij starten"
+      icon: mdi:thermometer-chevron-down
+      min: -20
+      max: 50
+      step: 0.1
+      unit_of_measurement: "°C"
+      mode: box
+
   timer:
     # REM 2: minimale looptijd. Eenmaal aan blijft hij een half uur aan, ook
     # als de gemeten temperatuur eerder onder het doel duikt. De eerste
@@ -134,6 +155,37 @@ klimaat_airco_package:
       name: "Airco boven - net gestart"
       duration: "00:15:00"
       icon: mdi:timer-alert-outline
+      restore: true
+
+    # Het voortgangsvenster. Loopt vanaf het aanzetten en wordt bij elke
+    # geslaagde controle opnieuw gestart, dus zolang de unit wint blijft hij
+    # rollen. Gaat de unit uit, dan zet de uitvoerder hem stil - en een
+    # `timer.cancel` vuurt geen `timer.finished`, dus dan controleert er niets.
+    airco_voortgang_woonkamer:
+      name: "Airco woonkamer - voortgangsvenster"
+      duration: "00:45:00"
+      icon: mdi:chart-line
+      restore: true
+    airco_voortgang_zolder:
+      name: "Airco boven - voortgangsvenster"
+      duration: "00:45:00"
+      icon: mdi:chart-line
+      restore: true
+
+    # Loopt na een venster zonder voortgang. Zolang deze loopt blijft de unit
+    # uit: hij heeft het net drie kwartier geprobeerd en er gebeurde niets, dus
+    # meteen opnieuw beginnen levert hetzelfde op. Twee uur, want in die tijd
+    # verandert er genoeg (de zon draait van de gevel, een raam gaat dicht) om
+    # een tweede poging zinvol te maken.
+    airco_kansloos_woonkamer:
+      name: "Airco woonkamer - kwam niet vooruit"
+      duration: "02:00:00"
+      icon: mdi:trending-neutral
+      restore: true
+    airco_kansloos_zolder:
+      name: "Airco boven - kwam niet vooruit"
+      duration: "02:00:00"
+      icon: mdi:trending-neutral
       restore: true
 
     # Handbediening, precies zoals timer.override_<zone> bij de zonwering: zet
@@ -207,6 +259,8 @@ klimaat_airco_package:
             - timer.airco_rust_zolder
             - timer.airco_override_woonkamer
             - timer.airco_override_zolder
+            - timer.airco_kansloos_woonkamer
+            - timer.airco_kansloos_zolder
         # De units zelf: hun stand bepaalt of "doorkoelen" of "aanzetten" het
         # advies is.
         - trigger: state
@@ -268,6 +322,8 @@ klimaat_airco_package:
             blokkade: "{{ adviezen.woonkamer.blokkade }}"
             naam: "{{ adviezen.woonkamer.naam }}"
             entiteit: "{{ adviezen.woonkamer.entiteit }}"
+            temp: "{{ adviezen.woonkamer.temp }}"
+            voortgang_min: "{{ adviezen.woonkamer.voortgang_min }}"
             uit_script: "{{ adviezen.woonkamer.uit_script }}"
             rustpauze_min: "{{ adviezen.woonkamer.rustpauze_min }}"
 
@@ -284,6 +340,8 @@ klimaat_airco_package:
             blokkade: "{{ adviezen.zolder.blokkade }}"
             naam: "{{ adviezen.zolder.naam }}"
             entiteit: "{{ adviezen.zolder.entiteit }}"
+            temp: "{{ adviezen.zolder.temp }}"
+            voortgang_min: "{{ adviezen.zolder.voortgang_min }}"
             uit_script: "{{ adviezen.zolder.uit_script }}"
             rustpauze_min: "{{ adviezen.zolder.rustpauze_min }}"
 
@@ -350,6 +408,7 @@ klimaat_airco_package:
                   # rustpauze wachten.
                   spoed: "{{ state_attr(advies_sensor, 'spoed') in [true, 'True', 'true'] }}"
                   uit_script: "{{ state_attr(advies_sensor, 'uit_script') }}"
+                  temp_sensor: "{{ state_attr(advies_sensor, 'temp') }}"
                   pauze_min: "{{ state_attr(advies_sensor, 'rustpauze_min') | int(10) }}"
               - variables:
                   huidig: "{{ states(entiteit) }}"
@@ -394,6 +453,7 @@ klimaat_airco_package:
                           entity_id:
                             - "timer.airco_minimaal_aan_{{ repeat.item }}"
                             - "timer.airco_gestart_{{ repeat.item }}"
+                            - "timer.airco_voortgang_{{ repeat.item }}"
                       - action: timer.start
                         target:
                           entity_id: "timer.airco_rust_{{ repeat.item }}"
@@ -428,11 +488,23 @@ klimaat_airco_package:
                       - action: timer.cancel
                         target:
                           entity_id: "timer.airco_rust_{{ repeat.item }}"
+                      # Vastleggen waar we vandaan komen. Drie kwartier later
+                      # legt `klimaat_airco_voortgang_bewaken` de meting hier
+                      # naast; is er niets gebeurd, dan draait de unit ergens
+                      # tegenop en heeft doorgaan geen zin.
+                      - action: input_number.set_value
+                        target:
+                          entity_id: "input_number.airco_start_temp_{{ repeat.item }}"
+                        data:
+                          value: >-
+                            {{ states(temp_sensor) | float(0) | round(1) }}
+                        continue_on_error: true
                       - action: timer.start
                         target:
                           entity_id:
                             - "timer.airco_minimaal_aan_{{ repeat.item }}"
                             - "timer.airco_gestart_{{ repeat.item }}"
+                            - "timer.airco_voortgang_{{ repeat.item }}"
                       # Modus en setpoint in één call, en daarna niet meer
                       # aangeraakt: de inverter moduleert zelf. Elke ronde een
                       # nieuw streefgetal sturen is hoe je een warmtepomp aan
@@ -656,6 +728,118 @@ klimaat_airco_package:
                 message: >-
                   {{ unit }}: start mislukt ({{ nieuw_aantal }}e keer vandaag,
                   bij twee gaat automatisch starten uit).
+
+    ###########################################################################
+    ## Laag 5d - komt hij eigenlijk wel vooruit?
+    ##
+    ## Een doel dat niet gehaald wordt is geen fout van de regeling: op een
+    ## hete dag is "zo koel mogelijk" het beste antwoord dat er is, en dan hoort
+    ## een airco te blijven draaien. Maar zonder controle lijkt dat precies op
+    ## de gevallen waarin doordraaien niets oplevert:
+    ##
+    ##   - een raam of deur open in een ruimte zonder contact;
+    ##   - een unit die het niet meer doet (de zolderunit stond op 20 augustus
+    ##     2026 vier uur op 18°/high terwijl het gemiddelde boven van 22,4 naar
+    ##     22,2 ging en twee kamers wármer werden - acht ramen stonden open);
+    ##   - een doel dat op deze sensor gewoon niet te halen is.
+    ##
+    ## Vandaar deze meting in plaats van een aanname. Elke 45 minuten: is het
+    ## minstens AIRCO_VOORTGANG_MIN opgeschoven? Zo ja, venster resetten en
+    ## doorgaan. Zo nee, twee uur stoppen en de gemeten cijfers melden - dan kan
+    ## een mens bepalen of het aan een raam ligt of aan de grens.
+    ##
+    ## Het is bewust GEEN storingsvlag: dit zegt niets over het apparaat. De
+    ## unit doet het waarschijnlijk prima en vecht tegen iets anders.
+    ###########################################################################
+    - id: klimaat_airco_voortgang_bewaken
+      alias: Klimaat - Airco komt niet vooruit
+      description: >-
+        Meet elke drie kwartier of een draaiende airco echt iets opschuift en
+        zet hem anders een paar uur stil, met de cijfers erbij.
+      mode: queued
+      max: 6
+      max_exceeded: silent
+      triggers:
+        - trigger: event
+          event_type: timer.finished
+      conditions:
+        - condition: state
+          entity_id: input_boolean.aircoregie_actief
+          state: "on"
+      actions:
+        - variables:
+            unit: >-
+              {% set e = trigger.event.data.entity_id | default('') %}
+              {{ e | replace('timer.airco_voortgang_', '')
+                 if e.startswith('timer.airco_voortgang_') else '' }}
+        - condition: template
+          value_template: "{{ unit != '' }}"
+        - variables:
+            advies_sensor: "sensor.airco_advies_{{ unit }}"
+        - variables:
+            entiteit: "{{ state_attr(advies_sensor, 'entiteit') }}"
+            temp_sensor: "{{ state_attr(advies_sensor, 'temp') }}"
+            drempel: "{{ state_attr(advies_sensor, 'voortgang_min') | float(0.3) }}"
+            naam: "{{ state_attr(advies_sensor, 'naam') | default('Airco', true) }}"
+            start_helper: "input_number.airco_start_temp_{{ unit }}"
+        - variables:
+            stand: "{{ states(entiteit) }}"
+            nu_temp: "{{ states(temp_sensor) | float('onbekend') }}"
+            start_temp: "{{ states(start_helper) | float('onbekend') }}"
+        - condition: template
+          alias: Draait hij nog, en hebben we twee bruikbare metingen?
+          value_template: >-
+            {{ stand in ['cool', 'heat']
+               and nu_temp not in ['onbekend', 'unknown']
+               and start_temp not in ['onbekend', 'unknown'] }}
+        - variables:
+            # Koelen wint als het kouder wordt, verwarmen als het warmer wordt.
+            # Eén getal, zodat de rest van deze automatisering niet meer hoeft
+            # te weten welke kant op hij aan het werk was.
+            vooruit: >-
+              {{ ((start_temp | float(0)) - (nu_temp | float(0)))
+                 if stand == 'cool'
+                 else ((nu_temp | float(0)) - (start_temp | float(0))) }}
+        - choose:
+            # Hij wint. Venster opnieuw beginnen vanaf de huidige stand, zodat
+            # de volgende controle over de vólgende drie kwartier gaat en niet
+            # over de hele run - anders blijft een unit die alleen in het eerste
+            # half uur iets deed de rest van de dag "in orde".
+            - conditions:
+                - condition: template
+                  value_template: "{{ vooruit | float(0) >= drempel | float(0.3) }}"
+              sequence:
+                - action: input_number.set_value
+                  target:
+                    entity_id: "{{ start_helper }}"
+                  data:
+                    value: "{{ nu_temp | float(0) | round(1) }}"
+                - action: timer.start
+                  target:
+                    entity_id: "timer.airco_voortgang_{{ unit }}"
+          default:
+            - action: timer.start
+              target:
+                entity_id: "timer.airco_kansloos_{{ unit }}"
+            - action: logbook.log
+              data:
+                name: Aircoregie
+                message: >-
+                  {{ unit }}: drie kwartier {{ 'gekoeld' if stand == 'cool'
+                  else 'verwarmd' }} zonder resultaat
+                  ({{ start_temp }}° -> {{ nu_temp }}°), twee uur gepauzeerd.
+            - action: notify.mobile_devices_adults
+              data:
+                title: "{{ naam }} komt niet vooruit"
+                message: >-
+                  Drie kwartier {{ 'koelen' if stand == 'cool' else 'verwarmen' }}
+                  bracht {{ start_temp }}° naar {{ nu_temp }}°
+                  ({{ (vooruit | float(0)) | round(1) }}° opgeschoven, er is
+                  {{ (drempel | float(0.3)) | round(1) }}° nodig). Hij staat nu
+                  twee uur uit. Kijk naar een deur of raam dat openstaat in een
+                  ruimte zonder contact - en bij de unit boven ook naar het
+                  doel zelf: die regelt op het gemiddelde van vijf kamers en
+                  blaast niet door een dichte slaapkamerdeur.
 
     - id: klimaat_airco_storing_resetten
       alias: Klimaat - Airco storingsteller resetten

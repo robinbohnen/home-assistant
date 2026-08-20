@@ -1135,13 +1135,23 @@ else:
 # voorganger hoorde. Dat gebeurt zodra je een regel tussen een entiteit en zijn
 # naam invoegt, en het is aan de YAML zelf niet te zien: het blijft geldig.
 kaarten, kaart = [], None
+# KAARTNIVEAU IS EEN INSPRINGING, GEEN WOORD
+# Deze lus keek eerst naar élke `- type:`-regel en zette de kaart daarmee op
+# None. Maar `- type: divider` en `- type: attribute` zijn RIJEN binnen een
+# kaart, geen nieuwe kaart: de eerste divider sloot de kaart dus af en alles
+# daaronder werd niet meer gecontroleerd. Bij de zonweringkaarten viel dat niet
+# op (die hebben hun dividers onderaan), bij de airco-kaarten hieronder zou het
+# de helft van de rijen ongezien laten.
+# Het verschil zit in de inspringing: kaarten staan onder `cards:` op zes
+# spaties, rijen onder `entities:` op tien.
+KAART_INSPRING = 6
 for regel in dashboard.splitlines():
-    # Een kaart loopt tot de volgende `- type:`. Zonder dat afsluiten belanden
-    # de entiteiten van een grafiekkaart erna in de vorige entities-kaart, en
-    # die staan daar bewust zonder naam.
-    soort = re.match(r"^\s*- type: (\S+)", regel)
-    if soort:
-        kaart = {"titel": "?", "rijen": []} if soort.group(1) == "entities" else None
+    soort = re.match(r"^( *)- type: (\S+)", regel)
+    if soort and len(soort.group(1)) <= KAART_INSPRING:
+        # Een kaart loopt tot de volgende kaart. Zonder dat afsluiten belanden
+        # de entiteiten van een grafiekkaart erna in de vorige entities-kaart,
+        # en die staan daar bewust zonder naam.
+        kaart = {"titel": "?", "rijen": []} if soort.group(2) == "entities" else None
         if kaart is not None:
             kaarten.append(kaart)
     if kaart is None:
@@ -1236,6 +1246,7 @@ def wereld(naam, tijd="14:00", **kw):
         STATES[f"timer.airco_override_{u}"] = "idle"
         STATES[f"timer.airco_minimaal_aan_{u}"] = "idle"
         STATES[f"timer.airco_rust_{u}"] = "idle"
+        STATES[f"timer.airco_kansloos_{u}"] = "idle"
     for r in AIRCO_RAMEN:
         STATES[r] = "off"
     STATES.update(kw)
@@ -1307,7 +1318,7 @@ check_airco("open dakraam blokkeert de zolderunit", "zolder", "off", spoed=True)
 # Een raam in het ándere gebied telt niet mee.
 wereld("keukenraam open, boven dicht",
        **{B: "25.0", "binary_sensor.keuken_raam_groot_contact": "on"})
-check_airco("keukenraam raakt de zolderunit niet", "zolder", "cool", doel=22.0)
+check_airco("keukenraam raakt de zolderunit niet", "zolder", "cool", doel=23.0)
 
 # EN DIT IS BEWUST ANDERSOM DAN BIJ DE ROLGORDIJNEN. Daar telt een contact op
 # 'unavailable' als open, want een gordijn tegen een openstaand raam is duur.
@@ -1366,7 +1377,7 @@ wereld("warme nacht", "23:30", **{B: "26.0"})
 check_airco("stille uren: niet uit zichzelf aan", "zolder", "off")
 
 wereld("warme ochtend na de stille uren", "07:30", **{B: "26.0"})
-check_airco("na 07:00 mag hij weer aan", "zolder", "cool", doel=22.0)
+check_airco("na 07:00 mag hij weer aan", "zolder", "cool", doel=23.0)
 
 # --- regime ----------------------------------------------------------------
 # Het regime komt uit de verwachting van vanochtend. Een kamer van 24° is warm,
@@ -1389,15 +1400,43 @@ wereld("koude kamer, hij verwarmt al",
           "climate.airco_woonkamer": "heat"})
 check_airco("verwarmt door tot het doel", "woonkamer", "rust")
 
-# --- de zolderunit rekent in hele graden -----------------------------------
-# target_temp_step is daar 1. 21,5 bestaat niet op dat apparaat, dus het doel
-# wordt 22 - en de uitzetgrens schuift netjes mee.
-wereld("zolder te warm", **{B: "24.0"})
-check_airco("zolder rondt af op hele graden", "zolder", "cool", doel=22.0)
+# --- de zolderunit heeft een eigen comfortband ------------------------------
+# `band: 1` schuift zijn hele band een graad omhoog. Hij regelt namelijk op het
+# gemiddelde van vijf kamers terwijl hij op de overloop hangt: achter een
+# dichte deur blaast hij niet. Op 20 augustus 2026 koelde hij vier uur op
+# 18°/high en ging dat gemiddelde van 22,4 naar 22,2, terwijl twee kamers
+# warmer werden. Een doel dat op één kamer normaal is, is daar onhaalbaar.
+wereld("beide units op 24 graden", **{W: "24.0", B: "24.0"})
+check_airco("woonkamer koelt bij 24°", "woonkamer", "cool", doel=21.5)
+check_airco("zolder nog niet: zijn band ligt hoger", "zolder", "off")
+
+wereld("zolder boven zijn eigen grens", **{B: "25.0"})
+check_airco("boven 24,5 gaat de zolder wel aan", "zolder", "cool", doel=23.0)
+
+# target_temp_step is daar 1, dus 22,5 bestaat niet op dat apparaat. Naar BOVEN
+# afronden: 22 vragen van de unit die zijn doel toch al niet haalt is precies
+# de verkeerde kant, en Python rondt .5 naar even (dus omlaag).
+wereld("zolder rondt zijn doel af", **{B: "25.0"})
+if abs(airco("zolder")["doel"] - 23.0) > 0.001:
+    FOUTEN.append("zolder rondt zijn doel de verkeerde kant op")
+    print("FAIL  doel hoort naar boven afgerond te worden (23, niet 22)")
+else:
+    print(f"PASS  {'koeldoel rondt af naar de haalbare kant':52}")
 
 wereld("zolder onder zijn minimum",
        **{B: "24.0", "input_number.klimaat_kamer_warm": "17"})
 check_airco("nooit lager dan wat de unit kan (18°)", "zolder", "cool", doel=18.0)
+
+# --- hij komt niet vooruit -------------------------------------------------
+# `timer.airco_kansloos_<unit>` loopt: de voortgangsbewaking heeft net gezien
+# dat drie kwartier koelen niets opleverde. Doordraaien kost dan alleen stroom.
+wereld("kansloze poging", **{W: "26.0", "climate.airco_woonkamer": "cool",
+                             "timer.airco_kansloos_woonkamer": "active"})
+check_airco("kwam niet vooruit: stoppen ondanks de warmte", "woonkamer", "off", spoed=True)
+
+# En hij pakt het daarna gewoon weer op.
+wereld("pauze voorbij", **{W: "26.0"})
+check_airco("na de pauze mag hij het opnieuw proberen", "woonkamer", "cool")
 
 # --- storing ---------------------------------------------------------------
 # Doorstarten van een unit die op zijn eigen beveiliging klapt is schadelijk;
@@ -1494,6 +1533,9 @@ for domein, prefix in [("input_boolean", "airco_handmatig_"),
                        ("timer", "airco_minimaal_aan_"),
                        ("timer", "airco_rust_"),
                        ("timer", "airco_gestart_"),
+                       ("timer", "airco_voortgang_"),
+                       ("timer", "airco_kansloos_"),
+                       ("input_number", "airco_start_temp_"),
                        ("counter", "airco_storingen_")]:
     ontbreekt = [u for u in units_cfg if f"{prefix}{u}:" not in airco_pakket]
     if ontbreekt:
