@@ -1185,6 +1185,365 @@ if zonder_cover:
 else:
     print(f"PASS  {'elke cover staat bij Werkelijke stand':52}")
 
+# ===========================================================================
+#  LAAG 5 - DE AIRCO'S
+# ===========================================================================
+# De hele opgave hier is NIET PENDELEN. De scenario's hieronder rekenen de vijf
+# remmen na: de dode zone, de minimale looptijd, de rustpauze, en de twee
+# redenen die daar dwars doorheen mogen (raam open, leeg huis).
+
+
+def airco(unit):
+    return json.loads(MOD.airco_advies(unit).strip())
+
+
+AIRCO_RAMEN = sorted({r for cfg in json.loads(MOD.aircos_json()).values()
+                      for r in cfg["ramen"]})
+
+
+def wereld(naam, tijd="14:00", **kw):
+    """Basiswereld voor de aircoregie: alles aan, niets in de weg, huis thuis."""
+    scenario(naam, tijd)
+    STATES.update({
+        "input_number.klimaat_kamer_koud": "19",
+        "input_number.klimaat_airco_aan_delta": "1.5",
+        "input_number.klimaat_airco_uit_delta": "0.5",
+        "input_number.klimaat_airco_voorkoelen_min": "20",
+        "input_boolean.aircoregie_actief": "on",
+        "input_number.klimaat_override_uren": "4",
+        "sensor.temperatuur_boven_gemiddeld": "20",
+        # Wat de units zelf over hun schaal melden. De zolderunit doet hele
+        # graden en kan niet lager dan 18; de woonkamerunit doet halve.
+        "climate.airco_woonkamer.target_temp_step": 0.5,
+        "climate.airco_woonkamer.min_temp": 16.0,
+        "climate.airco_woonkamer.max_temp": 31.0,
+        "climate.airco_zolder.target_temp_step": 1,
+        "climate.airco_zolder.min_temp": 18.0,
+        "climate.airco_zolder.max_temp": 30.0,
+        # Iedereen thuis: dan speelt het voorkoelen niet mee.
+        "person.robin_bohnen": "home",
+        "person.samantha_henkelman": "home",
+        "sensor.robin_reistijd_naar_huis": "1",
+        "sensor.samantha_reistijd_naar_huis": "1",
+        # Vers, anders valt `bijna_thuis` al om op AIRCO_REISTIJD_VERS voordat
+        # de reistijd zelf is bekeken. De harnas-standaard is een uur oud.
+        "sensor.robin_reistijd_naar_huis.last_changed": NOW - dt.timedelta(minutes=2),
+        "sensor.samantha_reistijd_naar_huis.last_changed": NOW - dt.timedelta(minutes=2),
+    })
+    for u in json.loads(MOD.airco_lijst()):
+        STATES[f"input_boolean.airco_handmatig_{u}"] = "off"
+        STATES[f"input_boolean.airco_storing_{u}"] = "off"
+        STATES[f"timer.airco_override_{u}"] = "idle"
+        STATES[f"timer.airco_minimaal_aan_{u}"] = "idle"
+        STATES[f"timer.airco_rust_{u}"] = "idle"
+    for r in AIRCO_RAMEN:
+        STATES[r] = "off"
+    STATES.update(kw)
+    return naam
+
+
+def check_airco(naam, unit, verwacht_modus, doel=None, uitvoeren=None, spoed=None):
+    a = airco(unit)
+    ok = a["modus"] == verwacht_modus
+    if doel is not None:
+        ok = ok and abs(a["doel"] - doel) < 0.001
+    if uitvoeren is not None:
+        ok = ok and a["uitvoeren"] == uitvoeren
+    if spoed is not None:
+        ok = ok and a["spoed"] == spoed
+    print(f"{'PASS' if ok else 'FAIL'}  {naam:52} {unit:10} -> {a['modus']:5} "
+          f"doel={a['doel']:5} uitvoeren={str(a['uitvoeren']):5} "
+          f"spoed={str(a['spoed']):5}  {a['reden']}")
+    if not ok:
+        FOUTEN.append(f"{naam} / {unit}: kreeg modus={a['modus']} doel={a['doel']} "
+                      f"uitvoeren={a['uitvoeren']} spoed={a['spoed']}, verwachtte "
+                      f"modus={verwacht_modus} doel={doel} uitvoeren={uitvoeren} spoed={spoed}")
+
+
+W = "sensor.woonkamer_woonkamer_multisensor_temperatuur"
+B = "sensor.temperatuur_boven_gemiddeld"
+
+# --- de dode zone ----------------------------------------------------------
+# Aan bij 22 + 1,5 = 23,5. Doel (en uitzetgrens) is 22 - 0,5 = 21,5.
+wereld("kamer boven de aanzetgrens", **{W: "24.0"})
+check_airco("te warm en iedereen thuis: koelen", "woonkamer", "cool", doel=21.5)
+
+wereld("kamer net onder de aanzetgrens", **{W: "23.4"})
+check_airco("net onder de grens: niet aanzetten", "woonkamer", "off")
+
+# Dit is de kern van het niet-pendelen. Bij 23,4 zou een systeem met één
+# drempel meteen weer uitgaan, waarna de kamer opwarmt naar 23,5 en hij weer
+# aanslaat - eindeloos, en de kamer wordt geen graad koeler.
+wereld("draaiende airco tussen de grenzen", **{W: "23.4", "climate.airco_woonkamer": "cool"})
+check_airco("hij draait al: doorkoelen tot het doel", "woonkamer", "rust")
+
+wereld("doel gehaald", **{W: "21.4", "climate.airco_woonkamer": "cool"})
+check_airco("doel gehaald: uit", "woonkamer", "off")
+
+# --- rem 2 en 3: de minimumtijden ------------------------------------------
+wereld("minimale looptijd loopt nog",
+       **{W: "21.0", "climate.airco_woonkamer": "cool",
+          "timer.airco_minimaal_aan_woonkamer": "active"})
+check_airco("koud genoeg, maar hij draait pas net", "woonkamer", "rust")
+
+wereld("rustpauze na uitschakelen",
+       **{W: "25.0", "timer.airco_rust_woonkamer": "active"})
+check_airco("te warm, maar hij ging net uit", "woonkamer", "rust")
+
+# --- wat wel dwars door de minimumtijden heen mag ---------------------------
+# Een openstaand raam en een leeg huis zijn geen comfortvraag maar een
+# rekening; die breken de minimale looptijd af en slaan de rustpauze van de
+# uitvoerder over (`spoed`).
+wereld("raam open tijdens het koelen",
+       **{W: "25.0", "climate.airco_woonkamer": "cool",
+          "timer.airco_minimaal_aan_woonkamer": "active",
+          "binary_sensor.keuken_raam_groot_contact": "on"})
+check_airco("raam open wint van de minimale looptijd", "woonkamer", "off", spoed=True)
+
+wereld("raam boven open",
+       **{B: "25.0", "binary_sensor.slaapkamer_mini_dakraam_contact": "on"})
+check_airco("open dakraam blokkeert de zolderunit", "zolder", "off", spoed=True)
+
+# Een raam in het ándere gebied telt niet mee.
+wereld("keukenraam open, boven dicht",
+       **{B: "25.0", "binary_sensor.keuken_raam_groot_contact": "on"})
+check_airco("keukenraam raakt de zolderunit niet", "zolder", "cool", doel=22.0)
+
+# EN DIT IS BEWUST ANDERSOM DAN BIJ DE ROLGORDIJNEN. Daar telt een contact op
+# 'unavailable' als open, want een gordijn tegen een openstaand raam is duur.
+# Hier zou diezelfde keuze betekenen dat één lege batterij de airco de hele
+# zomer blokkeert - en dat is precies wat er een keer twee weken lang met het
+# keukenrolgordijn gebeurde zonder dat iemand zag waarom.
+wereld("dood raamcontact",
+       **{W: "25.0", "binary_sensor.keuken_raam_groot_contact": "unavailable"})
+check_airco("onbereikbaar contact blokkeert niet", "woonkamer", "cool")
+if "onbereikbaar" not in airco("woonkamer")["reden"]:
+    FOUTEN.append("dood raamcontact wordt niet in de reden genoemd")
+    print("FAIL  dood raamcontact hoort wel in de reden te staan")
+else:
+    print(f"PASS  {'dood contact staat wel in de reden':52}")
+
+# --- thuis en bijna thuis --------------------------------------------------
+wereld("leeg huis", **{W: "26.0", "group.all_adults": "not_home",
+                       "person.robin_bohnen": "not_home",
+                       "person.samantha_henkelman": "not_home",
+                       "sensor.robin_reistijd_naar_huis": "45",
+                       "sensor.samantha_reistijd_naar_huis": "50"})
+check_airco("niemand thuis en niemand vlakbij", "woonkamer", "off", spoed=True)
+
+wereld("iemand bijna thuis", **{W: "26.0", "group.all_adults": "not_home",
+                                "person.robin_bohnen": "not_home",
+                                "person.samantha_henkelman": "not_home",
+                                "sensor.robin_reistijd_naar_huis": "45",
+                                "sensor.samantha_reistijd_naar_huis": "15"})
+check_airco("15 minuten onderweg: alvast koelen", "woonkamer", "cool", doel=21.5)
+
+wereld("nog te ver weg", **{W: "26.0", "group.all_adults": "not_home",
+                            "person.robin_bohnen": "not_home",
+                            "person.samantha_henkelman": "not_home",
+                            "sensor.robin_reistijd_naar_huis": "45",
+                            "sensor.samantha_reistijd_naar_huis": "35"})
+check_airco("35 minuten onderweg is nog geen bijna thuis", "woonkamer", "off")
+
+# Een reistijd die niet meer ververst is geen reistijd: een telefoon die op
+# "vijftien minuten" blijft hangen zou het huis anders eindeloos laten
+# voorkoelen voor iemand die niet komt.
+wereld("oude reistijd", **{W: "26.0", "group.all_adults": "not_home",
+                           "person.robin_bohnen": "not_home",
+                           "person.samantha_henkelman": "not_home",
+                           "sensor.robin_reistijd_naar_huis": "45",
+                           "sensor.samantha_reistijd_naar_huis": "15",
+                           "sensor.samantha_reistijd_naar_huis.last_changed":
+                               NOW - dt.timedelta(hours=2)})
+check_airco("vastgelopen reistijdsensor telt niet", "woonkamer", "off")
+
+# Wie nog op 'home' staat telt niet als onderweg; dan is `thuis` sowieso waar.
+wereld("thuis maar met reistijd 0", **{W: "26.0"})
+check_airco("gewoon thuis: koelen", "woonkamer", "cool")
+
+# --- nachtrust -------------------------------------------------------------
+wereld("warme nacht", "23:30", **{B: "26.0"})
+check_airco("stille uren: niet uit zichzelf aan", "zolder", "off")
+
+wereld("warme ochtend na de stille uren", "07:30", **{B: "26.0"})
+check_airco("na 07:00 mag hij weer aan", "zolder", "cool", doel=22.0)
+
+# --- regime ----------------------------------------------------------------
+# Het regime komt uit de verwachting van vanochtend. Een kamer van 24° is warm,
+# ook als het KNMI een neutrale dag voorspelde - vandaar dat koelen ook in
+# 'Neutraal' mag. In het verwarmregime niet: dan is warmte het doel.
+wereld("warme kamer op een verwarmdag",
+       **{W: "24.0", "input_select.klimaat_regime": "Verwarmen"})
+check_airco("verwarmregime: niet koelen", "woonkamer", "off")
+
+wereld("koude kamer op een verwarmdag",
+       **{W: "17.0", "input_select.klimaat_regime": "Verwarmen"})
+check_airco("bijverwarmen naar de onderkant van de band", "woonkamer", "heat", doel=19.5)
+
+wereld("koude kamer op een koeldag",
+       **{W: "17.0", "input_select.klimaat_regime": "Koelen"})
+check_airco("koelregime: geen bijverwarming", "woonkamer", "off")
+
+wereld("koude kamer, hij verwarmt al",
+       **{W: "19.2", "input_select.klimaat_regime": "Verwarmen",
+          "climate.airco_woonkamer": "heat"})
+check_airco("verwarmt door tot het doel", "woonkamer", "rust")
+
+# --- de zolderunit rekent in hele graden -----------------------------------
+# target_temp_step is daar 1. 21,5 bestaat niet op dat apparaat, dus het doel
+# wordt 22 - en de uitzetgrens schuift netjes mee.
+wereld("zolder te warm", **{B: "24.0"})
+check_airco("zolder rondt af op hele graden", "zolder", "cool", doel=22.0)
+
+wereld("zolder onder zijn minimum",
+       **{B: "24.0", "input_number.klimaat_kamer_warm": "17"})
+check_airco("nooit lager dan wat de unit kan (18°)", "zolder", "cool", doel=18.0)
+
+# --- storing ---------------------------------------------------------------
+# Doorstarten van een unit die op zijn eigen beveiliging klapt is schadelijk;
+# zie de zolderairco met foutcode E48 in augustus 2026.
+wereld("storing gemeld", **{B: "26.0", "input_boolean.airco_storing_zolder": "on"})
+check_airco("storing: niet automatisch starten", "zolder", "off", uitvoeren=True)
+
+# --- blokkades (het advies klopt, maar we voeren niets uit) ----------------
+wereld("regie uit", **{W: "26.0", "input_boolean.aircoregie_actief": "off"})
+check_airco("hoofdschakelaar uit: wel adviseren, niet doen", "woonkamer", "cool", uitvoeren=False)
+
+wereld("unit op handmatig", **{W: "26.0", "input_boolean.airco_handmatig_woonkamer": "on"})
+check_airco("unit op handmatig", "woonkamer", "cool", uitvoeren=False)
+
+wereld("handbediening loopt", **{W: "26.0", "timer.airco_override_woonkamer": "active"})
+check_airco("handbediening actief", "woonkamer", "cool", uitvoeren=False)
+
+# Een helper die tijdens een reload even weg is, mag geen beslissing dragen.
+wereld("helper weg tijdens reload", **{W: "26.0"})
+del STATES["input_number.klimaat_airco_aan_delta"]
+check_airco("ontbrekende helper zet de unit stil", "woonkamer", "cool", uitvoeren=False)
+
+# --- kapotte kamersensor ---------------------------------------------------
+# Niet uitzetten (dat zou een draaiende airco stilleggen op een lege batterij),
+# maar stilstaan.
+wereld("kamersensor weg", **{W: "unavailable", "climate.airco_woonkamer": "cool"})
+check_airco("temperatuur onbekend: niets sturen", "woonkamer", "rust")
+
+# --- consistentiechecks laag 5 ---------------------------------------------
+airco_pakket = open(f"{CONFIG}/packages/9 - Other/Klimaat Airco.yaml").read()
+units_cfg = json.loads(MOD.aircos_json())
+
+# Zelfde val als bij de zones: HA leidt het entity_id af uit de NAAM.
+airco_namen = re.findall(r'- name: "(Airco advies [^"]+)"', airco_pakket)
+verwacht_a = {f"sensor.airco_advies_{u}" for u in units_cfg}
+gevonden_a = {f"sensor.{slugify(n)}" for n in airco_namen}
+if verwacht_a == gevonden_a:
+    print(f"PASS  {'slug komt overeen met entity_id van elke airco-sensor':52} "
+          f"({len(verwacht_a)} units)")
+else:
+    print("FAIL  airco-slug en sensornaam lopen uit de pas")
+    FOUTEN.append(f"units zonder sensor: {verwacht_a - gevonden_a}; "
+                  f"sensoren zonder unit: {gevonden_a - verwacht_a}")
+
+
+def anker_uit(tekst, naam):
+    """De entiteiten onder `entity_id: &<naam>` tot de eerste andere regel."""
+    uit, verzamelen = [], False
+    for regel in tekst.splitlines():
+        if f"&{naam}" in regel:
+            verzamelen = True
+            continue
+        if verzamelen:
+            # Alleen echte entity-ids. Zonder deze eis loopt de lijst door in de
+            # volgende trigger (`- trigger: state`), want die matcht net zo goed
+            # op `- <woord>`.
+            m = re.match(r"^\s*- ([a-z_]+\.[a-z0-9_]+)\s*$", regel)
+            if m:
+                uit.append(m.group(1))
+            elif not re.match(r"^\s*#", regel):
+                break
+    return set(uit)
+
+
+for anker, hoort_bij in [("airco_advies_sensoren", lambda u, c: f"sensor.airco_advies_{u}"),
+                         ("beheerde_aircos", lambda u, c: c["entiteit"])]:
+    verwacht_anker = {hoort_bij(u, c) for u, c in units_cfg.items()}
+    gevonden_anker = anker_uit(airco_pakket, anker)
+    if verwacht_anker == gevonden_anker:
+        print(f"PASS  {'elke unit staat in &' + anker:52} ({len(verwacht_anker)} units)")
+    else:
+        print(f"FAIL  &{anker} loopt uit de pas met de units")
+        FOUTEN.append(f"&{anker}: mist {verwacht_anker - gevonden_anker}; "
+                      f"onbekend {gevonden_anker - verwacht_anker}")
+
+# De raamlijst staat twee keer: in AIRCOS (waar de beslissing hem leest) en als
+# trigger in het package (zodat een raam dat opengaat niet een minuut hoeft te
+# wachten). Lopen die uit elkaar, dan blijft de airco na het openzetten van dat
+# ene raam gewoon doorkoelen tot de volgende minuuttik - stil en onvindbaar.
+ramen_trigger = anker_uit(airco_pakket, "airco_ramen")
+if ramen_trigger == set(AIRCO_RAMEN):
+    print(f"PASS  {'elk raamcontact staat ook in de triggers':52} "
+          f"({len(AIRCO_RAMEN)} contacten)")
+else:
+    print("FAIL  raamlijst in AIRCOS en de triggers lopen uit de pas")
+    FOUTEN.append(f"&airco_ramen: mist {set(AIRCO_RAMEN) - ramen_trigger}; "
+                  f"onbekend {ramen_trigger - set(AIRCO_RAMEN)}")
+
+# Elke unit heeft zijn eigen helpers nodig; de macro leidt de namen af uit de
+# slug en vindt ze anders simpelweg niet.
+for domein, prefix in [("input_boolean", "airco_handmatig_"),
+                       ("input_boolean", "airco_storing_"),
+                       ("timer", "airco_override_"),
+                       ("timer", "airco_minimaal_aan_"),
+                       ("timer", "airco_rust_"),
+                       ("timer", "airco_gestart_"),
+                       ("counter", "airco_storingen_")]:
+    ontbreekt = [u for u in units_cfg if f"{prefix}{u}:" not in airco_pakket]
+    if ontbreekt:
+        print(f"FAIL  {domein}.{prefix}<unit> ontbreekt voor {ontbreekt}")
+        FOUTEN.append(f"{domein}.{prefix}: {ontbreekt}")
+    else:
+        print(f"PASS  {domein + '.' + prefix + '<unit> bestaat voor elke unit':52}")
+
+# Een nieuwe input_number die niet in `klimaat_standaardwaarden` staat, blijft
+# op zijn minimum hangen - HA vult die waarde zelf in als er niets is
+# opgeslagen, en dan zou `aan_delta` 0,5 zijn in plaats van 1,5.
+regime_pakket = open(f"{CONFIG}/packages/9 - Other/Klimaat Regime.yaml").read()
+nieuwe_drempels = ["input_number.klimaat_kamer_koud",
+                   "input_number.klimaat_airco_aan_delta",
+                   "input_number.klimaat_airco_uit_delta",
+                   "input_number.klimaat_airco_voorkoelen_min"]
+zonder_standaard = [d for d in nieuwe_drempels if f"{d}:" not in regime_pakket]
+if zonder_standaard:
+    print(f"FAIL  drempel zonder standaardwaarde: {zonder_standaard}")
+    FOUTEN.append(f"klimaat_standaardwaarden mist: {zonder_standaard}")
+else:
+    print(f"PASS  {'elke airco-drempel heeft een standaardwaarde':52} "
+          f"({len(nieuwe_drempels)} drempels)")
+
+# En zonder verhoogd versienummer draait die automatisering niet meer.
+versie = re.search(r"config_versie: (\d+)", regime_pakket)
+if versie and int(versie.group(1)) >= 4:
+    print(f"PASS  {'config_versie is opgehoogd voor de nieuwe drempels':52} "
+          f"(versie {versie.group(1)})")
+else:
+    print("FAIL  config_versie niet opgehoogd; nieuwe drempels blijven op hun minimum")
+    FOUTEN.append("config_versie in Klimaat Regime.yaml staat niet op 4 of hoger")
+
+# Stuurt de regie wel maar zie je er niets van, dan is hij niet te beoordelen -
+# en juist de eerste week is meekijken het hele punt.
+zonder_kaart = [u for u in units_cfg if f"sensor.airco_advies_{u}" not in dashboard]
+if zonder_kaart:
+    print(f"FAIL  units ontbreken op de Klimaat-weergave: {zonder_kaart}")
+    FOUTEN.append(f"dashboard mist adviessensor voor: {zonder_kaart}")
+else:
+    print(f"PASS  {'elke unit staat op de Klimaat-weergave':52} ({len(units_cfg)} units)")
+
+zonder_unit = [u for u, c in units_cfg.items() if c["entiteit"] not in dashboard]
+if zonder_unit:
+    print(f"FAIL  climate-entiteiten ontbreken bij 'Werkelijke stand': {zonder_unit}")
+    FOUTEN.append(f"dashboard mist climate-entiteit voor: {zonder_unit}")
+else:
+    print(f"PASS  {'elke airco staat bij Werkelijke stand':52}")
+
+
 # Als pytest dit bestand importeert draait alles hierboven al; deze functie
 # geeft pytest alleen iets om te verzamelen. Zonder haar meldde `pytest
 # tests/` "no tests ran" met exitcode 5, wat makkelijk voor groen doorgaat.

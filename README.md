@@ -38,7 +38,7 @@ UI editors happy. Everything is YAML, split per room.
 | `custom_templates/` | Jinja macro libraries. `klimaat.jinja` is the single decision table for all sun shading — the one place to change behaviour; `brandweer.jinja` is the single place where the quirks of the PreCom staffing webhook are handled. Note: edits here need a **full restart**, a YAML reload is not enough. |
 | `dashboards/` | Lovelace in YAML mode. `overzicht/` is the wall panel (split per column), plus separate views for Woning, Klimaat, Systeem, Camera's, Kalender and a Nest Hub cast target. |
 | `custom_sentences/nl/` | The sentences behind the house's own Assist intents. Matched literally — what isn't in there isn't understood. Needs a **full restart** as well. |
-| `docs/` | Design notes. `klimaatregie.md` explains the four layers of the climate control and why each rule exists; `spraak.md` does the same for the voice satellite. |
+| `docs/` | Design notes. `klimaatregie.md` explains the five layers of the climate control and why each rule exists; `spraak.md` does the same for the voice satellite. |
 | `tests/` | Offline tests that run without Home Assistant. |
 
 Run the tests before restarting after a climate change:
@@ -49,9 +49,10 @@ python3 -m venv .venv && .venv/bin/pip install jinja2 pyyaml pytest
 .venv/bin/python tests/test_klimaat.py     # or one on its own, with its full output
 ```
 
-It puts the decision table through 50+ scenarios (summer, winter, night, storm, rain,
-absent, manual override) and checks that every zone has its helpers, its sensors, its
-entry in the executor's trigger lists and a row on the Klimaat view.
+It puts the decision table through 80+ scenarios (summer, winter, night, storm, rain,
+absent, manual override, and the anti-cycling rules of the air conditioners) and checks
+that every zone and every AC unit has its helpers, its sensors, its entry in the
+executor's trigger lists and a row on the Klimaat view.
 
 `tests/test_brandweer.py` does the same for the fire brigade staffing webhook: it runs
 the real payload from the API spec through `custom_templates/brandweer.jinja` and checks

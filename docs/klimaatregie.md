@@ -15,7 +15,7 @@ De oude opzet had drie problemen:
 - **Handbediening verloor.** Zette je een rolluik zelf open, dan draaide de
   volgende trigger het binnen een kwartier terug.
 
-## De vier lagen
+## De vijf lagen
 
 | Laag | Wat | Waar |
 |---|---|---|
@@ -23,7 +23,13 @@ De oude opzet had drie problemen:
 | 2. Gevelzon | Waar staat de zon nu? | idem |
 | 3. Advies | Wat wil elke zone? | `packages/9 - Other/Klimaat Zonwering.yaml` |
 | 4. Uitvoeren | Doen, tenzij… | idem |
+| 5. Airco's | Actief koelen en bijverwarmen | `packages/9 - Other/Klimaat Airco.yaml` |
 | Beslistabel | De regels zelf | `custom_templates/klimaat.jinja` |
+
+Laag 1 tot en met 4 verplaatsen warmte die er al is: zon buiten houden, koelte
+binnenlaten. Laag 5 maakt koelte (en warmte). Die twee delen bewust dezelfde
+drempels en dezelfde beslistabel — twee bronnen voor "het is te warm" is precies
+hoe ze uit elkaar gaan lopen.
 
 **Alles wat over gedrag gaat staat in `custom_templates/klimaat.jinja`.** De
 packages meten en voeren uit, meer niet. Moet het huis zich anders gedragen,
@@ -339,9 +345,171 @@ dashboard zie je dat terug als blokkade *"wacht op je akkoord"*.
 > lager (2 uur is een prima waarde). De knop-automatisering kijkt zelf al naar
 > de lichtsterkte en laat de zonzijde met rust als het al fel is.
 
+### Laag 5 — De airco's
+
+De vier lagen hierboven schuiven warmte rond. Deze laag maakt koelte: staat het
+huis vol en is het te warm, dan mag de airco aan — en hij mag alvast beginnen
+als er iemand bijna thuis is. In de winter werkt hij dezelfde kant op als
+bijverwarming.
+
+Twee units, elk met een eigen adviessensor:
+
+| Unit (slug) | Entiteit | Regelt op | Bijzonder |
+|---|---|---|---|
+| `woonkamer` | `climate.airco_woonkamer` | `sensor.woonkamer_woonkamer_multisensor_temperatuur` | halve graden, ventilator op stand 2 |
+| `zolder` | `climate.airco_zolder` | `sensor.temperatuur_boven_gemiddeld` | hele graden, minimaal 18°, uitzetten via `script.script_attic_ac_off` |
+
+De zolderunit blaast op de overloop en bedient de hele bovenverdieping, dus die
+regelt op het gemiddelde van de vijf kamersensoren en niet op één kamer.
+
+De slug bepaalt weer de namen van de helpers: `sensor.airco_advies_<unit>`,
+`timer.airco_override_<unit>`, `timer.airco_minimaal_aan_<unit>`,
+`timer.airco_rust_<unit>`, `timer.airco_gestart_<unit>`,
+`input_boolean.airco_handmatig_<unit>`, `input_boolean.airco_storing_<unit>` en
+`counter.airco_storingen_<unit>`.
+
+De staat van zo'n sensor is `cool`, `heat`, `off` of `rust` (= niets sturen).
+Attributen: `doel`, `fan`, `uitvoeren`, `spoed`, `reden` en `blokkade`.
+
+#### Niet pendelen is de hele opgave
+
+Een airco die om de vijf minuten aan- en uitgaat koelt niets, kost stroom en
+sloopt zijn compressor. Vijf remmen over elkaar, elk tegen een andere manier
+van stuiteren:
+
+1. **Dode zone.** Aan bij `kamer_warm + aan_delta` (23,5°), uit pas bij
+   `kamer_warm - uit_delta` (21,5°). Twee graden ertussen. Eén drempel met een
+   beetje hysterese is niet genoeg: een kamertemperatuur schommelt een halve
+   graad op een zonnestraal. Bij 23,4° zegt de tabel daarom niet "uit" maar
+   "doorkoelen tot het doel".
+2. **Minimale looptijd** (`timer.airco_minimaal_aan_<unit>`, 30 min). De eerste
+   minuten koelt een airco vooral de thermometer: de koude luchtstroom komt
+   langs de sensor voordat hij de muren heeft gehad. Zet je dan uit, dan kruipt
+   de meting binnen tien minuten terug omhoog.
+3. **Minimale rust** (`timer.airco_rust_<unit>`, 20 min). Andersom hetzelfde:
+   vlak na het uitschakelen loopt de meting juist op omdat de kamer zich
+   herverdeelt.
+4. **Rustpauze van de uitvoerder** (10 min na de laatste standswijziging),
+   precies zoals bij de covers.
+5. **Het setpoint gaat één keer mee** bij het aanzetten en wordt daarna niet
+   meer bijgesteld. De inverter moduleert zelf; hem elke ronde een nieuw
+   streefgetal geven is dé manier om een warmtepomp aan het stuiteren te
+   krijgen.
+
+Rem 4 doet nog iets tweeds, en dat is de reden dat hij op tien minuten staat en
+de handbediening-herkenning op vijf: zet iemand de airco met de hand aan terwijl
+het advies `off` is, dan staat er een override op vóórdat de uitvoerder hem kan
+terugzetten. Zonder die volgorde zou de knop "niets doen": de uitvoerder
+zet hem binnen vijf minuten weer uit en niemand begrijpt waarom.
+
+#### Thuis, en bijna thuis
+
+`thuis` is `group.all_adults` op `home`, dezelfde definitie die de zonwering
+gebruikt (dus: mínstens één volwassene thuis, niet iedereen).
+
+`bijna thuis` is de kleinste reistijd van de volwassenen onder
+`klimaat_airco_voorkoelen_min` (20 minuten). Bewust niet
+`binary_sensor.iemand_onderweg_naar_huis`: die staat al aan zodra iemand het
+huis uit is, en dan koel je een uur voor niets. Twee guards:
+
+- de persoon moet aantoonbaar niet thuis zijn;
+- de reistijdsensor moet nog ververst hebben (30 minuten). Blijft de telefoon
+  van iemand in het buitenland op "twintig minuten" staan, dan zou het huis
+  eindeloos voorkoelen voor iemand die niet komt.
+
+Loopt de reistijd door de file weer op boven de 20 minuten, dan vervalt het
+voorkoelen vanzelf — de reistijdsensor ís de begrenzing, daar is geen aparte
+timer voor nodig.
+
+#### De beslistabel, van hoog naar laag
+
+1. **Raam open** in het gebied van die unit → uit. Alleen een *aantoonbaar*
+   open contact telt.
+
+   > **Dit is bewust andersom dan bij de rolgordijnen.** Daar telt een contact
+   > op `unavailable` als open, want een gordijn tegen een openstaand raam is
+   > duur. Hier zou diezelfde keuze betekenen dat één lege batterij de airco de
+   > hele zomer blokkeert — precies wat er een keer twee weken lang met het
+   > keukenrolgordijn gebeurde zonder dat iemand zag waarom. Een onbereikbaar
+   > contact blokkeert hier dus niet, maar wordt wél in de `reden` genoemd.
+
+2. **Storing gemeld** → niet automatisch starten. Zie hieronder.
+3. **Niemand thuis en niemand vlakbij** → uit.
+4. **Stille uren** (22:00–07:00) → niet uit zichzelf aanslaan. Uitgaan mag wel.
+   De zolderunit hangt op de overloop naast de slaapkamers; de woonkamerunit
+   zou 's nachts een lege kamer koelen.
+5. **Kamertemperatuur onbekend** → `rust`. Niet uitzetten: dat zou een
+   draaiende airco stilleggen op een lege batterij.
+6. **Koelen** bij `kamer_warm + aan_delta`, behalve in het verwarmregime. Ook
+   op een neutrale dag: het regime komt uit de verwachting van vanochtend, en
+   een kamer van 23,5° is warm ongeacht wat het KNMI dacht.
+7. **Bijverwarmen** bij `kamer_koud - aan_delta` (17,5°), behalve in het
+   koelregime. De cv doet het gewone werk; de airco springt pas bij als een
+   ruimte er echt onder zakt.
+8. **Draait al en het doel is nog niet gehaald** → doorgaan. Dit is de tak die
+   de dode zone maakt.
+9. Daarna de twee timers uit rem 2 en 3.
+
+De eerste drie redenen staan op `spoed`: die breken de minimale looptijd af en
+slaan de rustpauze van de uitvoerder over. Doorkoelen met een openstaand raam of
+in een leeg huis is geen comfort maar een rekening.
+
+#### Handbediening
+
+Net als bij de covers: onze eigen commando's eindigen per definitie op het
+advies, dus alles wat vijf minuten lang op iets ánders staat is een mens (of de
+afstandsbediening, of de Intesis-app). Die unit wordt dan `klimaat_override_uren`
+met rust gelaten.
+
+Vijf minuten en niet anderhalve, want een climate-entiteit doet er via de cloud
+soms een minuut over voordat hij de nieuwe stand terugmeldt. En een advies van
+`rust` telt hier niet mee: zodra wij een unit aanzetten slaat het advies binnen
+een paar minuten om naar `rust` (minimale looptijd, of "koelt door"), en dan zou
+een draaiende airco zijn eigen start als handbediening zien.
+
+#### Een unit die zichzelf uitschakelt
+
+`automation.klimaat_airco_storing_herkennen` telt hoe vaak een unit binnen een
+kwartier ná onze start weer uitvalt. Bij de tweede keer op een dag gaat
+`input_boolean.airco_storing_<unit>` om, start de regie hem niet meer, en krijg
+je een melding. Elke nacht om 04:00 gaan teller en vlag terug op nul, zodat één
+hik niet permanent blokkeert en een echte storing zich de volgende dag opnieuw
+meldt. Met de hand aanzetten kan altijd.
+
+Dit bestaat vanwege 19 augustus 2026: de zolderairco viel toen tien tot
+vijfentwintig minuten na elke start vanzelf uit op foutcode **E48** (de
+buitenventilator draaide niet, dus de condensor kon zijn warmte niet kwijt).
+Handmatig is dat vervelend, automatisch is het schadelijk — dan blijft het huis
+het de hele dag opnieuw proberen terwijl de compressor telkens op zijn
+beveiliging klapt.
+
+> Wat deze detectie **niet** kan zien: een lege context in het logboek betekent
+> "niet via Home Assistant", niet "het apparaat deed het zelf". De fabrikant-app,
+> de afstandsbediening en een stroomonderbreking komen alle drie contextloos
+> binnen. De melding vraagt daarom om te kijken en presenteert niets als bewezen.
+
+#### Wat er met de rolluiken gebeurt
+
+Blok 4b van de zonwering zet een zone op een kier zodra de airco in die zone
+vijf minuten koelt (`AIRCO_KIER_NA`). Nu de airco vaker uit zichzelf aangaat,
+gebeurt dat ook vaker — dat is de bedoeling, want koelen met de zon op het glas
+is dweilen met de kraan open. De minimale looptijd van een half uur zorgt dat
+het bij één beweging blijft; vóór die rem gingen er op één middag zes rolluiken
+vier keer op en neer omdat de airco steeds uitviel.
+
+De regie stuurt de covers **niet** zelf. Het `script_attic_ac` van de handmatige
+"het is snikheet boven"-vraag doet dat wel (`cover.close_cover` op alle
+rolluiken boven), en dat vecht met blok 4b: die adviseert 15% en een volledig
+gesloten rolluik telt anderhalve minuut later als handbediening. Dat script is
+hier bewust ongemoeid gelaten — het is een gebruikersactie met een mens erbij —
+maar het is wel de plek om te kijken als er boven vier uur lang niets meer
+beweegt na een handmatige airco-vraag.
+
 ## Aanzetten en terugdraaien
 
-Alles hangt aan één schakelaar: **`input_boolean.klimaatregie_actief`**.
+De zonwering hangt aan één schakelaar: **`input_boolean.klimaatregie_actief`**.
+De airco's hangen aan een eigen schakelaar, **`input_boolean.aircoregie_actief`**,
+zodat je ze los van elkaar kunt aanzetten en terugdraaien.
 
 - **Uit**: hier beweegt niets, en de zonwering doet dan ook niets meer uit
   zichzelf. De oude automatiseringen die dat vroeger deden
@@ -395,6 +563,27 @@ enige was dat zich er niet aan hield:
 
 Terugdraaien is altijd één schakelaar, op elk moment.
 
+### De airco's erbij (laag 5)
+
+Aparte schakelaar, dus een aparte ronde:
+
+1. **Meekijken met `aircoregie_actief` uit.** De adviessensoren rekenen gewoon
+   door. Op de Klimaat-weergave staat onder *Airco's* wat elke unit zou doen en
+   waarom. Let vooral op hoe vaak het advies wisselt: blijft `Wat wil elke unit`
+   op één warme middag heen en weer springen tussen `cool` en `off`, dan staat
+   de dode zone te krap en gaat `klimaat_airco_aan_delta` omhoog.
+2. **Eén unit tegelijk.** Zet `airco_handmatig_zolder` aan en begin met de
+   woonkamer. Die unit is niet stuk en je hoort hem in dezelfde ruimte waar je
+   zit, dus je merkt meteen of het gedrag klopt.
+3. **De zolderunit pas als E48 weg is.** Zolang die foutcode er staat, is
+   automatisch starten schadelijk. De storingsdetectie vangt het op — twee
+   afgebroken starts en hij blokkeert zichzelf — maar dat is een vangnet en geen
+   toestemming.
+4. **Kijk na een week naar de looptijden.** In de recorder-geschiedenis van
+   `climate.airco_woonkamer` horen blokken van een half uur of langer te staan.
+   Zie je reeksen van precies dertig minuten, dan is de minimale looptijd de
+   enige reden dat hij nog draait en mag `klimaat_airco_uit_delta` omhoog.
+
 ## Instellingen
 
 | Helper | Standaard | Wat het doet |
@@ -415,6 +604,13 @@ Terugdraaien is altijd één schakelaar, op elk moment.
 | `klimaat_zon_min_elevatie` | 8 ° | lager dan dit telt de zon niet mee |
 | `klimaat_nachtspui` | uit | mag er 's nachts een kier open voor koelte |
 | `klimaat_wakker` | uit | staat aan zodra het huis wakker is; uit houdt de slaapzones dicht |
+| `aircoregie_actief` | uit | mogen de airco's automatisch aan en uit (laag 5) |
+| `klimaat_kamer_koud` | 19 °C | onderkant van de comfortband; daaronder mag de airco bijverwarmen |
+| `klimaat_airco_aan_delta` | 1,5 °C | zoveel boven `kamer_warm` gaat hij aan (en zoveel onder `kamer_koud`) |
+| `klimaat_airco_uit_delta` | 0,5 °C | zoveel onder `kamer_warm` is het doel bereikt |
+| `klimaat_airco_voorkoelen_min` | 20 min | vanaf deze reistijd telt iemand als "bijna thuis" |
+| `airco_handmatig_<unit>` | uit | uit = deze unit doet mee |
+| `airco_storing_<unit>` | uit | aan = niet automatisch starten (gaat vanzelf om en om 04:00 weer uit) |
 
 Beide schakelaars (`klimaatregie_actief` en `klimaat_nachtspui`) staan na de
 eerste start uit; die zet je zelf aan. De tien
@@ -463,3 +659,10 @@ scenario toe — dat is sneller dan wachten op de volgende hittegolf.
 - **Bewegingen begrenzen per uur** doen we niet met een teller, maar met
   hysterese en `delay_off` op de zonsensoren. Blijkt een cover in de praktijk
   toch te vaak te lopen, dan is de lux-hysterese de plek om aan te draaien.
+- **De airco's op stroomprijs of zonoverschot laten draaien.** Kan later een
+  extra laag worden ("mag alvast koelen als er overschot is"), maar niet in de
+  eerste versie: dan zijn er twee redenen waarom hij aan staat en is er geen
+  zinnig antwoord meer op de vraag waarom hij nú draait.
+- **De rolluiken sluiten vóór de airco aangaat.** Dat doet blok 4b al, met een
+  kier in plaats van helemaal dicht. Zelf `close_cover` sturen levert een
+  gevecht met de handbediening-herkenning op — zie het slot van laag 5.

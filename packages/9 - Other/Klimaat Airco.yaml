@@ -1,0 +1,680 @@
+##############################################################################
+## KLIMAATREGIE - laag 5: de airco's
+##
+## De vier lagen van de zonwering verplaatsen warmte die er al is. Deze laag
+## maakt koelte (en warmte): als het huis bewoond is en het is te warm, mag de
+## airco aan, en hij mag alvast beginnen als er iemand bijna thuis is.
+##
+## Zelfde opzet als de zonwering, en met opzet: de beslislogica staat in
+## custom_templates/klimaat.jinja (macro `airco_advies`), hier staat alleen het
+## meten en het uitvoeren. Dezelfde drempels (`klimaat_kamer_warm`, het regime,
+## `group.all_adults`) sturen dus zowel de rolluiken als de airco's - twee
+## bronnen voor "het is te warm" is precies hoe die twee uit elkaar gaan lopen.
+##
+## AAN/UIT: input_boolean.aircoregie_actief. Staat die uit, dan stuurt hier
+## niets; de adviessensoren blijven wel rekenen, zodat je op de Klimaat-
+## weergave een week kunt meekijken voordat je hem aanzet.
+##
+## NIET PENDELEN is de hele opgave; de vijf remmen staan uitgelegd bij de
+## AIRCO-sectie in custom_templates/klimaat.jinja. Drie ervan staan hieronder
+## als timer, en die hebben allemaal `restore: true`: "hij draait nog geen half
+## uur" moet een herstart overleven, anders is een reload genoeg om de
+## minimumtijden te omzeilen.
+##
+## Zie docs/klimaatregie.md.
+##############################################################################
+
+klimaat_airco_package:
+
+  input_boolean:
+    aircoregie_actief:
+      name: "Klimaat - Airco's automatisch regelen"
+      icon: mdi:air-conditioner
+    # Per unit uit te zetten zonder de andere te raken.
+    # Uit = de klimaatregie mag deze unit sturen.
+    airco_handmatig_woonkamer:
+      name: "Airco handmatig - Woonkamer"
+      icon: mdi:hand-back-right-outline
+    airco_handmatig_zolder:
+      name: "Airco handmatig - Boven"
+      icon: mdi:hand-back-right-outline
+    # Gezet door `klimaat_airco_storing_herkennen` als een unit kort na het
+    # aanzetten twee keer vanzelf uitvalt. Zolang deze aan staat, start de
+    # regie hem niet meer - zie de toelichting bij die automatisering.
+    airco_storing_woonkamer:
+      name: "Airco storing - Woonkamer"
+      icon: mdi:alert-circle-outline
+    airco_storing_zolder:
+      name: "Airco storing - Boven"
+      icon: mdi:alert-circle-outline
+
+  input_number:
+    # De ondergrens van de comfortband. `klimaat_kamer_warm` (22°) is de
+    # bovengrens en die bestond al; deze hoort erbij en wordt ook door niets
+    # anders gebruikt. De cv doet het gewone verwarmen - de airco springt pas
+    # bij als een ruimte er echt onder zakt (19 - 1,5 = 17,5°).
+    klimaat_kamer_koud:
+      name: "Klimaat - Kamer is koud onder"
+      icon: mdi:home-thermometer-outline
+      min: 10
+      max: 24
+      step: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+    # De dode zone. Aanzetten bij warm + aan_delta, uitzetten bij
+    # warm - uit_delta: met de standaardwaarden dus aan op 23,5° en uit op
+    # 21,5°. Die twee graden ertussen zijn wat het pendelen tegenhoudt; maak je
+    # ze kleiner, dan gaat hij vaker aan en uit voor minder resultaat.
+    klimaat_airco_aan_delta:
+      name: "Klimaat - Airco aan vanaf (boven de comfortgrens)"
+      icon: mdi:thermometer-plus
+      min: 0.5
+      max: 5
+      step: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+    klimaat_airco_uit_delta:
+      name: "Klimaat - Airco uit bij (onder de comfortgrens)"
+      icon: mdi:thermometer-minus
+      min: 0
+      max: 3
+      step: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+    # Hoe ver van huis "bijna thuis" is. Een airco heeft twintig minuten nodig
+    # om iets te betekenen, dus korter zetten maakt het voorkoelen zinloos;
+    # veel langer en je koelt voor iemand die onderweg nog van gedachten
+    # verandert.
+    klimaat_airco_voorkoelen_min:
+      name: "Klimaat - Voorkoelen vanaf reistijd"
+      icon: mdi:car-clock
+      min: 0
+      max: 60
+      step: 5
+      unit_of_measurement: "min"
+      mode: box
+
+  timer:
+    # REM 2: minimale looptijd. Eenmaal aan blijft hij een half uur aan, ook
+    # als de gemeten temperatuur eerder onder het doel duikt. De eerste
+    # minuten koelt een airco vooral de thermometer, niet de kamer.
+    airco_minimaal_aan_woonkamer:
+      name: "Airco woonkamer - minimale looptijd"
+      duration: "00:30:00"
+      icon: mdi:timer-play-outline
+      restore: true
+    airco_minimaal_aan_zolder:
+      name: "Airco boven - minimale looptijd"
+      duration: "00:30:00"
+      icon: mdi:timer-play-outline
+      restore: true
+
+    # REM 3: minimale rust. Na uitzetten twintig minuten niet opnieuw starten.
+    airco_rust_woonkamer:
+      name: "Airco woonkamer - rustpauze"
+      duration: "00:20:00"
+      icon: mdi:timer-pause-outline
+      restore: true
+    airco_rust_zolder:
+      name: "Airco boven - rustpauze"
+      duration: "00:20:00"
+      icon: mdi:timer-pause-outline
+      restore: true
+
+    # Loopt vanaf het moment dat wíj de unit aanzetten. Valt hij binnen dit
+    # kwartier vanzelf uit, dan is dat geen toeval maar een storing; zie
+    # `klimaat_airco_storing_herkennen`. Een kwartier omdat de zolderunit in
+    # augustus 2026 na 10-25 minuten uitviel op foutcode E48, steeds sneller.
+    airco_gestart_woonkamer:
+      name: "Airco woonkamer - net gestart"
+      duration: "00:15:00"
+      icon: mdi:timer-alert-outline
+      restore: true
+    airco_gestart_zolder:
+      name: "Airco boven - net gestart"
+      duration: "00:15:00"
+      icon: mdi:timer-alert-outline
+      restore: true
+
+    # Handbediening, precies zoals timer.override_<zone> bij de zonwering: zet
+    # iemand de airco zelf aan of uit, dan blijft de regie er een paar uur van
+    # af. Duur komt uit input_number.klimaat_override_uren.
+    airco_override_woonkamer:
+      name: "Handbediening Airco woonkamer"
+      duration: "04:00:00"
+      icon: mdi:hand-back-right
+      restore: true
+    airco_override_zolder:
+      name: "Handbediening Airco boven"
+      duration: "04:00:00"
+      icon: mdi:hand-back-right
+      restore: true
+
+  counter:
+    # Hoe vaak een unit vandaag kort na het aanzetten vanzelf uitviel. Bij twee
+    # gaat de storingsvlag om. Wordt elke nacht om 04:00 op nul gezet, zodat
+    # een eenmalige hik het niet permanent blokkeert en een echte storing
+    # zichzelf de volgende dag weer meldt.
+    airco_storingen_woonkamer:
+      name: "Airco woonkamer - afgebroken starts"
+      icon: mdi:alert-circle-check-outline
+      initial: 0
+      step: 1
+      maximum: 99
+    airco_storingen_zolder:
+      name: "Airco boven - afgebroken starts"
+      icon: mdi:alert-circle-check-outline
+      initial: 0
+      step: 1
+      maximum: 99
+
+  ###########################################################################
+  ## Het advies per unit
+  ##
+  ## Eén trigger-blok voor beide units, om dezelfde reden als bij de zonwering:
+  ## state en attributen worden ieder apart gerenderd, dus met de macro-aanroep
+  ## in elk template zou `airco_advies()` acht keer per unit draaien in plaats
+  ## van één keer.
+  ##
+  ## De STATE is de modus (cool/heat/off/rust). Dat is bewust: de uitvoerder en
+  ## de handbediening-herkenning kunnen dan op `last_changed` van de sensor
+  ## zien of het advies zelf net verschoven is - dezelfde truc als bij de
+  ## zonwering, waar die controle een onterechte override voorkwam.
+  ###########################################################################
+  template:
+    - trigger:
+        # De knoppen en schuifjes van de aircoregie zelf.
+        - trigger: state
+          entity_id:
+            - input_boolean.aircoregie_actief
+            - input_boolean.airco_handmatig_woonkamer
+            - input_boolean.airco_handmatig_zolder
+            - input_boolean.airco_storing_woonkamer
+            - input_boolean.airco_storing_zolder
+            - input_number.klimaat_kamer_warm
+            - input_number.klimaat_kamer_koud
+            - input_number.klimaat_airco_aan_delta
+            - input_number.klimaat_airco_uit_delta
+            - input_number.klimaat_airco_voorkoelen_min
+            - input_select.klimaat_regime
+        # De timers die de remmen vormen. Loopt er een af, dan hoort het advies
+        # dat meteen te weten en niet pas bij de volgende minuuttik.
+        - trigger: state
+          entity_id:
+            - timer.airco_minimaal_aan_woonkamer
+            - timer.airco_minimaal_aan_zolder
+            - timer.airco_rust_woonkamer
+            - timer.airco_rust_zolder
+            - timer.airco_override_woonkamer
+            - timer.airco_override_zolder
+        # De units zelf: hun stand bepaalt of "doorkoelen" of "aanzetten" het
+        # advies is.
+        - trigger: state
+          entity_id:
+            - climate.airco_woonkamer
+            - climate.airco_zolder
+        # Een raam dat opengaat hoort de airco meteen uit te zetten, niet over
+        # een minuut. Dit is dezelfde lijst als in `AIRCOS` in klimaat.jinja.
+        - trigger: state
+          entity_id: &airco_ramen
+            - binary_sensor.keuken_raam_groot_contact
+            - binary_sensor.keuken_raam_klein_contact
+            - binary_sensor.woonkamer_openslaande_deuren_contact
+            - binary_sensor.woonkamer_achterdeur_contact
+            - binary_sensor.speelkamer_openslaande_deuren_contact
+            - binary_sensor.badkamer_raam_contact
+            - binary_sensor.kantoor_raam_links_contact
+            - binary_sensor.kantoor_raam_rechts_contact
+            - binary_sensor.slaapkamer_raam_links_contact
+            - binary_sensor.slaapkamer_raam_rechts_contact
+            - binary_sensor.slaapkamer_mini_raam_contact
+            - binary_sensor.slaapkamer_mini_dakraam_contact
+            - binary_sensor.slaapkamer_maxi_raam_links_contact
+            - binary_sensor.slaapkamer_maxi_raam_rechts_contact
+        # Wie er thuis is, en wie er aankomt.
+        - trigger: state
+          entity_id:
+            - group.all_adults
+            - person.robin_bohnen
+            - person.samantha_henkelman
+        # Vangnet voor de rest: kamertemperaturen en de reistijdsensoren. Die
+        # kruipen, dus een minuut achterstand is er geen.
+        - trigger: time_pattern
+          minutes: "/1"
+        - trigger: homeassistant
+          event: start
+
+      action:
+        - variables:
+            adviezen: >-
+              {% from 'klimaat.jinja' import airco_advies, airco_lijst %}
+              {%- set ns = namespace(delen=[]) -%}
+              {%- for u in airco_lijst() | from_json -%}
+                {%- set ns.delen = ns.delen + [(u | to_json) ~ ':' ~ (airco_advies(u) | trim)] -%}
+              {%- endfor -%}
+              {{ ('{' ~ ns.delen | join(',') ~ '}') | from_json }}
+
+      sensor:
+        - name: "Airco advies woonkamer"
+          unique_id: airco_advies_woonkamer
+          icon: mdi:air-conditioner
+          state: "{{ adviezen.woonkamer.modus }}"
+          attributes:
+            doel: "{{ adviezen.woonkamer.doel }}"
+            fan: "{{ adviezen.woonkamer.fan }}"
+            uitvoeren: "{{ adviezen.woonkamer.uitvoeren }}"
+            spoed: "{{ adviezen.woonkamer.spoed }}"
+            reden: "{{ adviezen.woonkamer.reden }}"
+            blokkade: "{{ adviezen.woonkamer.blokkade }}"
+            naam: "{{ adviezen.woonkamer.naam }}"
+            entiteit: "{{ adviezen.woonkamer.entiteit }}"
+            uit_script: "{{ adviezen.woonkamer.uit_script }}"
+            rustpauze_min: "{{ adviezen.woonkamer.rustpauze_min }}"
+
+        - name: "Airco advies zolder"
+          unique_id: airco_advies_zolder
+          icon: mdi:air-conditioner
+          state: "{{ adviezen.zolder.modus }}"
+          attributes:
+            doel: "{{ adviezen.zolder.doel }}"
+            fan: "{{ adviezen.zolder.fan }}"
+            uitvoeren: "{{ adviezen.zolder.uitvoeren }}"
+            spoed: "{{ adviezen.zolder.spoed }}"
+            reden: "{{ adviezen.zolder.reden }}"
+            blokkade: "{{ adviezen.zolder.blokkade }}"
+            naam: "{{ adviezen.zolder.naam }}"
+            entiteit: "{{ adviezen.zolder.entiteit }}"
+            uit_script: "{{ adviezen.zolder.uit_script }}"
+            rustpauze_min: "{{ adviezen.zolder.rustpauze_min }}"
+
+  automation:
+    ###########################################################################
+    ## Laag 5a - het advies uitvoeren
+    ##
+    ## Draait op vijf minuten en niet op elke wijziging: een airco is geen
+    ## lamp. De rustpauze hieronder (REM 4) is wat de handbediening-herkenning
+    ## de tijd geeft om te winnen - zie daar.
+    ###########################################################################
+    - id: klimaat_airco_uitvoeren
+      alias: Klimaat - Airco's uitvoeren
+      description: >-
+        Zet de airco's aan en uit volgens het advies, met minimale looptijd,
+        rustpauze en een setpoint dat maar één keer meegaat.
+      mode: queued
+      max: 3
+      max_exceeded: silent
+      triggers:
+        # De state van deze sensoren ís de modus, dus dit vuurt alleen als het
+        # advies echt verschuift en niet bij elke tiende graad in `reden`.
+        - trigger: state
+          entity_id: &airco_advies_sensoren
+            - sensor.airco_advies_woonkamer
+            - sensor.airco_advies_zolder
+        - trigger: state
+          entity_id: *airco_advies_sensoren
+          attribute: uitvoeren
+        # Vangnet. Op seconde 30, net als bij de zonwering: de adviessensoren
+        # rekenen op de minuutgrens, en er bovenop tikken zou het advies van de
+        # vorige minuut lezen.
+        - trigger: time_pattern
+          minutes: "/5"
+          seconds: 30
+        - trigger: homeassistant
+          event: start
+      conditions:
+        - condition: state
+          entity_id: input_boolean.aircoregie_actief
+          state: "on"
+      variables:
+        # Na een herstart heeft élke entiteit een verse `last_changed` en zou
+        # de rustpauze hieronder alles tien minuten stilzetten terwijl er juist
+        # bijgestuurd moet worden.
+        herstart: >-
+          {{ trigger is defined
+             and (trigger.platform | default('')) == 'homeassistant' }}
+      actions:
+        - repeat:
+            for_each: >-
+              {% from 'klimaat.jinja' import airco_lijst %}
+              {{ airco_lijst() | from_json }}
+            sequence:
+              - variables:
+                  advies_sensor: "sensor.airco_advies_{{ repeat.item }}"
+              - variables:
+                  modus: "{{ states(advies_sensor) }}"
+                  entiteit: "{{ state_attr(advies_sensor, 'entiteit') }}"
+                  doel: "{{ state_attr(advies_sensor, 'doel') | float(0) }}"
+                  fan: "{{ state_attr(advies_sensor, 'fan') }}"
+                  mag: "{{ state_attr(advies_sensor, 'uitvoeren') in [true, 'True', 'true'] }}"
+                  # Raam open, leeg huis of storing: dat mag niet op de
+                  # rustpauze wachten.
+                  spoed: "{{ state_attr(advies_sensor, 'spoed') in [true, 'True', 'true'] }}"
+                  uit_script: "{{ state_attr(advies_sensor, 'uit_script') }}"
+                  pauze_min: "{{ state_attr(advies_sensor, 'rustpauze_min') | int(10) }}"
+              - variables:
+                  huidig: "{{ states(entiteit) }}"
+                  # Staat er al een startpoging open? Dan niet opnieuw
+                  # commanderen. Zonder deze rem herstart elke ronde de
+                  # `gestart`-timer en vuurt `timer.finished` dus nooit -
+                  # waarmee een unit die het commando simpelweg negeert (hij
+                  # blijft `off`, er is geen overgang om op te tellen) elke vijf
+                  # minuten opnieuw geprobeerd zou worden, voor altijd.
+                  gestart_bezig: >-
+                    {{ is_state('timer.airco_gestart_' ~ repeat.item, 'active') }}
+                  # REM 4 - de uitvoerder blijft van een unit af in de minuten
+                  # na zijn laatste standswijziging.
+                  #
+                  # Dit remt niet alleen ons eigen heen-en-weer. Het is ook wat
+                  # de handbediening-herkenning (vijf minuten) laat winnen van
+                  # deze automatisering (tien): zet iemand de airco met de hand
+                  # aan terwijl het advies 'off' is, dan staat er een override
+                  # op vóórdat wij hem terugzetten. Zonder deze pauze zou de
+                  # vijfminutenronde hem meteen weer uitzetten en zou niemand
+                  # begrijpen waarom de knop "niets doet".
+                  mag_nu: >-
+                    {% set c = states[entiteit]
+                       if entiteit is string and '.' in entiteit else none %}
+                    {{ spoed or herstart or c is none
+                       or (now() - c.last_changed).total_seconds() >= pauze_min * 60 }}
+              - choose:
+                  # UIT
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{ mag and mag_nu and modus == 'off'
+                             and huidig not in ['off', 'unknown', 'unavailable'] }}
+                    sequence:
+                      # EERST de timers, dan pas het commando. Andersom is er
+                      # een race: de unit meldt `off` terug voordat de
+                      # `timer.cancel` hieronder heeft gedraaid, en dan telt
+                      # `klimaat_airco_storing_herkennen` onze eigen nette
+                      # uitschakeling als een afgebroken start.
+                      - action: timer.cancel
+                        target:
+                          entity_id:
+                            - "timer.airco_minimaal_aan_{{ repeat.item }}"
+                            - "timer.airco_gestart_{{ repeat.item }}"
+                      - action: timer.start
+                        target:
+                          entity_id: "timer.airco_rust_{{ repeat.item }}"
+                      # De zolderunit is regelmatig onbereikbaar en een kale
+                      # turn_off faalt dan stil; script_attic_ac_off blijft het
+                      # proberen en meldt het als het echt niet lukt.
+                      - if:
+                          - condition: template
+                            value_template: "{{ uit_script not in [none, 'None', ''] }}"
+                        then:
+                          - action: script.turn_on
+                            target:
+                              entity_id: "{{ uit_script }}"
+                        else:
+                          - action: climate.turn_off
+                            target:
+                              entity_id: "{{ entiteit }}"
+                            continue_on_error: true
+
+                  # AAN (koelen of verwarmen)
+                  - conditions:
+                      - condition: template
+                        value_template: >-
+                          {{ mag and mag_nu and modus in ['cool', 'heat']
+                             and huidig != modus and not gestart_bezig }}
+                    sequence:
+                      # Ook hier de timers eerst, en om dezelfde reden andersom:
+                      # een unit die het commando weigert meldt soms binnen een
+                      # seconde weer `off` (HA schrijft optimistisch `cool`, de
+                      # Intesis-cloud zegt daarna `off`). Loopt `gestart` dan nog
+                      # niet, dan telt die geweigerde start nergens.
+                      - action: timer.cancel
+                        target:
+                          entity_id: "timer.airco_rust_{{ repeat.item }}"
+                      - action: timer.start
+                        target:
+                          entity_id:
+                            - "timer.airco_minimaal_aan_{{ repeat.item }}"
+                            - "timer.airco_gestart_{{ repeat.item }}"
+                      # Modus en setpoint in één call, en daarna niet meer
+                      # aangeraakt: de inverter moduleert zelf. Elke ronde een
+                      # nieuw streefgetal sturen is hoe je een warmtepomp aan
+                      # het stuiteren krijgt.
+                      - action: climate.set_temperature
+                        target:
+                          entity_id: "{{ entiteit }}"
+                        data:
+                          hvac_mode: "{{ modus }}"
+                          temperature: "{{ doel }}"
+                        continue_on_error: true
+                      - action: climate.set_fan_mode
+                        target:
+                          entity_id: "{{ entiteit }}"
+                        data:
+                          fan_mode: "{{ fan }}"
+                        continue_on_error: true
+
+    ###########################################################################
+    ## Laag 5b - handbediening herkennen
+    ##
+    ## Zelfde principe als bij de covers: onze eigen commando's eindigen per
+    ## definitie op het advies, dus alles wat vijf minuten lang op iets ánders
+    ## staat is een mens (of de afstandsbediening, of de Intesis-app). Die unit
+    ## wordt dan met rust gelaten zolang `klimaat_override_uren` duurt.
+    ##
+    ## Vijf minuten en niet anderhalve: een climate-entiteit doet er via de
+    ## cloud soms een minuut over voor hij de nieuwe stand terugmeldt, en de
+    ## Intesis-integratie schrijft eerst optimistisch de gevraagde stand die
+    ## daarna alsnog kan terugvallen.
+    ##
+    ## Een advies van 'rust' telt hier NIET mee. Zodra wij een unit aanzetten
+    ## slaat het advies binnen een paar minuten om naar 'rust' (minimale
+    ## looptijd, of "koelt door"), en dan zou een draaiende airco zijn eigen
+    ## start als handbediening zien.
+    ###########################################################################
+    - id: klimaat_airco_handbediening_herkennen
+      alias: Klimaat - Airco handbediening herkennen
+      description: Laat een unit met rust nadat iemand hem zelf heeft gezet
+      mode: queued
+      max: 6
+      max_exceeded: silent
+      triggers:
+        - trigger: state
+          entity_id: &beheerde_aircos
+            - climate.airco_woonkamer
+            - climate.airco_zolder
+          for: "00:05:00"
+      conditions:
+        - condition: state
+          entity_id: input_boolean.aircoregie_actief
+          state: "on"
+        # Een herstart of een hik in de Intesis-cloud maakt een
+        # unavailable->stand-flank. Dat is geen handbediening; zonder deze
+        # controle stond er na elke storing vier uur override op een unit die
+        # niemand had aangeraakt.
+        - alias: Geen herstart- of herstel-flank
+          condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.to_state is not none
+               and trigger.from_state.state not in ['unknown', 'unavailable']
+               and trigger.to_state.state not in ['unknown', 'unavailable'] }}
+      actions:
+        - variables:
+            unit: >-
+              {% from 'klimaat.jinja' import airco_van_entiteit %}
+              {{ airco_van_entiteit(trigger.entity_id) | trim }}
+        - variables:
+            advies_sensor: "sensor.airco_advies_{{ unit }}"
+            override_timer: "timer.airco_override_{{ unit }}"
+        - variables:
+            modus: "{{ states(advies_sensor) }}"
+            huidig: "{{ states(trigger.entity_id) }}"
+            # Is het advies zelf net verschoven? Dan is de afwijking van ons,
+            # niet van een mens - dezelfde valkuil als bij de covers, waar dit
+            # een rolluik vier uur op de verkeerde stand vastzette.
+            advies_stabiel: >-
+              {% set s = states[advies_sensor] %}
+              {{ s is none or (now() - s.last_changed).total_seconds() > 330 }}
+        - choose:
+            # Staat anders dan geadviseerd: iemand wilde dit zo.
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {{ unit != '' and modus not in ['rust', 'unknown', 'unavailable']
+                       and huidig != modus and advies_stabiel }}
+              sequence:
+                - action: timer.start
+                  target:
+                    entity_id: "{{ override_timer }}"
+                  data:
+                    duration: >-
+                      {{ (states('input_number.klimaat_override_uren') | float(4) * 3600) | int }}
+            # Staat weer op het advies: handbediening mag vervallen.
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {{ unit != '' and huidig == modus
+                       and is_state(override_timer, 'active') }}
+              sequence:
+                - action: timer.cancel
+                  target:
+                    entity_id: "{{ override_timer }}"
+
+    ###########################################################################
+    ## Laag 5c - een unit die zichzelf uitschakelt
+    ##
+    ## Op 19 augustus 2026 viel de zolderairco tien tot vijfentwintig minuten
+    ## na het aanzetten steeds vanzelf uit, op foutcode E48 (de buitenventilator
+    ## draaide niet). Handmatig is dat vervelend; automatisch is het schadelijk,
+    ## want dan blijft het huis het de hele dag opnieuw proberen terwijl de
+    ## compressor elke keer op zijn beveiliging klapt.
+    ##
+    ## Valt een unit binnen een kwartier na ONZE start vanzelf uit, dan telt dat
+    ## hier. Bij de tweede keer op een dag gaat de storingsvlag om en start de
+    ## regie hem niet meer. Met de hand aanzetten kan altijd nog.
+    ##
+    ## LET OP wat dit niet kan zien: een lege context in het logboek betekent
+    ## "niet via Home Assistant", niet "het apparaat deed het zelf". De
+    ## fabrikant-app en de afstandsbediening komen net zo binnen. Vandaar dat de
+    ## melding vraagt om te kijken en niets als bewezen presenteert.
+    ###########################################################################
+    - id: klimaat_airco_storing_herkennen
+      alias: Klimaat - Airco valt vanzelf uit
+      description: >-
+        Telt hoe vaak een unit een start niet volhoudt en blokkeert automatisch
+        starten na de tweede keer op een dag.
+      mode: queued
+      max: 6
+      max_exceeded: silent
+      triggers:
+        # Hij ging aan en viel binnen het kwartier weer uit.
+        - trigger: state
+          entity_id: *beheerde_aircos
+          to: "off"
+          id: uitgevallen
+        # Of hij kwam helemaal niet op gang. Zonder deze tweede trigger blijft
+        # een unit die het commando gewoon negeert (of hem optimistisch aanneemt
+        # en meteen terugvalt) elke vijf minuten opnieuw geprobeerd worden: er
+        # is dan namelijk nooit een overgang naar `off` om op te tellen.
+        # `timer.finished` vuurt niet bij een `timer.cancel`, dus onze eigen
+        # nette uitschakeling komt hier niet langs.
+        - trigger: event
+          event_type: timer.finished
+          id: nooit_gestart
+      conditions:
+        - condition: state
+          entity_id: input_boolean.aircoregie_actief
+          state: "on"
+      actions:
+        - variables:
+            unit: >-
+              {% if trigger.id == 'uitgevallen' %}
+                {% from 'klimaat.jinja' import airco_van_entiteit %}
+                {{ airco_van_entiteit(trigger.entity_id) | trim }}
+              {% else %}
+                {% set e = trigger.event.data.entity_id | default('') %}
+                {{ e | replace('timer.airco_gestart_', '')
+                   if e.startswith('timer.airco_gestart_') else '' }}
+              {% endif %}
+        - condition: template
+          value_template: "{{ unit != '' }}"
+        - variables:
+            gestart_timer: "timer.airco_gestart_{{ unit }}"
+            teller: "counter.airco_storingen_{{ unit }}"
+            vlag: "input_boolean.airco_storing_{{ unit }}"
+            entiteit: "{{ state_attr('sensor.airco_advies_' ~ unit, 'entiteit') }}"
+        - condition: template
+          alias: Is dit echt een mislukte start?
+          value_template: >-
+            {% if trigger.id == 'uitgevallen' %}
+              {# Alleen tellen als wij hem net hebben aangezet. Ging hij uit
+                 omdat het advies dat wilde, dan heeft de uitvoerder deze timer
+                 al stilgezet. Een flank uit unknown/unavailable is een hik in
+                 de cloud, geen storing. #}
+              {{ is_state(gestart_timer, 'active')
+                 and trigger.from_state is not none
+                 and trigger.from_state.state not in ['unknown', 'unavailable', 'off'] }}
+            {% else %}
+              {# Kwartier om en hij staat nog steeds uit: hij is nooit
+                 aangeslagen. Staat hij te draaien, dan is er niets aan de hand. #}
+              {{ is_state(entiteit, 'off') }}
+            {% endif %}
+        # Vooraf lezen en zelf optellen, in plaats van na `counter.increment`
+        # opnieuw de state uitlezen: dan hangt de melding niet aan de vraag of
+        # de state al is bijgewerkt op het moment dat de volgende stap draait.
+        - variables:
+            nieuw_aantal: "{{ (states(teller) | int(0)) + 1 }}"
+        - action: counter.increment
+          target:
+            entity_id: "{{ teller }}"
+        - action: timer.cancel
+          target:
+            entity_id: "{{ gestart_timer }}"
+        - if:
+            - condition: template
+              value_template: "{{ nieuw_aantal | int(0) >= 2 }}"
+          then:
+            - action: input_boolean.turn_on
+              target:
+                entity_id: "{{ vlag }}"
+            - action: notify.mobile_devices_adults
+              data:
+                title: >-
+                  {{ state_attr('sensor.airco_advies_' ~ unit, 'naam')
+                     | default('Airco', true) }} houdt het niet vol
+                message: >-
+                  Twee starts op rij mislukt vandaag
+                  ({{ 'viel binnen een kwartier weer uit'
+                      if trigger.id == 'uitgevallen'
+                      else 'sloeg helemaal niet aan' }}).
+                  Automatisch starten staat nu uit tot vannacht 04:00; met de
+                  hand aanzetten kan gewoon. Kijk even in de app of er een
+                  foutcode staat - bij de zolderunit was dat in augustus 2026
+                  E48, een buitenventilator die niet draaide.
+          else:
+            - action: logbook.log
+              data:
+                name: Aircoregie
+                message: >-
+                  {{ unit }}: start mislukt ({{ nieuw_aantal }}e keer vandaag,
+                  bij twee gaat automatisch starten uit).
+
+    - id: klimaat_airco_storing_resetten
+      alias: Klimaat - Airco storingsteller resetten
+      description: >-
+        Zet de tellers en de storingsvlaggen elke nacht terug, zodat één hik
+        niet permanent blokkeert en een echte storing zich opnieuw meldt.
+      mode: single
+      triggers:
+        - trigger: time
+          at: "04:00:00"
+      actions:
+        - repeat:
+            for_each: >-
+              {% from 'klimaat.jinja' import airco_lijst %}
+              {{ airco_lijst() | from_json }}
+            sequence:
+              - action: counter.reset
+                target:
+                  entity_id: "counter.airco_storingen_{{ repeat.item }}"
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: "input_boolean.airco_storing_{{ repeat.item }}"

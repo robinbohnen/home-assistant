@@ -877,3 +877,387 @@
 {%- macro cooldown_voorbij(laatst, uren) -%}
 {{- laatst is none or now() - laatst > timedelta(hours=uren) -}}
 {%- endmacro -%}
+
+{#- ================= AIRCO - ACTIEF KOELEN EN BIJVERWARMEN ================ -#}
+{#-
+  De vijfde laag van de klimaatregie. De vier lagen hierboven verplaatsen
+  warmte die er al is (zon buiten houden, koelte binnenlaten); deze laag maakt
+  warmte of koude. Zelfde opzet: hier staat WAT een unit wil, het package
+  `packages/9 - Other/Klimaat Airco.yaml` meet en voert uit.
+
+  Gebruik:
+
+      {% from 'klimaat.jinja' import airco_advies %}
+      {{ (airco_advies('woonkamer') | trim | from_json).modus }}
+
+  DE HELE KUNST IS NIET-PENDELEN. Een airco die om de vijf minuten aan- en
+  uitgaat koelt niets, kost stroom en sloopt de compressor. Vijf remmen over
+  elkaar, en ze hebben elk een eigen reden:
+
+    1. Dode zone. Aan bij `kamer_warm + aan_delta` (23,5°), uit pas bij
+       `kamer_warm - uit_delta` (21,5°). Twee graden ertussen. Eén drempel
+       met een klein beetje hysterese is niet genoeg: de kamertemperatuur
+       schommelt een halve graad op een zonnestraal.
+    2. Minimale looptijd (`timer.airco_minimaal_aan_<unit>`). Eenmaal aan
+       blijft hij een half uur aan, ook als de gemeten temperatuur eerder
+       zakt - een airco die net begon heeft de kamer nog niet gekoeld, hij
+       heeft de sensor gekoeld.
+    3. Minimale rust (`timer.airco_rust_<unit>`). Na uitzetten twintig minuten
+       niet opnieuw starten.
+    4. De uitvoerder laat een unit met rust in de AIRCO_RUSTPAUZE minuten na
+       zijn laatste standswijziging, precies zoals de rustpauze op de covers.
+       Dat remt niet alleen ons eigen heen-en-weer, het geeft ook de
+       handbediening-herkenning (vijf minuten) de tijd om te winnen van de
+       uitvoerder (tien) als iemand de airco zelf aanzet.
+    5. Het setpoint gaat één keer mee bij het aanzetten en wordt daarna niet
+       meer bijgesteld. De inverter moduleert zelf; hem elke ronde een nieuw
+       streefgetal geven is precies hoe je een warmtepomp aan het stuiteren
+       krijgt.
+
+  De veiligheidsredenen om uit te gaan (raam open, niemand thuis, storing)
+  breken rem 2 en 4 wél af. Doorkoelen met een openstaand raam is geen comfort.
+-#}
+
+{#- Hoe lang de uitvoerder van een unit afblijft na diens laatste
+    standswijziging. Langer dan de vijf minuten van de handbediening-herkenning,
+    zodat die altijd eerst is: zet iemand de airco met de hand aan, dan staat er
+    een override op vóórdat de uitvoerder hem terug kan zetten. Zonder die
+    volgorde lijkt de knop niets te doen: de uitvoerder zet hem binnen vijf
+    minuten weer terug, en dat is bij een apparaat dat zijn stand traag
+    terugmeldt niet te zien aan wat er op het scherm staat. -#}
+{%- set AIRCO_RUSTPAUZE = 10 -%}
+
+{#- Een reistijd die niet meer ververst is geen reistijd. Blijft de sensor van
+    een telefoon in het buitenland of met een lege accu op "twintig minuten"
+    staan, dan zou het huis eeuwig staan voor te koelen voor iemand die niet
+    komt. Ouder dan dit telt als onbruikbaar. -#}
+{%- set AIRCO_REISTIJD_VERS = 30 -%}
+
+{#- Wie er "bijna thuis" kan zijn. Bewust alleen de volwassenen, net als
+    `group.all_adults` in de beslistabel hierboven: hun telefoons zijn de
+    betrouwbare bron en zij zijn degenen die 's middags aankomen. -#}
+{%- set AIRCO_VOLWASSENEN = [
+      ('person.robin_bohnen', 'sensor.robin_reistijd_naar_huis'),
+      ('person.samantha_henkelman', 'sensor.samantha_reistijd_naar_huis')] -%}
+
+{#-
+  naam       label op het dashboard
+  entiteit   de climate-entiteit
+  temp       waar deze unit op regelt. De zolderunit blaast op de overloop en
+             bedient de hele bovenverdieping, dus die regelt op het gemiddelde
+             van de vijf kamersensoren (sensor.temperatuur_boven_gemiddeld uit
+             packages/2 - Second Floor/Attic/AC.yaml) en niet op één kamer.
+  ramen      raamcontacten van het gebied dat deze unit bedient. Een
+             AANTOONBAAR open raam zet hem uit.
+  fan        ventilatorstand voor de automatische stand. Bewust niet 'high':
+             dat is de stand van de handmatige "het is snikheet"-vraag, en die
+             hoor je door het hele huis. De standen verschillen per merk
+             (woonkamer 1-5, zolder quiet/low/medium/high).
+  nacht      mag deze unit tijdens de stille uren uit zichzelf aanslaan?
+             Allebei nee: de zolderunit hangt aan de overloop naast de
+             slaapkamers, en de woonkamerunit koelt 's nachts een lege kamer.
+  uit_script script dat het uitzetten doet in plaats van climate.turn_off.
+             De zolderunit is regelmatig onbereikbaar en een kale turn_off
+             faalt dan stil; script_attic_ac_off blijft het proberen.
+-#}
+{%- set AIRCOS = {
+      'woonkamer': {
+        'naam': 'Airco woonkamer',
+        'entiteit': 'climate.airco_woonkamer',
+        'temp': 'sensor.woonkamer_woonkamer_multisensor_temperatuur',
+        'ramen': ['binary_sensor.keuken_raam_groot_contact',
+                  'binary_sensor.keuken_raam_klein_contact',
+                  'binary_sensor.woonkamer_openslaande_deuren_contact',
+                  'binary_sensor.woonkamer_achterdeur_contact',
+                  'binary_sensor.speelkamer_openslaande_deuren_contact'],
+        'fan': '2',
+        'nacht': false,
+        'uit_script': none },
+      'zolder': {
+        'naam': 'Airco boven',
+        'entiteit': 'climate.airco_zolder',
+        'temp': 'sensor.temperatuur_boven_gemiddeld',
+        'ramen': ['binary_sensor.badkamer_raam_contact',
+                  'binary_sensor.kantoor_raam_links_contact',
+                  'binary_sensor.kantoor_raam_rechts_contact',
+                  'binary_sensor.slaapkamer_raam_links_contact',
+                  'binary_sensor.slaapkamer_raam_rechts_contact',
+                  'binary_sensor.slaapkamer_mini_raam_contact',
+                  'binary_sensor.slaapkamer_mini_dakraam_contact',
+                  'binary_sensor.slaapkamer_maxi_raam_links_contact',
+                  'binary_sensor.slaapkamer_maxi_raam_rechts_contact'],
+        'fan': 'medium',
+        'nacht': false,
+        'uit_script': 'script.script_attic_ac_off' },
+    } -%}
+
+{#- Lijst met units, voor automatiseringen die er allemaal langs lopen. -#}
+{%- macro airco_lijst() -%}
+{{- AIRCOS.keys() | list | to_json -}}
+{%- endmacro -%}
+
+{#- Volledige configuratie, voor dashboards en debugging. -#}
+{%- macro aircos_json() -%}
+{{- AIRCOS | to_json -}}
+{%- endmacro -%}
+
+{#- Bij welke unit hoort deze climate-entiteit? Leeg als hij niet beheerd wordt. -#}
+{%- macro airco_van_entiteit(entity_id) -%}
+{%- set ns = namespace(unit='') -%}
+{%- for slug, u in AIRCOS.items() if u.entiteit == entity_id -%}
+{%- set ns.unit = slug -%}
+{%- endfor -%}
+{{- ns.unit -}}
+{%- endmacro -%}
+
+{#- Is er een volwassene onderweg die binnen `minuten` thuis is?
+
+    Niet `binary_sensor.iemand_onderweg_naar_huis`: die staat al aan zodra
+    iemand het huis uit is, en dan koel je een uur voor niets. Hier telt de
+    reistijd zelf, en alleen als de sensor nog ververst (AIRCO_REISTIJD_VERS)
+    en de persoon aantoonbaar niet thuis is.
+
+    `person.*` mag hier wél leidend zijn ondanks de trage router-tracker: een
+    persoon die nog op `home` staat terwijl hij al weg is, levert hooguit een
+    gemiste voorkoeling op - en `thuis` (group.all_adults) staat dan sowieso
+    nog aan, dus de unit mag toch al draaien. Andersom kan het niet fout gaan.
+
+    Geeft JSON: {'bijna': bool, 'wie': naam, 'minuten': n}. -#}
+{%- macro bijna_thuis(minuten) -%}
+{%- set ns = namespace(bijna=false, wie='', min=999) -%}
+{%- for p, r in AIRCO_VOLWASSENEN -%}
+  {%- set weg = states(p) not in ['home', 'unknown', 'unavailable'] -%}
+  {%- set m = states(r) | float(-1) -%}
+  {%- set obj = states[r] -%}
+  {%- set vers = obj is not none
+                 and (now() - obj.last_updated).total_seconds()
+                     < AIRCO_REISTIJD_VERS * 60 -%}
+  {%- if weg and vers and m >= 0 and m <= minuten and m < ns.min -%}
+    {%- set ns.bijna = true -%}
+    {%- set ns.min = m -%}
+    {%- set ns.wie = state_attr(p, 'friendly_name') or p -%}
+  {%- endif -%}
+{%- endfor -%}
+{{- {'bijna': ns.bijna,
+     'wie': ns.wie,
+     'minuten': (ns.min | round(0) | int) if ns.bijna else -1} | to_json -}}
+{%- endmacro -%}
+
+{#- Geeft JSON terug:
+      modus      cool | heat | off | rust  (rust = niets sturen)
+      doel       setpoint dat bij het aanzetten meegaat
+      fan        ventilatorstand
+      reden      leesbare uitleg voor het dashboard
+      uitvoeren  mag de uitvoerder hier iets mee doen?
+      spoed      mag dit de rustpauze van de uitvoerder overslaan?
+      blokkade   waarom niet, als uitvoeren false is
+-#}
+{%- macro airco_advies(unit) -%}
+{%- set u = AIRCOS[unit] -%}
+{%- set e = u.entiteit -%}
+
+{#- Alles eerst uitlezen; zie de toelichting bij `advies()` hierboven over
+    waarom een template alleen volgt wat het echt gelezen heeft. -#}
+{%- set regime = states('input_select.klimaat_regime') | lower -%}
+{%- set binnen = states(u.temp) | float(none) -%}
+{%- set warm = states('input_number.klimaat_kamer_warm') | float(22) -%}
+{%- set koud = states('input_number.klimaat_kamer_koud') | float(19) -%}
+{%- set aan_delta = states('input_number.klimaat_airco_aan_delta') | float(1.5) -%}
+{%- set uit_delta = states('input_number.klimaat_airco_uit_delta') | float(0.5) -%}
+{%- set voorkoel_min = states('input_number.klimaat_airco_voorkoelen_min') | float(20) -%}
+{%- set actief = is_state('input_boolean.aircoregie_actief', 'on') -%}
+{#- Omgekeerd, net als bij de zonwering: 'aan' = met de hand, dus niet meedoen.
+    Een verse input_boolean staat uit en dat moet 'doet mee' betekenen. -#}
+{%- set unit_auto = not is_state('input_boolean.airco_handmatig_' ~ unit, 'on') -%}
+{%- set override = is_state('timer.airco_override_' ~ unit, 'active') -%}
+{%- set storing = is_state('input_boolean.airco_storing_' ~ unit, 'on') -%}
+{%- set min_aan = is_state('timer.airco_minimaal_aan_' ~ unit, 'active') -%}
+{%- set rustpauze = is_state('timer.airco_rust_' ~ unit, 'active') -%}
+{%- set nu = states(e) -%}
+{%- set draait = nu in ['cool', 'heat', 'dry', 'heat_cool', 'fan_only'] -%}
+
+{#- Dezelfde bronnencontrole als bij de zonwering: een helper die tijdens een
+    reload even weg is, mag geen beslissing dragen. De climate-entiteit staat er
+    bewust NIET bij - die is bij de Intesis-cloud met enige regelmaat een paar
+    minuten onbereikbaar, en dan moet de rest van de logica gewoon door kunnen
+    lopen. De kamersensor ook niet: die vangen we hieronder apart af, omdat
+    "temperatuur onbekend" een andere uitkomst hoort te geven ('rust') dan
+    "helper weg" (blokkade op het dashboard). -#}
+{%- set bron = namespace(mist='') -%}
+{%- for x in ['input_select.klimaat_regime',
+              'input_number.klimaat_kamer_warm',
+              'input_number.klimaat_kamer_koud',
+              'input_number.klimaat_airco_aan_delta',
+              'input_number.klimaat_airco_uit_delta',
+              'input_number.klimaat_airco_voorkoelen_min',
+              'input_boolean.aircoregie_actief',
+              'input_boolean.airco_handmatig_' ~ unit,
+              'input_boolean.airco_storing_' ~ unit,
+              'timer.airco_override_' ~ unit,
+              'timer.airco_minimaal_aan_' ~ unit,
+              'timer.airco_rust_' ~ unit,
+              'group.all_adults'] -%}
+  {%- if bron.mist == '' and not has_value(x) -%}
+    {%- set bron.mist = x -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- set bron_onbekend = bron.mist != '' -%}
+
+{#- Het setpoint dat bij het aanzetten meegaat, en meteen de grens waarbij we
+    weer uitzetten. Afgerond op de stap die de unit zelf kan (de zolderunit doet
+    hele graden, de woonkamerunit halve) en geknepen binnen zijn eigen bereik -
+    de zolderunit kan niet lager dan 18. Ontbreken die attributen omdat de unit
+    net onbereikbaar is, dan gelden veilige terugvalwaarden. -#}
+{%- set stap = state_attr(e, 'target_temp_step') | float(0.5) -%}
+{%- set stap = stap if stap > 0 else 0.5 -%}
+{%- set emin = state_attr(e, 'min_temp') | float(16) -%}
+{%- set emax = state_attr(e, 'max_temp') | float(30) -%}
+{%- set koel_doel = [[((warm - uit_delta) / stap) | round(0, 'common') * stap, emin] | max, emax] | min -%}
+{%- set warm_doel = [[((koud + uit_delta) / stap) | round(0, 'common') * stap, emin] | max, emax] | min -%}
+
+{#- Wat wil de kamer? De dode zone zit tussen `te_warm` en `koel_klaar`. -#}
+{%- set te_warm = binnen is not none and binnen >= warm + aan_delta -%}
+{%- set koel_klaar = binnen is not none and binnen <= koel_doel -%}
+{%- set te_koud = binnen is not none and binnen <= koud - aan_delta -%}
+{%- set warm_klaar = binnen is not none and binnen >= warm_doel -%}
+{%- set b_txt = (binnen | round(1) | string ~ '°') if binnen is not none else '?' -%}
+
+{%- set thuis = is_state('group.all_adults', 'home') -%}
+{%- set bt = bijna_thuis(voorkoel_min) | trim | from_json -%}
+
+{#- Een AANTOONBAAR open raam blokkeert; een contact op unknown/unavailable
+    niet. Dat is bewust andersom dan bij de rolgordijnen, en met reden: daar
+    kost een verkeerde gok een gordijn dat tegen een raam aan rolt, hier kost
+    hij een airco die de hele zomer niet meer aangaat omdat één batterij leeg
+    is. Zo'n dood contact heeft een keer twee weken lang het keukenrolgordijn
+    geblokkeerd zonder dat iemand zag waarom; daarom staat een onbereikbaar
+    contact hieronder wél in de reden. -#}
+{%- set raam = namespace(open='', kapot='') -%}
+{%- for r in u.ramen -%}
+  {%- set s = states(r) -%}
+  {%- if s == 'on' and raam.open == '' -%}
+    {%- set raam.open = state_attr(r, 'friendly_name') or r -%}
+  {%- endif -%}
+  {%- if s in ['unknown', 'unavailable'] and raam.kapot == '' -%}
+    {%- set raam.kapot = r -%}
+  {%- endif -%}
+{%- endfor -%}
+
+{%- set in_stille_uren = now() >= today_at(STIL_VAN) or now() < today_at(STIL_TOT) -%}
+{%- set nacht_slot = in_stille_uren and not u.nacht -%}
+
+{%- set ns = namespace(m='off', r='', doel=koel_doel, spoed=false) -%}
+
+{#- 1. Veiligheid en verspilling. Deze redenen hebben de kamertemperatuur niet
+      nodig, gaan vóór alles, en mogen de rustpauze van de uitvoerder en de
+      minimale looptijd doorbreken: doorkoelen met een openstaand raam of in
+      een leeg huis is geen comfort maar een rekening. -#}
+{%- if raam.open != '' -%}
+  {%- set ns.m = 'off' -%}
+  {%- set ns.r = 'raam open (' ~ raam.open ~ ')' -%}
+  {%- set ns.spoed = true -%}
+
+{%- elif storing -%}
+  {%- set ns.m = 'off' -%}
+  {%- set ns.r = 'storing gemeld, automatisch starten staat uit' -%}
+  {%- set ns.spoed = true -%}
+
+{%- elif not (thuis or bt.bijna) -%}
+  {%- set ns.m = 'off' -%}
+  {%- set ns.r = 'niemand thuis en niemand vlakbij' -%}
+  {%- set ns.spoed = true -%}
+
+{#- 2. Nachtrust. Uitgaan mag, aanslaan niet: de zolderunit hangt op de
+      overloop naast de slaapkamers en de woonkamerunit zou een lege kamer
+      koelen. Draait hij al, dan zet de "naar bed"-knop hem uit; hier is dat
+      dus geen spoed maar gewoon het advies. -#}
+{%- elif nacht_slot -%}
+  {%- set ns.m = 'off' -%}
+  {%- set ns.r = 'stille uren (' ~ STIL_VAN ~ '-' ~ STIL_TOT ~ '), niet uit zichzelf aan' -%}
+
+{#- 3. Zonder kamertemperatuur valt er niets te vinden. Niet uitzetten (dat zou
+      een draaiende airco op een kapotte batterij stilleggen), maar stilstaan. -#}
+{%- elif binnen is none -%}
+  {%- set ns.m = 'rust' -%}
+  {%- set ns.r = 'kamertemperatuur onbekend (' ~ u.temp ~ ')' -%}
+
+{#- 4. Koelen. Ook op een neutrale dag: het regime komt uit de verwachting van
+      vanochtend, en een kamer van 23,5° is warm ongeacht wat het KNMI dacht.
+      Alleen in het verwarmregime niet - dan is warmte het doel. -#}
+{%- elif te_warm and regime != 'verwarmen' -%}
+  {%- set ns.m = 'cool' -%}
+  {%- set ns.doel = koel_doel -%}
+  {%- set ns.r = 'kamer is ' ~ b_txt ~ ', koelen naar ' ~ koel_doel | round(1) ~ '°'
+                 ~ ('' if thuis else
+                    ' (' ~ bt.wie ~ ' is over ' ~ bt.minuten ~ ' min thuis)') -%}
+
+{#- 5. Bijverwarmen. De cv doet het gewone werk; de airco springt bij als een
+      ruimte er echt onder zakt. In het koelregime niet - dan is een koude
+      ochtend geen reden om de dag warm te beginnen. -#}
+{%- elif te_koud and regime != 'koelen' -%}
+  {%- set ns.m = 'heat' -%}
+  {%- set ns.doel = warm_doel -%}
+  {%- set ns.r = 'kamer is ' ~ b_txt ~ ', bijverwarmen naar ' ~ warm_doel | round(1) ~ '°'
+                 ~ ('' if thuis else
+                    ' (' ~ bt.wie ~ ' is over ' ~ bt.minuten ~ ' min thuis)') -%}
+
+{#- 6. Hij draait en het doel is nog niet gehaald: laten draaien. Dit is de tak
+      die de dode zone maakt. Zonder hem zou hij bij 23,4° (net onder de
+      aanzetgrens) meteen weer uitgaan en bij 23,5° weer aan. -#}
+{%- elif draait and nu == 'cool' and not koel_klaar -%}
+  {%- set ns.m = 'rust' -%}
+  {%- set ns.r = 'koelt door, ' ~ b_txt ~ ' en het doel is ' ~ koel_doel | round(1) ~ '°' -%}
+
+{%- elif draait and nu == 'heat' and not warm_klaar -%}
+  {%- set ns.m = 'rust' -%}
+  {%- set ns.r = 'verwarmt door, ' ~ b_txt ~ ' en het doel is ' ~ warm_doel | round(1) ~ '°' -%}
+
+{#- 7. Niets te doen. -#}
+{%- elif draait -%}
+  {%- set ns.m = 'off' -%}
+  {%- set ns.r = 'doel gehaald (' ~ b_txt ~ ')' -%}
+
+{%- else -%}
+  {%- set ns.m = 'off' -%}
+  {%- set ns.r = 'kamer is ' ~ b_txt ~ ', binnen de comfortband' -%}
+{%- endif -%}
+
+{#- 8. Minimale looptijd. Een airco die vijf minuten geleden begon heeft de
+      kamer niet gekoeld maar de sensor: de koude luchtstroom komt langs de
+      thermometer voordat hij de muren heeft gehad. Zet je dan uit, dan kruipt
+      de meting binnen tien minuten terug omhoog en begin je opnieuw. De
+      veiligheidsredenen uit blok 1 komen hier niet, die zijn hierboven al
+      afgehandeld en staan op spoed. -#}
+{%- if min_aan and draait and ns.m == 'off' and not ns.spoed -%}
+  {%- set ns.m = 'rust' -%}
+  {%- set ns.r = 'minimale looptijd loopt nog (' ~ b_txt ~ ')' -%}
+{%- endif -%}
+
+{#- 9. Minimale rust na het uitzetten. Andersom hetzelfde verhaal: vlak na het
+      uitschakelen loopt de meting juist op omdat de kamer zich herverdeelt. -#}
+{%- if rustpauze and ns.m in ['cool', 'heat'] -%}
+  {%- set ns.m = 'rust' -%}
+  {%- set ns.r = 'rustpauze na uitschakelen (' ~ b_txt ~ ')' -%}
+{%- endif -%}
+
+{%- set uitvoeren = actief and unit_auto and not override and not bron_onbekend -%}
+{%- set blokkade = 'handbediening actief' if override
+                   else ('unit staat op handmatig' if not unit_auto
+                   else ('aircoregie staat uit' if not actief
+                   else (('bron ontbreekt: ' ~ bron.mist) if bron_onbekend
+                   else ('advies is rust' if ns.m == 'rust' else '')))) -%}
+
+{{- {'modus': ns.m,
+     'doel': ns.doel,
+     'fan': u.fan,
+     'reden': ns.r ~ ('' if raam.kapot == '' else
+                      ' - let op: raamcontact ' ~ raam.kapot ~ ' is onbereikbaar'),
+     'uitvoeren': uitvoeren,
+     'spoed': ns.spoed,
+     'blokkade': blokkade,
+     'entiteit': e,
+     'naam': u.naam,
+     'uit_script': u.uit_script,
+     'rustpauze_min': AIRCO_RUSTPAUZE,
+     'regime': regime} | to_json -}}
+{%- endmacro -%}

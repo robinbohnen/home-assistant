@@ -2,7 +2,7 @@ airco_livingroom_package:
   automation:
     - id: ac_off_nobody_home
       alias: AC - Turn off when nobody home
-      description: Turn off all ACs when all adults leave and AC is heating
+      description: Turn off all ACs when all adults leave and an AC is running
       mode: single
       triggers:
         - trigger: state
@@ -11,14 +11,21 @@ airco_livingroom_package:
           from: home
           to: not_home
       conditions:
+        # Alle standen waarin de unit echt iets doet, niet alleen `heat`.
+        # Hier stond jarenlang alleen `heat`, en dat is precies de helft van
+        # het jaar dat het misgaat: verlieten we in de zomer het huis met een
+        # koelende airco, dan viel deze automatisering stil en bleef hij de
+        # lege woonkamer koelen tot iemand thuiskwam. Sinds de aircoregie
+        # (packages/9 - Other/Klimaat Airco.yaml) kan de airco ook zonder dat
+        # iemand hem heeft aangezet aan staan, en dan telt dat dubbel.
         - condition: or
           conditions:
             - condition: state
               entity_id: climate.airco_woonkamer
-              state: heat
+              state: &aan_standen [heat, cool, dry, heat_cool, fan_only]
             - condition: state
               entity_id: climate.airco_zolder
-              state: heat
+              state: *aan_standen
       actions:
         - action: climate.turn_off
           data: {}

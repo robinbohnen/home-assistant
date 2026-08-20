@@ -260,8 +260,9 @@ klimaat_regime_package:
       description: Vult nieuwe drempels die nog nooit zijn ingesteld
       mode: single
       variables:
-        # 1 = eerste set, 2 = screens-windgrens erbij, 3 = screens-regengrens
-        config_versie: 3
+        # 1 = eerste set, 2 = screens-windgrens erbij, 3 = screens-regengrens,
+        # 4 = de vier drempels van de aircoregie (laag 5)
+        config_versie: 4
       triggers:
         - trigger: homeassistant
           event: start
@@ -287,6 +288,15 @@ klimaat_regime_package:
               input_number.klimaat_override_uren: 4
               input_number.klimaat_screen_max_wind: 45
               input_number.klimaat_screen_max_regen: 0.1
+              # Laag 5, de airco's. `kamer_koud` is de onderkant van dezelfde
+              # comfortband waarvan `kamer_warm` de bovenkant is; de twee
+              # delta's eromheen zijn de dode zone die het pendelen tegenhoudt
+              # (aan op 23,5°, uit op 21,5°). Zie de AIRCO-sectie in
+              # custom_templates/klimaat.jinja.
+              input_number.klimaat_kamer_koud: 19
+              input_number.klimaat_airco_aan_delta: 1.5
+              input_number.klimaat_airco_uit_delta: 0.5
+              input_number.klimaat_airco_voorkoelen_min: 20
         - repeat:
             for_each: "{{ standaard.keys() | list }}"
             sequence:
