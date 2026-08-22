@@ -120,8 +120,8 @@ dan is dat moment weg — precies wanneer je twee minuten later alsnog "ja" roep
 Daarom blijft de vraag daarna nog even open staan:
 
 - `input_text.spraak_openstaande_vraag` bevat de **sleutel** van de vraag die
-  open staat (`zonnescherm`), niet de vraagtekst — dan mag de tekst veranderen
-  zonder dat de afhandeling meeverandert.
+  open staat (`zonnescherm`, `spa_gratis`, `spa_warm`), niet de vraagtekst — dan
+  mag de tekst veranderen zonder dat de afhandeling meeverandert.
 - `timer.spraak_antwoordvenster` bepaalt hoe lang een antwoord nog telt. Loopt
   hij af, dan ruimt `automation.spraak_vraag_opruimen` de vraag op.
 - Een antwoord komt naar buiten als event `spraak_antwoord` met `vraag` en

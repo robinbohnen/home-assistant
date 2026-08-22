@@ -55,6 +55,48 @@ backyard_spa_package:
       has_time: true
       icon: mdi:hot-tub
 
+  ###########################################################################
+  ## DE SPA GAAT NIET MEER UIT ZICHZELF AAN
+  ###########################################################################
+  # Er waren drie plekken waar het huis de verwarming aanzette zonder dat
+  # iemand daarom gevraagd had: gratis stroom, water onder de 20 graden, en
+  # het bijstoken van `keep_warm`. Alle drie stellen ze nu eerst de vraag, via
+  # dezelfde weg als het zonnescherm en de zolderairco: een melding met
+  # Ja/Nee, de satelliet in de keuken als er iemand thuis is, en de vraag-pil
+  # op het Overzicht-dashboard.
+  #
+  # De vraag en het antwoord staan bewust los van elkaar. Een
+  # `wait_for_trigger` die op jouw antwoord staat te wachten overleeft geen
+  # reload van de YAML; de vraag staat dan nog op je telefoon terwijl "Ja"
+  # nergens meer aankomt. Dat is precies waarom de zonnescherm- en
+  # airco-vragen op 2026-08-06 gesplitst zijn - hier staat het meteen zo.
+  timer:
+    # Zolang deze loopt is de vraag al gesteld en wordt hij niet opnieuw
+    # gesteld, ook niet voor een van de andere twee redenen. Alle drie komen
+    # ze op hetzelfde neer ("zal ik de spa opwarmen?"), dus wie net "nee" zei
+    # op de gratis-stroomvraag hoeft een half uur later niet dezelfde vraag te
+    # krijgen omdat het water inmiddels onder de 20 staat.
+    #
+    # `restore`, anders begint hij na een herstart weer op idle: de
+    # numeric_state- en template-triggers hieronder maken bij het opstarten een
+    # verse overgang, dus op een koude dag kreeg je de vraag na elke herstart
+    # opnieuw. Zelfde reden als bij timer.airco_zolder_vraag.
+    backyard_spa_vraag:
+      name: "Backyard Spa - Vraag gesteld"
+      duration: "02:00:00"
+      icon: mdi:comment-question-outline
+      restore: true
+
+    # Hoe lang "Ja" nog geldt. Even lang als het venster dat de satelliet
+    # meekrijgt (30 minuten), zodat het niet uitmaakt via welk kanaal je
+    # antwoordt. Lang genoeg om een melding op te merken, kort genoeg dat je
+    # 's avonds niet per ongeluk de vraag van vanmiddag beantwoordt.
+    backyard_spa_antwoord:
+      name: "Backyard Spa - Antwoordvenster"
+      duration: "00:30:00"
+      icon: mdi:comment-question-outline
+      restore: true
+
   template:
     - binary_sensor:
         - name: Backyard Spa - Aanwezig
@@ -325,6 +367,11 @@ backyard_spa_package:
                     entity_id:
                       - input_boolean.backyard_spa_temperature_reached_today
                       - input_boolean.backyard_spa_keep_warm
+            # Bijstoken zodra het water onder de streeftemperatuur zakt. Ook dit
+            # is nu een vraag. Let op de twee guards onderaan: zonder de eerste
+            # zou hij tíjdens het opwarmen blijven vragen (het water is dan nog
+            # steeds te koud en `current_temperature` verandert continu), en de
+            # tweede houdt het bij hooguit één vraag per twee uur.
             - conditions:
                 - condition: trigger
                   id:
@@ -343,34 +390,39 @@ backyard_spa_package:
                         - condition: state
                           entity_id: switch.intex_purespa_sanitizer
                           state: "off"
+                        - alias: De spa staat niet al te verwarmen
+                          condition: state
+                          entity_id: climate.intex_purespa
+                          state: "off"
+                        - alias: Recent al gevraagd? Dan nu even niet
+                          condition: state
+                          entity_id: timer.backyard_spa_vraag
+                          state: idle
                   then:
-                    - action: climate.turn_on
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: climate.intex_purespa
-                    - action: climate.set_hvac_mode
-                      metadata: {}
+                    - action: script.spa_verwarmen_vragen
                       data:
-                        hvac_mode: heat
-                      target:
-                        entity_id: climate.intex_purespa
+                        reden: warmhouden
+            # Water onder de 20 graden ging vroeger meteen op de verwarming.
+            # Dat is geen vorstbeveiliging - bij 20 graden vriest er niets - maar
+            # een comfortkeuze, en die is aan jou. Vandaar ook hier een vraag.
             - conditions:
                 - condition: trigger
                   id:
                     - too_cold
               sequence:
-                - action: climate.turn_on
-                  metadata: {}
-                  data: {}
-                  target:
-                    entity_id: climate.intex_purespa
-                - action: climate.set_hvac_mode
-                  metadata: {}
-                  data:
-                    hvac_mode: heat
-                  target:
-                    entity_id: climate.intex_purespa
+                - if:
+                    - alias: De spa staat niet al te verwarmen
+                      condition: state
+                      entity_id: climate.intex_purespa
+                      state: "off"
+                    - alias: Recent al gevraagd? Dan nu even niet
+                      condition: state
+                      entity_id: timer.backyard_spa_vraag
+                      state: idle
+                  then:
+                    - action: script.spa_verwarmen_vragen
+                      data:
+                        reden: koud
 
     - id: backyard_spa_sanitizer
       alias: Backyard - Spa Sanitizer
@@ -495,6 +547,17 @@ backyard_spa_package:
               state: unavailable
       actions:
         - choose:
+            # HIER GING DE SPA VROEGER GEWOON AAN
+            # Deze tak zette de spa op 37 graden zodra de stroom niets kostte.
+            # Dat is een prima aanbod maar geen besluit dat het huis alleen
+            # hoort te nemen: je staat er niet altijd op te wachten, en een spa
+            # van 37 graden die niemand gebruikt is alsnog zonde. Nu is het een
+            # vraag; het antwoord komt binnen bij `backyard_spa_antwoord`.
+            #
+            # Alleen "ja" zet `free_heating_enabled` aan, en dat is de vlag
+            # waarop de tak hieronder hem straks weer uitzet als de prijs
+            # omslaat. Blijft de vraag onbeantwoord, dan is er niets aangezet
+            # en valt er ook niets uit te zetten.
             - conditions:
                 - condition: trigger
                   id:
@@ -503,46 +566,24 @@ backyard_spa_package:
                 - condition: state
                   entity_id: input_boolean.backyard_spa_free_heating_enabled
                   state: "off"
+                # Draait hij al (met de hand, of omdat je net "ja" zei op een
+                # van de andere vragen), dan valt er niets te vragen. Dit dekt
+                # meteen een onbereikbare spa af: die staat niet op `off`.
+                - alias: De spa staat niet al te verwarmen
+                  condition: state
+                  entity_id: climate.intex_purespa
+                  state: "off"
+                # Overcapaciteit wipt op een dag met wolkenvelden om de haverklap
+                # over de grens heen en weer. Zonder deze rem is dat elke keer
+                # een nieuwe melding.
+                - alias: Recent al gevraagd? Dan nu even niet
+                  condition: state
+                  entity_id: timer.backyard_spa_vraag
+                  state: idle
               sequence:
-                - alias: Turn on
-                  if:
-                    - condition: state
-                      entity_id: switch.intex_purespa_power
-                      state: "off"
-                  then:
-                    - action: switch.turn_on
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: switch.intex_purespa_power
-                - alias: Turn on climate
-                  if:
-                    - condition: state
-                      entity_id: climate.intex_purespa
-                      state: "off"
-                  then:
-                    - action: climate.turn_on
-                      metadata: {}
-                      data: {}
-                      target:
-                        entity_id: climate.intex_purespa
-                    - action: climate.set_hvac_mode
-                      metadata: {}
-                      data:
-                        hvac_mode: heat
-                      target:
-                        entity_id: climate.intex_purespa
-                - action: climate.set_temperature
-                  metadata: {}
+                - action: script.spa_verwarmen_vragen
                   data:
-                    temperature: 37
-                  target:
-                    entity_id: climate.intex_purespa
-                - action: input_boolean.turn_on
-                  metadata: {}
-                  data: {}
-                  target:
-                    entity_id: input_boolean.backyard_spa_free_heating_enabled
+                    reden: gratis
             - conditions:
                 - condition: trigger
                   id:
@@ -562,3 +603,264 @@ backyard_spa_package:
                   data: {}
                   target:
                     entity_id: input_boolean.backyard_spa_free_heating_enabled
+
+    ###########################################################################
+    ## HET ANTWOORD OP DE VRAAG AFHANDELEN
+    ###########################################################################
+    # Los van de vraag zelf, zodat er niets hoeft te blijven wachten - zie de
+    # toelichting bovenaan dit bestand. Alle drie de antwoordkanalen komen
+    # hier binnen: de knoppen op de telefoon, het `spraak_antwoord`-event van
+    # de satelliet in de keuken, en de Ja/Nee-knoppen in de vraag-popup op het
+    # Overzicht-dashboard (die vuren hetzelfde event).
+    #
+    # De telefoonknoppen hebben vaste namen (`SPA_GRATIS_JA` en verwanten) en
+    # geen `context.id` erachter zoals bij het zonnescherm: deze afhandelaar
+    # is een losse automatisering en kan een per-run gegenereerde naam toch
+    # niet kennen. De geldigheid komt van `timer.backyard_spa_antwoord`.
+    #
+    # Waarom twee sleutels en niet één: "ja" op de gratis-stroomvraag doet iets
+    # anders dan "ja" op de andere twee. Alleen de eerste stookt naar 37 graden
+    # en zet `free_heating_enabled` aan, waardoor hij vanzelf weer uitgaat als
+    # de prijs omslaat. De sleutel zit in de naam van de knop en in de
+    # `vraag`-sleutel van de satelliet, dus er hoeft nergens iets onthouden te
+    # worden.
+    - id: backyard_spa_antwoord
+      alias: Backyard - Spa antwoord op de vraag
+      description: >-
+        Warmt de spa op als je "Ja" antwoordt op de opwarmvraag, mits het
+        antwoordvenster nog loopt. "Nee" legt de vraag zes uur stil.
+      mode: single
+      triggers:
+        # Zonder filter: de knopnamen staan hieronder in de conditie, en een
+        # event van een andere melding (zonnescherm, zolderairco) valt daar af.
+        - trigger: event
+          event_type: mobile_app_notification_action
+        - trigger: event
+          event_type: spraak_antwoord
+          event_data:
+            vraag: spa_gratis
+        - trigger: event
+          event_type: spraak_antwoord
+          event_data:
+            vraag: spa_warm
+      conditions:
+        - alias: Hoort bij de spa-vraag
+          condition: template
+          value_template: >-
+            {% set actie = trigger.event.data.action | default('', true) %}
+            {{ trigger.event.event_type == 'spraak_antwoord'
+               or actie.startswith('SPA_GRATIS_')
+               or actie.startswith('SPA_WARM_') }}
+        - alias: Het antwoordvenster loopt nog
+          condition: state
+          entity_id: timer.backyard_spa_antwoord
+          state: active
+      actions:
+        - variables:
+            actie: "{{ trigger.event.data.action | default('', true) }}"
+        - variables:
+            ja: >-
+              {{ trigger.event.data.get('antwoord') == 'ja'
+                 or actie.endswith('_JA') }}
+            gratis: >-
+              {{ trigger.event.data.get('vraag') == 'spa_gratis'
+                 or actie.startswith('SPA_GRATIS_') }}
+        # Venster meteen dicht: twee telefoons die allebei "Ja" tikken hoeven
+        # de spa niet twee keer aan te zetten.
+        - action: timer.cancel
+          target:
+            entity_id: timer.backyard_spa_antwoord
+        # Beantwoord op de telefoon? Dan hoeft de satelliet er niet meer op te
+        # wachten. Kwam het antwoord uit de keuken, dan heeft het intent de
+        # vraag zelf al gesloten en doet deze aanroep niets.
+        - action: script.spraak_vraag_sluiten
+        - choose:
+            - alias: Nee, nu even niet
+              conditions:
+                - "{{ not ja }}"
+              sequence:
+                # Zelfde gedachte als het zonnescherm-override: wie nee zegt
+                # wil er voorlopig niet meer over gebeld worden. Zes uur is
+                # ruim langer dan de gewone rem van twee, en korter dan een
+                # hele dag - vanavond mag hij het best opnieuw vragen.
+                - action: timer.start
+                  target:
+                    entity_id: timer.backyard_spa_vraag
+                  data:
+                    duration: "06:00:00"
+            - alias: Ja, en het was de gratis-stroomvraag
+              conditions:
+                - "{{ gratis }}"
+              sequence:
+                # De vraag mag een half uur open blijven staan, en zo lang duurt
+                # een gratis venster niet altijd. Zonder deze hercontrole zet
+                # een late "Ja" de spa op 37 graden op vol tarief - precies wat
+                # deze hele regeling wilde voorkomen.
+                - if:
+                    - alias: Het is nog steeds gratis
+                      condition: template
+                      value_template: >-
+                        {{ is_state('binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu', 'on')
+                           or is_state('switch.live_energieverbruik_totaal_negatief', 'on') }}
+                  then:
+                    - if:
+                        - condition: state
+                          entity_id: switch.intex_purespa_power
+                          state: "off"
+                      then:
+                        - action: switch.turn_on
+                          target:
+                            entity_id: switch.intex_purespa_power
+                    - action: climate.turn_on
+                      target:
+                        entity_id: climate.intex_purespa
+                    - action: climate.set_temperature
+                      target:
+                        entity_id: climate.intex_purespa
+                      data:
+                        temperature: 37
+                        hvac_mode: heat
+                    - action: input_boolean.turn_on
+                      target:
+                        entity_id: input_boolean.backyard_spa_free_heating_enabled
+                  else:
+                    - action: notify.mobile_devices_adults
+                      data:
+                        title: Gratis stroom is net voorbij
+                        message: >-
+                          De spa blijft uit: opwarmen kost nu gewoon geld. Wil
+                          je het toch, zet hem dan met de hand aan.
+          default:
+            # "Ja" op de koud- of warmhoudenvraag: opwarmen naar de ingestelde
+            # streeftemperatuur. `backyard_spa_temperature` zet hem daar weer
+            # uit zodra die gehaald is.
+            - action: climate.turn_on
+              target:
+                entity_id: climate.intex_purespa
+            - action: climate.set_hvac_mode
+              target:
+                entity_id: climate.intex_purespa
+              data:
+                hvac_mode: heat
+
+  script:
+    ###########################################################################
+    ## ALLEEN VRAGEN; HET ANTWOORD WORDT ELDERS AFGEHANDELD
+    ###########################################################################
+    # Eén script voor alle drie de redenen, zodat de vraag overal hetzelfde
+    # klinkt en de rem, het antwoordvenster en de nachtstilte maar op één plek
+    # staan. De aanroepers hoeven alleen te weten waaróm ze het vragen.
+    spa_verwarmen_vragen:
+      alias: Spa - Vragen of hij opgewarmd mag worden
+      description: >-
+        Stelt de vraag "zal ik de spa opwarmen?" op de telefoon, op de
+        satelliet en op het wandpaneel. Het antwoord komt binnen bij
+        automation.backyard_spa_antwoord; hier blijft niets staan wachten.
+      icon: mdi:hot-tub
+      mode: single
+      max_exceeded: silent
+      fields:
+        reden:
+          name: Reden
+          description: Waarom het huis het vraagt
+          required: true
+          example: gratis
+          selector:
+            select:
+              options:
+                - gratis
+                - koud
+                - warmhouden
+      sequence:
+        # Staat de spa in het schuurtje, dan valt er niets op te warmen. Zie de
+        # toelichting bij binary_sensor.backyard_spa_aanwezig; dat is de enige
+        # plek waar "is de spa er nog" wordt vastgesteld.
+        - alias: De spa staat er nog
+          condition: state
+          entity_id: binary_sensor.backyard_spa_aanwezig
+          state: "on"
+        # Een negatief tarief valt ook wel eens om drie uur 's nachts. Vroeger
+        # ging de spa dan stil aan; nu zou het een melding zijn die je wakker
+        # maakt voor iets dat tot morgen kan wachten. De prijs hiervan is dat
+        # een gratis nachtvenster ongebruikt voorbijgaat. Zelfde afweging als
+        # bij de zolderairco, die tussen 22:30 en 08:00 ook niets vraagt.
+        - alias: Niet midden in de nacht vragen
+          condition: time
+          after: "07:00:00"
+          before: "23:00:00"
+        - variables:
+            doel: "{{ states('input_number.backyard_spa_target_temperature') | int(38) }}"
+            # De sleutel die de satelliet en de vraag-pil op het dashboard
+            # onthouden. Twee sleutels, want het antwoord pakt er anders op uit;
+            # zie de toelichting bij `backyard_spa_antwoord`. Rechtstreeks uit
+            # `reden` afgeleid en niet uit een tussenvariabele: dan kan het niet
+            # misgaan op een "False" die als tekst waar blijkt te zijn.
+            sleutel: "{{ 'spa_gratis' if reden == 'gratis' else 'spa_warm' }}"
+            water: >-
+              {%- set temp = state_attr('climate.intex_purespa', 'current_temperature') -%}
+              {%- if temp is number -%}Het water is {{ temp | round(1) }} graden.
+              {%- else -%}De spa geeft nu geen temperatuur door.{%- endif -%}
+            titel: >-
+              {%- if reden == 'gratis' -%}Gratis stroom - spa opwarmen?
+              {%- elif reden == 'koud' -%}Spa is koud - opwarmen?
+              {%- else -%}Spa warm houden?{%- endif -%}
+        # Alle regels hieronder staan even diep ingesprongen, en dat is geen
+        # opmaak maar noodzaak: in een `>-`-blok wordt een regel die dieper
+        # inspringt dan de eerste letterlijk overgenomen, mét regeleinde. Zet je
+        # de tekst netjes onder de `{% if %}` ingesprongen, dan staan er harde
+        # enters in de melding en leest de satelliet ze mee voor.
+        - variables:
+            vraagtekst: >-
+              {%- if reden == 'gratis' -%}
+              De stroom is nu gratis of levert zelfs geld op. {{ water }} Zal ik
+              de spa opwarmen naar 37 graden?
+              {%- elif reden == 'koud' -%}
+              {{ water }} Zal ik hem opwarmen naar {{ doel }} graden?
+              {%- else -%}
+              {{ water }} Dat is onder de ingestelde {{ doel }} graden. Zal ik de
+              spa bijstoken?
+              {%- endif -%}
+        # Eerst de rem, dan pas de vraag: gaat er onderweg iets mis, dan is de
+        # melding hooguit blijven liggen in plaats van elk kwartier opnieuw
+        # verstuurd.
+        - action: timer.start
+          target:
+            entity_id: timer.backyard_spa_vraag
+        - action: timer.start
+          target:
+            entity_id: timer.backyard_spa_antwoord
+        - action: notify.mobile_devices_adults
+          data:
+            title: "{{ titel }}"
+            message: "{{ vraagtekst }}"
+            data:
+              actions:
+                - action: "{{ 'SPA_GRATIS_JA' if reden == 'gratis' else 'SPA_WARM_JA' }}"
+                  title: Ja
+                - action: "{{ 'SPA_GRATIS_NEE' if reden == 'gratis' else 'SPA_WARM_NEE' }}"
+                  title: Nee
+        # Tweede en derde kanaal, dezelfde vraag. Is er iemand thuis, dan vraagt
+        # de keuken-satelliet het ook hardop en luistert hij naar het antwoord;
+        # tegelijk verschijnt de vraag-pil op het Overzicht-dashboard, want die
+        # hangt aan dezelfde input_text. Het script stopt vanzelf als de
+        # satelliet er niet is; de melding op de telefoon staat daar los van.
+        #
+        # `script.turn_on` en niet een gewone aanroep: dat script staat te
+        # luisteren of je antwoord geeft, en daar zou deze run anders op
+        # blijven wachten. Het venster van 30 minuten is even lang als
+        # timer.backyard_spa_antwoord, zodat het niet uitmaakt via welk kanaal
+        # je antwoordt.
+        - if:
+            - condition: state
+              entity_id: group.all_adults
+              state: home
+          then:
+            - action: script.turn_on
+              target:
+                entity_id: script.spraak_vraag_stellen
+              data:
+                variables:
+                  vraag: "{{ sleutel }}"
+                  tekst: "{{ vraagtekst }}"
+                  minuten: 30
+              continue_on_error: true
