@@ -1,0 +1,168 @@
+###############################################################################
+## LOGAN - alles uit Magister
+###############################################################################
+#
+# DIT BESTAND IS HET SJABLOON VOOR EEN TWEEDE KIND. Er staat precies één ding
+# in dat over Logan gaat: de sensor-prefix `sensor.magister_logan_veen`, plus
+# onderaan een handvol entiteiten van zijn telefoon. Kopieer dit bestand, zoek
+# en vervang die prefix, en zet de nieuwe `!include` in `school.yaml`.
+#
+# Welke prefix een kind krijgt, bepaalt de integratie: `Roepnaam Achternaam` in
+# kleine letters met underscores. Kijk hem op onder Ontwikkelhulpmiddelen ->
+# Status, filter `magister_`, en gebruik ALTIJD de kale prefix zonder
+# achtervoegsel - de macro's plakken er zelf `_aanmeldingen`, `_cijfers`,
+# `_opdrachten` en `_absenties` achter.
+#
+# Alle logica staat in `custom_templates/school.jinja`. Hier staat alleen welke
+# kaart welke macro aanroept, zodat een wijziging in hoe iets eruitziet één
+# plek raakt en niet twee kinderen.
+#
+# WAAROM ELKE KAART `content: |-` HEEFT EN NIET `>-`
+# In een gevouwen blok (`>-`) wordt een lege regel één regeleinde, en in
+# markdown is één regeleinde geen regeleinde maar een spatie. Een kop plakte
+# daardoor aan zijn tabel vast, en een tabel die niet op een eigen regel begint
+# is voor markdown geen tabel meer maar een alinea vol pipe-tekens. Met `|-`
+# staat er precies wat er staat. De `{%-`/`-%}`-streepjes halen de regeleinden
+# van de template-regels zelf weg, zodat er geen lege regels overblijven waar
+# je ze niet wilt.
+#
+# LET OP: `school.jinja` wordt alleen bij het OPSTARTEN van Home Assistant
+# ingelezen. Zie je hier na een wijziging een foutmelding over een onbekende
+# macro, dan is het bestand nog niet opnieuw ingelezen - herstart volledig.
+
+type: grid
+cards:
+  - type: heading
+    heading: Logan
+    heading_style: title
+    icon: mdi:school-outline
+
+  #############################################################################
+  ## Waar hij nu is in zijn dag
+  #############################################################################
+  # De enige kaart die je op een doordeweekse ochtend echt leest. Hij verandert
+  # zelf mee met het uur: vóór schooltijd de begintijd, tijdens een les het vak
+  # en het lokaal, in een tussenuur wanneer het weer begint, en na de laatste
+  # bel de volgende schooldag. `now()` in het template zorgt dat Home Assistant
+  # hem elke minuut opnieuw rendert.
+  #
+  # De studie ("Brugklas HAVO/VWO1") staat eronder in plaats van als badge op
+  # de kop: in de sensor is `studie` geen attribuut maar een veld binnen de
+  # lijst `aanmeldingen`, en daar kan `state_content` niet bij.
+  - type: markdown
+    content: |-
+      {%- from 'school.jinja' import nu, studie -%}
+      {%- set kind = 'sensor.magister_logan_veen' -%}
+      {{ nu(kind) }}
+
+      *{{ studie(kind) }}*
+
+  #############################################################################
+  ## Het rooster
+  #############################################################################
+  - type: heading
+    heading: Rooster
+    heading_style: subtitle
+    icon: mdi:timetable
+
+  - type: markdown
+    content: |-
+      {%- from 'school.jinja' import rooster -%}
+      **Vandaag**
+
+      {{ rooster('sensor.magister_logan_veen', 'vandaag') }}
+
+  # Staat er bewust altijd bij en niet alleen op een vrije dag: 's avonds is
+  # "hoe laat begint het morgen" de vraag, ook als er vandaag gewoon les was.
+  - type: markdown
+    content: |-
+      {%- from 'school.jinja' import rooster, volgende_schooldag, dagnaam -%}
+      {%- set kind = 'sensor.magister_logan_veen' -%}
+      {%- set vd = volgende_schooldag(kind) -%}
+      **Volgende schooldag{% if vd %}: {{ dagnaam(vd) }}{% endif %}**
+
+      {{ rooster(kind, 'volgende') }}
+
+  #############################################################################
+  ## Wat er af moet
+  #############################################################################
+  - type: heading
+    heading: Huiswerk en toetsen
+    heading_style: subtitle
+    icon: mdi:book-education-outline
+
+  # Huiswerk én toetsen in één lijst. Toetsen tellen in de API NIET als
+  # huiswerk (`is_huiswerk` is alleen InfoType 1), dus de kant-en-klare
+  # huiswerksensor zou ze stilletjes overslaan - zie de kop van school.jinja.
+  - type: markdown
+    content: |-
+      {%- from 'school.jinja' import werk -%}
+      {{ werk('sensor.magister_logan_veen', 14) }}
+
+  - type: markdown
+    content: |-
+      {%- from 'school.jinja' import opdrachten -%}
+      **Opdrachten die nog open staan**
+
+      {{ opdrachten('sensor.magister_logan_veen') }}
+
+  #############################################################################
+  ## Cijfers
+  #############################################################################
+  - type: heading
+    heading: Cijfers
+    heading_style: subtitle
+    icon: mdi:certificate-outline
+
+  - type: markdown
+    content: |-
+      {%- from 'school.jinja' import cijfers -%}
+      {{ cijfers('sensor.magister_logan_veen', 10) }}
+
+  #############################################################################
+  ## Absenties
+  #############################################################################
+  - type: heading
+    heading: Absenties
+    heading_style: subtitle
+    icon: mdi:account-clock-outline
+
+  - type: markdown
+    content: |-
+      {%- from 'school.jinja' import absenties -%}
+      {{ absenties('sensor.magister_logan_veen') }}
+
+  #############################################################################
+  ## Thuis
+  #############################################################################
+  # Niet uit Magister, maar wel de vragen die je op deze weergave stelt: is hij
+  # onderweg, en heeft zijn telefoon nog stroom om dat te blijven melden.
+  #
+  # De reistijd komt uit `packages/9 - Other/Locations.yaml` en staat in
+  # minuten; thuis is dat een halve minuut, geen nul.
+  - type: heading
+    heading: Onderweg
+    heading_style: subtitle
+    icon: mdi:bag-personal-outline
+
+  - type: entities
+    show_header_toggle: false
+    entities:
+      - entity: person.logan_veen
+        name: Logan
+        secondary_info: last-changed
+      - entity: sensor.logan_veen_geo
+        name: Waar
+      - entity: sensor.logan_reistijd_naar_huis
+        name: Reistijd naar huis
+      - type: divider
+      - entity: sensor.iphone_battery_level
+        name: Batterij telefoon
+      # Zijn iPhone heeft TWEE "Geblokkeerd"-schakelaars
+      # (switch.apple_iphone_logan en ..._logan_2, allebei live, allebei met
+      # dezelfde naam) en het is van buitenaf niet te zien welke bij welk
+      # MAC-adres hoort. Daarom staat hier alleen de iPad, die er maar één
+      # heeft. Weet je welke van de twee de telefoon echt blokkeert, zet die er
+      # dan bij - de andere hoort dan opgeruimd te worden.
+      - entity: switch.apple_ipad_logan
+        name: iPad geblokkeerd

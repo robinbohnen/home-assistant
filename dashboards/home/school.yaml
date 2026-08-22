@@ -1,0 +1,140 @@
+###############################################################################
+## SCHOOL - de Magister-weergave
+###############################################################################
+#
+# Eén kolom per kind, plus een gedeelde kolom rechts met het weekrooster en de
+# staat van de integratie.
+#
+# Bewust met standaardkaarten gebouwd (markdown, entities, heading), net als
+# `klimaat.yaml` en anders dan `overzicht.yaml`: dit is een leespagina die je
+# op een telefoon opent, geen wandpaneel. Hij moet het dus ook doen als
+# button-card of card-mod een keer niet laden. De enige custom kaart is de
+# week-planner, en die staat in de gedeelde kolom - valt hij weg, dan mis je
+# een overzicht, geen informatie.
+#
+# ---------------------------------------------------------------------------
+# EEN TWEEDE KIND ERBIJ
+# ---------------------------------------------------------------------------
+# Drie stappen, en geen ervan zit in `school.jinja`:
+#
+#   1. Hang het kind in Magister aan hetzelfde ouderaccount. De integratie
+#      haalt elk kwartier op en maakt zijn sensoren vanzelf aan.
+#   2. Kopieer `school/logan.yaml` naar `school/<roepnaam>.yaml` en vervang
+#      daarin overal `sensor.magister_logan_veen` door de nieuwe prefix (te
+#      vinden onder Ontwikkelhulpmiddelen -> Status, filter `magister_`), plus
+#      onderaan de vier entiteiten van zijn telefoon.
+#   3. Zet hieronder de `!include` erbij, en zijn Magister-kalender in de
+#      week-planner in de gedeelde kolom.
+#
+# `max_columns: 3` klopt dan nog steeds: twee kinderen plus de gedeelde kolom.
+# Bij een derde kind moet dat getal mee omhoog, anders wikkelt de gedeelde
+# kolom naar een tweede rij en valt er een gat onder de kortste kolom (dezelfde
+# valkuil als bij de airco's in `klimaat.yaml`).
+#
+# De regel "Vandaag in het kort" bovenaan de gedeelde kolom heeft stap 2 en 3
+# niet nodig: die leest de kinderlijst die de integratie zelf bijhoudt en toont
+# een nieuw kind dus meteen, ook al is zijn kolom er nog niet.
+
+type: sections
+max_columns: 3
+title: School
+path: school
+icon: mdi:school
+dense_section_placement: true
+
+sections:
+  - !include school/logan.yaml
+  # - !include school/emma.yaml
+
+  #############################################################################
+  ## Gedeeld - geldt voor alle kinderen tegelijk
+  #############################################################################
+  - type: grid
+    cards:
+      - type: heading
+        heading: Vandaag in het kort
+        heading_style: title
+        icon: mdi:account-multiple-outline
+
+      # Eén regel per kind. Dit is de kaart die het langst meegaat: hij kent
+      # geen kinderen bij naam maar leest `sensor.magister_data`, de lijst die
+      # de integratie zelf bijhoudt.
+      - type: markdown
+        content: |-
+          {%- from 'school.jinja' import overzicht_alle -%}
+          {{ overzicht_alle() }}
+
+      - type: heading
+        heading: Deze twee weken
+        heading_style: title
+        icon: mdi:calendar-month-outline
+
+      # Magister levert het rooster tot twee weken vooruit; verder terug of
+      # vooruit heeft deze kaart dus niets te tonen. De persoonlijke agenda's
+      # (`calendar.maxi` / `calendar.mini`) staan er bewust naast: zwemles en
+      # een proefwerkweek botsen op dezelfde avond, en die zie je alleen als ze
+      # in hetzelfde raster staan. Dezelfde kaart en dezelfde teksten als op de
+      # KALENDER-weergave, zodat het één ding blijft dat je leert lezen.
+      - type: custom:week-planner-card
+        days: 14
+        noCardBackground: true
+        locale: nl
+        showLocation: true
+        calendars:
+          - entity: calendar.magister_logan_veen_kalender
+            name: Rooster Logan
+            color: "#9fc5e8"
+          - entity: calendar.maxi
+            name: Logan
+            color: "#0b5394"
+          # Bij een tweede kind hier zijn twee kalenders erbij, in een kleur
+          # die duidelijk van die van Logan verschilt:
+          # - entity: calendar.magister_<kind>_kalender
+          #   name: Rooster <kind>
+          #   color: "#ffc0cb"
+          # - entity: calendar.mini
+          #   name: Emma
+          #   color: "#a64d79"
+        texts:
+          noEvents: Geen lessen
+          fullDay: Hele dag
+          today: Vandaag
+          tomorrow: Morgen
+          yesterday: Gisteren
+          moreEvents: Meer
+
+      #########################################################################
+      ## Onderhoud
+      #########################################################################
+      # Magister is een bron die stil kan wegvallen: verloopt het wachtwoord of
+      # verandert de school iets aan het account, dan blijven de sensoren op hun
+      # laatste waarde staan en lijkt het rooster gewoon oud. Deze kaart is de
+      # enige plek waar je dat ziet.
+      - type: heading
+        heading: Onderhoud
+        heading_style: title
+        icon: mdi:wrench-outline
+
+      # `sensor.magister_data` zet er een KALE tijd in zonder tijdzone, en die
+      # is lokaal. `as_timestamp` leest een naïeve tijd ook als lokale tijd, dus
+      # dit klopt - met `as_local()` erop zou hij hem als UTC lezen en er twee
+      # uur naast zitten.
+      - type: markdown
+        content: |-
+          {%- set t = states('sensor.magister_data') -%}
+          {%- if t in ['unknown', 'unavailable'] -%}
+          ⚠️ **De integratie heeft nog niets opgehaald.**
+          {%- else -%}
+          {%- set min = ((as_timestamp(now()) - as_timestamp(t)) / 60) | round -%}
+          {% if min > 60 %}⚠️{% else %}✅{% endif %} Laatst opgehaald {% if min < 1 %}zojuist{% elif min < 60 %}{{ min }} minuten geleden{% else %}**{{ (min / 60) | round(1) }} uur geleden**{% endif %}. De integratie ververst elk kwartier; staat er meer dan een uur, dan loopt het ophalen vast.
+          {%- endif -%}
+
+      - type: entities
+        show_header_toggle: false
+        entities:
+          - entity: update.magister_school_update
+            name: Versie integratie
+          - entity: sensor.magister_logan_veen_afspraken
+            name: Roosterregels Logan
+          - entity: sensor.magister_logan_veen_roosterwijzigingen
+            name: Roosterwijzigingen Logan

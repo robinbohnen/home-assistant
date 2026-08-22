@@ -1,0 +1,422 @@
+{#-
+==============================================================================
+  SCHOOL - Magister-gegevens leesbaar maken
+==============================================================================
+
+  Dit bestand tekent alles wat op `dashboards/home/school.yaml` staat. De
+  weergave zelf bevat geen enkele regel logica: elke kaart daar is één markdown-
+  kaart die hier een macro aanroept met de sensor-prefix van het kind.
+
+  Gebruik:
+
+      {% from 'school.jinja' import nu %}
+      {{ nu('sensor.magister_logan_veen') }}
+
+  `kind` is ALTIJD die prefix zonder achtervoegsel, dus
+  `sensor.magister_logan_veen` en niet `sensor.magister_logan_veen_afspraken`.
+  De integratie leidt de prefix af van de volledige naam in Magister
+  (`Roepnaam Achternaam`, kleine letters, spatie wordt underscore).
+
+  ---------------------------------------------------------------------------
+  EEN TWEEDE KIND TOEVOEGEN
+  ---------------------------------------------------------------------------
+  Hier hoeft niets te gebeuren - deze macro's kennen geen kinderen, alleen een
+  prefix. Toevoegen is: het kind in Magister aan hetzelfde ouderaccount hangen,
+  kijken welke prefix de integratie maakt (Ontwikkelhulpmiddelen -> Status,
+  filter `magister_`) en `dashboards/home/school/logan.yaml` kopiëren naar een
+  bestand voor het nieuwe kind. Alleen `overzicht_alle()` onderaan kent de
+  kinderen wél vanzelf: die leest de lijst die de integratie zelf bijhoudt.
+
+  ---------------------------------------------------------------------------
+  WAAROM HET ROOSTER HIER WORDT GEFILTERD EN NIET UIT DE KANT-EN-KLARE SENSOREN
+  KOMT
+  ---------------------------------------------------------------------------
+  De integratie levert per kind twintig sensoren, maar de bruikbare inhoud zit
+  in één attribuut: `afspraken` op `sensor.magister_<kind>`, met alles van
+  vandaag tot twee weken vooruit. De losse sensoren zijn tellingen daarvan, en
+  twee ervan zijn misleidend (magister_school v2.0.1):
+
+    - `..._huiswerk` heeft als STATE het aantal huiswerkafspraken, maar als
+      ATTRIBUUT `huiswerk_items` de OPDRACHTEN (sensor.py, regel 318). Die twee
+      horen niet bij elkaar, en het huiswerk zelf staat in géén enkel attribuut.
+      Daarom bouwt `werk()` de huiswerklijst uit `afspraken`.
+    - `is_huiswerk` is in de API `InfoType == 1`, en een proefwerk heeft
+      InfoType 2. EEN TOETS TELT DUS NIET ALS HUISWERK. Precies daarom filtert
+      `werk()` op het veld `type` (Huiswerk / Proefwerk / Tentamen /
+      Schriftelijke Overhoring / Mondelinge Overhoring) en niet op die vlag.
+
+  Wat een "les" is, is hier hetzelfde gedefinieerd als in de integratie
+  (`_get_school_lessen` + `_non_midnight_lessons`): geen huiswerkregel, niet
+  vervallen, en niet om 00:00 beginnend - dat laatste zijn dagvullende
+  mededelingen, die zouden de schooldag anders om middernacht laten beginnen.
+
+  ---------------------------------------------------------------------------
+  MARKDOWN, GEEN LOSSE REGELS
+  ---------------------------------------------------------------------------
+  De markdown-kaart is echte markdown: één regeleinde is GEEN regeleinde, die
+  wordt een spatie. Alles wat als lijst moet lezen staat daarom als `- ` opsomming
+  of in een tabel, met een lege regel tussen de blokken. Zie je op het dashboard
+  een alinea waar een lijstje hoort te staan, dan is hier een lege regel weg.
+
+  LET OP: wijzigingen in dit bestand vragen een VOLLEDIGE HERSTART van Home
+  Assistant. custom_templates worden alleen bij het opstarten ingelezen; een
+  template-reload is niet genoeg.
+-#}
+
+
+{#- ==========================================================================
+    Kleine hulpjes
+    ========================================================================== -#}
+
+{%- macro lokaal(v) -%}
+  {#- De API plakt `Lokatie` en alle `Lokalen[].Naam` achter elkaar, en dat is
+      bij deze school twee keer hetzelfde lokaal: "603, 603". Ontdubbelen. -#}
+  {{- (v | default('', true)).split(',') | map('trim') | reject('eq', '') | unique | join(', ') -}}
+{%- endmacro -%}
+
+
+{%- macro dagnaam(d) -%}
+  {#- '2026-08-31' -> 'maandag 31 augustus'. Vandaag, morgen en overmorgen
+      krijgen hun eigen woord: dat lees je sneller dan een datum. -#}
+  {%- set dt = strptime(d[:10], '%Y-%m-%d') -%}
+  {%- set delta = (dt.date() - now().date()).days -%}
+  {%- if delta == 0 -%}vandaag
+  {%- elif delta == 1 -%}morgen
+  {%- elif delta == 2 -%}overmorgen
+  {%- elif delta == -1 -%}gisteren
+  {%- else -%}
+    {%- set dagen = ['maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag'] -%}
+    {%- set maanden = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli',
+                       'augustus', 'september', 'oktober', 'november', 'december'] -%}
+    {{- dagen[dt.weekday()] }} {{ dt.day }} {{ maanden[dt.month - 1] -}}
+  {%- endif -%}
+{%- endmacro -%}
+
+
+{#- ==========================================================================
+    De ruwe lijsten
+    ==========================================================================
+    Een macro kan in Jinja alleen tekst teruggeven, dus deze leveren JSON en
+    worden verderop aangeroepen als `... | from_json`. Dit is de enige plek waar
+    de filterregels staan: verandert de definitie van "een les", dan verandert
+    hij hier voor alle kaarten tegelijk.
+-#}
+
+{%- macro afspraken_json(kind) -%}
+  {{- (state_attr(kind, 'afspraken') or []) | to_json -}}
+{%- endmacro -%}
+
+
+{%- macro lessen_json(kind, d) -%}
+  {#- Alle échte lessen op dag `d`, op tijd gesorteerd. -#}
+  {{- afspraken_json(kind) | from_json
+        | rejectattr('is_huiswerk') | rejectattr('is_uitval')
+        | selectattr('start', 'match', d ~ ' (?!00:00)')
+        | sort(attribute='start') | list | to_json -}}
+{%- endmacro -%}
+
+
+{%- macro uitval_json(kind, d) -%}
+  {{- afspraken_json(kind) | from_json
+        | selectattr('is_uitval') | rejectattr('is_huiswerk')
+        | selectattr('start', 'match', d)
+        | sort(attribute='start') | list | to_json -}}
+{%- endmacro -%}
+
+
+{%- macro schooldagen_json(kind) -%}
+  {#- Elke datum met minstens één les, oplopend. Hieruit komt "de volgende
+      schooldag" zonder dat je hoeft te weten wat weekend of vakantie is. -#}
+  {#- `list.append` mag niet in de HA-sandbox ("access to attribute 'append' of
+      'list' object is unsafe"), dus de datum wordt er met een regex afgeknipt
+      in plaats van in een lus verzameld. -#}
+  {{- afspraken_json(kind) | from_json
+        | rejectattr('is_huiswerk') | rejectattr('is_uitval')
+        | rejectattr('start', 'search', ' 00:00')
+        | map(attribute='start') | map('regex_replace', ' .*$', '')
+        | unique | sort | list | to_json -}}
+{%- endmacro -%}
+
+
+{%- macro mededelingen_json(kind, d) -%}
+  {#- De 00:00-items die `lessen_json` er bewust uit filtert. Het zijn geen
+      lesuren maar dagmededelingen (studiedag, roostervrij, excursie), en die
+      wil je juist wél zien: zonder deze macro is "vrij vandaag" niet te
+      onderscheiden van "studiedag" en zoek je 's ochtends in Magister. -#}
+  {{- afspraken_json(kind) | from_json
+        | rejectattr('is_huiswerk') | rejectattr('is_uitval')
+        | selectattr('start', 'match', d ~ ' 00:00')
+        | list | to_json -}}
+{%- endmacro -%}
+
+
+{%- macro volgende_schooldag(kind) -%}
+  {%- set later = schooldagen_json(kind) | from_json | select('gt', now().strftime('%Y-%m-%d')) | list -%}
+  {{- later | first | default('', true) -}}
+{%- endmacro -%}
+
+
+{%- macro studie(kind) -%}
+  {#- "Brugklas HAVO/VWO1" uit de aanmelding die vandaag loopt. Een kind heeft
+      er meerdere (één per schooljaar), dus filteren op de periode waar vandaag
+      in valt; is er geen match, dan de laatste - dan staat de nieuwe aanmelding
+      er al wel maar begint hij pas na de zomer. -#}
+  {%- set alle = state_attr(kind ~ '_aanmeldingen', 'aanmeldingen') or [] -%}
+  {%- set nu_d = now().strftime('%Y-%m-%d') -%}
+  {%- set lopend = alle | selectattr('start', 'le', nu_d ~ ' 23:59:59')
+                        | selectattr('einde', 'ge', nu_d) | list -%}
+  {{- ((lopend | last if lopend else alle | last).studie if alle else '') | default('', true) -}}
+{%- endmacro -%}
+
+
+{#- ==========================================================================
+    NU - de statuskaart bovenaan
+    ==========================================================================
+    Beantwoordt in één blik de vraag die je op dát moment hebt: 's ochtends
+    "hoe laat moet hij weg", overdag "waar zit hij nu", 's avonds "hoe laat
+    begint het morgen".
+-#}
+
+{%- macro nu(kind) -%}
+{%- if states(kind) in ['unknown', 'unavailable'] -%}
+### Geen verbinding met Magister
+
+De integratie levert nu niets. Kijk bij **Onderhoud** onderaan wanneer er voor
+het laatst is opgehaald.
+{%- else -%}
+{%- set vandaag = now().strftime('%Y-%m-%d') -%}
+{%- set nu_str = now().strftime('%Y-%m-%d %H:%M:%S') -%}
+{%- set les = lessen_json(kind, vandaag) | from_json -%}
+{%- set weg = uitval_json(kind, vandaag) | from_json -%}
+{%- if les | count == 0 -%}
+{%- set vd = volgende_schooldag(kind) -%}
+{%- if vd == '' -%}
+### Geen lessen bekend
+
+Magister heeft voor de komende twee weken niets ingeroosterd.
+{%- else -%}
+{%- set vles = lessen_json(kind, vd) | from_json -%}
+### Vrij vandaag
+
+Weer naar school **{{ dagnaam(vd) }}** om **{{ (vles | first).start[11:16] }}**,
+eerste uur {{ (vles | first).vak }}, uit om {{ (vles | last).einde[11:16] }}.
+{%- endif -%}
+{%- else -%}
+{%- set eerste = les | first -%}
+{%- set laatste = les | last -%}
+{%- set bezig = les | selectattr('start', 'le', nu_str) | selectattr('einde', 'gt', nu_str) | list -%}
+{%- set hierna = les | selectattr('start', 'gt', nu_str) | list -%}
+{%- if nu_str < eerste.start -%}
+### Begint om {{ eerste.start[11:16] }}
+
+Eerste uur **{{ eerste.vak }}**{% if lokaal(eerste.lokaal) %} in {{ lokaal(eerste.lokaal) }}{% endif %}.
+{{ les | count }} {{ 'uur' if les | count == 1 else 'uren' }}, uit om **{{ laatste.einde[11:16] }}**.
+{%- elif bezig | count > 0 -%}
+{%- set b = bezig | first -%}
+### Nu: {{ b.vak }}
+
+{{ b.start[11:16] }} - {{ b.einde[11:16] }}{% if lokaal(b.lokaal) %} · lokaal {{ lokaal(b.lokaal) }}{% endif %}{% if b.docent %} · {{ b.docent }}{% endif %}.
+{% if hierna | count > 0 %}Hierna **{{ (hierna | first).vak }}** om {{ (hierna | first).start[11:16] }}, uit om {{ laatste.einde[11:16] }}.{% else %}Daarna klaar.{% endif %}
+{%- elif hierna | count > 0 -%}
+{%- set h = hierna | first -%}
+### Tussenuur tot {{ h.start[11:16] }}
+
+Daarna **{{ h.vak }}**{% if lokaal(h.lokaal) %} in {{ lokaal(h.lokaal) }}{% endif %}, uit om **{{ laatste.einde[11:16] }}**.
+{%- else -%}
+### Klaar sinds {{ laatste.einde[11:16] }}
+{%- set vd = volgende_schooldag(kind) %}
+{% if vd != '' %}{%- set vles = lessen_json(kind, vd) | from_json %}
+Volgende schooldag **{{ dagnaam(vd) }}** om **{{ (vles | first).start[11:16] }}**.
+{%- endif -%}
+{%- endif -%}
+{%- if weg | count > 0 %}
+
+> **{{ weg | count }} {{ 'uur vervalt' if weg | count == 1 else 'uren vervallen' }} vandaag** ·
+> {{ weg | map(attribute='vak') | select('ne', '') | unique | join(', ') | default('zie het rooster', true) }}
+{%- endif -%}
+{%- endif -%}
+{%- set mede = mededelingen_json(kind, vandaag) | from_json -%}
+{%- if mede | count > 0 %}
+
+{% for m in mede %}> 📌 {{ m.omschrijving if m.omschrijving else m.vak }}{% if m.inhoud %} — {{ m.inhoud | replace('\n', ' ') | truncate(120, true, '…') }}{% endif %}
+{% endfor -%}
+{%- endif -%}
+{%- endif -%}
+{%- endmacro -%}
+
+
+{#- ==========================================================================
+    ROOSTER - één dag uitgeschreven
+    ==========================================================================
+    `d` is een datum als '2026-08-31', of het woord 'vandaag' of 'volgende'.
+    Vervallen uren blijven staan maar worden doorgestreept: weghalen maakt een
+    gat in de lesuren waarvan je niet ziet waar het vandaan komt.
+-#}
+
+{%- macro rooster(kind, d='vandaag') -%}
+{%- set dag = now().strftime('%Y-%m-%d') if d == 'vandaag' else (volgende_schooldag(kind) if d == 'volgende' else d) -%}
+{%- if dag == '' -%}
+_Geen volgende schooldag bekend._
+{%- else -%}
+{%- set les = lessen_json(kind, dag) | from_json -%}
+{%- set weg = uitval_json(kind, dag) | from_json -%}
+{%- set alles = (les + weg) | sort(attribute='start') | list -%}
+{%- if alles | count == 0 -%}
+_Geen lessen {{ dagnaam(dag) }}._
+{%- else -%}
+| | Tijd | Vak | Lokaal |
+|--:|:--|:--|:--|
+{% for l in alles -%}
+{%- set naam = l.vak if l.vak else (l.omschrijving | default('les', true)) -%}
+| {{ l.lesuurstart if l.lesuurstart else '' }} | {{ l.start[11:16] }}-{{ l.einde[11:16] }} | {% if l.is_uitval %}~~{{ naam }}~~ vervalt{% else %}**{{ naam }}**{% if l.docent %}<br>{{ l.docent }}{% endif %}{% endif %} | {{ lokaal(l.lokaal) }} |
+{% endfor -%}
+{%- endif -%}
+{%- endif -%}
+{%- endmacro -%}
+
+
+{#- ==========================================================================
+    WERK - huiswerk en toetsen, op datum
+    ==========================================================================
+    Eén lijst, want zo kijk je er ook naar: "wat moet er af, en wanneer".
+    Toetsen staan er zwaarder in dan huiswerk omdat ze dat zijn.
+-#}
+
+{%- macro werk_json(kind, dagen=14) -%}
+{%- set grens = (now() + timedelta(days=dagen)).strftime('%Y-%m-%d') -%}
+{{- afspraken_json(kind) | from_json
+      | selectattr('type', 'in', ['Huiswerk', 'Proefwerk', 'Tentamen',
+                                  'Schriftelijke Overhoring', 'Mondelinge Overhoring'])
+      | rejectattr('is_uitval')
+      | selectattr('start', 'ge', now().strftime('%Y-%m-%d'))
+      | selectattr('start', 'le', grens ~ ' 23:59:59')
+      | sort(attribute='start') | list | to_json -}}
+{%- endmacro -%}
+
+
+{%- macro werk(kind, dagen=14) -%}
+{%- set items = werk_json(kind, dagen) | from_json -%}
+{%- if items | count == 0 -%}
+_Niets ingevoerd voor de komende {{ dagen }} dagen._
+{%- else -%}
+{%- set ns = namespace(dag='') -%}
+{%- for w in items -%}
+{%- if w.start[:10] != ns.dag -%}
+{%- set ns.dag = w.start[:10] -%}
+{% if not loop.first %}
+{% endif %}**{{ dagnaam(w.start[:10]) | capitalize }}**
+
+{% endif -%}
+- {% if w.type != 'Huiswerk' %}🔴 **{{ w.type }}** {% else %}📖 {% endif %}{{ w.vak if w.vak else w.omschrijving }}{% if w.inhoud %} — *{{ w.inhoud | replace('\n', ' ') | truncate(150, true, '…') }}*{% endif %}
+{% endfor -%}
+{%- endif -%}
+{%- endmacro -%}
+
+
+{#- ==========================================================================
+    OPDRACHTEN - de losse inlevermomenten
+    ==========================================================================
+    Staat los van `werk()`: een opdracht hangt niet aan een lesuur maar aan een
+    inleverdatum. `ingeleverd_op` is '?' zolang er niets is ingeleverd - dat is
+    wat de integratie van een lege datum maakt, en dus de test op "nog open".
+-#}
+
+{%- macro opdrachten(kind, alleen_open=true) -%}
+{%- set alles = state_attr(kind ~ '_opdrachten', 'opdrachten') or [] -%}
+{%- set items = (alles | rejectattr('ingeleverd_op', 'match', '\\d') | list) if alleen_open else alles -%}
+{%- if items | count == 0 -%}
+_{{ 'Niets meer open.' if alleen_open else 'Geen opdrachten.' }}_
+{%- else -%}
+{% for o in items | sort(attribute='inleveren_voor') -%}
+{%- set laat = o.inleveren_voor is match('\\d') and o.inleveren_voor[:10] < now().strftime('%Y-%m-%d') -%}
+- {{ '⚠️' if laat else '📝' }} **{{ o.titel | default('Opdracht', true) }}**{% if o.vak %} · {{ o.vak }}{% endif %} — {% if o.inleveren_voor is match('\\d') %}inleveren voor {{ dagnaam(o.inleveren_voor) }}{% else %}geen inleverdatum{% endif %}
+{% endfor -%}
+{%- endif -%}
+{%- endmacro -%}
+
+
+{#- ==========================================================================
+    CIJFERS
+    ==========================================================================
+    `waarde` komt als TEKST binnen en is niet altijd een getal: een gemiste
+    toets staat er als 'inh' of '-'. Alles wat niet als getal te lezen is telt
+    daarom niet mee in het gemiddelde en krijgt een grijze stip.
+
+    Het gemiddelde is ONGEWOGEN over de opgehaalde cijfers en is dus niet het
+    cijfer van de rapportvergadering - Magister rekent per vak en per periode
+    met weegfactoren. Het staat er als "hoe loopt het", niet als eindstand.
+-#}
+
+{%- macro cijfers(kind, aantal=8) -%}
+{%- set alles = state_attr(kind ~ '_cijfers', 'cijfers') or [] -%}
+{%- if alles | count == 0 -%}
+_Nog geen cijfers._
+{%- else -%}
+{%- set getallen = alles | map(attribute='waarde') | map('replace', ',', '.')
+                         | select('is_number') | map('float') | list -%}
+{% if getallen | count > 0 -%}
+Gemiddeld **{{ getallen | average | round(1) }}** over {{ getallen | count }} {{ 'cijfer' if getallen | count == 1 else 'cijfers' }}.
+{% endif %}
+| Vak | Cijfer | Waarvoor |
+|:--|:--:|:--|
+{% for c in (alles | sort(attribute='ingevoerd_op', reverse=true))[:aantal] -%}
+{%- set w = c.waarde | replace(',', '.') -%}
+{%- set kleur = ('🟢' if w | float(0) >= 6.5 else ('🟠' if w | float(0) >= 5.5 else '🔴')) if w is is_number else '⚪' -%}
+| {{ c.vak | upper }} | {{ kleur }} **{{ c.waarde }}** | {{ c.omschrijving | truncate(40, true, '…') }}{% if c.weegfactor and c.weegfactor | string not in ['1', '1.0', ''] %} (×{{ c.weegfactor }}){% endif %} |
+{% endfor -%}
+{%- endif -%}
+{%- endmacro -%}
+
+
+{#- ==========================================================================
+    ABSENTIES
+    ========================================================================== -#}
+
+{%- macro absenties(kind, aantal=6) -%}
+{%- set alles = state_attr(kind ~ '_absenties', 'absenties') or [] -%}
+{%- if alles | count == 0 -%}
+_Geen absenties geregistreerd._
+{%- else -%}
+{% for a in (alles | sort(attribute='start', reverse=true))[:aantal] -%}
+- **{{ dagnaam(a.start) | capitalize }}** — {{ a.omschrijving | default('absent', true) }}{% if a.afspraak %} ({{ a.afspraak }}){% endif %}
+{% endfor -%}
+{%- endif -%}
+{%- endmacro -%}
+
+
+{#- ==========================================================================
+    OVERZICHT VAN ALLE KINDEREN
+    ==========================================================================
+    De enige macro die de kinderen zelf opzoekt, en dat mag hier: de lijst komt
+    niet uit een naamfilter over alle entiteiten maar uit `sensor.magister_data`
+    - de integratie houdt zelf bij welke kinderen aan het ouderaccount hangen.
+    Geen uitsluitlijst, geen kans dat er een vreemde meelift.
+
+    Gevolg: een tweede kind staat hier de dag dat hij in Magister verschijnt,
+    ook al is zijn eigen sectie op de weergave nog niet gemaakt.
+-#}
+
+{%- macro overzicht_alle() -%}
+{%- set kinderen = state_attr('sensor.magister_data', 'kinderen') or {} -%}
+{%- if kinderen | count == 0 -%}
+_Nog geen kinderen opgehaald uit Magister._
+{%- else -%}
+{%- set vandaag = now().strftime('%Y-%m-%d') -%}
+{%- set nu_str = now().strftime('%Y-%m-%d %H:%M:%S') -%}
+{% for naam, k in kinderen.items() -%}
+{%- set les = k.afspraken | default([], true)
+              | rejectattr('is_huiswerk') | rejectattr('is_uitval')
+              | selectattr('start', 'match', vandaag ~ ' (?!00:00)')
+              | sort(attribute='start') | list -%}
+{%- set weg = k.afspraken | default([], true) | selectattr('is_uitval')
+              | rejectattr('is_huiswerk') | selectattr('start', 'match', vandaag) | list -%}
+{%- set bezig = les | selectattr('start', 'le', nu_str) | selectattr('einde', 'gt', nu_str) | list -%}
+- **{{ naam.split(' ') | first }}** — {% if les | count == 0 %}vrij vandaag
+{%- elif nu_str < (les | first).start %}school {{ (les | first).start[11:16] }} tot {{ (les | last).einde[11:16] }}
+{%- elif nu_str > (les | last).einde %}klaar sinds {{ (les | last).einde[11:16] }}
+{%- elif bezig | count > 0 %}{{ (bezig | first).vak }} tot {{ (bezig | first).einde[11:16] }}
+{%- else %}tussenuur
+{%- endif %}{% if weg | count > 0 %} · {{ weg | count }} vervallen{% endif %}
+{% endfor -%}
+{%- endif -%}
+{%- endmacro -%}
