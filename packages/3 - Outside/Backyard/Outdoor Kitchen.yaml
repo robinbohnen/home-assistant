@@ -10,27 +10,42 @@
 ## element stookt onafgebroken op vol vermogen en zodra de thermostaat de
 ## ingestelde temperatuur ziet valt hij dicht en zakt het verbruik naar bijna
 ## niets. Deze automatisering wacht dus op twee dingen achter elkaar:
-##   1. het vermogen komt BOVEN de stookdrempel  -> hij is echt aan het stoken
-##   2. het vermogen valt daarna ONDER de rustdrempel en blijft daar een
-##      minuut                                    -> hij is op temperatuur
+##   1. het vermogen komt BOVEN de 500 W -> hij is echt aan het stoken
+##   2. het vermogen valt daarna ONDER de 150 W en blijft daar 15 seconden
+##                                       -> hij is op temperatuur
 ##
 ## Stap 1 is er om een melding te voorkomen bij een stekker die wel aan staat
 ## maar niets doet (frietpan zelf nog op nul, of hij is al warm van de vorige
 ## ronde). Zonder die stap is "weinig verbruik" niet te onderscheiden van
 ## "nog niet begonnen".
 ##
-## DE DREMPELS ZIJN EEN AANNAME, GEEN METING. De stekker zit er sinds
-## 22 augustus 2026 en is nog nooit onder belasting geweest, dus er is geen
-## historie om ze op te ijken. Een frietpan stookt met 2000-3000 W en valt
-## tussendoor terug naar vrijwel 0 W, dus het gat is groot en 500/150 W zit
-## daar ruim tussenin. Klopt de melding na de eerste keer frituren niet, kijk
-## dan in de historie van sensor...._vermogen wat hij werkelijk trekt en pas
-## `below`/`above` hieronder aan.
+## DE DREMPELS ZIJN GEIJKT OP DE EERSTE ECHTE RONDE, 22 augustus 2026 16:58 -
+## 17:10 (uit de historie van sensor...._vermogen):
 ##
-## De minuut in `for:` is bewust langer dan strikt nodig: valt de stekker
-## even van het zigbee-netwerk, dan komt hij terug met een verse melding en
-## kan dat als "verbruik ingezakt" lezen. Een stekker die net terug is meldt
-## binnen die minuut opnieuw, een echt warme frietpan blijft gewoon laag.
+##   16:58:38  stekker aan
+##   16:58:40  2512 W - binnen twee seconden op vol vermogen
+##   ..:..     stookt 8 min 52 s onafgebroken tussen 2300 en 2510 W
+##   17:07:30   899 W - één tussenmeting
+##   17:07:32     0,0 W - thermostaat dicht, DIT is het warm-moment
+##   17:08:55  2454 W - bijstoken, 38 seconden
+##   17:09:33     0,2 W
+##
+## Daarmee staan de twee drempels in een gat van ruim 2000 W: stoken is altijd
+## 2300+, rust is 0,0-0,2. Die hoeven dus niet nauwkeuriger.
+##
+## DE 15 SECONDEN IN `for:` KOMEN UIT DIEZELFDE RONDE. Er zat maar 83 seconden
+## tussen dichtvallen en bijstoken, dus een dwell van een minuut (wat hier
+## eerst stond) kwam 23 seconden voor de volgende stookronde binnen: je stond
+## dan een minuut te wachten op een melding over iets dat al gebeurd was. Met
+## 15 seconden komt het bericht om 17:07:47, negen minuten na het aanzetten.
+##
+## Korter dan 15 seconden niet doen. De dwell is namelijk ook de vangnet tegen
+## een stekker die even van het zigbee-netwerk valt: die komt terug met een
+## verse melding en kan met 0 W binnenkomen terwijl de pan gewoon stookt.
+## Onder belasting meldt deze stekker elke 3 tot 4 seconden (langste gat in de
+## hele ronde: 7 seconden), dus binnen 15 seconden liggen er vier meldingen -
+## staat hij écht nog te stoken, dan blijkt dat ruim op tijd en valt de dwell
+## om. Voor een warme pan verandert er niets: die blijft minutenlang op 0.
 ##############################################################################
 
 backyard_outdoor_kitchen_package:
@@ -85,7 +100,9 @@ backyard_outdoor_kitchen_package:
             - trigger: numeric_state
               entity_id: sensor.achtertuin_achtertuin_buitenkeuken_frietpan_vermogen
               below: 150
-              for: "00:01:00"
+              # 15 s, niet korter: zie de uitleg over de rustperiode van 83
+              # seconden en het zigbee-vangnet in de kop van dit bestand.
+              for: "00:00:15"
           # Opwarmen duurt hooguit een kwartier; blijft hij drie kwartier
           # stoken, dan is er iets anders aan de hand en is "hij is warm" een
           # onjuiste mededeling. Dan liever niets zeggen.
@@ -94,7 +111,7 @@ backyard_outdoor_kitchen_package:
         - condition: template
           value_template: "{{ wait.trigger is not none }}"
 
-        # Tijdens die minuut kan hij alsnog uitgezet zijn - dat is een gewone
+        # Tijdens die 15 seconden kan hij alsnog uitgezet zijn - dat is een gewone
         # state-trigger die deze run herstart, maar de melding hangt aan het
         # eind van de sequence en niet aan de trigger, dus check het hier ook.
         - condition: state
