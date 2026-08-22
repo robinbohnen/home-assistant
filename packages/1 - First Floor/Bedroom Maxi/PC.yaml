@@ -12,20 +12,72 @@
 ## metingen, en dat waren aan- en uitloopjes. 50 W ligt dus in het midden van
 ## een leeg gebied en niet op een grens waar hij van kan gaan flapperen.
 ##
-## De sessie waar Robin het over had staat er netjes in: 17 augustus 13:55 tot
-## 15:34, 99 minuten, piek 233 W. Die zou met deze regels één omroep hebben
-## opgeleverd, rond 15:25.
+## EEN DAGTOTAAL, GEEN SESSIETELLER
+## Dit stond eerst op "anderhalf uur onafgebroken aan". Dat is precies het
+## soort regel waar een kind omheen leert lopen: pc uit, vijf minuten wachten,
+## pc weer aan en de teller staat op nul - je mag dan de hele dag gamen in
+## blokken van 89 minuten. Sinds 22 augustus 2026 telt daarom niet de sessie
+## maar de dag: `sensor.pc_logan_gametijd` is alle pc-tijd van vandaag bij
+## elkaar opgeteld. Uitzetten pauzeert die teller, hij zet hem niet terug.
 ##
-## LAAT HIJ HEM AAN STAAN, DAN GAAT HET PORREN DOOR
-## Sinds 19 augustus 2026 blijft het niet bij die ene melding: zolang de pc
-## aan blijft komt hij elke twee minuten terug, nu ook met knipperend licht.
-## Dat is hetzelfde idee als de douchetimer in
-## packages/1 - First Floor/Bathroom/Douche.yaml - stem én licht, want de
-## Sonos kan uit staan en het licht is er altijd. Het stopt vanzelf zodra de
-## pc uitgaat, en houdt na een half uur op met porren.
+## Zodra dat dagtotaal over de limiet gaat wordt er gepord. Zet hij hem daarna
+## uit en weer aan, dan begint het porren meteen opnieuw - het dagtotaal staat
+## dan immers nog steeds boven de limiet.
+##
+## DE LIMIET IS EEN HELPER
+## `input_number.pc_logan_gametijd_limiet` (in minuten, standaard 90). Draaien
+## kan gewoon in de UI, zonder deze file aan te raken; vakantie ruimer, week
+## voor een toets krapper. Alle teksten hieronder rekenen het getal zelf om
+## naar "1 uur en 30 minuten", dus er staat nergens nog "anderhalf uur".
+##
+## HOE HET PORREN GAAT
+## Het blijft niet bij die ene melding: zolang de pc aan blijft komt hij elke
+## twee minuten terug, nu ook met knipperend licht. Dat is hetzelfde idee als
+## de douchetimer in packages/1 - First Floor/Bathroom/Douche.yaml - stem én
+## licht, want de Sonos kan uit staan en het licht is er altijd. Het stopt
+## vanzelf zodra de pc uitgaat, en houdt na een half uur op met porren.
 ##############################################################################
 
 pc_logan_package:
+
+  input_number:
+    # Geen `initial:`, om dezelfde reden als bij de ventilatiedrempels in
+    # packages/9 - Other/Ventilation.yaml: `initial` zet je eigen instelling
+    # bij ELKE herstart terug naar de fabriekswaarde. De automatisering
+    # `bedroom_maxi_pc_gametijd_limiet_vullen` onderaan vult hem eenmalig op
+    # 90; wat je daarna zelf draait blijft staan.
+    pc_logan_gametijd_limiet:
+      name: "PC Logan - Gametijd per dag"
+      icon: mdi:timer-cog-outline
+      min: 15
+      max: 480
+      step: 15
+      unit_of_measurement: min
+      mode: box
+
+  sensor:
+    ##########################################################################
+    ## Hoeveel pc-tijd zit er vandaag op
+    ##
+    ## DE DAG LOOPT VAN 05:00 TOT 05:00 EN NIET VAN MIDDERNACHT
+    ## Met een grens op middernacht zou een sessie die doorloopt tot half een
+    ## precies daar op nul springen - hetzelfde gat als het uit-en-weer-aan
+    ## dat we hier dichten, alleen dan met de klok als medeplichtige. Om 05:00
+    ## slaapt iedereen en is de vorige dag echt afgelopen.
+    ##
+    ## Deze telt in uren (dat kan history_stats niet anders); de sensor in
+    ## minuten staat hieronder bij de template-blokken.
+    ##########################################################################
+    - platform: history_stats
+      name: pc_logan_gametijd_vandaag_uren
+      unique_id: pc_logan_gametijd_vandaag_uren
+      entity_id: binary_sensor.pc_logan_aan
+      state: "on"
+      type: time
+      start: >-
+        {{ today_at('05:00') if now() >= today_at('05:00')
+           else today_at('05:00') - timedelta(days=1) }}
+      end: "{{ now() }}"
 
   template:
     - binary_sensor:
@@ -34,17 +86,22 @@ pc_logan_package:
         # minuten is te lang voor die twee en te kort om van een echte sessie
         # iets te missen.
         #
-        # `delay_off` van vijf minuten is belangrijker dan hij lijkt: zonder
-        # die marge zet een pc die even in slaapstand valt (of een monitor die
-        # uitgaat tijdens een filmpje) de teller van anderhalf uur hieronder
-        # weer op nul, en dan komt de omroep nooit. Vijf minuten uit is een
-        # pauze, langer is een nieuwe sessie.
+        # `delay_off` STOND OP VIJF MINUTEN EN MAG NU KORTER
+        # Die vijf minuten waren er om te voorkomen dat een pc in slaapstand
+        # de sessieteller op nul zette. Die teller is er niet meer - het
+        # dagtotaal hierboven pauzeert bij een slaapstand en telt daarna
+        # gewoon door - dus die reden is vervallen. Wat de vijf minuten wél
+        # deden is elke sessie vijf minuten te lang laten meetellen in dat
+        # dagtotaal. Drie minuten is nog steeds ruim genoeg om een monitor die
+        # even uitvalt of een filmpje in beeldscherm-uit niet als "pc uit" te
+        # lezen, en houdt de telling eerlijk: twee minuten te laat aan, drie
+        # minuten te laat uit, netto één minuut per sessie.
         - name: pc_logan_aan
           unique_id: pc_logan_aan
           icon: mdi:desktop-tower-monitor
           device_class: running
           delay_on: "00:02:00"
-          delay_off: "00:05:00"
+          delay_off: "00:03:00"
           # Een stekker die niets meldt is geen pc die aanstaat: `float(-1)`
           # houdt hem uit.
           state: >
@@ -58,6 +115,34 @@ pc_logan_package:
             # nog een keer op te schrijven. Draai je hem hier, dan draait het
             # porren mee.
             drempel: 50
+
+    - sensor:
+        # Hetzelfde dagtotaal, maar in hele minuten. Dat is niet alleen
+        # prettiger lezen dan "1.53 uur": de trigger hieronder vergelijkt hem
+        # rechtstreeks met `input_number.pc_logan_gametijd_limiet`, en een
+        # `numeric_state`-trigger kan geen eenheden omrekenen. Beide in
+        # minuten dus, anders vergelijk je uren met minuten en gaat het
+        # ongemerkt mis.
+        - name: pc_logan_gametijd
+          unique_id: pc_logan_gametijd
+          icon: mdi:timer-play-outline
+          unit_of_measurement: min
+          device_class: duration
+          state_class: measurement
+          # Zonder deze regel zou een history_stats die nog aan het opstarten
+          # is als "0 minuten" gelezen worden, en dan telt een dag waarop hij
+          # allang over de limiet zit even opnieuw vanaf nul.
+          availability: "{{ has_value('sensor.pc_logan_gametijd_vandaag_uren') }}"
+          state: >
+            {{ (states('sensor.pc_logan_gametijd_vandaag_uren') | float(0) * 60)
+               | round(0) | int }}
+          attributes:
+            limiet_minuten: >
+              {{ states('input_number.pc_logan_gametijd_limiet')
+                 | float(90) | round(0) | int }}
+            over_limiet: >
+              {{ states('sensor.pc_logan_gametijd_vandaag_uren') | float(0) * 60
+                 > states('input_number.pc_logan_gametijd_limiet') | float(90) }}
 
   script:
     ##########################################################################
@@ -83,7 +168,7 @@ pc_logan_package:
           name: Bericht
           description: Wat er omgeroepen wordt
           required: true
-          example: Logan, je computer staat nu anderhalf uur aan.
+          example: Logan, je gametijd voor vandaag is op.
           selector:
             text:
       sequence:
@@ -144,34 +229,49 @@ pc_logan_package:
 
   automation:
     ##########################################################################
-    ## Anderhalf uur achter de pc
+    ## De gametijd van vandaag is op
     ##
-    ## Eén omroep per sessie, op Logans eigen Sonos. De `for` telt vanaf het
-    ## moment dat de sensor hierboven aangaat, en die heeft zelf twee minuten
-    ## `delay_on` nodig - in de praktijk klinkt het dus rond 1 uur 32.
+    ## TWEE TRIGGERS, ÉÉN VERVOLG
+    ## 1. Het dagtotaal gaat over de limiet heen. Dat is de gewone: hij zit te
+    ##    gamen en de tijd raakt op.
+    ## 2. De pc gaat aan terwijl het dagtotaal al over de limiet is. Dit is de
+    ##    trigger die het uit-en-weer-aan afvangt: trigger 1 vuurt maar één
+    ##    keer per dag (hij kan die grens maar één keer passeren), dus zonder
+    ##    deze tweede zou een herstart na het porren gratis zijn.
     ##
     ## Daarna houdt de run zichzelf aan tot de pc uitgaat (of tot het half uur
-    ## porren om is). Dat mag hier: een tweede trigger is in die tijd
-    ## onmogelijk, want daarvoor moet de sensor eerst vijf minuten uit zijn
-    ## geweest én daarna anderhalf uur aan.
+    ## porren om is). Komt trigger 2 langs terwijl er al gepord wordt, dan laat
+    ## `mode: single` hem stilletjes vallen - dat is precies goed, hij wordt al
+    ## gepord.
     ##
-    ## LET OP bij een herstart van Home Assistant: `last_changed` van de sensor
-    ## wordt dan opnieuw gezet, dus een sessie die al liep begint voor deze
-    ## automatisering weer bij nul. Een lopende porlus overleeft zo'n herstart
-    ## ook niet. Vervelender is het omgekeerde niet mogelijk (te vroeg
-    ## omroepen), en dat is de goede kant om fout te gaan.
+    ## LET OP bij een herstart van Home Assistant: het dagtotaal komt uit de
+    ## recorder en overleeft een herstart dus wél, maar een lopende porlus niet.
+    ## Zat hij op dat moment over de limiet met de pc aan, dan pakt trigger 2
+    ## hem opnieuw zodra de sensor weer 'on' meldt.
     ##########################################################################
+    # De `id` blijft met opzet `..._anderhalf_uur` heten, ook al gaat het daar
+    # niet meer over: aan die id hangt HA de bestaande entiteit
+    # `automation.bedroom_maxi_pc_staat_anderhalf_uur_aan` met zijn historie en
+    # zijn aan/uit-stand. Hernoemen levert een nieuwe entiteit op en laat de
+    # oude als wees in het register achter. De alias (wat je in de UI ziet)
+    # klopt weer wel.
     - id: bedroom_maxi_pc_anderhalf_uur
-      alias: Bedroom Maxi - PC staat anderhalf uur aan
+      alias: Bedroom Maxi - Gametijd van Logan is op
       description: >-
-        Roept op de Sonos van Logan om zodra zijn pc anderhalf uur onafgebroken
-        aanstaat, en herhaalt dat elke twee minuten met knipperend licht zolang
-        hij hem aan laat staan. De sensor moet eerst vijf minuten stil zijn
-        geweest voordat er een nieuwe sessie begint.
+        Roept op de Sonos van Logan om zodra zijn pc-tijd van vandaag over de
+        limiet uit `input_number.pc_logan_gametijd_limiet` gaat, en herhaalt
+        dat elke twee minuten met knipperend licht zolang hij hem aan laat
+        staan. Zet hij de pc uit en weer aan terwijl de tijd al op is, dan
+        begint het porren opnieuw.
       mode: single
       max_exceeded: silent
       triggers:
-        - trigger: state
+        - id: limiet_bereikt
+          trigger: numeric_state
+          entity_id: sensor.pc_logan_gametijd
+          above: input_number.pc_logan_gametijd_limiet
+        - id: weer_aan
+          trigger: state
           entity_id: binary_sensor.pc_logan_aan
           to: "on"
           # Een sensor die na een herstart uit 'unknown' komt opborrelen is geen
@@ -180,19 +280,53 @@ pc_logan_package:
           not_from:
             - unknown
             - unavailable
-          for: "01:30:00"
-      # Geen conditie op automatiseringsniveau: het bericht aan de ouders gaat
-      # ALTIJD, ook 's nachts. Alleen de omroep en de knipper hieronder hebben
-      # een tijdvenster, want die zouden Logan wakker maken en een
-      # telefoonmelding niet.
-      conditions: []
+      conditions:
+        # DRAAIT HIJ OP DIT MOMENT ECHT?
+        # Geen tijdvenster - het bericht aan de ouders gaat ALTIJD, ook 's
+        # nachts; alleen de omroep en de knipper hieronder kijken naar de klok.
+        # Wat hier wél weggefilterd wordt is de samenloop waarin het dagtotaal
+        # de limiet passeert op het moment dat hij de pc net uitzet: dan is er
+        # niemand om te porren en zou de eerste melding alsnog vertrekken. Het
+        # vermogen is bij het echte werk binnen seconden, de sensor met zijn
+        # `delay_off` niet - dus hier het vermogen.
+        - condition: template
+          value_template: >-
+            {{ states('sensor.slaapkamer_logan_slaapkamer_maxi_stopcontact_apparatuur_vermogen')
+               | float(-1)
+               >= state_attr('binary_sensor.pc_logan_aan', 'drempel') | int(50) }}
+        # Bij trigger 2 moet de tijd al op zijn; bij trigger 1 is dat per
+        # definitie zo. Een pc die 's ochtends voor het eerst aangaat mag geen
+        # melding opleveren.
+        - condition: template
+          value_template: >-
+            {{ states('sensor.pc_logan_gametijd') | float(0)
+               > states('input_number.pc_logan_gametijd_limiet') | float(90) }}
       variables:
-        # Wanneer de sessie begon. Dat is het moment waarop de sensor aanging,
-        # dus zo'n twee minuten ná de pc zelf (de `delay_on` hierboven).
-        gestart: >-
-          {{ trigger.to_state.last_changed | as_local
-             | as_timestamp | timestamp_custom('%H:%M') }}
-        gestart_ts: "{{ trigger.to_state.last_changed | as_timestamp }}"
+        # De limiet als tekst, bijvoorbeeld "1 uur en 30 minuten". Het anker is
+        # er omdat de porlus dit opnieuw uitrekent: een variabele op dit niveau
+        # wordt één keer gerenderd, bij de trigger, en tijdens een half uur
+        # porren kan iemand de helper draaien.
+        limiet_tekst: &limiettekst >-
+          {% set m = states('input_number.pc_logan_gametijd_limiet')
+                     | float(90) | round(0) | int %}
+          {% set u = m // 60 %}{% set r = m % 60 %}
+          {{ (u ~ ' uur') if u else '' }}{{ ' en ' if u and r else ''
+          }}{{ (r ~ (' minuut' if r == 1 else ' minuten')) if r or not u else '' }}
+        # Hoeveel er vandaag al op zit, in dezelfde vorm.
+        gebruikt_tekst: &gebruikttekst >-
+          {% set m = states('sensor.pc_logan_gametijd') | float(0) | round(0) | int %}
+          {% set u = m // 60 %}{% set r = m % 60 %}
+          {{ (u ~ ' uur') if u else '' }}{{ ' en ' if u and r else ''
+          }}{{ (r ~ (' minuut' if r == 1 else ' minuten')) if r or not u else '' }}
+        # Sinds wanneer de pc nu onafgebroken aanstaat. Alleen ter informatie
+        # in het bericht aan de ouders - de teller hangt er niet meer aan. Dit
+        # is het moment waarop de sensor aanging, dus zo'n twee minuten ná de
+        # pc zelf (de `delay_on` hierboven). Leeg als hij niet aanstaat, en dan
+        # blijft de zin er ook uit.
+        sinds: &sindstekst >-
+          {% set s = states.binary_sensor.pc_logan_aan %}
+          {{ (s.last_changed | as_local | as_timestamp | timestamp_custom('%H:%M'))
+             if s is not none and s.state == 'on' else '' }}
         # Het venster voor de omroep: van 07:00 tot Logans eigen bedtijd. Een
         # omroep om kwart over acht 's avonds gaat dus gewoon door - dat is juist
         # het moment dat hij helpt.
@@ -206,10 +340,6 @@ pc_logan_package:
         # als de bedtijd-markers op de tijdlijn (`wd === 5 || wd === 6` daar,
         # weekday() 4 en 5 hier - beide vrijdag en zaterdag). Staat een helper
         # op onzin, dan valt hij terug op 21:30.
-        #
-        # Het anker is er omdat de porlus dit opnieuw moet uitrekenen: een
-        # variabele op dit niveau wordt één keer gerenderd, bij de trigger, en
-        # een half uur porren kan zo de bedtijd over.
         omroepen: &omroepvenster >-
           {% set helper = 'input_datetime.bedtime_maxi_weekend'
                           if now().weekday() in [4, 5]
@@ -231,10 +361,16 @@ pc_logan_package:
         - alias: Bericht aan de ouders
           action: notify.mobile_devices_adults
           data:
-            title: Gametijd Logan - anderhalf uur
+            title: >-
+              {{ 'Gametijd Logan - pc weer aan' if trigger.id == 'weer_aan'
+                 else 'Gametijd Logan - tijd is op' }}
             message: >-
-              De pc van Logan staat sinds {{ gestart }} aan, dat is nu
-              anderhalf uur.
+              {% if trigger.id == 'weer_aan' %}
+              Logan heeft zijn pc weer aangezet terwijl zijn gametijd op is.{%
+              endif %}
+              Vandaag staat hij {{ gebruikt_tekst }} aan; de limiet is
+              {{ limiet_tekst }}.
+              {{ 'Deze sessie loopt sinds ' ~ sinds ~ '.' if sinds else '' }}
               {{ 'Hij heeft het net op zijn Sonos gehoord.' if omroepen
                  else 'Het is buiten de omroeptijden, dus er is niets omgeroepen.' }}
             data: &meldingdata
@@ -247,17 +383,23 @@ pc_logan_package:
           then:
             - action: script.pc_logan_omroepen
               data:
-                bericht: Logan, je computer staat nu anderhalf uur aan.
+                bericht: >-
+                  {% if trigger.id == 'weer_aan' %}
+                  Logan, je gametijd voor vandaag is al op. Zet je computer uit.
+                  {% else %}
+                  Logan, je hebt vandaag {{ gebruikt_tekst }} achter je computer
+                  gezeten. Je gametijd van {{ limiet_tekst }} is op.
+                  {% endif %}
 
         ######################################################################
         ## PORREN TOT DE PC UIT IS
         ##
         ## NIET OP `binary_sensor.pc_logan_aan` KIJKEN
-        ## Die heeft `delay_off: 5 minuten`, en dat is precies wat je hier niet
-        ## wil: Logan zet de pc uit en krijgt daarna nog twee keer een stem en
-        ## een knipperlamp over zich heen. Het vermogen zelf is er binnen
-        ## seconden bij. De drempel komt uit het attribuut van de sensor, zodat
-        ## hij maar op één plek staat.
+        ## Die heeft `delay_off`, en dat is precies wat je hier niet wil: Logan
+        ## zet de pc uit en krijgt daarna nog een stem en een knipperlamp over
+        ## zich heen. Het vermogen zelf is er binnen seconden bij. De drempel
+        ## komt uit het attribuut van de sensor, zodat hij maar op één plek
+        ## staat.
         ######################################################################
         - alias: Blijft hij aan, dan elke twee minuten opnieuw
           repeat:
@@ -280,20 +422,20 @@ pc_logan_package:
                   - stop: "De pc is uit"
 
               - variables:
-                  # Opnieuw uitrekenen, zie het anker hierboven.
+                  # Opnieuw uitrekenen, zie de ankers hierboven.
                   omroepen: *omroepvenster
-                  verstreken: >-
-                    {% set m = ((now().timestamp() - gestart_ts | float(0)) / 60)
-                               | round(0) | int %}
-                    {{ m // 60 }} uur{{ ' en ' ~ m % 60 ~ ' minuten' if m % 60 else '' }}
+                  limiet_tekst: *limiettekst
+                  gebruikt_tekst: *gebruikttekst
+                  sinds: *sindstekst
 
               - alias: Bericht aan de ouders
                 action: notify.mobile_devices_adults
                 data:
                   title: Gametijd Logan - pc staat nog aan
                   message: >-
-                    De pc van Logan staat nog steeds aan, sinds {{ gestart }} -
-                    dat is nu {{ verstreken }}.
+                    De pc van Logan staat nog steeds aan. Vandaag is dat
+                    {{ gebruikt_tekst }}, bij een limiet van {{ limiet_tekst }}.
+                    {{ 'Deze sessie loopt sinds ' ~ sinds ~ '.' if sinds else '' }}
                     {{ 'Hij hoort het op zijn Sonos en zijn licht knippert.'
                        if omroepen
                        else 'Het is buiten de omroeptijden, dus er klinkt en knippert niets.' }}
@@ -372,7 +514,45 @@ pc_logan_package:
           data:
             title: Gametijd Logan - er wordt niet meer gepord
             message: >-
-              De pc van Logan staat sinds {{ gestart }} aan en stond er na een
-              half uur porren nog steeds. Vanaf nu is het stil; hier gebeurt
-              niets meer tot hij hem uitzet.
+              De pc van Logan stond na een half uur porren nog steeds aan;
+              vandaag staat er {{ gebruikt_tekst }} op. Vanaf nu is het stil;
+              hier gebeurt niets meer tot hij hem uitzet. Zet hij hem uit en
+              weer aan, dan begint het porren opnieuw.
             data: *meldingdata
+
+    ##########################################################################
+    ## De limiet eenmalig vullen
+    ##
+    ## De helper hierboven heeft bewust geen `initial:`, want dat zou je eigen
+    ## instelling bij elke herstart overschrijven. Prijs daarvan is dat hij de
+    ## allereerste keer op `unknown` staat, en dan kan de `numeric_state`-
+    ## trigger hierboven nergens mee vergelijken en vuurt hij dus nooit - een
+    ## storing die je niet ziet. Deze zet hem dan op 90 minuten.
+    ##########################################################################
+    - id: bedroom_maxi_pc_gametijd_limiet_vullen
+      alias: Bedroom Maxi - Gametijdlimiet eenmalig vullen
+      description: >-
+        Zet input_number.pc_logan_gametijd_limiet op 90 minuten zolang hij nog
+        nooit een waarde heeft gehad. Raakt een limiet die je zelf hebt
+        ingesteld niet aan.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: homeassistant
+          event: start
+        - trigger: state
+          entity_id: input_number.pc_logan_gametijd_limiet
+          to: unknown
+      actions:
+        # Bij een herstart komt de opgeslagen waarde terug uit de database, en
+        # dat gaat niet altijd vóór het start-event. Even wachten scheelt een
+        # helper die zichzelf op 90 zet terwijl er 120 in stond.
+        - delay: "00:00:30"
+        - condition: template
+          value_template: >-
+            {{ not has_value('input_number.pc_logan_gametijd_limiet') }}
+        - action: input_number.set_value
+          target:
+            entity_id: input_number.pc_logan_gametijd_limiet
+          data:
+            value: 90
