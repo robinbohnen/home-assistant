@@ -524,17 +524,30 @@ pc_logan_package:
     ## De limiet eenmalig vullen
     ##
     ## De helper hierboven heeft bewust geen `initial:`, want dat zou je eigen
-    ## instelling bij elke herstart overschrijven. Prijs daarvan is dat hij de
-    ## allereerste keer op `unknown` staat, en dan kan de `numeric_state`-
-    ## trigger hierboven nergens mee vergelijken en vuurt hij dus nooit - een
-    ## storing die je niet ziet. Deze zet hem dan op 90 minuten.
+    ## instelling bij elke herstart overschrijven.
+    ##
+    ## EEN NIEUWE INPUT_NUMBER BEGINT OP ZIJN MINIMUM, NIET OP `unknown`
+    ## Dat is precies waar deze automatisering op 22 augustus 2026 op stukliep.
+    ## De guard was `not has_value(...)`, en die was al onwaar: de helper stond
+    ## bij zijn allereerste start meteen op 15 - het `min:` hierboven. Er werd
+    ## dus nooit 90 gezet, en de limiet stond de hele middag stilletjes op een
+    ## kwartier. Op het paneel was dat te zien als "gametijd Logan 1u23 - over"
+    ## terwijl er 1u30 hoorde te staan.
+    ##
+    ## Daarom kijkt de conditie nu ook naar "staat nog op het minimum". Prijs
+    ## daarvan: een limiet die je bewust op precies 15 minuten zet, overleeft
+    ## een herstart niet. Dat is geen realistische instelling, en het alternatief
+    ## (nog een verborgen helper als vlaggetje) is het niet waard.
+    ##
+    ## En hij meldt zich nu. Een vangnet dat stilletjes iets rechtzet is precies
+    ## hoe deze fout een middag onopgemerkt bleef.
     ##########################################################################
     - id: bedroom_maxi_pc_gametijd_limiet_vullen
       alias: Bedroom Maxi - Gametijdlimiet eenmalig vullen
       description: >-
         Zet input_number.pc_logan_gametijd_limiet op 90 minuten zolang hij nog
-        nooit een waarde heeft gehad. Raakt een limiet die je zelf hebt
-        ingesteld niet aan.
+        nooit een echte waarde heeft gehad (leeg, of nog op het minimum van 15).
+        Raakt een limiet die je zelf hebt ingesteld niet aan.
       mode: single
       max_exceeded: silent
       triggers:
@@ -542,7 +555,9 @@ pc_logan_package:
           event: start
         - trigger: state
           entity_id: input_number.pc_logan_gametijd_limiet
-          to: unknown
+          to:
+            - unknown
+            - unavailable
       actions:
         # Bij een herstart komt de opgeslagen waarde terug uit de database, en
         # dat gaat niet altijd vóór het start-event. Even wachten scheelt een
@@ -550,9 +565,22 @@ pc_logan_package:
         - delay: "00:00:30"
         - condition: template
           value_template: >-
-            {{ not has_value('input_number.pc_logan_gametijd_limiet') }}
+            {% set h = 'input_number.pc_logan_gametijd_limiet' %}
+            {{ not has_value(h)
+               or states(h) | float(0) <= state_attr(h, 'min') | float(15) }}
         - action: input_number.set_value
           target:
             entity_id: input_number.pc_logan_gametijd_limiet
           data:
             value: 90
+        - alias: En zeggen dat je het gedaan hebt
+          action: notify.mobile_devices_adults
+          data:
+            title: Gametijd Logan - limiet teruggezet op 90 minuten
+            message: >-
+              De gametijdlimiet van Logan had geen bruikbare waarde en staat nu
+              op 1 uur en 30 minuten. Wil je iets anders, zet het dan bij de
+              helpers; dit vangnet komt er daarna niet meer aan.
+            data:
+              tag: pc-logan-gametijd-limiet
+              notification_icon: mdi:timer-cog-outline

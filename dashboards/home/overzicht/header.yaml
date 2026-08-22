@@ -255,9 +255,9 @@ cards:
         styles:
           card:
             - background: >
-                [[[ var g = states['sensor.pc_logan_gametijd'], l = states['input_number.pc_logan_gametijd_limiet']; return (g && l && Number(g.state) > Number(l.state)) ? 'rgba(245,158,11,0.16)' : 'rgba(255,255,255,0.05)'; ]]]
+                [[[ var g = states['sensor.pc_logan_gametijd'], l = states['input_number.pc_logan_gametijd_limiet']; return (g && l && Number(g.state) > Number(l.state)) ? 'rgba(239,68,68,0.16)' : 'rgba(255,255,255,0.05)'; ]]]
             - border: >
-                [[[ var g = states['sensor.pc_logan_gametijd'], l = states['input_number.pc_logan_gametijd_limiet']; return (g && l && Number(g.state) > Number(l.state)) ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(255,255,255,0.06)'; ]]]
+                [[[ var g = states['sensor.pc_logan_gametijd'], l = states['input_number.pc_logan_gametijd_limiet']; return (g && l && Number(g.state) > Number(l.state)) ? '1px solid rgba(239,68,68,0.35)' : '1px solid rgba(255,255,255,0.06)'; ]]]
         custom_fields:
           c: |
             [[[
@@ -273,10 +273,16 @@ cards:
               // want dat leest als "hij is net begonnen".
               if(m === null) return '';
               var over = lim !== null && m > lim;
-              var col = over ? '#f59e0b' : 'rgba(255,255,255,0.7)';
-              // Onder de limiet erbij hoeveel er te gaan is, erboven alleen dat
-              // hij eroverheen is - dan is het exacte tegoed niet meer nieuws.
-              var staart = lim === null ? '' : (over ? ' \u00b7 over' : ' van ' + kort(lim));
+              // ALTIJD "X van Y", OOK BOVEN DE LIMIET
+              // Stond eerst op "1u47 · over" zodra hij eroverheen was. Dat las
+              // Robin op 22 augustus 2026 als een storing ("wat is dat over?"),
+              // en terecht: de pil wisselde precies op het interessante moment
+              // van vorm, dus je kon niet meer zien hoever hij eroverheen zat -
+              // én je kon niet zien dat de limiet zelf verkeerd stond (die stond
+              // toen op 15 minuten in plaats van 90). De vorm is nu vast en
+              // alleen de kleur zegt of het te veel is.
+              var col = over ? '#ef4444' : 'rgba(255,255,255,0.7)';
+              var staart = lim === null ? '' : ' van ' + kort(lim);
               return `<span style="display:flex;align-items:center;gap:7px;color:${col}"><ha-icon icon="mdi:desktop-tower-monitor" style="--mdc-icon-size:16px;color:${col}"></ha-icon>gametijd Logan \u00b7 ${kort(m)}${staart}</span>`;
             ]]]
       # Conditioneel: stroom wordt straks duurder
