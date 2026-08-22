@@ -167,18 +167,47 @@ sections:
       #########################################################################
       # Magister is een bron die stil kan wegvallen: verloopt het wachtwoord of
       # verandert de school iets aan het account, dan blijven de sensoren op hun
-      # laatste waarde staan en lijkt het rooster gewoon oud. Deze kaart is de
+      # laatste waarde staan en lijkt het rooster gewoon oud. Dit blok is de
       # enige plek waar je dat ziet.
+      #
+      # STAAT ER ALLEEN ALS ER IETS TE DOEN IS - anders is dit een kaart die
+      # elke dag "✅ alles goed" zegt, en die lees je na een week niet meer.
+      # Juist dan zegt hij ook niets meer op de dag dat het wél misgaat. Twee
+      # redenen om op te komen, en meer niet:
+      #
+      #   binary_sensor.magister_haalt_niets_meer_op   het ophalen ligt stil
+      #     (staat in `packages/9 - Other/School Meldingen.yaml`, met dezelfde
+      #     drempel van een uur als de tekst hieronder - laat die twee niet uit
+      #     elkaar lopen, anders komt er een kaart op met een groen vinkje erop)
+      #   update.magister_school_update                er is een nieuwe versie
+      #
+      # De voorwaarde staat één keer op de kop en hangt met een anker aan de
+      # twee kaarten eronder. Alleen de kaarten verbergen laat een kop zonder
+      # inhoud staan, en dat leest als een kapotte kaart (zelfde reden als bij
+      # Cijfers in de kolom van het kind).
+      #
+      # `condition: state` en niet `condition: template`: een template-
+      # voorwaarde verbergt hier stil de hele kaart, ook als hij waar is.
       - type: heading
         heading: Onderhoud
         heading_style: title
         icon: mdi:wrench-outline
+        visibility: &onderhoud_nodig
+          - condition: or
+            conditions:
+              - condition: state
+                entity: binary_sensor.magister_haalt_niets_meer_op
+                state: "on"
+              - condition: state
+                entity: update.magister_school_update
+                state: "on"
 
       # `sensor.magister_data` zet er een KALE tijd in zonder tijdzone, en die
       # is lokaal. `as_timestamp` leest een naïeve tijd ook als lokale tijd, dus
       # dit klopt - met `as_local()` erop zou hij hem als UTC lezen en er twee
       # uur naast zitten.
       - type: markdown
+        visibility: *onderhoud_nodig
         content: |-
           {%- set t = states('sensor.magister_data') -%}
           {%- if t in ['unknown', 'unavailable'] -%}
@@ -189,6 +218,7 @@ sections:
           {%- endif -%}
 
       - type: entities
+        visibility: *onderhoud_nodig
         show_header_toggle: false
         entities:
           - entity: update.magister_school_update

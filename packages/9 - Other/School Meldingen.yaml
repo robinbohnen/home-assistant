@@ -49,6 +49,56 @@
 
 school_meldingen_package:
 
+  ###########################################################################
+  ## Merken dat Magister stil is gevallen
+  ###########################################################################
+  #
+  # Magister is een bron die kan wegvallen zonder dat er iets kapot LIJKT: het
+  # wachtwoord verloopt, of de school verandert iets aan het account, en dan
+  # blijven alle sensoren gewoon op hun laatste waarde staan. Het rooster op de
+  # weergave klopt dan nog steeds - het is alleen van vorige week. Er is niets
+  # aan te zien, en dat is precies het probleem.
+  #
+  # Deze sensor is de enige plek in de config die dat kan zien, en hij bestaat
+  # om de Onderhoud-kaarten op de School-weergave te STUREN: die staan er alleen
+  # als hij aan staat. Een kaart die altijd "✅ alles goed" zegt lees je na een
+  # week niet meer, en dan zegt hij ook niets meer als het een keer misgaat.
+  #
+  # De drempel van een uur is dezelfde als in de tekst op die kaart, en dat moet
+  # zo blijven: gaan ze uit elkaar lopen, dan verschijnt er een kaart met een
+  # groen vinkje erop.
+  #
+  # `sensor.magister_data` zet er een KALE tijd in zonder tijdzone, en die is
+  # lokaal. `as_timestamp` leest een naïeve tijd ook als lokale tijd, dus dit
+  # klopt - met `as_local()` erop zou hij hem als UTC lezen en er in de zomer
+  # twee uur naast zitten. De `0` als tweede argument vangt een tijd af die
+  # helemaal niet te lezen is: die telt als "lang geleden", en dat is hier de
+  # veilige kant.
+  #
+  # `now()` in een template laat Home Assistant hem uit zichzelf elke minuut
+  # opnieuw uitrekenen; er is geen trigger of tijdpatroon voor nodig.
+  #
+  # `delay_on` is er voor het herstarten van Home Assistant: dan is de sensor
+  # even onbereikbaar terwijl er niets aan de hand is. Tien minuten is ruim
+  # langer dan de integratie nodig heeft om zijn eerste ronde te doen (hij
+  # ververst elk kwartier), en de storing zelf duurt toch al minstens een uur
+  # voor hij zich meldt.
+  template:
+    - binary_sensor:
+        - name: "Magister haalt niets meer op"
+          unique_id: magister_haalt_niets_meer_op
+          device_class: problem
+          icon: mdi:school-outline
+          delay_on: "00:10:00"
+          delay_off: "00:01:00"
+          state: >
+            {% set t = states('sensor.magister_data') %}
+            {% if t in ['unknown', 'unavailable', 'none', ''] %}
+              true
+            {% else %}
+              {{ (as_timestamp(now()) - as_timestamp(t, 0)) > 3600 }}
+            {% endif %}
+
   automation:
     - id: school_werk_voor_morgen
       alias: School - Wat moet er morgen af (16:00)
