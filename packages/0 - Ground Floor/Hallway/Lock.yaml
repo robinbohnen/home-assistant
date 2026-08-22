@@ -103,6 +103,71 @@ hallway_lock_package:
                         entity_id: lock.kroon18voordeur
                   alias: Unlock if someone is home
 
+    ###########################################################################
+    ## VIJF MINUTEN VOOR BEDTIJD NOG EEN KEER KIJKEN
+    ##
+    ## Om 19:00 gaat het slot er standaard op (de `bedtime`-tak hierboven),
+    ## maar daarna wordt de deur nog gebruikt: de tuin in, iemand die langskomt,
+    ## de laatste boodschap. Zit hij daarna niet meer op slot, dan merkt niemand
+    ## dat: het huis kijkt er pas weer naar als het alarm aangaat. Vijf minuten
+    ## voor de kinderen naar bed gaan is daar het natuurlijke moment voor - je
+    ## loopt dan toch naar boven - en zit hij er niet op, dan doet dit het
+    ## alsnog (Robin, 22 augustus 2026).
+    ##
+    ## De vier bedtijd-helpers staan nu alle vier op 21:30, dus in de praktijk
+    ## is dit 21:25. Verzet Robin een bedtijd, dan schuift de controle mee. Het
+    ## zijn dezelfde vier helpers waar de rest van het huis op stuurt; de
+    ## time-trigger telt de `offset` gewoon bij de tijd uit de helper op en
+    ## loopt desnoods over middernacht heen.
+    ##
+    ## Een eigen automatisering en niet een tak erbij in `Hallway - Lock`: die
+    ## staat op `mode: single`, en vier helpers met dezelfde tijd zijn vier
+    ## triggers op dezelfde seconde. Drie daarvan zouden dan elke avond een
+    ## "already running" in het log zetten voor iets dat gewoon klopt. Hier
+    ## vangt `max_exceeded: silent` dat af, zonder dat het de rest van het
+    ## slotverhaal raakt.
+    ##
+    ## De conditie kijkt naar alles wat niet aantoonbaar op slot zit en niet
+    ## alleen naar `unlocked`: een slot dat klemt of nog openstaat (`jammed`,
+    ## `open`) hoort hier ook een commando te krijgen. `unavailable`/`unknown`
+    ## juist niet - dan weet je het niet, en een commando naar een slot dat er
+    ## op dat moment niet is levert alleen een fout in de trace op.
+    ###########################################################################
+    - id: hallway_lock_before_kids_bedtime
+      alias: Hallway - Lock check voor bedtijd kinderen
+      description: >-
+        Kijkt vijf minuten voor de bedtijd van de kinderen of de voordeur op
+        slot zit, en doet hem alsnog op slot als dat niet zo is.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: time
+          at:
+            - entity_id: input_datetime.bedtime_maxi
+              offset: "-00:05:00"
+            - entity_id: input_datetime.bedtime_mini
+              offset: "-00:05:00"
+            - entity_id: input_datetime.bedtime_maxi_weekend
+              offset: "-00:05:00"
+            - entity_id: input_datetime.bedtime_mini_weekend
+              offset: "-00:05:00"
+      conditions:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: lock.kroon18voordeur
+              state:
+                - locked
+                - locking
+                - unavailable
+                - unknown
+      actions:
+        - action: lock.lock
+          metadata: {}
+          data: {}
+          target:
+            entity_id: lock.kroon18voordeur
+
     - id: hallway_lock_unlock_fingerprint
       alias: Hallway - Lock Unlock on Fingerprint
       description: Unlock lock when known fingerprint is detected

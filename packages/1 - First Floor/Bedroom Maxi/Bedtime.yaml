@@ -122,6 +122,16 @@ bedtime_maxi_package:
     ## bewegingslicht tegen, deze zet iets uit dat iemand net zelf aanzette.
     ## Wil je de grens verleggen, dan is dit het enige getal dat mee moet.
     ##
+    ## Die ochtendhelft kent sinds 22 augustus 2026 één uitzondering: staat
+    ## `input_boolean.kinderen_mogen_wakker_worden` aan, dan telt hij niet mee
+    ## en blijft het licht gewoon branden. Anders knipt deze automatisering het
+    ## licht dat om half zeven net voor Logan is aangedaan (packages/9 - Other/
+    ## Kinderen Wakker.yaml) tien minuten later weer uit - twee regels die
+    ## allebei doen wat ze horen te doen, met een kind in het donker als
+    ## uitkomst. De avondhelft (`na_bedtijd`) blijft ongemoeid: na bedtijd is
+    ## brandend licht nog steeds fout, wat er ook voor morgenochtend is
+    ## afgesproken.
+    ##
     ## `mode: restart` en niet `single`: de reeks hieronder duurt door de
     ## nachtlamp een kwartier, en met `single` zou een druk binnen dat kwartier
     ## precies weer stilletjes wegvallen - hetzelfde gat, andere oorzaak.
@@ -178,7 +188,8 @@ bedtime_maxi_package:
                     {% set na_bedtijd = bedtijden
                        and now().strftime('%H:%M:%S') >= bedtijden | min %}
                     {% set voor_opstaan = now().hour < 7
-                       and is_state('input_boolean.klimaat_wakker', 'off') %}
+                       and is_state('input_boolean.klimaat_wakker', 'off')
+                       and not is_state('input_boolean.kinderen_mogen_wakker_worden', 'on') %}
                     {{ na_bedtijd or voor_opstaan }}
       actions:
         - action: light.turn_off

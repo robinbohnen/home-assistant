@@ -1,0 +1,109 @@
+##############################################################################
+## KINDEREN MOGEN WAKKER WORDEN
+##
+## Eén schakelaar voor de vrije ochtend: staat hij aan en doet een kind zijn
+## deur open, dan gaat drie seconden later zijn eigen kamerlicht aan (Robin,
+## 22 augustus 2026). Die drie seconden zijn niet toevallig - ze geven het kind
+## de tijd om uit het looppad van de deur te stappen en maken van het licht een
+## antwoord op wat hij net deed, niet iets dat tegelijk met de deur gebeurt.
+##
+## Het is bewust één vlag voor allebei de kinderen en niet één per kamer: het is
+## een uitspraak over de ochtend ("jullie mogen eruit"), niet over een kind.
+## Wie er dan als eerste zijn deur opendoet, krijgt licht in zijn eigen kamer -
+## de ander niet, tot hij zelf zijn deur opendoet.
+##
+## DE VLAG HANGT AAN DRIE ANDERE PLEKKEN, en dat is de reden dat hij hier
+## centraal staat en niet in een kamerpackage:
+##
+##   1. `blueprints/automation/robin/door_opened_bedtime.yaml` - normaal ademen
+##      er beneden twee lampen in de kleur van het kind dat zijn deur opendoet,
+##      en komt er een pushbericht. Dat is een alarm ("er is er een uit bed"),
+##      en precies dat heb je zelf net toegestaan. Met deze vlag aan blijft het
+##      dus stil.
+##   2. + 3. `Bedroom Maxi/Bedtime.yaml` en `Bedroom Mini/Bedtime.yaml` - de
+##      nabrander dooft 's nachts elk kamerlicht dat tien minuten aan staat, tot
+##      07:00. Zonder uitzondering zou hij het licht dat hier net is aangedaan
+##      een kwartier later weer uitknippen bij een kind dat om half zeven ligt
+##      te lezen. Alleen die ochtendhelft kent de uitzondering; ná bedtijd
+##      blijft de bedtijdregel gewoon de baas.
+##
+## LET OP: dit is een nieuw packagebestand; het laadt pas na een volledige
+## herstart van Home Assistant, een YAML-reload is niet genoeg.
+##############################################################################
+
+kinderen_wakker_package:
+
+  input_boolean:
+    kinderen_mogen_wakker_worden:
+      name: "Kinderen - Mogen wakker worden"
+      icon: mdi:weather-sunset-up
+
+  automation:
+    - id: kids_may_wake_up_light_on
+      alias: Kinderen - Kamerlicht aan bij open deur
+      description: >-
+        Staat "kinderen mogen wakker worden" aan, dan gaat het kamerlicht van
+        het kind dat zijn deur opendoet drie seconden later aan.
+      # parallel en niet single: gaan beide deuren binnen die drie seconden
+      # open, dan hoort ieder kind zijn eigen licht te krijgen. Met `single`
+      # viel de tweede weg, met `queued` kwam zijn licht pas na zes seconden.
+      mode: parallel
+      max: 4
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.slaapkamer_maxi_deur_contact
+            - binary_sensor.slaapkamer_mini_deur_contact
+          from: "off"
+          to: "on"
+      conditions:
+        - condition: state
+          entity_id: input_boolean.kinderen_mogen_wakker_worden
+          state: "on"
+      actions:
+        # De koppeling deur -> lamp staat hier expliciet uitgeschreven en wordt
+        # niet uit het gebied of uit de naam afgeleid: een derde kinderkamer is
+        # dan één regel erbij, en een hernoemde lamp valt hier op in plaats van
+        # stilletjes op de verkeerde plek licht te maken.
+        - variables:
+            lamp: >-
+              {{ {'binary_sensor.slaapkamer_maxi_deur_contact': 'light.slaapkamer_maxi_lampen',
+                  'binary_sensor.slaapkamer_mini_deur_contact': 'light.slaapkamer_mini_lampen'}
+                 .get(trigger.entity_id, '') }}
+        - condition: template
+          value_template: "{{ lamp != '' }}"
+        - delay:
+            hours: 0
+            minutes: 0
+            seconds: 3
+            milliseconds: 0
+        - action: light.turn_on
+          data:
+            transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+          target:
+            entity_id: "{{ lamp }}"
+
+    - id: kids_may_wake_up_reset
+      alias: Kinderen - Mogen wakker worden weer uit
+      description: >-
+        Zet de vlag 's ochtends weer uit, zodat een vergeten schakelaar niet de
+        rest van de dag - en de avond erna - elke deur die opengaat beantwoordt
+        met licht.
+      mode: single
+      # 09:30 en geen ander tijdstip: dat is dezelfde grens waarop de rest van
+      # het huis de nacht laat ophouden (de kinderdeur-blueprint en de knop naast
+      # Logans bed gebruiken hem ook). Zet je hem 's avonds aan voor de ochtend
+      # erna, dan blijft hij dus de hele nacht staan en valt hij daarna vanzelf om.
+      triggers:
+        - trigger: time
+          at: "09:30:00"
+      conditions:
+        - condition: state
+          entity_id: input_boolean.kinderen_mogen_wakker_worden
+          state: "on"
+      actions:
+        - action: input_boolean.turn_off
+          metadata: {}
+          data: {}
+          target:
+            entity_id: input_boolean.kinderen_mogen_wakker_worden

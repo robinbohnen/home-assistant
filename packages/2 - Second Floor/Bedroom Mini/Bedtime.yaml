@@ -25,6 +25,10 @@ bedtime_mini_package:
     ## tweede trigger doet het licht alsnog uit zodra het binnen de nacht tien
     ## minuten aan staat. Bij Maxi ging het op 18 augustus 2026 mis; hier stond
     ## exact hetzelfde gat, alleen viel het nog niet op.
+    ##
+    ## En dezelfde uitzondering: staat `input_boolean.kinderen_mogen_wakker_worden`
+    ## aan, dan laat de ochtendhelft het licht met rust. Zie de Maxi-package voor
+    ## het waarom.
     ###########################################################################
     - id: bedtime_for_mini_lights_off
       alias: 'Bedroom Mini - Bedtime Lights Off'
@@ -72,7 +76,8 @@ bedtime_mini_package:
                     {% set na_bedtijd = bedtijden
                        and now().strftime('%H:%M:%S') >= bedtijden | min %}
                     {% set voor_opstaan = now().hour < 7
-                       and is_state('input_boolean.klimaat_wakker', 'off') %}
+                       and is_state('input_boolean.klimaat_wakker', 'off')
+                       and not is_state('input_boolean.kinderen_mogen_wakker_worden', 'on') %}
                     {{ na_bedtijd or voor_opstaan }}
       actions:
         - action: light.turn_off

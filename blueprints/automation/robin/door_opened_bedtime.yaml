@@ -60,6 +60,20 @@ blueprint:
       default: "09:30:00"
       selector:
         time:
+    stil_wanneer:
+      name: Schakelaar die dit alles stilzet
+      description: >-
+        Staat deze aan, dan gebeurt er niets: geen ademende lampen beneden en
+        ook geen pushbericht. Bedoeld voor "kinderen mogen wakker worden"
+        (packages/9 - Other/Kinderen Wakker.yaml): het lampenspel is een alarm
+        - er is er een uit bed - en dat heb je met die schakelaar zelf net
+        toegestaan. Een melding krijgen over iets wat mag, leert je de meldingen
+        wegklikken.
+      default: input_boolean.kinderen_mogen_wakker_worden
+      selector:
+        entity:
+          filter:
+            domain: input_boolean
     scene_id:
       name: Scene-id voor de momentopname
       description: >-
@@ -139,6 +153,7 @@ max_exceeded: silent
 # !input werkt niet binnen templates; alles wat een template raakt gaat hierlangs.
 variables:
   scene_id: !input scene_id
+  stil_wanneer: !input stil_wanneer
   attentie_lampen: !input attentie_lampen
   mediaspeler: !input mediaspeler
   bezet_timer: !input bezet_timer
@@ -154,6 +169,14 @@ conditions:
     condition: time
     after: !input bedtijd
     before: !input tot
+  # Bewust `is_state(..., 'on')` en niet `!= 'off'`: bestaat de schakelaar niet
+  # (of is hij weg), dan telt hij als uit en doet de blueprint gewoon wat hij
+  # altijd deed. Een ontbrekende helper hoort het seintje naar beneden niet
+  # stil te leggen.
+  - alias: "Tenzij de kinderen wakker mogen worden"
+    condition: template
+    value_template: >-
+      {{ stil_wanneer in ['', none] or not is_state(stil_wanneer, 'on') }}
 
 actions:
   - variables:
