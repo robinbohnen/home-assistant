@@ -1,0 +1,118 @@
+##############################################################################
+## SCHOOL - de melding van 16:00 over morgen
+##############################################################################
+#
+# Elke dag om 16:00, per kind: staat er voor MORGEN nog iets open, dan gaat er
+# een bericht naar alle volwassenen én naar de telefoon van dat kind zelf.
+# Staat er niets, dan gebeurt er niets - er is geen "alles is af"-bericht, want
+# een melding die ook komt als er niets aan de hand is, leer je wegtikken.
+#
+# De tekst wordt niet hier opgebouwd maar door `melding_morgen()` in
+# `custom_templates/school.jinja`, dezelfde plek waar de School-weergave zijn
+# kaarten vandaan haalt. Deze automatisering doet drie dingen: klok, kinderen,
+# versturen.
+#
+# ---------------------------------------------------------------------------
+# WAT "NOG NIET AF" HIER BETEKENT - EN WAT NIET
+# ---------------------------------------------------------------------------
+# Dit is de belangrijkste beperking van deze melding, en hij is niet op te
+# lossen zonder de integratie aan te passen:
+#
+#   OPDRACHTEN  hebben een veld `ingeleverd_op`. Staat daar geen datum in, dan
+#               is de opdracht aantoonbaar nog niet ingeleverd. Die staan in het
+#               bericht onder "Nog niet ingeleverd".
+#   HUISWERK    kent Home Assistant alleen als "er staat huiswerk voor morgen".
+#               De Magister-API heeft per afspraak wel een afgerond-vlag, maar
+#               de integratie leest die niet uit (magister_school v2.0.1). Het
+#               bericht somt huiswerk en toetsen daarom OP zonder te beweren dat
+#               ze niet af zijn.
+#
+# Het verschil zit bewust in de woorden ("nog niet ingeleverd" tegenover
+# "huiswerk"), zodat niemand het bericht leest als een aanklacht die hij niet
+# waar kan maken. Komt die afgerond-vlag ooit door, dan hoeft alleen
+# `melding_morgen()` in school.jinja aangepast te worden.
+#
+# ---------------------------------------------------------------------------
+# EEN TWEEDE KIND
+# ---------------------------------------------------------------------------
+# Eén regel in de lijst `kinderen` hieronder: roepnaam, de sensor-prefix uit
+# Magister, en de notify-dienst van zijn eigen telefoon. Verder niets - de
+# tekst, de drempel en de bezorging zijn voor elk kind gelijk.
+#
+# De lijst staat hier UITGESCHREVEN en wordt niet uit de entiteiten afgeleid.
+# Dat is dezelfde keuze als in `Kinderen Wakker.yaml`: een kind dat je vergeet
+# levert een zichtbaar gat op ("waarom kreeg ik niets over Emma"), terwijl een
+# automatisch gevonden lijst stilletjes naar het verkeerde toestel kan sturen.
+#
+# LET OP: nieuw packagebestand, dus dit laadt pas na een VOLLEDIGE HERSTART.
+# Datzelfde geldt voor `school.jinja` waar de tekst vandaan komt.
+
+school_meldingen_package:
+
+  automation:
+    - id: school_werk_voor_morgen
+      alias: School - Wat moet er morgen af (16:00)
+      description: >-
+        Meldt om 16:00 per kind wat er voor morgen open staat: opdrachten die
+        nog niet ingeleverd zijn, plus het huiswerk en de toetsen die morgen op
+        het rooster staan. Stuurt niets als er niets is.
+      mode: single
+
+      triggers:
+        - trigger: time
+          at: "16:00:00"
+
+      actions:
+        - variables:
+            kinderen:
+              - naam: Logan
+                prefix: sensor.magister_logan_veen
+                telefoon: notify.mobile_app_iphone_van_logan
+              # - naam: Emma
+              #   prefix: sensor.magister_emma_bohnen
+              #   telefoon: notify.mobile_app_iphone_van_emma
+
+        - repeat:
+            for_each: "{{ kinderen }}"
+            sequence:
+              - variables:
+                  # Import en aanroep staan met opzet op ÉÉN regel. In een
+                  # gevouwen blok (`>-`) worden die twee regels met een SPATIE
+                  # aan elkaar geplakt, en dan hangt het van de streepjes in
+                  # `-%}` af of `tekst` leeg is of één spatie bevat - waarmee
+                  # de test hieronder ("is er iets te melden?") altijd waar zou
+                  # zijn en er elke dag om 16:00 een leeg bericht uitgaat.
+                  tekst: "{% from 'school.jinja' import melding_morgen %}{{ melding_morgen(repeat.item.prefix) | trim }}"
+
+
+              # Een `condition:` op deze plek zou de hele herhaling afbreken,
+              # dus ook het kind dat er nog achter staat. Met `if/then` slaat
+              # hij alleen dít kind over.
+              - if:
+                  - condition: template
+                    value_template: "{{ tekst != '' }}"
+                then:
+                  - action: notify.mobile_devices_adults
+                    data:
+                      title: "{{ repeat.item.naam }} - voor morgen"
+                      message: "{{ tekst }}"
+                      data: &melding_opties
+                        # Eén tag per kind: stuurt hij morgen opnieuw, dan
+                        # vervangt dat bericht het oude in plaats van een
+                        # stapel te maken. Twee kinderen houden zo elk hun
+                        # eigen melding.
+                        tag: "school-morgen-{{ repeat.item.prefix }}"
+                        group: school
+                        # `url` is wat iOS opent, `clickAction` wat Android
+                        # opent. Allebei meesturen is de gewone manier.
+                        url: /lovelace/school
+                        clickAction: /lovelace/school
+
+                  # Apart bericht en niet dezelfde tekst met dezelfde kop: de
+                  # ouders lezen "Logan - voor morgen", het kind leest een
+                  # bericht dat tegen hem zelf praat.
+                  - action: "{{ repeat.item.telefoon }}"
+                    data:
+                      title: Voor morgen
+                      message: "{{ tekst }}"
+                      data: *melding_opties

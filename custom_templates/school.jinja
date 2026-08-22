@@ -385,6 +385,59 @@ _Geen absenties geregistreerd._
 
 
 {#- ==========================================================================
+    DE MELDING VAN 16:00 - wat moet er morgen af
+    ==========================================================================
+    Geeft de tekst van het pushbericht terug, of een LEGE TEKST als er voor
+    morgen niets is. Dat lege antwoord is meteen de aan/uit-knop van de
+    automatisering in `packages/9 - Other/School Meldingen.yaml`: die kijkt of
+    er iets uitkomt en stuurt alleen dan.
+
+    HET VERSCHIL TUSSEN DE TWEE HELFTEN VAN DIT BERICHT IS ECHT, NIET COSMETISCH
+    - `opdrachten` hebben een veld `ingeleverd_op`. Staat daar geen datum in,
+      dan is de opdracht aantoonbaar nog niet ingeleverd. Dat mag dus hard
+      gezegd worden.
+    - Bij HUISWERK weet Home Assistant het niet. De Magister-API kent per
+      afspraak wel een afgerond-vlag, maar de integratie leest die niet uit
+      (magister_school v2.0.1 leest per afspraak alleen start/einde/status/
+      soort/type/lokaal/omschrijving/inhoud/vak/docent/lesuur). Wat hier over
+      huiswerk en toetsen staat is daarom een OPSOMMING van wat er voor morgen
+      staat, geen bewering dat het niet af is. De woorden zijn met opzet zo
+      gekozen: "nog niet ingeleverd" tegenover "staat voor morgen".
+
+    Wordt de integratie ooit bijgewerkt zodat `afgerond` wél doorkomt, dan is
+    dit de enige plek die aangepast hoeft te worden.
+
+    Waarom LETTERLIJK morgen en niet "de eerstvolgende schooldag": op vrijdag om
+    16:00 een lijstje voor maandag sturen en dat zaterdag en zondag herhalen is
+    drie keer zeuren over hetzelfde. Zondag om 16:00 komt hij vanzelf, en dat is
+    precies op tijd.
+-#}
+
+{%- macro melding_morgen(kind) -%}
+  {%- set morgen = (now() + timedelta(days=1)).strftime('%Y-%m-%d') -%}
+  {%- set af = afspraken_json(kind) | from_json | rejectattr('is_uitval')
+               | selectattr('start', 'match', morgen) | list -%}
+  {%- set huiswerk = af | selectattr('type', 'eq', 'Huiswerk') | list -%}
+  {%- set toetsen = af | selectattr('type', 'in', ['Proefwerk', 'Tentamen',
+                          'Schriftelijke Overhoring', 'Mondelinge Overhoring']) | list -%}
+  {%- set open_opdr = (state_attr(kind ~ '_opdrachten', 'opdrachten') or [])
+                      | selectattr('inleveren_voor', 'match', morgen)
+                      | rejectattr('ingeleverd_op', 'match', '\d') | list -%}
+  {%- if open_opdr | count > 0 -%}
+Nog niet ingeleverd: {{ open_opdr | map(attribute='titel') | join(', ') }}
+{% endif -%}
+  {%- if toetsen | count > 0 -%}
+{{ 'Toets' if toetsen | count == 1 else 'Toetsen' }}: {{ toetsen | map(attribute='vak') | select('ne', '') | unique | join(', ') }}
+{% endif -%}
+  {%- if huiswerk | count > 0 -%}
+Huiswerk:
+{% for h in huiswerk %}- {{ h.vak if h.vak else h.omschrijving }}{% if h.inhoud %}: {{ h.inhoud | replace('\n', ' ') | truncate(70, true, '…') }}{% endif %}
+{% endfor -%}
+  {%- endif -%}
+{%- endmacro -%}
+
+
+{#- ==========================================================================
     OVERZICHT VAN ALLE KINDEREN
     ==========================================================================
     De enige macro die de kinderen zelf opzoekt, en dat mag hier: de lijst komt
