@@ -65,7 +65,18 @@ cards:
     heading_style: subtitle
     icon: mdi:timetable
 
+  # Verdwijnt op een dag zonder afspraken. Anders staat er "Geen lessen
+  # vandaag" onder een statuskaart die net "Vrij vandaag" heeft gezegd - twee
+  # kaarten om hetzelfde niets te vertellen.
+  #
+  # De voorwaarde hangt aan de TELSENSOR en niet aan een template: card-level
+  # `visibility:` doet het hier alleen met `condition: state`, een
+  # `condition: template` verbergt stil de hele kaart. `state_not` werkt wel.
   - type: markdown
+    visibility:
+      - condition: state
+        entity: sensor.magister_logan_veen_afspraken_vandaag
+        state_not: "0"
     content: |-
       {%- from 'school.jinja' import rooster -%}
       **Vandaag**
@@ -99,7 +110,14 @@ cards:
       {%- from 'school.jinja' import werk -%}
       {{ werk('sensor.magister_logan_veen', 14) }}
 
+  # Idem: alleen tonen als er überhaupt opdrachten zijn. De telsensor telt ze
+  # allemaal, ook de ingeleverde, dus in een rustige week kan hier nog "Niets
+  # meer open" staan - dat is dan een antwoord en geen leeg vakje.
   - type: markdown
+    visibility:
+      - condition: state
+        entity: sensor.magister_logan_veen_opdrachten
+        state_not: "0"
     content: |-
       {%- from 'school.jinja' import opdrachten -%}
       **Opdrachten die nog open staan**
@@ -109,12 +127,19 @@ cards:
   #############################################################################
   ## Cijfers
   #############################################################################
+  # Kop én kaart krijgen dezelfde voorwaarde. Alleen de kaart verbergen laat
+  # een kop zonder inhoud staan, en dat leest als een kapotte kaart.
   - type: heading
     heading: Cijfers
     heading_style: subtitle
     icon: mdi:certificate-outline
+    visibility: &heeft_cijfers
+      - condition: state
+        entity: sensor.magister_logan_veen_cijfers
+        state_not: "0"
 
   - type: markdown
+    visibility: *heeft_cijfers
     content: |-
       {%- from 'school.jinja' import cijfers -%}
       {{ cijfers('sensor.magister_logan_veen', 10) }}
@@ -126,8 +151,13 @@ cards:
     heading: Absenties
     heading_style: subtitle
     icon: mdi:account-clock-outline
+    visibility: &heeft_absenties
+      - condition: state
+        entity: sensor.magister_logan_veen_absenties
+        state_not: "0"
 
   - type: markdown
+    visibility: *heeft_absenties
     content: |-
       {%- from 'school.jinja' import absenties -%}
       {{ absenties('sensor.magister_logan_veen') }}
@@ -151,10 +181,29 @@ cards:
       - entity: person.logan_veen
         name: Logan
         secondary_info: last-changed
-      - entity: sensor.logan_veen_geo
-        name: Waar
-      - entity: sensor.logan_reistijd_naar_huis
-        name: Reistijd naar huis
+
+      # `sensor.logan_veen_geo` is een Places-sensor die `person.logan_veen`
+      # VOLGT: hij neemt diens foto over en zegt thuis precies hetzelfde
+      # ("Thuis"). Vandaar dat Logan er twee keer stond met dezelfde pasfoto.
+      # Hij is alleen iets waard als hij wég is - dan staat er de straat of de
+      # plek waar hij is. Zelfde verhaal voor de reistijd: thuis is dat 0,4
+      # minuut, wat als "0 m" op de kaart komt en nergens op slaat.
+      #
+      # Een rij in een `entities`-kaart kan zichzelf niet verbergen met
+      # `visibility:`; daarvoor bestaat de rij `type: conditional`.
+      - type: conditional
+        conditions: &logan_is_weg
+          - entity: person.logan_veen
+            state_not: home
+        row:
+          entity: sensor.logan_veen_geo
+          name: Waar
+      - type: conditional
+        conditions: *logan_is_weg
+        row:
+          entity: sensor.logan_reistijd_naar_huis
+          name: Reistijd naar huis
+
       - type: divider
       - entity: sensor.iphone_battery_level
         name: Batterij telefoon
