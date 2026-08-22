@@ -75,6 +75,18 @@
 {%- endmacro -%}
 
 
+{%- macro vaknaam(v) -%}
+  {#- Magister geeft de vakken terug zoals de school ze heeft ingetypt, en dat
+      is hier meestal met kleine letter: "wiskunde", "biologie", "aardrijkskunde".
+      Talen staan er wél goed in ("Engels", "Frans"), want zo schrijf je ze.
+      Alleen de eerste letter omhoog dus, en de rest onaangeroerd laten:
+      `capitalize` maakt van "Coachtijd/Basisgroep" het onjuiste
+      "Coachtijd/basisgroep" en van "CKV" "Ckv". -#}
+  {%- set naam = v | default('', true) | string | trim -%}
+  {{- naam[:1] | upper ~ naam[1:] -}}
+{%- endmacro -%}
+
+
 {%- macro dagnaam(d) -%}
   {#- '2026-08-31' -> 'maandag 31 augustus'. Vandaag, morgen en overmorgen
       krijgen hun eigen woord: dat lees je sneller dan een datum. -#}
@@ -199,7 +211,7 @@ Magister heeft voor de komende twee weken niets ingeroosterd.
 ### Vrij vandaag
 
 Weer naar school **{{ dagnaam(vd) }}** om **{{ (vles | first).start[11:16] }}**,
-eerste uur {{ (vles | first).vak }}, uit om {{ (vles | last).einde[11:16] }}.
+eerste uur {{ vaknaam((vles | first).vak) }}, uit om {{ (vles | last).einde[11:16] }}.
 {%- endif -%}
 {%- else -%}
 {%- set eerste = les | first -%}
@@ -209,19 +221,19 @@ eerste uur {{ (vles | first).vak }}, uit om {{ (vles | last).einde[11:16] }}.
 {%- if nu_str < eerste.start -%}
 ### Begint om {{ eerste.start[11:16] }}
 
-Eerste uur **{{ eerste.vak }}**{% if lokaal(eerste.lokaal) %} in {{ lokaal(eerste.lokaal) }}{% endif %}.
+Eerste uur **{{ vaknaam(eerste.vak) }}**{% if lokaal(eerste.lokaal) %} in {{ lokaal(eerste.lokaal) }}{% endif %}.
 {{ les | count }} {{ 'uur' if les | count == 1 else 'uren' }}, uit om **{{ laatste.einde[11:16] }}**.
 {%- elif bezig | count > 0 -%}
 {%- set b = bezig | first -%}
-### Nu: {{ b.vak }}
+### Nu: {{ vaknaam(b.vak) }}
 
 {{ b.start[11:16] }} - {{ b.einde[11:16] }}{% if lokaal(b.lokaal) %} · lokaal {{ lokaal(b.lokaal) }}{% endif %}{% if b.docent %} · {{ b.docent }}{% endif %}.
-{% if hierna | count > 0 %}Hierna **{{ (hierna | first).vak }}** om {{ (hierna | first).start[11:16] }}, uit om {{ laatste.einde[11:16] }}.{% else %}Daarna klaar.{% endif %}
+{% if hierna | count > 0 %}Hierna **{{ vaknaam((hierna | first).vak) }}** om {{ (hierna | first).start[11:16] }}, uit om {{ laatste.einde[11:16] }}.{% else %}Daarna klaar.{% endif %}
 {%- elif hierna | count > 0 -%}
 {%- set h = hierna | first -%}
 ### Tussenuur tot {{ h.start[11:16] }}
 
-Daarna **{{ h.vak }}**{% if lokaal(h.lokaal) %} in {{ lokaal(h.lokaal) }}{% endif %}, uit om **{{ laatste.einde[11:16] }}**.
+Daarna **{{ vaknaam(h.vak) }}**{% if lokaal(h.lokaal) %} in {{ lokaal(h.lokaal) }}{% endif %}, uit om **{{ laatste.einde[11:16] }}**.
 {%- else -%}
 ### Klaar sinds {{ laatste.einde[11:16] }}
 {%- set vd = volgende_schooldag(kind) %}
@@ -229,16 +241,17 @@ Daarna **{{ h.vak }}**{% if lokaal(h.lokaal) %} in {{ lokaal(h.lokaal) }}{% endi
 Volgende schooldag **{{ dagnaam(vd) }}** om **{{ (vles | first).start[11:16] }}**.
 {%- endif -%}
 {%- endif -%}
-{%- if weg | count > 0 %}
+{%- if weg | count > 0 -%}
+{%- set wegvakken = weg | map(attribute='vak') | select('ne', '') | unique | list %}
 
 > **{{ weg | count }} {{ 'uur vervalt' if weg | count == 1 else 'uren vervallen' }} vandaag** ·
-> {{ weg | map(attribute='vak') | select('ne', '') | unique | join(', ') | default('zie het rooster', true) }}
+> {% if wegvakken %}{% for v in wegvakken %}{{ vaknaam(v) }}{{ ', ' if not loop.last }}{% endfor %}{% else %}zie het rooster{% endif %}
 {%- endif -%}
 {%- endif -%}
 {%- set mede = mededelingen_json(kind, vandaag) | from_json -%}
 {%- if mede | count > 0 %}
 
-{% for m in mede %}> 📌 {{ m.omschrijving if m.omschrijving else m.vak }}{% if m.inhoud %} — {{ m.inhoud | replace('\n', ' ') | truncate(120, true, '…') }}{% endif %}
+{% for m in mede %}> 📌 {{ vaknaam(m.omschrijving if m.omschrijving else m.vak) }}{% if m.inhoud %} — {{ m.inhoud | replace('\n', ' ') | truncate(120, true, '…') }}{% endif %}
 {% endfor -%}
 {%- endif -%}
 {%- endif -%}
@@ -267,7 +280,7 @@ _Geen lessen {{ dagnaam(dag) }}._
 | | Tijd | Vak | Lokaal |
 |--:|:--|:--|:--|
 {% for l in alles -%}
-{%- set naam = l.vak if l.vak else (l.omschrijving | default('les', true)) -%}
+{%- set naam = vaknaam(l.vak if l.vak else (l.omschrijving | default('les', true))) -%}
 | {{ l.lesuurstart if l.lesuurstart else '' }} | {{ l.start[11:16] }}-{{ l.einde[11:16] }} | {% if l.is_uitval %}~~{{ naam }}~~ vervalt{% else %}**{{ naam }}**{% if l.docent %}<br>{{ l.docent }}{% endif %}{% endif %} | {{ lokaal(l.lokaal) }} |
 {% endfor -%}
 {%- endif -%}
@@ -307,7 +320,7 @@ _Niets ingevoerd voor de komende {{ dagen }} dagen._
 {% endif %}**{{ dagnaam(w.start[:10]) | capitalize }}**
 
 {% endif -%}
-- {% if w.type != 'Huiswerk' %}🔴 **{{ w.type }}** {% else %}📖 {% endif %}{{ w.vak if w.vak else w.omschrijving }}{% if w.inhoud %} — *{{ w.inhoud | replace('\n', ' ') | truncate(150, true, '…') }}*{% endif %}
+- {% if w.type != 'Huiswerk' %}🔴 **{{ w.type }}** {% else %}📖 {% endif %}{{ vaknaam(w.vak if w.vak else w.omschrijving) }}{% if w.inhoud %} — *{{ w.inhoud | replace('\n', ' ') | truncate(150, true, '…') }}*{% endif %}
 {% endfor -%}
 {%- endif -%}
 {%- endmacro -%}
@@ -329,7 +342,7 @@ _{{ 'Niets meer open.' if alleen_open else 'Geen opdrachten.' }}_
 {%- else -%}
 {% for o in items | sort(attribute='inleveren_voor') -%}
 {%- set laat = o.inleveren_voor is match('\\d') and o.inleveren_voor[:10] < now().strftime('%Y-%m-%d') -%}
-- {{ '⚠️' if laat else '📝' }} **{{ o.titel | default('Opdracht', true) }}**{% if o.vak %} · {{ o.vak }}{% endif %} — {% if o.inleveren_voor is match('\\d') %}inleveren voor {{ dagnaam(o.inleveren_voor) }}{% else %}geen inleverdatum{% endif %}
+- {{ '⚠️' if laat else '📝' }} **{{ o.titel | default('Opdracht', true) }}**{% if o.vak %} · {{ vaknaam(o.vak) }}{% endif %} — {% if o.inleveren_voor is match('\\d') %}inleveren voor {{ dagnaam(o.inleveren_voor) }}{% else %}geen inleverdatum{% endif %}
 {% endfor -%}
 {%- endif -%}
 {%- endmacro -%}
@@ -427,11 +440,12 @@ _Geen absenties geregistreerd._
 Nog niet ingeleverd: {{ open_opdr | map(attribute='titel') | join(', ') }}
 {% endif -%}
   {%- if toetsen | count > 0 -%}
-{{ 'Toets' if toetsen | count == 1 else 'Toetsen' }}: {{ toetsen | map(attribute='vak') | select('ne', '') | unique | join(', ') }}
+{%- set toetsvakken = toetsen | map(attribute='vak') | select('ne', '') | unique | list -%}
+{{ 'Toets' if toetsen | count == 1 else 'Toetsen' }}: {% for v in toetsvakken %}{{ vaknaam(v) }}{{ ', ' if not loop.last }}{% endfor %}
 {% endif -%}
   {%- if huiswerk | count > 0 -%}
 Huiswerk:
-{% for h in huiswerk %}- {{ h.vak if h.vak else h.omschrijving }}{% if h.inhoud %}: {{ h.inhoud | replace('\n', ' ') | truncate(70, true, '…') }}{% endif %}
+{% for h in huiswerk %}- {{ vaknaam(h.vak if h.vak else h.omschrijving) }}{% if h.inhoud %}: {{ h.inhoud | replace('\n', ' ') | truncate(70, true, '…') }}{% endif %}
 {% endfor -%}
   {%- endif -%}
 {%- endmacro -%}
@@ -467,7 +481,7 @@ _Nog geen kinderen opgehaald uit Magister._
 - **{{ naam.split(' ') | first }}** — {% if les | count == 0 %}vrij vandaag
 {%- elif nu_str < (les | first).start %}school {{ (les | first).start[11:16] }} tot {{ (les | last).einde[11:16] }}
 {%- elif nu_str > (les | last).einde %}klaar sinds {{ (les | last).einde[11:16] }}
-{%- elif bezig | count > 0 %}{{ (bezig | first).vak }} tot {{ (bezig | first).einde[11:16] }}
+{%- elif bezig | count > 0 %}{{ vaknaam((bezig | first).vak) }} tot {{ (bezig | first).einde[11:16] }}
 {%- else %}tussenuur
 {%- endif %}{% if weg | count > 0 %} · {{ weg | count }} vervallen{% endif %}
 {% endfor -%}
