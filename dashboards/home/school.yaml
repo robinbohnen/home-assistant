@@ -86,14 +86,16 @@ sections:
       #                          tot alleen de dagen waarop iets gebeurt.
       #
       #   filterText             De titel van een Magister-afspraak is de
-      #                          roostercode: "CT_BG - hwij - uhv1d" (vakcode -
-      #                          docentcode - klascode). De mooie vaknaam zit
-      #                          alleen in de omschrijving, niet in de titel,
-      #                          dus die kan deze kaart niet tonen. Wat wel kan
-      #                          is de docent- en klascode wegstrepen, zodat er
-      #                          "CT_BG" of "WI" overblijft. Staat per kalender
-      #                          en niet op de kaart, anders knipt hij ook in
-      #                          de titels van de privé-agenda.
+      #     + replaceTitleText   roostercode: "CT_BG - hwij - uhv1d" (vakcode -
+      #                          docentcode - klascode). De vaknaam zelf staat
+      #                          alleen in de omschrijving van de afspraak, en
+      #                          daar kan deze kaart niet bij. Vandaar twee
+      #                          stappen: `filterText` streept docent- en
+      #                          klascode weg zodat er "WI" overblijft, en
+      #                          `replaceTitleText` maakt daar "Wiskunde" van.
+      #                          Beide staan per kalender en niet op de kaart,
+      #                          anders knipt en verbouwt hij ook de titels van
+      #                          de privé-agenda.
       #
       #   showLocation: false    Magister levert het lokaal dubbel ("603, 603").
       #                          Het lokaal staat al netjes in de roostertabel
@@ -117,6 +119,28 @@ sections:
             name: Rooster Logan
             color: "#9fc5e8"
             filterText: '\s+-\s+\S+\s+-\s+\S+$'
+            # De vakcodes van deze school, overgenomen uit het veld `Vak:` in
+            # de omschrijving van de afspraken zelf - dus niet zelf verzonnen.
+            # Een code die hier niet in staat blijft gewoon een code: een nieuw
+            # vak of een volgend leerjaar breekt hier niets, het leest alleen
+            # even schraler tot je hem erbij zet.
+            #
+            # LETTERLIJKE vervanging, geen regex: hoofdlettergevoelig, en
+            # alleen de eerste treffer in de titel. Codes met aanhalingstekens
+            # omdat YAML van een kale `NO` of `ON` een booleaan maakt.
+            replaceTitleText:
+              "CT_BG": Coachtijd/Basisgroep
+              "AK": Aardrijkskunde
+              "BI": Biologie
+              "BV": Beeldende vorming
+              "DGW": Digiwijs
+              "EN": Engels
+              "FA": Frans
+              "GS": Geschiedenis
+              "LO": Lichamelijke opvoeding
+              "NE": Nederlands
+              "TN": Techniek
+              "WI": Wiskunde
           - entity: calendar.maxi
             name: Logan privé
             color: "#0b5394"
@@ -126,6 +150,7 @@ sections:
           #   name: Rooster <kind>
           #   color: "#ffc0cb"
           #   filterText: '\s+-\s+\S+\s+-\s+\S+$'
+          #   replaceTitleText:      # zijn eigen vakken, zie hierboven
           # - entity: calendar.mini
           #   name: Emma privé
           #   color: "#a64d79"
