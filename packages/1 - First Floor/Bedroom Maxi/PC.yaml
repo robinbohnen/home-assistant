@@ -25,8 +25,7 @@
 ## dan immers nog steeds boven de limiet.
 ##
 ## DE LIMIET IS EEN HELPER
-## `input_number.pc_logan_gametijd_limiet` (in minuten, standaard 75 - dat is
-## het kwartier-over-een waar Robin op 22 augustus 2026 om vroeg). Draaien
+## `input_number.pc_logan_gametijd_limiet` (in minuten, standaard 90). Draaien
 ## kan gewoon in de UI, zonder deze file aan te raken; vakantie ruimer, week
 ## voor een toets krapper. Alle teksten hieronder rekenen het getal zelf om
 ## naar "1 uur en 30 minuten", dus er staat nergens nog "anderhalf uur".
@@ -46,7 +45,7 @@ pc_logan_package:
     # packages/9 - Other/Ventilation.yaml: `initial` zet je eigen instelling
     # bij ELKE herstart terug naar de fabriekswaarde. De automatisering
     # `bedroom_maxi_pc_gametijd_limiet_vullen` onderaan vult hem eenmalig op
-    # 75; wat je daarna zelf draait blijft staan.
+    # 90; wat je daarna zelf draait blijft staan.
     pc_logan_gametijd_limiet:
       name: "PC Logan - Gametijd per dag"
       icon: mdi:timer-cog-outline
@@ -140,10 +139,10 @@ pc_logan_package:
           attributes:
             limiet_minuten: >
               {{ states('input_number.pc_logan_gametijd_limiet')
-                 | float(75) | round(0) | int }}
+                 | float(90) | round(0) | int }}
             over_limiet: >
               {{ states('sensor.pc_logan_gametijd_vandaag_uren') | float(0) * 60
-                 > states('input_number.pc_logan_gametijd_limiet') | float(75) }}
+                 > states('input_number.pc_logan_gametijd_limiet') | float(90) }}
 
   script:
     ##########################################################################
@@ -301,7 +300,7 @@ pc_logan_package:
         - condition: template
           value_template: >-
             {{ states('sensor.pc_logan_gametijd') | float(0)
-               > states('input_number.pc_logan_gametijd_limiet') | float(75) }}
+               > states('input_number.pc_logan_gametijd_limiet') | float(90) }}
       variables:
         # De limiet als tekst, bijvoorbeeld "1 uur en 30 minuten". Het anker is
         # er omdat de porlus dit opnieuw uitrekent: een variabele op dit niveau
@@ -309,7 +308,7 @@ pc_logan_package:
         # porren kan iemand de helper draaien.
         limiet_tekst: &limiettekst >-
           {% set m = states('input_number.pc_logan_gametijd_limiet')
-                     | float(75) | round(0) | int %}
+                     | float(90) | round(0) | int %}
           {% set u = m // 60 %}{% set r = m % 60 %}
           {{ (u ~ ' uur') if u else '' }}{{ ' en ' if u and r else ''
           }}{{ (r ~ (' minuut' if r == 1 else ' minuten')) if r or not u else '' }}
@@ -528,12 +527,12 @@ pc_logan_package:
     ## instelling bij elke herstart overschrijven. Prijs daarvan is dat hij de
     ## allereerste keer op `unknown` staat, en dan kan de `numeric_state`-
     ## trigger hierboven nergens mee vergelijken en vuurt hij dus nooit - een
-    ## storing die je niet ziet. Deze zet hem dan op 75 minuten.
+    ## storing die je niet ziet. Deze zet hem dan op 90 minuten.
     ##########################################################################
     - id: bedroom_maxi_pc_gametijd_limiet_vullen
       alias: Bedroom Maxi - Gametijdlimiet eenmalig vullen
       description: >-
-        Zet input_number.pc_logan_gametijd_limiet op 75 minuten zolang hij nog
+        Zet input_number.pc_logan_gametijd_limiet op 90 minuten zolang hij nog
         nooit een waarde heeft gehad. Raakt een limiet die je zelf hebt
         ingesteld niet aan.
       mode: single
@@ -547,7 +546,7 @@ pc_logan_package:
       actions:
         # Bij een herstart komt de opgeslagen waarde terug uit de database, en
         # dat gaat niet altijd vóór het start-event. Even wachten scheelt een
-        # helper die zichzelf op 75 zet terwijl er 120 in stond.
+        # helper die zichzelf op 90 zet terwijl er 120 in stond.
         - delay: "00:00:30"
         - condition: template
           value_template: >-
@@ -556,4 +555,4 @@ pc_logan_package:
           target:
             entity_id: input_number.pc_logan_gametijd_limiet
           data:
-            value: 75
+            value: 90
