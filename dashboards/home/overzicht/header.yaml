@@ -226,6 +226,59 @@ cards:
             [[[
               return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:shield-lock" style="--mdc-icon-size:16px"></ha-icon>alarm ingeschakeld</span>`;
             ]]]
+      # Conditioneel: de pc van Logan staat aan. Alleen dan zegt zijn gametijd
+      # van vandaag iets; staat de pc uit, dan blijft de pil helemaal weg.
+      #
+      # `visibility` met `condition: template` werkt op dit dashboard niet (dat
+      # verbergt stil alles), dus dit gaat via `condition: state` op de
+      # binary_sensor - dezelfde constructie als bij de Sonos-groepstoggles.
+      #
+      # LET OP: die sensor heeft `delay_off: 3 minuten`, dus de pil blijft na
+      # het uitzetten nog een paar minuten hangen. Dat is geen storing maar de
+      # marge die voorkomt dat een slaapstand als "pc uit" leest; zie de kop
+      # van packages/1 - First Floor/Bedroom Maxi/PC.yaml.
+      - type: custom:button-card
+        template: ov_pill
+        # De teller loopt elke minuut op en button-card hertekent alleen als
+        # zijn eigen entity verandert - dit is dus precies de goede entity.
+        # De limiet staat ook in de tekst en kan tussendoor gedraaid worden,
+        # vandaar de tweede als `triggers_update`.
+        entity: sensor.pc_logan_gametijd
+        triggers_update:
+          - input_number.pc_logan_gametijd_limiet
+        tap_action:
+          action: more-info
+        visibility:
+          - condition: state
+            entity: binary_sensor.pc_logan_aan
+            state: "on"
+        styles:
+          card:
+            - background: >
+                [[[ var g = states['sensor.pc_logan_gametijd'], l = states['input_number.pc_logan_gametijd_limiet']; return (g && l && Number(g.state) > Number(l.state)) ? 'rgba(245,158,11,0.16)' : 'rgba(255,255,255,0.05)'; ]]]
+            - border: >
+                [[[ var g = states['sensor.pc_logan_gametijd'], l = states['input_number.pc_logan_gametijd_limiet']; return (g && l && Number(g.state) > Number(l.state)) ? '1px solid rgba(245,158,11,0.35)' : '1px solid rgba(255,255,255,0.06)'; ]]]
+        custom_fields:
+          c: |
+            [[[
+              var g = states['sensor.pc_logan_gametijd'];
+              var l = states['input_number.pc_logan_gametijd_limiet'];
+              var m = g && !isNaN(Number(g.state)) ? Math.round(Number(g.state)) : null;
+              var lim = l && !isNaN(Number(l.state)) ? Math.round(Number(l.state)) : null;
+              // Onder het uur leest een plat aantal minuten prettiger ("45
+              // min"), daarboven niet meer ("1u19" in plaats van "79 min").
+              var kort = function(x){ return x >= 60 ? Math.floor(x / 60) + 'u' + ('0' + (x % 60)).slice(-2) : x + ' min'; };
+              // De sensor kan er even niet zijn (history_stats start na een
+              // herstart later op dan de kaart); dan liever niets dan "0 min",
+              // want dat leest als "hij is net begonnen".
+              if(m === null) return '';
+              var over = lim !== null && m > lim;
+              var col = over ? '#f59e0b' : 'rgba(255,255,255,0.7)';
+              // Onder de limiet erbij hoeveel er te gaan is, erboven alleen dat
+              // hij eroverheen is - dan is het exacte tegoed niet meer nieuws.
+              var staart = lim === null ? '' : (over ? ' \u00b7 over' : ' van ' + kort(lim));
+              return `<span style="display:flex;align-items:center;gap:7px;color:${col}"><ha-icon icon="mdi:desktop-tower-monitor" style="--mdc-icon-size:16px;color:${col}"></ha-icon>gametijd Logan \u00b7 ${kort(m)}${staart}</span>`;
+            ]]]
       # Conditioneel: stroom wordt straks duurder
       - type: custom:button-card
         template: ov_pill
