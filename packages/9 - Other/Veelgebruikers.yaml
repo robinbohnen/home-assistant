@@ -38,10 +38,30 @@ veelgebruikers_package:
 
   template:
     - trigger:
-        # Elke minuut is ruim voor een paneel waar je langsloopt, en het scheelt
-        # een render bij elke wattschommeling van 37 stekkers.
+        # ELKE 5 SECONDEN, en dat is bewust niet sneller. Op 22 augustus 2026
+        # nagemeten over drie uur historie hoe vaak de stekkers zelf iets
+        # zeggen: de tv-kast om de 3,2 seconden (mediaan), de koelkast en de
+        # meterkast om de ~12, het aquarium eens per minuut, en een stekker
+        # die niets doet urenlang niets. Ze melden op verandering, niet op een
+        # klok. Onder de 5 seconden ververs je dus dezelfde getallen nog een
+        # keer - dan werkt de kaart harder zonder iets nieuws te laten zien.
+        #
+        # Stond tot dan op één minuut. Dat was rustig voor de database maar te
+        # traag om te volgen wat er nu aangaat: een waterkoker of frietpan is
+        # binnen een minuut al op temperatuur en verscheen soms pas op het
+        # paneel toen hij alweer terugzakte.
+        #
+        # Prijs hiervan: de recorder krijgt tot ~17.000 schrijfacties per dag
+        # in plaats van 1.440, elk met het `top`-attribuut eraan (zes regels,
+        # een kleine kB) - grofweg 10 MB database per dag. Dat is de bovengrens:
+        # levert een ronde exact dezelfde state én attributen op, dan werkt HA
+        # alleen `last_reported` bij en slaat de recorder hem over. Omdat de
+        # state het totaal van 37 stekkers is, verandert er meestal wel iets.
+        # Wordt het een probleem, dan is deze sensor een kandidaat voor de
+        # exclude-lijst in configuration.yaml, net als sensor.kamers - alleen
+        # ben je dan ook de totaalgrafiek in more-info kwijt (zie de kop).
         - trigger: time_pattern
-          minutes: "/1"
+          seconds: "/5"
         - trigger: homeassistant
           event: start
       action:
