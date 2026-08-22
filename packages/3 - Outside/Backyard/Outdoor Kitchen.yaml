@@ -1,0 +1,113 @@
+##############################################################################
+## BUITENKEUKEN - FRIETPAN
+##
+## De frietpan hangt aan een IKEA GRILLPLATS-stekker met echte
+## vermogensmeting (switch.achtertuin_achtertuin_buitenkeuken_frietpan +
+## sensor...._vermogen). Dat is een gemeten waarde, geen powercalc-schatting,
+## dus hier mag je hem wel als bewijs gebruiken - anders dan bij de lampen.
+##
+## "Warm" is bij een frietpan geen temperatuur maar een stroombeeld: het
+## element stookt onafgebroken op vol vermogen en zodra de thermostaat de
+## ingestelde temperatuur ziet valt hij dicht en zakt het verbruik naar bijna
+## niets. Deze automatisering wacht dus op twee dingen achter elkaar:
+##   1. het vermogen komt BOVEN de stookdrempel  -> hij is echt aan het stoken
+##   2. het vermogen valt daarna ONDER de rustdrempel en blijft daar een
+##      minuut                                    -> hij is op temperatuur
+##
+## Stap 1 is er om een melding te voorkomen bij een stekker die wel aan staat
+## maar niets doet (frietpan zelf nog op nul, of hij is al warm van de vorige
+## ronde). Zonder die stap is "weinig verbruik" niet te onderscheiden van
+## "nog niet begonnen".
+##
+## DE DREMPELS ZIJN EEN AANNAME, GEEN METING. De stekker zit er sinds
+## 22 augustus 2026 en is nog nooit onder belasting geweest, dus er is geen
+## historie om ze op te ijken. Een frietpan stookt met 2000-3000 W en valt
+## tussendoor terug naar vrijwel 0 W, dus het gat is groot en 500/150 W zit
+## daar ruim tussenin. Klopt de melding na de eerste keer frituren niet, kijk
+## dan in de historie van sensor...._vermogen wat hij werkelijk trekt en pas
+## `below`/`above` hieronder aan.
+##
+## De minuut in `for:` is bewust langer dan strikt nodig: valt de stekker
+## even van het zigbee-netwerk, dan komt hij terug met een verse melding en
+## kan dat als "verbruik ingezakt" lezen. Een stekker die net terug is meldt
+## binnen die minuut opnieuw, een echt warme frietpan blijft gewoon laag.
+##############################################################################
+
+backyard_outdoor_kitchen_package:
+  automation:
+    - id: backyard_frietpan_op_temperatuur
+      alias: Backyard Buitenkeuken - Frietpan op temperatuur
+      description: >-
+        Meldt de volwassenen dat de frietpan warm is: na het aanzetten stookt
+        hij op vol vermogen en zodra de thermostaat dichtvalt zakt het
+        verbruik in.
+      # restart: elk nieuw aanzetten begint de meting opnieuw, en de
+      # uit-trigger hieronder gebruikt dezelfde eigenschap om een lopende
+      # meting af te breken (de conditie op de eerste regel stopt hem dan).
+      mode: restart
+      triggers:
+        - trigger: state
+          entity_id: switch.achtertuin_achtertuin_buitenkeuken_frietpan
+          from: "off"
+          to: "on"
+          id: aan
+        # Zet je hem tussendoor weer uit, dan herstart deze automatisering en
+        # loopt hij meteen dood op de conditie hieronder. Zonder deze trigger
+        # blijft de oude run staan wachten en komt de melding alsnog.
+        - trigger: state
+          entity_id: switch.achtertuin_achtertuin_buitenkeuken_frietpan
+          to: "off"
+          id: uit
+      conditions: []
+      actions:
+        - alias: Alleen verder zolang de frietpan aan staat
+          condition: state
+          entity_id: switch.achtertuin_achtertuin_buitenkeuken_frietpan
+          state: "on"
+
+        - alias: Wacht tot hij echt begint te stoken
+          wait_for_trigger:
+            - trigger: numeric_state
+              entity_id: sensor.achtertuin_achtertuin_buitenkeuken_frietpan_vermogen
+              above: 500
+          # Ruim genomen: soms staat de stekker al aan voor de frietpan zelf
+          # wordt bijgedraaid. Gebeurt er in dat kwartier niets, dan is er ook
+          # niets te melden en stopt de run zonder bericht.
+          timeout: "00:15:00"
+          continue_on_timeout: true
+        # `wait.trigger` is de gedocumenteerde uitkomst van wait_for_trigger:
+        # none bij een timeout. (`wait.completed` hoort bij wait_template.)
+        - condition: template
+          value_template: "{{ wait.trigger is not none }}"
+
+        - alias: Wacht tot het verbruik inzakt
+          wait_for_trigger:
+            - trigger: numeric_state
+              entity_id: sensor.achtertuin_achtertuin_buitenkeuken_frietpan_vermogen
+              below: 150
+              for: "00:01:00"
+          # Opwarmen duurt hooguit een kwartier; blijft hij drie kwartier
+          # stoken, dan is er iets anders aan de hand en is "hij is warm" een
+          # onjuiste mededeling. Dan liever niets zeggen.
+          timeout: "00:45:00"
+          continue_on_timeout: true
+        - condition: template
+          value_template: "{{ wait.trigger is not none }}"
+
+        # Tijdens die minuut kan hij alsnog uitgezet zijn - dat is een gewone
+        # state-trigger die deze run herstart, maar de melding hangt aan het
+        # eind van de sequence en niet aan de trigger, dus check het hier ook.
+        - condition: state
+          entity_id: switch.achtertuin_achtertuin_buitenkeuken_frietpan
+          state: "on"
+
+        - action: notify.mobile_devices_adults
+          data:
+            title: Frietpan is warm
+            # De uit-trigger komt hier nooit langs (die valt om op de conditie
+            # bovenaan), dus trigger.to_state is altijd het aanzetmoment.
+            message: >-
+              {% set min = ((now() - trigger.to_state.last_changed).total_seconds()
+                            / 60) | round | int %}
+              De frietpan in de buitenkeuken is op temperatuur
+              ({{ min }} {{ 'minuut' if min == 1 else 'minuten' }} opgewarmd).

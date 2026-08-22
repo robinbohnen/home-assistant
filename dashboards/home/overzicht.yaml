@@ -2284,6 +2284,44 @@ cards:
             columns: 2
             square: false
             cards:
+              # De frietpan staat in de buitenkeuken en is de enige knop hier
+              # die je aanzet om te wachten: hij trekt een paar duizend watt
+              # tot de thermostaat dichtvalt, en juist dat inzakken is het
+              # signaal dat hij op temperatuur is. De ondertekst laat dat
+              # verloop zien, backyard_frietpan_op_temperatuur (packages/
+              # 3 - Outside/Backyard/Outdoor Kitchen.yaml) stuurt het als
+              # bericht naar de volwassenen. Dezelfde drempels als daar.
+              #
+              # "Op temperatuur" pas na 3 minuten: de eerste minuten na het
+              # aanzetten is weinig verbruik gewoon een frietpan die nog moet
+              # beginnen, en dat mag er niet uitzien als warm.
+              - type: custom:mushroom-template-card
+                entity: switch.achtertuin_achtertuin_buitenkeuken_frietpan
+                primary: Frietpan
+                secondary: >-
+                  {% set e = states.switch.achtertuin_achtertuin_buitenkeuken_frietpan %}
+                  {% if e is none or e.state in ['unavailable','unknown'] %}Geen verbinding
+                  {% elif e.state == 'off' %}Uit
+                  {% else %}
+                    {% set w = states('sensor.achtertuin_achtertuin_buitenkeuken_frietpan_vermogen') | float(none) %}
+                    {% set m = ((now() - e.last_changed).total_seconds() / 60) | round(0) | int %}
+                    {% if w is none %}Aan · {{ m }} min
+                    {% elif w > 500 %}Opwarmen · {{ w | round(0) | int }} W
+                    {% elif w < 150 and m >= 3 %}Op temperatuur · {{ m }} min aan
+                    {% else %}Aan · {{ m }} min · {{ w | round(0) | int }} W
+                    {% endif %}
+                  {% endif %}
+                icon: mdi:french-fries
+                icon_color: >-
+                  {% set e = states.switch.achtertuin_achtertuin_buitenkeuken_frietpan %}
+                  {% if e is none or e.state != 'on' %}grey
+                  {% else %}
+                    {% set w = states('sensor.achtertuin_achtertuin_buitenkeuken_frietpan_vermogen') | float(none) %}
+                    {% set m = ((now() - e.last_changed).total_seconds() / 60) | round(0) | int %}
+                    {{ 'green' if (w is not none and w < 150 and m >= 3) else 'orange' }}
+                  {% endif %}
+                tap_action:
+                  action: toggle
               - type: custom:mushroom-template-card
                 entity: switch.achtertuin_schuur_lampen
                 primary: Schuurlampen
