@@ -1,0 +1,205 @@
+##############################################################################
+## WASMACHINE EN DROGER - KLAARMELDING OP HET STROOMVERBRUIK
+##
+## Beide apparaten hangen in de garage aan een stekker met échte
+## vermogensmeting, geen powercalc-schatting - die mag hier dus wel als bewijs
+## dienen (zelfde afweging als bij de frietpan in packages/3 - Outside/
+## Backyard/Outdoor Kitchen.yaml):
+##
+##   sensor.garage_garage_stopcontact_wasmachine_vermogen
+##   sensor.garage_garage_stopcontact_droger_en_verlengsnoer_vermogen
+##
+## WAAROM HET VERBRUIK EN NIET HOME CONNECT
+## Er ís een Home Connect-koppeling, maar die is niet te vertrouwen als
+## meldingsbron. Over 14 dagen (10 - 24 augustus 2026) gemeten:
+##   - `sensor.wasmachine_programma_voortgang` is sinds 14 augustus 09:30
+##     onafgebroken `unavailable`, en `binary_sensor.wasmachine_connectiviteit`
+##     stond in die hele periode geen enkele keer op `on`. Voor de wasmachine
+##     bestaat er dus feitelijk alleen de stekker.
+##   - De droger doet het wél (`sensor.droger_status` liep 7 keer naar
+##     `finished`), maar zijn connectiviteit stond vaker op `off`/`unavailable`
+##     dan op `on`. Bruikbaar als extraatje, niet als enige signaal.
+## Vandaar voor allebei dezelfde aanpak: de stekker beslist. Wil je de droger
+## sneller melden, dan kan `sensor.droger_program_finished` er later als
+## tweede trigger bij - dan wel met een vangnet tegen dubbele meldingen.
+##
+## HOE "DRAAIT" EN "KLAAR" ZIJN GEIJKT
+## Uit de historie van beide vermogenssensoren over 17 - 24 augustus 2026,
+## samen bijna 30.000 metingen en 9 wasbeurten en 4 droogbeurten.
+##
+##   WASMACHINE (15.193 metingen)
+##     rust    : 0,0 W - na afloop nog een paar minuten 5-7 W en dan nul,
+##               de machine schakelt zichzelf uit
+##     draaien : tot 2.175 W bij het opwarmen, daartussen alles van 14 W
+##               (trommel keert langzaam) tot 500 W (centrifuge)
+##   Hier zit dus GEEN leeg gat tussen rust en draaien: midden in een
+##   programma komt hij regelmatig even onder de 15 W. Wat die momenten
+##   onderscheidt van het einde is hun lengte. Onder de 15 W duurde binnen een
+##   lopend programma nooit langer dan 2,1 minuten (18 aug 07:41-07:43); alle
+##   langere stiltes vielen tussen twee programma's in.
+##   De kortste echte pauze tússen twee beurten was 7 minuten (18 aug 14:03 ->
+##   14:10, daarna meteen weer 2.090 W opwarmen - een wasprogramma warmt niet
+##   halverwege opnieuw op, dus dat waren twee losse korte programma's).
+##   `delay_off` van 5 minuten ligt daar netjes tussenin: ruim 2x de langste
+##   dip binnen een programma, en nog net onder de kortste pauze ertussen.
+##
+##   DROGER (14.763 metingen)
+##     rust    : 0-2 W
+##     draaien : 66-538 W, en dat is bimodaal - 380-538 W met het
+##               verwarmingselement aan, 66-96 W als alleen de trommel draait
+##   Tussen 5 en 50 W lagen in de hele week 31 van de 14.763 metingen. De
+##   drempel van 20 W staat dus midden in een leeg gebied en kan niet
+##   flapperen; binnen een droogbeurt kwam hij geen enkele keer onder de 20 W.
+##   DE DREMPEL MAG NIET BOVEN DE 60 W. De laatste 10 tot 15 minuten van een
+##   droogbeurt is de nakoelfase: element uit, trommel draait door op ~70 W
+##   (18 aug 17:46-17:57, 21 aug 16:46-16:59). Met een drempel daarboven meld
+##   je "klaar" terwijl de was nog rondgaat.
+##
+## DE STEKKER VAN DE DROGER DEELT MET EEN VERLENGSNOER
+## Vandaar de entity-naam `..._droger_en_verlengsnoer_...`. In de gemeten week
+## trok dat verlengsnoer buiten de droogbeurten om niets meetbaars (rust bleef
+## 0-2 W), dus het staat de detectie niet in de weg. Hang je er iets zwaars
+## bij dat langer dan 2 minuten meer dan 20 W trekt, dan leest deze package
+## dat als een droogbeurt.
+##
+## WAT DE MELDING NIET WEET
+## Of de was er ook uít is. Er zit geen deurcontact op de wasmachine, dus na
+## de melding blijft het stil - ook als de was er drie dagen in blijft
+## liggen. De droger heeft wél `sensor.droger_deur`; wil je een herinnering
+## die blijft porren tot de deur opengaat, dan is dat de haak.
+##############################################################################
+
+garage_laundry_package:
+
+  template:
+    - binary_sensor:
+        ####################################################################
+        ## Deze twee sensoren zijn het hele mechaniek. De automatiseringen
+        ## hieronder doen niets anders dan luisteren naar het aan->uit-moment.
+        ##
+        ## `delay_on` van 2 minuten houdt losse pieken buiten de deur: een
+        ## stekker die na een netwerkstoring terugkomt met een oude waarde,
+        ## of iemand die de trommel even laat draaien om iets bij te gooien.
+        ## Geen enkele echte beurt duurde korter dan 19 minuten, dus je mist
+        ## er niets mee.
+        ##
+        ## `float(-1)` en niet `float(0)`: een stekker die `unknown` of
+        ## `unavailable` meldt is geen apparaat dat draait. Met een default
+        ## van 0 zou dat toevallig ook goed gaan, maar dan lees je "hij staat
+        ## stil" waar "ik weet het niet" bedoeld is - en bij de uit-kant is
+        ## dat wél het verschil tussen een terechte en een verzonnen melding.
+        ####################################################################
+        - name: wasmachine_draait
+          unique_id: wasmachine_draait
+          icon: mdi:washing-machine
+          device_class: running
+          delay_on: "00:02:00"
+          # 5 minuten: zie de ijking in de kop van dit bestand.
+          delay_off: "00:05:00"
+          state: >
+            {{ states('sensor.garage_garage_stopcontact_wasmachine_vermogen')
+               | float(-1) >= 15 }}
+          attributes:
+            watt: >
+              {{ states('sensor.garage_garage_stopcontact_wasmachine_vermogen')
+                 | float(-1) | round(0) | int }}
+            drempel: 15
+
+        - name: droger_draait
+          unique_id: droger_draait
+          icon: mdi:tumble-dryer
+          device_class: running
+          delay_on: "00:02:00"
+          # 3 minuten mag hier korter dan bij de wasmachine: binnen een
+          # droogbeurt kwam het verbruik geen enkele keer onder de drempel,
+          # dus er is geen dip om te overbruggen. De 3 minuten staan er
+          # alleen nog tegen een stekker die even van het netwerk valt.
+          delay_off: "00:03:00"
+          state: >
+            {{ states('sensor.garage_garage_stopcontact_droger_en_verlengsnoer_vermogen')
+               | float(-1) >= 20 }}
+          attributes:
+            watt: >
+              {{ states('sensor.garage_garage_stopcontact_droger_en_verlengsnoer_vermogen')
+                 | float(-1) | round(0) | int }}
+            drempel: 20
+
+  automation:
+    ##########################################################################
+    ## DE TWEE MELDINGEN
+    ##
+    ## OVER DE GEMELDE DUUR
+    ## De sensor gaat pas 2 minuten ná de start aan en pas `delay_off` ná het
+    ## einde uit, dus de tijd die hij "on" stond is langer dan het programma
+    ## zelf. De correctie hieronder (`- 3` bij de wasmachine, `- 1` bij de
+    ## droger) haalt dat er weer af, zodat er in de melding staat wat er op de
+    ## machine stond en niet wat deze package heeft zitten wachten.
+    ##
+    ## OVER DE ONDERGRENS VAN 10 MINUTEN
+    ## Een beurt die na de ontdubbeling korter dan 10 minuten blijkt, was geen
+    ## beurt. De kortste echte wasbeurt in de gemeten week duurde 22 minuten,
+    ## de kortste droogbeurt 19; 10 minuten zit daar ruim onder en vangt de
+    ## gevallen af waarin er iets anders aan de stekker hing.
+    ##
+    ## OVER EEN HERSTART VAN HOME ASSISTANT
+    ## Template-sensoren bewaren hun state niet over een herstart heen: ze
+    ## beginnen op `off` en tellen hun `delay_on` opnieuw af. Draait er op dat
+    ## moment een beurt, dan is de gemelde duur alleen de tijd sinds de
+    ## herstart - en eindigt de beurt binnen 10 minuten na de herstart, dan
+    ## komt de melding helemaal niet. Een onterechte melding kan er niet uit
+    ## komen: zonder aan->uit-overgang gebeurt er niets.
+    ##########################################################################
+    - id: garage_wasmachine_klaar
+      alias: Garage Wasmachine - Programma klaar
+      description: >-
+        Meldt de volwassenen dat de wasmachine klaar is, afgeleid uit het
+        verbruik van de stekker.
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.wasmachine_draait
+          from: "on"
+          to: "off"
+      conditions: []
+      actions:
+        - variables:
+            minuten: >-
+              {{ (((trigger.to_state.last_changed
+                    - trigger.from_state.last_changed).total_seconds() / 60)
+                  - 3) | round | int }}
+        - alias: Alleen melden na een beurt die lang genoeg duurde
+          condition: template
+          value_template: "{{ minuten >= 10 }}"
+        - action: notify.mobile_devices_adults
+          data:
+            title: Wasmachine is klaar
+            message: >-
+              De was is klaar na {{ minuten }} minuten.
+
+    - id: garage_droger_klaar
+      alias: Garage Droger - Programma klaar
+      description: >-
+        Meldt de volwassenen dat de droger klaar is, afgeleid uit het verbruik
+        van de stekker. Het bericht komt ná de nakoelfase, want die telt mee
+        als draaien.
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.droger_draait
+          from: "on"
+          to: "off"
+      conditions: []
+      actions:
+        - variables:
+            minuten: >-
+              {{ (((trigger.to_state.last_changed
+                    - trigger.from_state.last_changed).total_seconds() / 60)
+                  - 1) | round | int }}
+        - alias: Alleen melden na een beurt die lang genoeg duurde
+          condition: template
+          value_template: "{{ minuten >= 10 }}"
+        - action: notify.mobile_devices_adults
+          data:
+            title: Droger is klaar
+            message: >-
+              De droger is klaar na {{ minuten }} minuten.
