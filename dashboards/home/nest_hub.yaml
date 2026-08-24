@@ -832,9 +832,13 @@ cards:
                     var st = thuis ? 'thuis' : 'afwezig';
                     var stKleur = 'rgba(255,255,255,0.7)';
                     if(!thuis){
+                      // In een bekende zone is de person-state de zonenaam zelf;
+                      // die tonen we in plaats van "afwezig", net als op Overzicht.
+                      var bekend = p.state && ['not_home','unavailable','unknown'].indexOf(p.state) === -1;
+                      if(bekend){ st = p.state; stKleur = '#38bdf8'; }
                       var r = states[m[2]];
                       if(r && !isNaN(Number(r.state)) && Number(r.state) > 0){
-                        st = Math.round(Number(r.state)) + ' min';
+                        st = (bekend ? p.state + ' · ' : '') + Math.round(Number(r.state)) + ' min';
                         stKleur = '#38bdf8';
                       }
                     }
@@ -868,7 +872,7 @@ cards:
                     return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5vh">
                       ${av}
                       <span style="font-size:2.5vh;font-weight:600;color:white">${naam}</span>
-                      <span style="font-size:2.1vh;color:${stKleur}">${st}</span>
+                      <span style="font-size:2.1vh;color:${stKleur};max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${st}</span>
                       <span style="font-size:2.1vh;font-weight:600;color:${accKleur}">${acc === null ? '—' : acc + '%'}</span></div>`;
                   });
                   return `<div style="display:flex;gap:1vh">${cellen.join('')}</div>`;

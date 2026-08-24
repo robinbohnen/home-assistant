@@ -60,10 +60,15 @@ ov_person:
         var st = home ? 'thuis' : 'afwezig';
         var kleur = 'rgba(255,255,255,0.52)';
         if(!home) {
+          // In een bekende zone is de person-state de zonenaam zelf; die is
+          // informatiever dan "afwezig" of "onderweg", dus die tonen we.
+          var zone = entity ? entity.state : '';
+          var bekend = zone && ['not_home','unavailable','unknown'].indexOf(zone) === -1;
+          if(bekend) { st = zone; kleur = '#38bdf8'; }
           // Reistijd naar huis, als de routesensor een bruikbare waarde heeft.
           var r = states[variables.travel];
           if(r && !isNaN(Number(r.state)) && Number(r.state) > 0) {
-            st = 'onderweg · ' + Math.round(Number(r.state)) + ' min';
+            st = (bekend ? zone : 'onderweg') + ' · ' + Math.round(Number(r.state)) + ' min';
             kleur = '#38bdf8';
           }
         }
