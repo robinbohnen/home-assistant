@@ -219,217 +219,238 @@ cards:
                   </div>
                 </div>`;
               ]]]
-        # LIVE-STROOK: het huis-getal hierboven als verloop. De grote grafiek
-        # eronder middelt per 2 minuten over 2 uur; wat je NU aanzet zie je
-        # daar pas minuten later als een bobbeltje. Deze strook toont
-        # `sensor.huis_verbruik` (Electricity.yaml, zelfde optelsom
-        # net + zon - accu als de flow, gesampled op 15 s) over het laatste
-        # halfuur, dus een waterkoker is binnen een kwart minuut zichtbaar.
-        # Eén serie, dus geen legenda: de kopregel benoemt hem, met de blauwe
-        # stip als koppeling naar de lijnkleur (blauw = verbruik, overal op
-        # deze kaart).
-        - type: custom:button-card
-          tap_action:
-            action: navigate
-            navigation_path: "#ov-energie"
-          styles:
-            card:
-              - background: none
-              - border: none
-              - box-shadow: none
-              - padding: 4px 2px 0 2px
-            grid:
-              - grid-template-areas: '"regel"'
-            custom_fields:
-              regel:
-                - width: 100%
-          custom_fields:
-            regel: |
-              [[[
-                return `<span style="display:flex;align-items:baseline;justify-content:space-between;width:100%;font-size:11.5px;color:rgba(255,255,255,0.52)">
-                  <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:#3b82f6"></span>live · wat het huis trekt</span>
-                  <span style="color:rgba(255,255,255,0.38)">laatste 30 min</span></span>`;
-              ]]]
-        - type: custom:apexcharts-card
-          # Geen x-as: de kopregel zegt al "laatste 30 min" en de as van de
-          # 2-uursgrafiek eronder zou er vlak onder een tweede, nét andere
-          # tijdschaal naast zetten. De tooltip geeft het exacte tijdstip.
-          graph_span: 30min
-          update_interval: 15s
+        # GRAFIEKEN NAAST ELKAAR: links 2 uur productie tegen huisverbruik,
+        # rechts de live-strook van het laatste halfuur. Eerst stond de strook
+        # erboven en groeide het paneel bijna 100 px ("neemt veel in de
+        # hoogte", Robin 24-08-2026); naast elkaar kost het samen niet meer
+        # hoogte dan de grote grafiek alleen. Beide tonen sinds 24-08 dezelfde
+        # blauwe grootheid (sensor.huis_verbruik) op twee zoomniveaus; de
+        # kopregel van de strook benoemt hem voor allebei.
+        # De flex-basis laat de strook op een smal scherm (telefoon, één
+        # kolom) onder de grote grafiek vallen in plaats van onleesbaar
+        # smal te worden.
+        - type: horizontal-stack
           card_mod:
             style: |
-              ha-card { background: none !important; box-shadow: none !important; border: none !important; }
-          header:
-            show: false
-          apex_config:
-            chart:
-              height: 80
-              toolbar:
+              #root { gap: 2px 16px !important; flex-wrap: wrap !important; align-items: flex-end !important; }
+              #root > :first-child { flex: 1.7 1 320px !important; }
+              #root > :last-child { flex: 1 1 210px !important; }
+          cards:
+            # 2 uur productie tegen huisverbruik
+            - type: custom:apexcharts-card
+              # Twee uur productie tegen verbruik: bij tien minuten netto
+              # verbruik zag je vooral ruis rond nul. Nu zie je de vorm van
+              # de ochtend: wanneer de zon aankwam, wanneer de batterij laadt.
+              graph_span: 2h
+              update_interval: 60s
+              card_mod:
+                style: |
+                  ha-card { background: none !important; box-shadow: none !important; border: none !important; }
+              header:
                 show: false
-            grid:
-              show: false
-              padding:
-                left: 14
-                right: 4
-                top: -12
-                bottom: -8
-            legend:
-              show: false
-            yaxis:
-              show: true
-              # De vloer op 0 houdt de strook rustig: zonder min zoomt
-              # ApexCharts op het bereik van het halfuur in en wordt 100 W
-              # ruis een berglandschap.
-              min: 0
-              tickAmount: 2
-              labels:
-                style:
-                  colors: "rgba(255,255,255,0.5)"
-                  fontSize: "10px"
-                formatter: |
-                  EVAL:function(v) { return (v === null || v === undefined) ? '' : Number(v).toFixed(1).replace('.', ',') + ' kW'; }
-            xaxis:
-              axisBorder:
-                show: false
-              axisTicks:
-                show: false
-              labels:
-                show: false
-              tooltip:
-                enabled: false
-            tooltip:
-              enabled: true
-              x:
-                format: "HH:mm"
-          series:
-            - entity: sensor.huis_verbruik
-              name: huis
-              type: area
-              color: "#3b82f6"
-              curve: smooth
-              stroke_width: 2
-              opacity: 0.18
-              float_precision: 2
-              # Sensor staat al in kW; alleen niet-numerieke punten (sensor
-              # even unavailable) naar null, anders blaast één zo'n punt de
-              # as op - zelfde les als bij de productielijn hieronder.
-              transform: >-
-                var v = Number(x);
-                return (x === null || x === undefined || isNaN(v)) ? null : v;
-        # 2 uur productie tegen netafname
-        - type: custom:apexcharts-card
-          # Twee uur productie tegen verbruik: bij tien minuten netto
-          # verbruik zag je vooral ruis rond nul. Nu zie je de vorm van
-          # de ochtend: wanneer de zon aankwam, wanneer de batterij laadt.
-          #
-          # 175 -> 150 px sinds de live-strook erbij kwam (2026-08-24),
-          # anders groeide dit paneel bijna 100 px; ruimte op de kolommen
-          # is schaars.
-          graph_span: 2h
-          update_interval: 60s
-          card_mod:
-            style: |
-              ha-card { background: none !important; box-shadow: none !important; border: none !important; }
-          header:
-            show: false
-          apex_config:
-            chart:
-              height: 150
-              toolbar:
-                show: false
-            grid:
-              show: false
-              padding:
-                left: 14
-                right: 4
-                top: -8
-                bottom: 0
-            legend:
-              show: false
-            yaxis:
-              show: true
-              tickAmount: 3
-              labels:
-                style:
-                  colors: "rgba(255,255,255,0.5)"
-                  fontSize: "10px"
-                formatter: |
-                  EVAL:function(v) { return (v === null || v === undefined) ? '' : Number(v).toFixed(1).replace('.', ',') + ' kW'; }
-            xaxis:
-              axisBorder:
-                show: false
-              axisTicks:
-                show: false
-              tooltip:
-                enabled: false
-              labels:
-                show: true
-                style:
-                  colors: "rgba(255,255,255,0.5)"
-                  fontSize: "10px"
-                datetimeFormatter:
-                  hour: "HH:mm"
-                  minute: "HH:mm"
-            tooltip:
-              enabled: true
-              shared: true
-              x:
-                format: "HH:mm"
-          series:
-            - entity: sensor.solar_power_generated_now
-              name: productie
-              type: area
-              color: "#4ade80"
-              curve: smooth
-              stroke_width: 2
-              opacity: 0.22
-              float_precision: 2
-              # Deze sensor staat in W, verbruik in kW; hier gelijktrekken.
-              #
-              # WAAROM DIT ZO OMSLACHTIG STAAT
-              # Hier stond `unit === 'W' ? x / 1000 : x`. Dat gaat mis zodra een
-              # punt geen getal is: op 2026-08-06 stond deze sensor drie keer
-              # even op `unavailable` (de omvormers vielen weg tijdens de
-              # Zigbee-storing), en één zo'n punt kwam ongedeeld in de grafiek.
-              # Gevolg: de y-as sprong naar 3000 en de echte curve van 4-6 kW lag
-              # plat tegen de bodem - de grafiek leek stuk terwijl de data klopte.
-              #
-              # Twee dingen daartegen: niet-numerieke punten worden `null` (die
-              # tekent apexcharts gewoon niet), en de deling gebeurt TENZIJ de
-              # eenheid expliciet kW is. Ontbreekt het attribuut - historische
-              # punten dragen het niet altijd mee - dan delen we dus, en dat is
-              # hier de goede gok: dit is een min_max van twee omvormers die
-              # allebei in W meten.
-              transform: >-
-                var s = hass.states['sensor.solar_power_generated_now'];
-                var u = (s && s.attributes) ? s.attributes.unit_of_measurement : null;
-                var v = Number(x);
-                return (x === null || x === undefined || isNaN(v))
-                  ? null : (u === 'kW' ? v : v / 1000);
-              group_by:
-                duration: 2m
-                func: avg
-            - entity: sensor.electricity_meter_energieverbruik
-              name: verbruik
-              type: line
-              color: "#3b82f6"
-              curve: smooth
-              stroke_width: 2
-              opacity: 1
-              float_precision: 2
-              # Spiegelbeeld van de productielijn hierboven, met één verschil:
-              # deze meter staat in kW, dus hier delen we alleen als de eenheid
-              # expliciet W is. Ook hier worden niet-numerieke punten `null`,
-              # zodat een weggevallen meter de as niet meer kan opblazen.
-              transform: >-
-                var s = hass.states['sensor.electricity_meter_energieverbruik'];
-                var u = (s && s.attributes) ? s.attributes.unit_of_measurement : null;
-                var v = Number(x);
-                return (x === null || x === undefined || isNaN(v))
-                  ? null : (u === 'W' ? v / 1000 : v);
-              group_by:
-                duration: 2m
-                func: avg
+              apex_config:
+                chart:
+                  height: 150
+                  toolbar:
+                    show: false
+                grid:
+                  show: false
+                  padding:
+                    left: 14
+                    right: 4
+                    top: -8
+                    bottom: 0
+                legend:
+                  show: false
+                yaxis:
+                  show: true
+                  tickAmount: 3
+                  labels:
+                    style:
+                      colors: "rgba(255,255,255,0.5)"
+                      fontSize: "10px"
+                    formatter: |
+                      EVAL:function(v) { return (v === null || v === undefined) ? '' : Number(v).toFixed(1).replace('.', ',') + ' kW'; }
+                xaxis:
+                  axisBorder:
+                    show: false
+                  axisTicks:
+                    show: false
+                  tooltip:
+                    enabled: false
+                  labels:
+                    show: true
+                    style:
+                      colors: "rgba(255,255,255,0.5)"
+                      fontSize: "10px"
+                    datetimeFormatter:
+                      hour: "HH:mm"
+                      minute: "HH:mm"
+                tooltip:
+                  enabled: true
+                  shared: true
+                  x:
+                    format: "HH:mm"
+              series:
+                - entity: sensor.solar_power_generated_now
+                  name: productie
+                  type: area
+                  color: "#4ade80"
+                  curve: smooth
+                  stroke_width: 2
+                  opacity: 0.22
+                  float_precision: 2
+                  # Deze sensor staat in W, verbruik in kW; hier gelijktrekken.
+                  #
+                  # WAAROM DIT ZO OMSLACHTIG STAAT
+                  # Hier stond `unit === 'W' ? x / 1000 : x`. Dat gaat mis zodra een
+                  # punt geen getal is: op 2026-08-06 stond deze sensor drie keer
+                  # even op `unavailable` (de omvormers vielen weg tijdens de
+                  # Zigbee-storing), en één zo'n punt kwam ongedeeld in de grafiek.
+                  # Gevolg: de y-as sprong naar 3000 en de echte curve van 4-6 kW lag
+                  # plat tegen de bodem - de grafiek leek stuk terwijl de data klopte.
+                  #
+                  # Twee dingen daartegen: niet-numerieke punten worden `null` (die
+                  # tekent apexcharts gewoon niet), en de deling gebeurt TENZIJ de
+                  # eenheid expliciet kW is. Ontbreekt het attribuut - historische
+                  # punten dragen het niet altijd mee - dan delen we dus, en dat is
+                  # hier de goede gok: dit is een min_max van twee omvormers die
+                  # allebei in W meten.
+                  transform: >-
+                    var s = hass.states['sensor.solar_power_generated_now'];
+                    var u = (s && s.attributes) ? s.attributes.unit_of_measurement : null;
+                    var v = Number(x);
+                    return (x === null || x === undefined || isNaN(v))
+                      ? null : (u === 'kW' ? v : v / 1000);
+                  group_by:
+                    duration: 2m
+                    func: avg
+                # Tot 24-08-2026 stond hier `sensor.electricity_meter_energie-
+                # verbruik` onder de naam "verbruik", maar dat is de NETAFNAME:
+                # die zakt naar 0 zodra de zon je verbruik dekt, ook met een
+                # draaiende vaatwasser. Nu dus hetzelfde huisverbruik als de
+                # live-strook hiernaast (net + zon - accu). De sensor bestaat
+                # pas sinds die datum, dus ouder dan zijn eerste meting begint
+                # de lijn gewoon later in de grafiek.
+                - entity: sensor.huis_verbruik
+                  name: huis
+                  type: line
+                  color: "#3b82f6"
+                  curve: smooth
+                  stroke_width: 2
+                  opacity: 1
+                  float_precision: 2
+                  # Sensor staat al in kW; alleen niet-numerieke punten naar
+                  # null, zodat een weggevallen bron de as niet kan opblazen -
+                  # zelfde les als bij de productielijn hierboven.
+                  transform: >-
+                    var v = Number(x);
+                    return (x === null || x === undefined || isNaN(v)) ? null : v;
+                  group_by:
+                    duration: 2m
+                    func: avg
+            # LIVE-STROOK: het huis-getal van de flow als verloop. De grote
+            # grafiek hiernaast middelt per 2 minuten over 2 uur; wat je NU
+            # aanzet zie je daar pas minuten later als een bobbeltje. Deze
+            # strook toont `sensor.huis_verbruik` (Electricity.yaml, zelfde
+            # optelsom net + zon - accu als de flow, gesampled op 15 s) over
+            # het laatste halfuur, dus een waterkoker is binnen een kwart
+            # minuut zichtbaar. Eén serie, dus geen legenda: de kopregel
+            # benoemt hem, met de blauwe stip als koppeling naar de lijnkleur
+            # (blauw = verbruik, overal op deze kaart).
+            - type: vertical-stack
+              cards:
+                - type: custom:button-card
+                  tap_action:
+                    action: navigate
+                    navigation_path: "#ov-energie"
+                  styles:
+                    card:
+                      - background: none
+                      - border: none
+                      - box-shadow: none
+                      - padding: 0 2px
+                    grid:
+                      - grid-template-areas: '"regel"'
+                    custom_fields:
+                      regel:
+                        - width: 100%
+                  custom_fields:
+                    regel: |
+                      [[[
+                        return `<span style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;font-size:11.5px;color:rgba(255,255,255,0.52)">
+                          <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:#3b82f6"></span>live · wat het huis trekt</span>
+                          <span style="color:rgba(255,255,255,0.38);white-space:nowrap">laatste 30 min</span></span>`;
+                      ]]]
+                - type: custom:apexcharts-card
+                  # Geen x-as: de kopregel zegt al "laatste 30 min" en de as
+                  # van de 2-uursgrafiek ernaast zou er een tweede, nét andere
+                  # tijdschaal naast zetten. De tooltip geeft het exacte
+                  # tijdstip. Hoogte: 126 + kopregel ≈ de 150 van de grote
+                  # grafiek, zodat de onderkanten gelijk lopen (align-items
+                  # flex-end op de rij).
+                  graph_span: 30min
+                  update_interval: 15s
+                  card_mod:
+                    style: |
+                      ha-card { background: none !important; box-shadow: none !important; border: none !important; }
+                  header:
+                    show: false
+                  apex_config:
+                    chart:
+                      height: 126
+                      toolbar:
+                        show: false
+                    grid:
+                      show: false
+                      padding:
+                        left: 14
+                        right: 4
+                        top: -12
+                        bottom: -8
+                    legend:
+                      show: false
+                    yaxis:
+                      show: true
+                      # De vloer op 0 houdt de strook rustig: zonder min zoomt
+                      # ApexCharts op het bereik van het halfuur in en wordt
+                      # 100 W ruis een berglandschap.
+                      min: 0
+                      tickAmount: 2
+                      labels:
+                        style:
+                          colors: "rgba(255,255,255,0.5)"
+                          fontSize: "10px"
+                        formatter: |
+                          EVAL:function(v) { return (v === null || v === undefined) ? '' : Number(v).toFixed(1).replace('.', ',') + ' kW'; }
+                    xaxis:
+                      axisBorder:
+                        show: false
+                      axisTicks:
+                        show: false
+                      labels:
+                        show: false
+                      tooltip:
+                        enabled: false
+                    tooltip:
+                      enabled: true
+                      x:
+                        format: "HH:mm"
+                  series:
+                    - entity: sensor.huis_verbruik
+                      name: huis
+                      type: area
+                      color: "#3b82f6"
+                      curve: smooth
+                      stroke_width: 2
+                      opacity: 0.18
+                      float_precision: 2
+                      # Sensor staat al in kW; alleen niet-numerieke punten
+                      # (sensor even unavailable) naar null, anders blaast één
+                      # zo'n punt de as op.
+                      transform: >-
+                        var v = Number(x);
+                        return (x === null || x === undefined || isNaN(v)) ? null : v;
         # chips row
         - type: horizontal-stack
           card_mod:
