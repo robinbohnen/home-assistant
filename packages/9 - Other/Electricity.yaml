@@ -17,6 +17,40 @@ electricity_package:
           unit_of_measurement: "kW"
           device_class: "power"
           state_class: "measurement"
+    # WAT HET HUIS ZELF TREKT - NIET DE METERSTAND
+    # Zelfde optelsom als de energieflow op het Overzicht-paneel (dashboards/
+    # home/overzicht/kolom_midden.yaml, custom_field `flow` - wijzigt de formule
+    # daar, dan ook hier): net + zon, min wat de accu wegzet. De accu telt
+    # positief bij laden, dus aftrekken; valt de accusensor weg dan rekenen we
+    # met 0, net als de flow-kaart. Onder nul komt in de praktijk alleen
+    # meetruis voor, dus dat wordt op 0 afgekapt.
+    #
+    # BEWUST GESAMPLED OP /15s EN NIET STATE-GEDREVEN: de slimme meter meldt
+    # zich meerdere keren per seconde (nagemeten 24-08-2026: ~8.300 punten in
+    # 20 minuten). Een gewone template-sensor rendert op elke bronupdate en
+    # zou de recorder daarmee volschrijven; vier punten per minuut is genoeg
+    # voor de live-grafiek op het paneel die deze sensor tekent.
+    - triggers:
+        - trigger: time_pattern
+          seconds: "/15"
+        - trigger: homeassistant
+          event: start
+      sensor:
+        - name: "Huis Verbruik"
+          unique_id: huis_verbruik
+          default_entity_id: sensor.huis_verbruik
+          state: >-
+            {% set netto = states('sensor.live_energieverbruik_totaal') | float(0) %}
+            {% set zon_ruw = states('sensor.solar_power_generated_now') | float(0) %}
+            {% set zon = zon_ruw if state_attr('sensor.solar_power_generated_now', 'unit_of_measurement') == 'kW' else zon_ruw / 1000 %}
+            {% set accu = states('sensor.lilygo_rs485_marstek_battery_power') | float(0) / 1000 %}
+            {{ [netto + zon - accu, 0] | max | round(3) }}
+          availability: >-
+            {{ states('sensor.live_energieverbruik_totaal') not in ['unavailable', 'unknown']
+               and states('sensor.solar_power_generated_now') not in ['unavailable', 'unknown'] }}
+          unit_of_measurement: "kW"
+          device_class: "power"
+          state_class: "measurement"
     - sensor:
         - name: "Total costs today calculated"
           unique_id: daily_total_costs_today_calculated

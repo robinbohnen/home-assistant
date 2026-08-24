@@ -219,11 +219,112 @@ cards:
                   </div>
                 </div>`;
               ]]]
-        # live chart
+        # LIVE-STROOK: het huis-getal hierboven als verloop. De grote grafiek
+        # eronder middelt per 2 minuten over 2 uur; wat je NU aanzet zie je
+        # daar pas minuten later als een bobbeltje. Deze strook toont
+        # `sensor.huis_verbruik` (Electricity.yaml, zelfde optelsom
+        # net + zon - accu als de flow, gesampled op 15 s) over het laatste
+        # halfuur, dus een waterkoker is binnen een kwart minuut zichtbaar.
+        # Eén serie, dus geen legenda: de kopregel benoemt hem, met de blauwe
+        # stip als koppeling naar de lijnkleur (blauw = verbruik, overal op
+        # deze kaart).
+        - type: custom:button-card
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-energie"
+          styles:
+            card:
+              - background: none
+              - border: none
+              - box-shadow: none
+              - padding: 4px 2px 0 2px
+            grid:
+              - grid-template-areas: '"regel"'
+            custom_fields:
+              regel:
+                - width: 100%
+          custom_fields:
+            regel: |
+              [[[
+                return `<span style="display:flex;align-items:baseline;justify-content:space-between;width:100%;font-size:11.5px;color:rgba(255,255,255,0.52)">
+                  <span style="display:inline-flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:#3b82f6"></span>live · wat het huis trekt</span>
+                  <span style="color:rgba(255,255,255,0.38)">laatste 30 min</span></span>`;
+              ]]]
+        - type: custom:apexcharts-card
+          # Geen x-as: de kopregel zegt al "laatste 30 min" en de as van de
+          # 2-uursgrafiek eronder zou er vlak onder een tweede, nét andere
+          # tijdschaal naast zetten. De tooltip geeft het exacte tijdstip.
+          graph_span: 30min
+          update_interval: 15s
+          card_mod:
+            style: |
+              ha-card { background: none !important; box-shadow: none !important; border: none !important; }
+          header:
+            show: false
+          apex_config:
+            chart:
+              height: 80
+              toolbar:
+                show: false
+            grid:
+              show: false
+              padding:
+                left: 14
+                right: 4
+                top: -12
+                bottom: -8
+            legend:
+              show: false
+            yaxis:
+              show: true
+              # De vloer op 0 houdt de strook rustig: zonder min zoomt
+              # ApexCharts op het bereik van het halfuur in en wordt 100 W
+              # ruis een berglandschap.
+              min: 0
+              tickAmount: 2
+              labels:
+                style:
+                  colors: "rgba(255,255,255,0.5)"
+                  fontSize: "10px"
+                formatter: |
+                  EVAL:function(v) { return (v === null || v === undefined) ? '' : Number(v).toFixed(1).replace('.', ',') + ' kW'; }
+            xaxis:
+              axisBorder:
+                show: false
+              axisTicks:
+                show: false
+              labels:
+                show: false
+              tooltip:
+                enabled: false
+            tooltip:
+              enabled: true
+              x:
+                format: "HH:mm"
+          series:
+            - entity: sensor.huis_verbruik
+              name: huis
+              type: area
+              color: "#3b82f6"
+              curve: smooth
+              stroke_width: 2
+              opacity: 0.18
+              float_precision: 2
+              # Sensor staat al in kW; alleen niet-numerieke punten (sensor
+              # even unavailable) naar null, anders blaast één zo'n punt de
+              # as op - zelfde les als bij de productielijn hieronder.
+              transform: >-
+                var v = Number(x);
+                return (x === null || x === undefined || isNaN(v)) ? null : v;
+        # 2 uur productie tegen netafname
         - type: custom:apexcharts-card
           # Twee uur productie tegen verbruik: bij tien minuten netto
           # verbruik zag je vooral ruis rond nul. Nu zie je de vorm van
           # de ochtend: wanneer de zon aankwam, wanneer de batterij laadt.
+          #
+          # 175 -> 150 px sinds de live-strook erbij kwam (2026-08-24),
+          # anders groeide dit paneel bijna 100 px; ruimte op de kolommen
+          # is schaars.
           graph_span: 2h
           update_interval: 60s
           card_mod:
@@ -233,7 +334,7 @@ cards:
             show: false
           apex_config:
             chart:
-              height: 175
+              height: 150
               toolbar:
                 show: false
             grid:
