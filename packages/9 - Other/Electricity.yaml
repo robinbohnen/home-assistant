@@ -25,14 +25,15 @@ electricity_package:
     # met 0, net als de flow-kaart. Onder nul komt in de praktijk alleen
     # meetruis voor, dus dat wordt op 0 afgekapt.
     #
-    # BEWUST GESAMPLED OP /15s EN NIET STATE-GEDREVEN: de slimme meter meldt
-    # zich meerdere keren per seconde (nagemeten 24-08-2026: ~8.300 punten in
+    # BEWUST GESAMPLED EN NIET STATE-GEDREVEN: de slimme meter meldt zich
+    # meerdere keren per seconde (nagemeten 24-08-2026: ~8.300 punten in
     # 20 minuten). Een gewone template-sensor rendert op elke bronupdate en
-    # zou de recorder daarmee volschrijven; vier punten per minuut is genoeg
-    # voor de live-grafiek op het paneel die deze sensor tekent.
+    # zou de recorder daarmee volschrijven. Elke 5 s (was 15 s; Robin wilde
+    # de live-strook sneller zien bewegen) is ~17.000 rijen per dag - ruim
+    # binnen wat de recorder aankan, en de kaart tekent bij elke update.
     - triggers:
         - trigger: time_pattern
-          seconds: "/15"
+          seconds: "/5"
         - trigger: homeassistant
           event: start
       sensor:
