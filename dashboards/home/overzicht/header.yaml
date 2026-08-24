@@ -207,10 +207,22 @@ cards:
       - type: custom:button-card
         template: ov_pill
         entity: alarm_control_panel.alarmo
-        # Naar de #ov-alarm-popup in plaats van more-info: daar staan de uit- en
-        # aan-knoppen mét de camera's ernaast, en het is dezelfde plek waar de
-        # rode balk bij een afgegaan alarm naartoe gaat.
+        # Tikken zet het alarm direct uit - dezelfde kale disarm-aanroep als de
+        # uitknop in de #ov-alarm-popup (Alarmo vraagt hier geen code). Wél met
+        # bevestiging: dit is een wandpaneel en één verdwaalde tik hoort niet
+        # stilletjes het alarm uit te schakelen. Vasthouden opent de popup met
+        # de camera's en de aan-knoppen - dezelfde plek waar de rode balk bij
+        # een afgegaan alarm naartoe gaat.
         tap_action:
+          action: perform-action
+          perform_action: alarm_control_panel.alarm_disarm
+          target:
+            entity_id: alarm_control_panel.alarmo
+          # Bevestiging in de action, niet op kaartniveau: dat is de plek waar
+          # button-card hem leest (zie de auto-klimaatknop in kolom_links.yaml).
+          confirmation:
+            text: Alarm uitzetten?
+        hold_action:
           action: navigate
           navigation_path: "#ov-alarm"
         visibility:
@@ -224,7 +236,12 @@ cards:
         custom_fields:
           c: |
             [[[
-              return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:shield-lock" style="--mdc-icon-size:16px"></ha-icon>alarm ingeschakeld</span>`;
+              // De stand erbij ("aan · weg"), zodat je ook ziet wélke stand je
+              // uitzet. Onbekende Alarmo-standen tonen zichzelf.
+              var lbl = {armed_away:'weg', armed_home:'thuis', armed_night:'nacht', armed_vacation:'vakantie'};
+              var s = entity ? entity.state : '';
+              var m = lbl[s] || String(s).replace('armed_','').replace(/_/g,' ');
+              return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:shield-lock" style="--mdc-icon-size:16px"></ha-icon>alarm ${m} · tik om uit te zetten</span>`;
             ]]]
       # Conditioneel: de pc van Logan staat aan. Alleen dan zegt zijn gametijd
       # van vandaag iets; staat de pc uit, dan blijft de pil helemaal weg.
