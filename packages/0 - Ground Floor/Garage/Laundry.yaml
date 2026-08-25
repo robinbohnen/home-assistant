@@ -9,64 +9,108 @@
 ##   sensor.garage_garage_stopcontact_wasmachine_vermogen
 ##   sensor.garage_garage_stopcontact_droger_en_verlengsnoer_vermogen
 ##
-## WAAROM HET VERBRUIK EN NIET HOME CONNECT
-## Er ís een Home Connect-koppeling, maar die is niet te vertrouwen als
-## meldingsbron. Over 14 dagen (10 - 24 augustus 2026) gemeten:
-##   - `sensor.wasmachine_programma_voortgang` is sinds 14 augustus 09:30
-##     onafgebroken `unavailable`, en `binary_sensor.wasmachine_connectiviteit`
-##     stond in die hele periode geen enkele keer op `on`. Voor de wasmachine
-##     bestaat er dus feitelijk alleen de stekker.
-##   - De droger doet het wél (`sensor.droger_status` liep 7 keer naar
-##     `finished`), maar zijn connectiviteit stond vaker op `off`/`unavailable`
-##     dan op `on`. Bruikbaar als extraatje, niet als enige signaal.
-## Vandaar voor allebei dezelfde aanpak: de stekker beslist. Wil je de droger
-## sneller melden, dan kan `sensor.droger_program_finished` er later als
-## tweede trigger bij - dan wel met een vangnet tegen dubbele meldingen.
+## WAAROM DE WASMACHINE OP DE STEKKER GAAT EN DE DROGER NIET
+## Er is een Home Connect-koppeling, maar niet voor allebei even bruikbaar.
+## Gemeten over 26 juli - 25 augustus 2026:
+##   - WASMACHINE: `sensor.wasmachine_programma_voortgang` is sinds 14 augustus
+##     09:30 onafgebroken `unavailable` en `binary_sensor.wasmachine_connecti-
+##     viteit` stond in die hele periode geen enkele keer op `on`. Voor de
+##     wasmachine bestaat er dus feitelijk alleen de stekker.
+##   - DROGER: die meldt zijn eigen einde wél, en betrouwbaar - 8 keer
+##     `finished` in 30 dagen. Dat is de bron die hieronder gebruikt wordt.
 ##
-## HOE "DRAAIT" EN "KLAAR" ZIJN GEIJKT
+## DE DROGER GING EERST OOK OP DE STEKKER, EN DAT WAS FOUT
+## Tot 25 augustus 2026 werkte de droger op dezelfde manier als de wasmachine:
+## drempel op het vermogen, `delay_off` van 3 minuten. Dat gaf op 24 augustus
+## één melding om 23:32 met de tekst "klaar na 572 minuten", waar er twee
+## ladingen in zaten:
+##
+##     13:31:57  droger start, programma `mix`
+##     14:49     deur 6 seconden open, programma loopt door
+##     16:35:05  DEUR OPEN, vermogen valt naar 3 W  <- einde lading 1
+##     16:36:18  deur dicht, nieuw programma `cotton` start
+##     23:29:43  Home Connect meldt `finished`, vermogen valt weg
+##     23:32:47  pas hier ging `binary_sensor.droger_draait` uit
+##
+## Het gat tussen die twee ladingen duurde 73 seconden (16:35:09 -> 16:36:22).
+## De `delay_off` van 3 minuten overbrugde dat, dus de lading die om 16:35 uit
+## de trommel kwam kreeg nooit een eigen melding.
+##
+## DE IJKFOUT DIE ERACHTER ZAT, want de drempel zelf klopte prima
+## Er is destijds gemeten hoe lang het vermogen BINNEN een beurt onder de
+## drempel duikt (antwoord: geen enkele keer) en daar is de `delay_off` op
+## gebaseerd. De omgekeerde vraag is nooit gesteld: hoe kort is het gat TUSSEN
+## twee beurten. Dat is 73 seconden - korter dan de dip die de `delay_off`
+## juist moest overbruggen. Die twee liggen bij deze droger in de verkeerde
+## volgorde, en dan is er geen drempel of dwell op het vermogen die ze nog uit
+## elkaar houdt. Dezelfde fout zit in de oude bewering dat er in de week van
+## 17 augustus "4 droogbeurten" waren: Home Connect meldde op 18 augustus drie
+## keer `finished` waar het vermogen één blok liet zien, en op 21 augustus
+## twee keer binnen het blok van 10:44 tot 17:00.
+##
+## HET VANGNET OP DE HOME CONNECT-MELDING
+## Komt de integratie terug uit `unavailable`, dan herhaalt hij soms een oude
+## `finished`. Op 17 augustus 14:00:55 kwam er zo een `finished` binnen voor
+## een droogbeurt die op 16 augustus om 18:21 al was afgelopen. Daarom telt
+## een `finished` alleen als de stekker bevestigt dat de droger ook echt heeft
+## gedraaid: `binary_sensor.droger_draait` moet aan staan of net uit zijn.
+## Nagelopen op alle vier de gevallen uit de historie waarin een `finished`
+## vlak na een `unavailable` kwam - de drie echte komen erdoor, die van
+## 17 augustus wordt tegengehouden.
+##
+## WAAROM ER GEEN MINUTEN MEER IN HET DROGERBERICHT STAAN
+## De duur kwam uit de aan-tijd van `binary_sensor.droger_draait`, en dat is
+## precies de waarde die twee ladingen aan elkaar plakte (vandaar die 572).
+## Een eerlijke duur per lading is uit deze signalen niet te halen: de status
+## springt binnen één programma van `run` naar `pause` en terug, en de deur
+## gaat ook halverwege wel eens open. Liever niets melden dan een getal dat
+## niet klopt. Het programma staat er nu in - dat is wél hard.
+##
+## DE IJKING VAN DE VERMOGENSDREMPELS
 ## Uit de historie van beide vermogenssensoren over 17 - 24 augustus 2026,
-## samen bijna 30.000 metingen en 9 wasbeurten en 4 droogbeurten.
+## samen bijna 30.000 metingen.
 ##
 ##   WASMACHINE (15.193 metingen)
 ##     rust    : 0,0 W - na afloop nog een paar minuten 5-7 W en dan nul,
 ##               de machine schakelt zichzelf uit
 ##     draaien : tot 2.175 W bij het opwarmen, daartussen alles van 14 W
 ##               (trommel keert langzaam) tot 500 W (centrifuge)
-##   Hier zit dus GEEN leeg gat tussen rust en draaien: midden in een
-##   programma komt hij regelmatig even onder de 15 W. Wat die momenten
-##   onderscheidt van het einde is hun lengte. Onder de 15 W duurde binnen een
-##   lopend programma nooit langer dan 2,1 minuten (18 aug 07:41-07:43); alle
-##   langere stiltes vielen tussen twee programma's in.
-##   De kortste echte pauze tússen twee beurten was 7 minuten (18 aug 14:03 ->
-##   14:10, daarna meteen weer 2.090 W opwarmen - een wasprogramma warmt niet
-##   halverwege opnieuw op, dus dat waren twee losse korte programma's).
-##   `delay_off` van 5 minuten ligt daar netjes tussenin: ruim 2x de langste
-##   dip binnen een programma, en nog net onder de kortste pauze ertussen.
+##   Hier zit GEEN leeg gat tussen rust en draaien: midden in een programma
+##   komt hij regelmatig even onder de 15 W. Wat die momenten onderscheidt van
+##   het einde is hun lengte. Onder de 15 W duurde binnen een lopend programma
+##   nooit langer dan 2,1 minuten (18 aug 07:41-07:43); de kortste pauze
+##   tussen twee wasbeurten was 7 minuten (18 aug 14:03 -> 14:10, daarna
+##   meteen weer 2.090 W opwarmen - een wasprogramma warmt niet halverwege
+##   opnieuw op, dus dat waren twee losse korte programma's).
+##   `delay_off` van 5 minuten ligt daar tussenin. LET OP: dat is dezelfde
+##   constructie die bij de droger omviel, alleen valt hij hier wél goed uit -
+##   2,1 minuten dip binnen een beurt tegen 7 minuten tussen twee beurten. De
+##   marge is één kant op ruim en de andere kant op krap. Zie je ooit twee
+##   wasbeurten in één melding, dan is dit de plek.
 ##
-##   DROGER (14.763 metingen)
+##   DROGER (14.763 metingen) - nu alleen nog als vangnet
 ##     rust    : 0-2 W
 ##     draaien : 66-538 W, en dat is bimodaal - 380-538 W met het
 ##               verwarmingselement aan, 66-96 W als alleen de trommel draait
-##   Tussen 5 en 50 W lagen in de hele week 31 van de 14.763 metingen. De
-##   drempel van 20 W staat dus midden in een leeg gebied en kan niet
-##   flapperen; binnen een droogbeurt kwam hij geen enkele keer onder de 20 W.
-##   DE DREMPEL MAG NIET BOVEN DE 60 W. De laatste 10 tot 15 minuten van een
-##   droogbeurt is de nakoelfase: element uit, trommel draait door op ~70 W
-##   (18 aug 17:46-17:57, 21 aug 16:46-16:59). Met een drempel daarboven meld
-##   je "klaar" terwijl de was nog rondgaat.
+##   Tussen 5 en 50 W lagen in de hele week 31 van de 14.763 metingen, dus de
+##   drempel van 20 W staat midden in een leeg gebied. DE DREMPEL MAG NIET
+##   BOVEN DE 60 W: de laatste 10 tot 15 minuten van een droogbeurt is de
+##   nakoelfase, element uit en trommel draait door op ~70 W. Met een drempel
+##   daarboven meld je "klaar" terwijl de was nog rondgaat.
 ##
 ## DE STEKKER VAN DE DROGER DEELT MET EEN VERLENGSNOER
 ## Vandaar de entity-naam `..._droger_en_verlengsnoer_...`. In de gemeten week
 ## trok dat verlengsnoer buiten de droogbeurten om niets meetbaars (rust bleef
 ## 0-2 W), dus het staat de detectie niet in de weg. Hang je er iets zwaars
-## bij dat langer dan 2 minuten meer dan 20 W trekt, dan leest deze package
-## dat als een droogbeurt.
+## bij dat langer dan 2 minuten meer dan 20 W trekt, dan telt dat mee als
+## "droger draait" - en dan laat het vangnet hierboven een oude `finished`
+## alsnog door.
 ##
 ## WAT DE MELDING NIET WEET
-## Of de was er ook uít is. Er zit geen deurcontact op de wasmachine, dus na
-## de melding blijft het stil - ook als de was er drie dagen in blijft
-## liggen. De droger heeft wél `sensor.droger_deur`; wil je een herinnering
-## die blijft porren tot de deur opengaat, dan is dat de haak.
+## Of de was er ook uit is. Er zit geen deurcontact op de wasmachine, dus na
+## de melding blijft het stil - ook als de was er drie dagen in blijft liggen.
+## De droger heeft wel `sensor.droger_deur`; wil je een herinnering die blijft
+## porren tot de deur opengaat, dan is dat de haak.
 ##############################################################################
 
 garage_laundry_package:
@@ -176,30 +220,116 @@ garage_laundry_package:
             message: >-
               De was is klaar na {{ minuten }} minuten.
 
+    ##########################################################################
+    ## DE DROGER - HOME CONNECT MELDT HET EINDE, DE STEKKER BEVESTIGT HET
+    ##
+    ## Twee triggers, met een duidelijke rolverdeling:
+    ##   `home_connect` is de normale weg. `sensor.droger_status` gaat naar
+    ##      `finished` op het moment dat het programma echt af is - op
+    ##      24 augustus om 23:29:43, in dezelfde seconde dat het vermogen
+    ##      wegviel. Dit is de enige bron die twee ladingen achter elkaar uit
+    ##      elkaar houdt; zie de kop.
+    ##   `stekker` is het vangnet voor als Home Connect er op dat moment niet
+    ##      is. Hij komt alleen aan bod als de status `unknown` of
+    ##      `unavailable` is, anders zou hij drie minuten na elke echte
+    ##      `finished` een tweede melding sturen.
+    ##
+    ## GEEN MELDING ALS JE HET PROGRAMMA ZELF AFBREEKT. Dan gaat de status naar
+    ## `ready` en niet naar `finished` (24 augustus 16:36:04). Dat is bewust:
+    ## je staat op dat moment zelf voor de machine.
+    ##
+    ## TWEE RESTRISICO'S, allebei bewust zo gelaten omdat ze de goede kant op
+    ## fout gaan - liever een melding te veel dan eentje gemist, want dat
+    ## laatste was nu juist de klacht:
+    ##   1. Komt Home Connect terug uit `unavailable` terwijl de droger MIDDEN
+    ##      in een programma zit, dan bevestigt de stekker die oude `finished`
+    ##      en krijg je hem te vroeg te horen. In 30 dagen historie is dat geen
+    ##      enkele keer gebeurd: alle drie de herhaalde meldingen kwamen op een
+    ##      moment dat de stekker stilstond.
+    ##   2. Valt Home Connect precies aan het eind van een beurt weg, dan meldt
+    ##      het vangnet het, en komt de integratie binnen tien minuten terug,
+    ##      dan meldt die het nog een keer. Op 17 augustus duurde zo'n
+    ##      herverbinding 1 minuut, dus dit kan echt voorkomen.
+    ##########################################################################
     - id: garage_droger_klaar
       alias: Garage Droger - Programma klaar
       description: >-
-        Meldt de volwassenen dat de droger klaar is, afgeleid uit het verbruik
-        van de stekker. Het bericht komt ná de nakoelfase, want die telt mee
-        als draaien.
+        Meldt de volwassenen dat de droger klaar is. Normaal op het
+        `finished`-signaal van Home Connect, en als dat er niet is op het
+        wegvallen van het verbruik.
       mode: single
       triggers:
+        - trigger: state
+          entity_id: sensor.droger_status
+          to: finished
+          id: home_connect
         - trigger: state
           entity_id: binary_sensor.droger_draait
           from: "on"
           to: "off"
-      conditions: []
+          id: stekker
+      conditions:
+        - alias: Per trigger de eigen voorwaarde
+          condition: or
+          conditions:
+            # HET VANGNET TEGEN EEN HERHAALDE `finished`
+            # Komt de integratie terug uit `unavailable`, dan meldt hij soms
+            # opnieuw de `finished` van een droogbeurt die allang voorbij is
+            # (17 augustus 14:00:55, voor een beurt van de dag ervoor). De
+            # stekker weet wel beter: die stond toen op nul. Draait de droger
+            # nu, of is hij net gestopt, dan is de melding terecht.
+            - alias: Home Connect meldt klaar en de stekker bevestigt dat
+              condition: and
+              conditions:
+                - condition: trigger
+                  id: home_connect
+                - condition: template
+                  value_template: >-
+                    {% set d = states.binary_sensor.droger_draait %}
+                    {{ d is not none
+                       and (d.state == 'on'
+                            or (d.state == 'off'
+                                and (now() - d.last_changed).total_seconds() < 600)) }}
+
+            # Alleen als Home Connect niets te zeggen heeft. Staat de status op
+            # `ready`, dan lééft de integratie en heeft hij bewust geen
+            # `finished` gestuurd - dan hoort hier ook niets uit te komen.
+            - alias: Geen Home Connect, dus op het verbruik terugvallen
+              condition: and
+              conditions:
+                - condition: trigger
+                  id: stekker
+                - condition: state
+                  entity_id: sensor.droger_status
+                  state:
+                    - unknown
+                    - unavailable
       actions:
+        # Het ruwe programma heet `laundry_care_dryer_program_cotton`; hiervan
+        # blijft `cotton` over, en de bekende namen worden vertaald. Staat er
+        # iets onbekends, dan komt de kale naam in het bericht - beter dan een
+        # lege haakjes-tekst.
         - variables:
-            minuten: >-
-              {{ (((trigger.to_state.last_changed
-                    - trigger.from_state.last_changed).total_seconds() / 60)
-                  - 1) | round | int }}
-        - alias: Alleen melden na een beurt die lang genoeg duurde
-          condition: template
-          value_template: "{{ minuten >= 10 }}"
+            programma: >-
+              {% set ruw = states('select.droger_actieve_programma')
+                           | replace('laundry_care_dryer_program_', '') %}
+              {% set namen = {
+                   'cotton': 'katoen',
+                   'mix': 'gemengd',
+                   'synthetic': 'synthetisch',
+                   'delicates': 'fijne was',
+                   'super_40': 'super 40',
+                   'dessous': 'lingerie',
+                   'shirts_blouses': 'overhemden',
+                   'towels': 'handdoeken' } %}
+              {{ namen.get(ruw, ruw | replace('_', ' ')) }}
         - action: notify.mobile_devices_adults
           data:
             title: Droger is klaar
+            # Geen minuten: zie de kop van dit bestand. De duur die hier stond
+            # was de aan-tijd van de stekkersensor, en juist die plakte op
+            # 24 augustus twee ladingen aan elkaar tot "572 minuten".
             message: >-
-              De droger is klaar na {{ minuten }} minuten.
+              De droger is klaar
+              {%- if programma not in ['unknown', 'unavailable', ''] %}
+              (programma: {{ programma }}){%- endif %}.
