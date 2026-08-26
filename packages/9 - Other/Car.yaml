@@ -177,7 +177,25 @@ car_package:
                accu na jaren terug, dan pas je dit getal aan; de al opgetelde
                kWh's worden niet herrekend, dat hoort ook zo. #}
             {% set capaciteit = 60 %}
-            {% set vorige = this.state | float(0) %}
+            {# STARTWAARDE UIT DE HISTORIE
+               Deze twee tellers zijn op 26-08-2026 aangezet, maar de recorder
+               had toen al tien dagen accupercentage en kilometerstand staan.
+               Diezelfde rekenwijze losgelaten op 16-08 t/m 25-08-2026 gaf
+               63,60 kWh over 355,0 km (= 17,9 kWh/100 km). Dat is hier de
+               startwaarde, zodat het gemiddelde meteen klopt in plaats van pas
+               na een week rijden.
+
+               Waarom als DEFAULT van `this.state` en niet eenmalig via de API:
+               een state die je met POST /api/states in de state machine zet,
+               overleeft geen onverwachte herstart - dat is op 26-08 precies
+               gebeurd, de teller stond daarna weer op `unknown`. Zo staat de
+               startwaarde in de config en kan hij niet meer zoekraken.
+
+               Valt de teller ooit terug op deze waarde nadat hij verder was,
+               dan ziet `total_increasing` dat als een reset en vangt het op -
+               net zoals bij de 0 die hier eerst stond, maar met een getal dat
+               tenminste ergens op slaat. #}
+            {% set vorige = this.state | float(63.6) %}
             {% set was = trigger.from_state.state | float(-1) %}
             {% set nu = trigger.to_state.state | float(-1) %}
             {% set daling = was - nu %}
@@ -222,7 +240,25 @@ car_package:
           unit_of_measurement: km
           state_class: total_increasing
           state: >-
-            {% set vorige = this.state | float(0) %}
+            {# STARTWAARDE UIT DE HISTORIE
+               Deze twee tellers zijn op 26-08-2026 aangezet, maar de recorder
+               had toen al tien dagen accupercentage en kilometerstand staan.
+               Diezelfde rekenwijze losgelaten op 16-08 t/m 25-08-2026 gaf
+               63,60 kWh over 355,0 km (= 17,9 kWh/100 km). Dat is hier de
+               startwaarde, zodat het gemiddelde meteen klopt in plaats van pas
+               na een week rijden.
+
+               Waarom als DEFAULT van `this.state` en niet eenmalig via de API:
+               een state die je met POST /api/states in de state machine zet,
+               overleeft geen onverwachte herstart - dat is op 26-08 precies
+               gebeurd, de teller stond daarna weer op `unknown`. Zo staat de
+               startwaarde in de config en kan hij niet meer zoekraken.
+
+               Valt de teller ooit terug op deze waarde nadat hij verder was,
+               dan ziet `total_increasing` dat als een reset en vangt het op -
+               net zoals bij de 0 die hier eerst stond, maar met een getal dat
+               tenminste ergens op slaat. #}
+            {% set vorige = this.state | float(355.0) %}
             {% set was = trigger.from_state.state | float(-1) %}
             {% set nu = trigger.to_state.state | float(-1) %}
             {% set stap = nu - was %}
