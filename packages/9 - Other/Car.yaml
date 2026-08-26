@@ -49,6 +49,227 @@ car_package:
           unit_of_measurement: "hour"
           unique_id: car_departing_in_hours
 
+        # ------------------------------------------------------------------
+        # VERBRUIK IN kWh PER 100 KM
+        #
+        # De drie sensoren hieronder delen een kWh-teller door een km-teller.
+        # Die tellers staan verderop in dit bestand (`Car - Energy used` en
+        # `Car - Distance driven`) en worden opgeteld uit het accupercentage
+        # en de kilometerstand, want de Renault levert zelf geen energiemeting.
+        # Lees daar waarom dit een schatting is en geen meting.
+        #
+        # WAAROM ELKE SENSOR EEN MINIMUM AAN KILOMETERS EIST
+        # Onder een paar tientallen kilometers is dit cijfer onbruikbaar. Uit
+        # de historie van 16-08 t/m 25-08-2026, met dezelfde rekenwijze:
+        #
+        #   17-08  56 km -> 17,1      20-08  11 km -> 27,3
+        #   18-08  59 km -> 18,3      21-08  11 km -> 38,2
+        #   23-08  79 km -> 17,5      25-08  11 km ->  5,5
+        #   24-08  66 km -> 16,4      16-08   9 km -> 13,3
+        #
+        # De lange dagen liggen binnen twee punten van elkaar, de korte dagen
+        # schieten van 5 naar 38. Dat komt niet doordat hij die dagen anders
+        # reed. Percentage en kilometerstand komen op hun eigen momenten
+        # binnen (elke ~6 minuten aan de lader, elke ~30 minuten onderweg), en
+        # valt de laatste percentagemelding van een rit net na middernacht en
+        # die van de kilometers ervoor, dan staan de kWh's op de ene dag en de
+        # km's op de andere. Bij 60 km verdwijnt dat in het totaal, bij 11 km
+        # is het de helft van het cijfer.
+        #
+        # Onder de drempel is de sensor `unavailable`. Dat is de bedoeling: de
+        # grafiek tekent dan geen staaf, en een gat is eerlijker dan een
+        # verzonnen getal.
+        - name: "Car - Consumption today"
+          unique_id: car_consumption_today
+          unit_of_measurement: "kWh/100km"
+          state_class: measurement
+          state: >-
+            {{ ((states('sensor.car_energy_today') | float)
+                / (states('sensor.car_distance_today') | float) * 100) | round(1) }}
+          availability: >-
+            {{ has_value('sensor.car_energy_today')
+               and has_value('sensor.car_distance_today')
+               and states('sensor.car_distance_today') | float(0) >= 25 }}
+
+        # Een maand is lang genoeg om de dagruis eruit te middelen, dus hier
+        # mag de drempel laag: 100 km is de eerste week van een gemiddelde
+        # maand. Dit is het cijfer waarmee je zomer en winter vergelijkt.
+        - name: "Car - Consumption this month"
+          unique_id: car_consumption_this_month
+          unit_of_measurement: "kWh/100km"
+          state_class: measurement
+          state: >-
+            {{ ((states('sensor.car_energy_this_month') | float)
+                / (states('sensor.car_distance_this_month') | float) * 100) | round(1) }}
+          availability: >-
+            {{ has_value('sensor.car_energy_this_month')
+               and has_value('sensor.car_distance_this_month')
+               and states('sensor.car_distance_this_month') | float(0) >= 100 }}
+
+        # Alles sinds de tellers zijn gaan lopen. Geen venster, geen reset:
+        # dit is het anker waar de dag- en maandcijfers tegen afgezet worden.
+        # De tellers beginnen op nul zodra dit pakket voor het eerst laadt, dus
+        # de eerste week staat hier nog niets - dat klopt en gaat vanzelf over.
+        - name: "Car - Consumption average"
+          unique_id: car_consumption_average
+          unit_of_measurement: "kWh/100km"
+          state_class: measurement
+          state: >-
+            {{ ((states('sensor.car_energy_used') | float)
+                / (states('sensor.car_distance_driven') | float) * 100) | round(1) }}
+          availability: >-
+            {{ has_value('sensor.car_energy_used')
+               and has_value('sensor.car_distance_driven')
+               and states('sensor.car_distance_driven') | float(0) >= 100 }}
+
+    # ==========================================================================
+    # DE TWEE VERBRUIKSTELLERS
+    #
+    # De Renault-integratie levert geen enkele energiemeting. De kWh-sensor die
+    # er wel bij zit (`sensor.hrh85f_battery_available_energy`) staat permanent
+    # op `unknown` en is dus nutteloos. Wat er wel is: een accupercentage en een
+    # kilometerstand, allebei bijgewerkt zodra de auto zich meldt.
+    #
+    # Daaruit valt het verbruik op te tellen. Elke DALING van het percentage is
+    # verbruikte energie, elke STIJGING van de kilometerstand is afstand. Twee
+    # tellers die alleen omhoog gaan; de verhouding ertussen is het verbruik.
+    # Over 16-08 t/m 25-08-2026 gaf dat 355 km op 63,6 kWh = 17,9 kWh/100 km,
+    # een geloofwaardig cijfer voor deze auto.
+    #
+    # DIT IS EEN SCHATTING, GEEN METING - zelfde categorie als de
+    # powercalc-sensoren elders in deze config. Er wordt geen stroom gemeten;
+    # er wordt een percentage vermenigvuldigd met een aangenomen capaciteit.
+    # De kleinste stap die deze teller kan zien is 1% = 0,6 kWh. Gebruik hem
+    # voor de trend, niet als bewijs voor een los ritje. Dat is ook de reden
+    # dat de sensoren hierboven een minimum aan kilometers eisen.
+    #
+    # Beide sensoren zijn trigger-based en houden hun eigen vorige stand bij via
+    # `this.state`. Trigger-based template-entiteiten herstellen die stand na een
+    # herstart, dus de tellers lopen door. Gaat er ooit toch een verloren, dan
+    # begint hij bij nul en vangt `state_class: total_increasing` die val op.
+    - trigger:
+        # `not_from` is hier het hele punt en niet alleen netheid. De Renault
+        # valt regelmatig even weg (17-08 04:16, 18-08 17:58, 21-08 01:13 in de
+        # historie) en komt daarna terug op dezelfde waarde. Zonder deze filter
+        # ziet de teller `unavailable -> 100` als een sprong en gaat rekenen op
+        # een getal dat geen accustand is.
+        - trigger: state
+          entity_id: sensor.hrh85f_batterij
+          not_from:
+            - unknown
+            - unavailable
+          not_to:
+            - unknown
+            - unavailable
+      sensor:
+        - name: "Car - Energy used"
+          unique_id: car_energy_used
+          unit_of_measurement: kWh
+          state_class: total_increasing
+          # Bewust GEEN `device_class: energy`. Met die class biedt HA deze
+          # teller aan als bron voor het energiedashboard, en daar hoort alleen
+          # echt gemeten energie in. Dit is een som van percentagestapjes.
+          state: >-
+            {# Bruikbare accucapaciteit van de Megane E-Tech EV60. Dat het de
+               EV60 is en niet de EV40 blijkt van twee kanten: 360 km bereik bij
+               100%, en het verbruik dat er dan uit rolt (17,9 kWh/100 km). Met
+               40 kWh zou daar 11,9 uit komen en dat rijdt geen Megane. Loopt de
+               accu na jaren terug, dan pas je dit getal aan; de al opgetelde
+               kWh's worden niet herrekend, dat hoort ook zo. #}
+            {% set capaciteit = 60 %}
+            {% set vorige = this.state | float(0) %}
+            {% set was = trigger.from_state.state | float(-1) %}
+            {% set nu = trigger.to_state.state | float(-1) %}
+            {% set daling = was - nu %}
+            {% if was < 0 or nu < 0 %}
+              {{ vorige }}
+            {% elif is_state('binary_sensor.hrh85f_stekker', 'on') %}
+              {# Aan de stekker telt een daling niet mee. Hij hangt hier vaak
+                 uren ingeplugd zonder te laden - het laadschema start pas om
+                 22:00 (packages/3 - Outside/Carport/Charging Station.yaml) - en
+                 wat de auto in die uren aan standby wegtrekt is geen rijden.
+                 In de veertien dagen historie kwam zo'n daling nul keer voor,
+                 dus dit is puur een vangnet.
+
+                 Let op de vorm: alleen overslaan als de stekker AANTOONBAAR
+                 aan zit. Stond hier `not is_state(..., 'off')`, dan zou een
+                 stekkersensor die los `unavailable` wordt de hele telling
+                 stilzetten, en dan leest het verbruik straks te laag zonder
+                 dat iets dat verraadt. Een stille nul is erger dan een
+                 standby-procentje dat meelift. #}
+              {{ vorige }}
+            {% elif daling <= 0 or daling > 60 %}
+              {# Stijgingen zijn laden en horen hier niet. De bovengrens vangt
+                 glitches: 60 procentpunt in een enkele melding is geen rit
+                 maar een integratie die iets raars doorgeeft. #}
+              {{ vorige }}
+            {% else %}
+              {{ (vorige + daling * capaciteit / 100) | round(3) }}
+            {% endif %}
+
+    - trigger:
+        - trigger: state
+          entity_id: sensor.hrh85f_kilometerstand
+          not_from:
+            - unknown
+            - unavailable
+          not_to:
+            - unknown
+            - unavailable
+      sensor:
+        - name: "Car - Distance driven"
+          unique_id: car_distance_driven
+          unit_of_measurement: km
+          state_class: total_increasing
+          state: >-
+            {% set vorige = this.state | float(0) %}
+            {% set was = trigger.from_state.state | float(-1) %}
+            {% set nu = trigger.to_state.state | float(-1) %}
+            {% set stap = nu - was %}
+            {# Bovengrens van 2000: onderweg meldt de auto elke ~30 minuten, en
+               ook na een week zonder bereik komt daar geen tweeduizend
+               kilometer uit. Zo'n sprong is een teller die is teruggezet of een
+               waarde uit een ander voertuig, niet een rit. #}
+            {% if was < 0 or nu < 0 or stap <= 0 or stap > 2000 %}
+              {{ vorige }}
+            {% else %}
+              {{ (vorige + stap) | round(1) }}
+            {% endif %}
+
+
+  # --------------------------------------------------------------------------
+  # Dag- en maandvensters over de twee verbruikstellers hierboven. De tellers
+  # zelf lopen alleen omhoog en zijn daarmee onleesbaar op een dashboard; wat
+  # je wil zien is "hoeveel deze dag" en "hoeveel deze maand", en dat is
+  # precies waar utility_meter voor is. De verhouding tussen elk paar is het
+  # verbruik - zie de drie `Car - Consumption ...` sensoren hierboven.
+  #
+  # Beide helften van een paar knippen op hetzelfde moment (middernacht, de
+  # eerste van de maand), dus een rit die over de grens loopt verdeelt zijn
+  # kWh's en zijn kilometers over dezelfde twee dagen. De verhouding blijft
+  # daardoor kloppen, ook al valt de rit in tweeen.
+  utility_meter:
+    car_energy_today:
+      name: Car - Energy today
+      unique_id: car_energy_today
+      source: sensor.car_energy_used
+      cycle: daily
+    car_distance_today:
+      name: Car - Distance today
+      unique_id: car_distance_today
+      source: sensor.car_distance_driven
+      cycle: daily
+    car_energy_this_month:
+      name: Car - Energy this month
+      unique_id: car_energy_this_month
+      source: sensor.car_energy_used
+      cycle: monthly
+    car_distance_this_month:
+      name: Car - Distance this month
+      unique_id: car_distance_this_month
+      source: sensor.car_distance_driven
+      cycle: monthly
+
   input_text:
     geoapify_api_key:
       name: Geoapify API Key

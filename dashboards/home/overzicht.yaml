@@ -433,6 +433,96 @@ cards:
                   {{ 'grey' if p is none else ('orange' if p > 0 else 'green') }}
                 tap_action:
                   action: more-info
+          # ----- Verbruik -----
+          # Er wordt hier niets gemeten: de Renault levert geen kWh-teller, dus
+          # packages/9 - Other/Car.yaml telt het verbruik op uit dalingen van
+          # het accupercentage maal 60 kWh. Vandaar dat de ondertitel het
+          # "schatting" noemt en niet "verbruik" - zelfde reden als bij de
+          # powercalc-sensoren elders.
+          - type: custom:mushroom-title-card
+            title: Verbruik
+            subtitle: schatting uit accupercentage × 60 kWh
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              # De kleur vergelijkt met zijn EIGEN gemiddelde en niet met een
+              # verzonnen drempel. Wat "zuinig" is hangt aan het seizoen: 17 in
+              # augustus is niks bijzonders, 17 in januari is een prestatie. Een
+              # vaste grens zou de halve winter rood kleuren zonder dat er iets
+              # aan de hand is. Is er nog geen gemiddelde (de eerste 100 km na
+              # het aanzetten van de tellers), dan blijft de kaart grijs.
+              - type: custom:mushroom-template-card
+                entity: sensor.car_consumption_today
+                primary: Vandaag
+                secondary: >-
+                  {% if has_value('sensor.car_consumption_today') %}
+                    {{ states('sensor.car_consumption_today') | replace('.', ',') }} kWh/100 km
+                  {% else %}
+                    {% set km = states('sensor.car_distance_today') | float(none) %}
+                    {% if km is none %}nog geen meting
+                    {% else %}{{ km | round(0) | int }} km · te weinig voor een cijfer{% endif %}
+                  {% endif %}
+                icon: mdi:lightning-bolt-outline
+                icon_color: >-
+                  {% set v = states('sensor.car_consumption_today') | float(none) %}
+                  {% set g = states('sensor.car_consumption_average') | float(none) %}
+                  {% if v is none or g is none %}grey
+                  {% elif v <= g %}green
+                  {% elif v > g * 1.15 %}orange
+                  {% else %}blue{% endif %}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.car_consumption_this_month
+                primary: Deze maand
+                secondary: >-
+                  {% set m = states('sensor.car_consumption_this_month') | float(none) %}
+                  {% set g = states('sensor.car_consumption_average') | float(none) %}
+                  {% if m is none %}nog te weinig kilometers
+                  {% else %}
+                    {{ ('%.1f' | format(m)) | replace('.', ',') }} kWh/100 km{{
+                      ' · gemiddeld ' ~ (('%.1f' | format(g)) | replace('.', ',')) if g is not none else '' }}
+                  {% endif %}
+                icon: mdi:calendar-month
+                icon_color: blue
+                tap_action:
+                  action: more-info
+          # 30 dagen en staafjes per dag. `fill: null` is hier het verschil
+          # tussen een eerlijke en een leugenachtige grafiek: de standaard van
+          # apexcharts is `last`, en die trekt de waarde van gisteren door over
+          # elke dag waarop de sensor niets zei. Dagen onder de 25 km hebben
+          # geen cijfer (zie de drempel in het pakket) en horen leeg te blijven
+          # staan, niet de vorige dag te herhalen.
+          - type: custom:apexcharts-card
+            graph_span: 30d
+            span:
+              end: day
+            header:
+              show: true
+              title: Verbruik per dag (kWh/100 km)
+              show_states: false
+            apex_config:
+              chart:
+                height: 170
+              tooltip:
+                x:
+                  format: "ddd d MMM"
+            yaxis:
+              - id: verbruik
+                min: 0
+                decimals: 1
+            series:
+              - entity: sensor.car_consumption_today
+                name: kWh/100 km
+                type: column
+                color: "#38bdf8"
+                yaxis_id: verbruik
+                float_precision: 1
+                group_by:
+                  duration: 1d
+                  func: last
+                  fill: "null"
           - type: horizontal-stack
             cards:
               - type: custom:mushroom-template-card
