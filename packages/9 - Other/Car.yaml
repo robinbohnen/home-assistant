@@ -161,6 +161,24 @@ car_package:
           not_to:
             - unknown
             - unavailable
+        # ZONDER DEZE TWEE KOMT DE TELLER NOOIT UIT `unknown`
+        # De startwaarde hieronder zit in de DEFAULT van `this.state`, en die
+        # wordt pas gelezen als er een trigger vuurt. Na de herstart van
+        # 26-08 09:13 en de reload van 09:21 stond de accu op 100% en hing de
+        # auto niet aan de lader: `sensor.hrh85f_batterij` veranderde dus niet,
+        # de trigger vuurde niet, en de teller bleef `unknown`. Daarmee vielen
+        # de utility_meters om ("received an invalid new state ... unknown") en
+        # bleef het hele Verbruik-blok op het dashboard leeg.
+        #
+        # `homeassistant start` vangt de herstart. De time_pattern vangt de
+        # reload - `template.reload` geeft geen start-event, en de teller mag
+        # daar geen tien uur op wachten. Beide komen bij `was < 0` uit en geven
+        # `vorige` onveranderd terug, dus de recorder ziet dezelfde state en
+        # slaat hem over: dit kost niets en telt niets dubbel.
+        - trigger: homeassistant
+          event: start
+        - trigger: time_pattern
+          minutes: "/10"
       sensor:
         - name: "Car - Energy used"
           unique_id: car_energy_used
@@ -196,8 +214,21 @@ car_package:
                net zoals bij de 0 die hier eerst stond, maar met een getal dat
                tenminste ergens op slaat. #}
             {% set vorige = this.state | float(63.6) %}
-            {% set was = trigger.from_state.state | float(-1) %}
-            {% set nu = trigger.to_state.state | float(-1) %}
+            {# De triggers hierboven zijn niet allemaal state-triggers, en bij een
+               start- of time_pattern-trigger BESTAAT `trigger.from_state` niet.
+               `trigger.from_state.state` geeft dan een Undefined, en `| float(-1)`
+               vangt dat NIET op - de float-filter roept `__float__` aan en dat
+               gooit alsnog een UndefinedError, waarna de hele sensor omvalt.
+               Vandaar eerst de `is defined`-test en pas daarna de filter; `none`
+               loopt wel netjes in de default van `float`. #}
+            {% set from_s = trigger.from_state.state
+                 if trigger.from_state is defined and trigger.from_state is not none
+                 else none %}
+            {% set to_s = trigger.to_state.state
+                 if trigger.to_state is defined and trigger.to_state is not none
+                 else none %}
+            {% set was = from_s | float(-1) %}
+            {% set nu = to_s | float(-1) %}
             {% set daling = was - nu %}
             {% if was < 0 or nu < 0 %}
               {{ vorige }}
@@ -234,6 +265,13 @@ car_package:
           not_to:
             - unknown
             - unavailable
+        # Zelfde reden als bij de kWh-teller hierboven: zonder een trigger die
+        # ook zonder ritje vuurt, blijft deze teller na een herstart of reload
+        # op `unknown` staan en start zijn utility_meter niet.
+        - trigger: homeassistant
+          event: start
+        - trigger: time_pattern
+          minutes: "/10"
       sensor:
         - name: "Car - Distance driven"
           unique_id: car_distance_driven
@@ -259,8 +297,21 @@ car_package:
                net zoals bij de 0 die hier eerst stond, maar met een getal dat
                tenminste ergens op slaat. #}
             {% set vorige = this.state | float(355.0) %}
-            {% set was = trigger.from_state.state | float(-1) %}
-            {% set nu = trigger.to_state.state | float(-1) %}
+            {# De triggers hierboven zijn niet allemaal state-triggers, en bij een
+               start- of time_pattern-trigger BESTAAT `trigger.from_state` niet.
+               `trigger.from_state.state` geeft dan een Undefined, en `| float(-1)`
+               vangt dat NIET op - de float-filter roept `__float__` aan en dat
+               gooit alsnog een UndefinedError, waarna de hele sensor omvalt.
+               Vandaar eerst de `is defined`-test en pas daarna de filter; `none`
+               loopt wel netjes in de default van `float`. #}
+            {% set from_s = trigger.from_state.state
+                 if trigger.from_state is defined and trigger.from_state is not none
+                 else none %}
+            {% set to_s = trigger.to_state.state
+                 if trigger.to_state is defined and trigger.to_state is not none
+                 else none %}
+            {% set was = from_s | float(-1) %}
+            {% set nu = to_s | float(-1) %}
             {% set stap = nu - was %}
             {# Bovengrens van 2000: onderweg meldt de auto elke ~30 minuten, en
                ook na een week zonder bereik komt daar geen tweeduizend
