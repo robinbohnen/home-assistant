@@ -75,6 +75,16 @@ lovelace:
   resources: !include dashboards/resources.yaml
 
 recorder:
+  # Standaard bewaart HA 10 dagen. Dat is te kort voor de kaarten die over een
+  # maand kijken: apexcharts leest rauwe historie, dus een `graph_span: 30d`
+  # (zoals "Verbruik per dag" op het overzicht) tekende met de default nooit
+  # meer dan tien staafjes en liet de rest leeg - wat leest als een kapotte
+  # sensor terwijl de data simpelweg al gepurged was.
+  #
+  # Dit geldt voor ALLE ~4.300 entiteiten, niet alleen de auto, dus de database
+  # wordt navenant groter. De uitsluitingen hieronder houden dat in toom;
+  # groeit het alsnog uit de hand, dan is dit getal de eerste knop.
+  purge_keep_days: 35
   exclude:
     domains:
       - camera
