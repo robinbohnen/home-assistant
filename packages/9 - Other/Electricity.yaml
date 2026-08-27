@@ -42,13 +42,20 @@ electricity_package:
           default_entity_id: sensor.huis_verbruik
           state: >-
             {% set netto = states('sensor.live_energieverbruik_totaal') | float(0) %}
-            {% set zon_ruw = states('sensor.solar_power_generated_now') | float(0) %}
-            {% set zon = zon_ruw if state_attr('sensor.solar_power_generated_now', 'unit_of_measurement') == 'kW' else zon_ruw / 1000 %}
+            {% set zon_ruw = states('sensor.zon_vermogen_nu') | float(0) %}
+            {% set zon = zon_ruw if state_attr('sensor.zon_vermogen_nu', 'unit_of_measurement') == 'kW' else zon_ruw / 1000 %}
             {% set accu = states('sensor.lilygo_rs485_marstek_battery_power') | float(0) / 1000 %}
             {{ [netto + zon - accu, 0] | max | round(3) }}
+          # De guard op de zonsensor blijft staan - zonder zon is het huis-
+          # verbruik niet te berekenen en zou de kaart een te laag getal tonen.
+          # Hij kost sinds 27-08-2026 alleen bijna nooit meer wat: `zon_vermogen_nu`
+          # houdt een haperende omvormer tien minuten vast en gaat pas op
+          # unavailable als beide arrays weg zijn. Tot die dag hing deze sensor
+          # aan de min_max-som, die al bij één wegvallende omvormer `unknown`
+          # gaf - vandaar de gaten in de live-grafiek.
           availability: >-
             {{ states('sensor.live_energieverbruik_totaal') not in ['unavailable', 'unknown']
-               and states('sensor.solar_power_generated_now') not in ['unavailable', 'unknown'] }}
+               and states('sensor.zon_vermogen_nu') not in ['unavailable', 'unknown'] }}
           unit_of_measurement: "kW"
           device_class: "power"
           state_class: "measurement"

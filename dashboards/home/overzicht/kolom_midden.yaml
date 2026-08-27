@@ -29,7 +29,7 @@ cards:
             b: |
               [[[
                 var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
-                var solar = states['sensor.solar_power_generated_now'];
+                var solar = states['sensor.zon_vermogen_nu'];
                 // /low/ vangt zowel low als very_low; SlimHuys kent vijf niveaus.
                 var cheap = g && /low/.test(g.state);
                 // Deze sensor staat in W (zie het prod-veld hieronder). De oude
@@ -100,7 +100,7 @@ cards:
         - type: custom:button-card
           entity: sensor.live_energieverbruik_totaal
           triggers_update:
-            - sensor.solar_power_generated_now
+            - sensor.zon_vermogen_nu
             - sensor.electricity_meter_energieverbruik
             - sensor.lilygo_rs485_marstek_battery_power
             - sensor.lilygo_rs485_marstek_battery_state_of_charge
@@ -128,7 +128,7 @@ cards:
                 var num = function(id){ var s = states[id];
                   return (s && !isNaN(Number(s.state))) ? Number(s.state) : null; };
                 // zon: sensor staat in W tenzij hij expliciet kW zegt
-                var zonS = states['sensor.solar_power_generated_now'];
+                var zonS = states['sensor.zon_vermogen_nu'];
                 var zonKw = null;
                 if(zonS && !isNaN(Number(zonS.state))){
                   var zu = zonS.attributes.unit_of_measurement || '';
@@ -154,15 +154,21 @@ cards:
                 var accuMode = accuPv === null ? ''
                              : (Math.abs(accuPv) <= 15 ? 'standby'
                              : (accuPv < 0 ? 'ontlaadt' : 'laadt'));
-                var pct = function(vermogenId, capId, terugval){
-                  var p = num(vermogenId), c = num(capId);
+                // De percentages lazen tot 27-08-2026 de ruwe omvormersensoren en
+                // verdwenen daardoor bij elke hik van de integratie (elf keer op
+                // die dag). Ze komen nu uit de attributen `zw`/`o` van
+                // sensor.zon_vermogen_nu, die een uitval tot tien minuten
+                // vasthoudt - zie packages/2 - Second Floor/Attic/Solarpanels.yaml.
+                var zonAttr = (states['sensor.zon_vermogen_nu'] || {}).attributes || {};
+                var pct = function(vermogen, capId, terugval){
+                  var p = (vermogen === undefined || vermogen === null || isNaN(Number(vermogen)))
+                        ? null : Number(vermogen);
+                  var c = num(capId);
                   c = (c === null ? terugval : c) * 1000;
                   return (p === null || c <= 0) ? null : Math.round(p / c * 100);
                 };
-                var zw = pct('sensor.inverter_kroon_18_overkapping',
-                             'sensor.inverter_kroon_18_achtertuin_capacity', 5);
-                var oo = pct('sensor.inverter_kroon_18_zolder_voorzijde',
-                             'sensor.inverter_kroon_18_zolder_capacity', 3);
+                var zw = pct(zonAttr.zw, 'sensor.inverter_kroon_18_achtertuin_capacity', 5);
+                var oo = pct(zonAttr.o, 'sensor.inverter_kroon_18_zolder_capacity', 3);
                 var kw = function(v){ return v === null ? '—' : v.toFixed(2).replace('.',','); };
 
                 // ---------- teksten ----------
@@ -292,7 +298,7 @@ cards:
                   x:
                     format: "HH:mm"
               series:
-                - entity: sensor.solar_power_generated_now
+                - entity: sensor.zon_vermogen_nu
                   name: productie
                   type: area
                   color: "#4ade80"
@@ -314,10 +320,14 @@ cards:
                   # tekent apexcharts gewoon niet), en de deling gebeurt TENZIJ de
                   # eenheid expliciet kW is. Ontbreekt het attribuut - historische
                   # punten dragen het niet altijd mee - dan delen we dus, en dat is
-                  # hier de goede gok: dit is een min_max van twee omvormers die
+                  # hier de goede gok: dit is de som van twee omvormers die
                   # allebei in W meten.
+                  #
+                  # Sinds 27-08-2026 is dat `sensor.zon_vermogen_nu` en niet meer
+                  # de min_max-som: die gaf `unknown` zodra één omvormer wegviel,
+                  # en dat waren de gaten in deze grafiek.
                   transform: >-
-                    var s = hass.states['sensor.solar_power_generated_now'];
+                    var s = hass.states['sensor.zon_vermogen_nu'];
                     var u = (s && s.attributes) ? s.attributes.unit_of_measurement : null;
                     var v = Number(x);
                     return (x === null || x === undefined || isNaN(v))
@@ -460,13 +470,13 @@ cards:
           cards:
             - type: custom:button-card
               template: ov_pill
-              entity: sensor.solar_power_generated_today
+              entity: sensor.zon_opgewekt_vandaag
               tap_action:
                 action: more-info
               custom_fields:
                 c: |
                   [[[
-                    var g = states['sensor.solar_power_generated_today'];
+                    var g = states['sensor.zon_opgewekt_vandaag'];
                     return `<span style="color:rgba(255,255,255,0.8)">vandaag opgewekt · ${g && !isNaN(Number(g.state)) ? Number(g.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
                   ]]]
             - type: custom:button-card

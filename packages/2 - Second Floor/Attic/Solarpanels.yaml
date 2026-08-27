@@ -6,19 +6,176 @@ solar_panels_package:
       source: sensor.inverter_kroon_18_zolder_voorzijde_energy
       cycle: daily
 
-  sensor:
-    - platform: min_max
-      type: sum
-      entity_ids:
-        - sensor.today_s_pv_generation
-        - sensor.attic_solar_total_today
-      name: Solar Power Generated Today
-      unique_id: solar_total_today
+  ######################################################################
+  ## EEN HAPERENDE OMVORMER MAG DE HELE ZONMETING NIET WISSEN
+  ##
+  ## Hier stonden twee `min_max`-sommen (type: sum) over de twee arrays.
+  ## Die integratie geeft `unknown` zodra ÉÉN bron unavailable is - hij telt
+  ## niet door met wat er wel binnenkomt. En de omvormers vallen vaak weg:
+  ## op 27-08-2026 elf keer tussen 06:00 en 13:20, meestal 1-2 minuten,
+  ## zolder en achtertuin grotendeels onafhankelijk van elkaar.
+  ##
+  ## Gevolg op het Overzicht-paneel (Robin, 27-08-2026: "waarom staat er
+  ## - kW"): zon op `—`, geen groene lijn, gaten in de grafiek, en het
+  ## dagtotaal in kWh verdween ook - want `sensor.huis_verbruik` heeft een
+  ## availability-guard op de zonsensor en viel dus mee om.
+  ##
+  ## VASTHOUDEN IS HIER BETER DAN BLANKEN
+  ## Per omvormer staat er nu een sensor die ALLEEN op een geldige waarde
+  ## bijwerkt (`not_to: unavailable/unknown`). Valt de bron weg, dan vuurt er
+  ## geen trigger en blijft de laatste meting staan - precies wat je wilt bij
+  ## een gat van twee minuten, want de zon springt niet. Dat vasthouden is
+  ## expres eindig: blijft de bron langer dan tien minuten weg, dan vuurt de
+  ## tweede trigger (`for: 00:10:00`) en wordt die helft eerlijk unavailable.
+  ## De som telt een weggevallen helft dan als 0 en gaat pas zelf op `—` als
+  ## ze allebei dood zijn. Alle elf uitvallen van vandaag zaten binnen die
+  ## tien minuten; de kaart had er geen van gemerkt.
+  ##
+  ## De dagtotalen in kWh hebben geen tienminutenrem maar een dagwissel: een
+  ## dagteller mag nooit halverwege terugvallen (dat leest als een defect),
+  ## dus die houdt zijn stand vast tot 00:00:30 en begint dan op 0.
+  ##
+  ## De `homeassistant start`-trigger staat erbij omdat een trigger-sensor
+  ## anders op `unknown` blijft staan tot zijn bron voor het eerst verandert.
+  ######################################################################
+  template:
+    # ---------- vermogen per array (W) ----------
+    - triggers:
+        - trigger: state
+          entity_id: sensor.inverter_kroon_18_overkapping
+          not_to: ["unavailable", "unknown"]
+          id: waarde
+        - trigger: state
+          entity_id: sensor.inverter_kroon_18_overkapping
+          to: ["unavailable", "unknown"]
+          for: "00:10:00"
+          id: dood
+        - trigger: homeassistant
+          event: start
+          id: start
+      sensor:
+        - name: "Zon Vermogen ZW"
+          unique_id: zon_vermogen_zw
+          default_entity_id: sensor.zon_vermogen_zw
+          unit_of_measurement: "W"
+          device_class: power
+          state_class: measurement
+          availability: >-
+            {{ trigger.id == 'waarde' or is_number(states('sensor.inverter_kroon_18_overkapping')) }}
+          state: >-
+            {% if trigger.id == 'waarde' %}{{ trigger.to_state.state | float(0) | round(1) }}
+            {% else %}{{ states('sensor.inverter_kroon_18_overkapping') | float(0) | round(1) }}{% endif %}
 
-    - platform: min_max
-      type: sum
-      entity_ids:
-        - sensor.inverter_kroon_18_zolder_voorzijde
-        - sensor.inverter_kroon_18_overkapping
-      name: Solar Power Generated Now
-      unique_id: solar_total_now
+    - triggers:
+        - trigger: state
+          entity_id: sensor.inverter_kroon_18_zolder_voorzijde
+          not_to: ["unavailable", "unknown"]
+          id: waarde
+        - trigger: state
+          entity_id: sensor.inverter_kroon_18_zolder_voorzijde
+          to: ["unavailable", "unknown"]
+          for: "00:10:00"
+          id: dood
+        - trigger: homeassistant
+          event: start
+          id: start
+      sensor:
+        - name: "Zon Vermogen O"
+          unique_id: zon_vermogen_o
+          default_entity_id: sensor.zon_vermogen_o
+          unit_of_measurement: "W"
+          device_class: power
+          state_class: measurement
+          availability: >-
+            {{ trigger.id == 'waarde' or is_number(states('sensor.inverter_kroon_18_zolder_voorzijde')) }}
+          state: >-
+            {% if trigger.id == 'waarde' %}{{ trigger.to_state.state | float(0) | round(1) }}
+            {% else %}{{ states('sensor.inverter_kroon_18_zolder_voorzijde') | float(0) | round(1) }}{% endif %}
+
+    # ---------- dagtotaal per array (kWh) ----------
+    - triggers:
+        - trigger: state
+          entity_id: sensor.today_s_pv_generation
+          not_to: ["unavailable", "unknown"]
+          id: waarde
+        - trigger: time
+          at: "00:00:30"
+          id: dagwissel
+        - trigger: homeassistant
+          event: start
+          id: start
+      sensor:
+        - name: "Zon Vandaag ZW"
+          unique_id: zon_vandaag_zw
+          default_entity_id: sensor.zon_vandaag_zw
+          unit_of_measurement: "kWh"
+          device_class: energy
+          state_class: measurement
+          availability: >-
+            {{ trigger.id in ['waarde', 'dagwissel'] or is_number(states('sensor.today_s_pv_generation')) }}
+          state: >-
+            {% if trigger.id == 'waarde' %}{{ trigger.to_state.state | float(0) | round(2) }}
+            {% elif trigger.id == 'dagwissel' %}0
+            {% else %}{{ states('sensor.today_s_pv_generation') | float(0) | round(2) }}{% endif %}
+
+    - triggers:
+        - trigger: state
+          entity_id: sensor.attic_solar_total_today
+          not_to: ["unavailable", "unknown"]
+          id: waarde
+        - trigger: time
+          at: "00:00:30"
+          id: dagwissel
+        - trigger: homeassistant
+          event: start
+          id: start
+      sensor:
+        - name: "Zon Vandaag O"
+          unique_id: zon_vandaag_o
+          default_entity_id: sensor.zon_vandaag_o
+          unit_of_measurement: "kWh"
+          device_class: energy
+          state_class: measurement
+          availability: >-
+            {{ trigger.id in ['waarde', 'dagwissel'] or is_number(states('sensor.attic_solar_total_today')) }}
+          state: >-
+            {% if trigger.id == 'waarde' %}{{ trigger.to_state.state | float(0) | round(2) }}
+            {% elif trigger.id == 'dagwissel' %}0
+            {% else %}{{ states('sensor.attic_solar_total_today') | float(0) | round(2) }}{% endif %}
+
+    # ---------- de sommen waar de rest van het huis op leunt ----------
+    # Vervangen `sensor.solar_power_generated_now` / `_today` (min_max).
+    # Eenheid blijft W resp. kWh, zodat alle plekken die op de eenheid
+    # testen (dashboards, huis_verbruik) blijven kloppen.
+    - sensor:
+        - name: "Zon Vermogen Nu"
+          unique_id: zon_vermogen_nu
+          default_entity_id: sensor.zon_vermogen_nu
+          unit_of_measurement: "W"
+          device_class: power
+          state_class: measurement
+          availability: >-
+            {{ has_value('sensor.zon_vermogen_zw') or has_value('sensor.zon_vermogen_o') }}
+          state: >-
+            {{ (states('sensor.zon_vermogen_zw') | float(0)
+                + states('sensor.zon_vermogen_o') | float(0)) | round(1) }}
+          attributes:
+            # Voor de ZW/O-percentages op het Overzicht: die stonden op de ruwe
+            # omvormersensoren en verdwenen dus bij elke hik.
+            zw: "{{ states('sensor.zon_vermogen_zw') | float(0) | round(1) }}"
+            o: "{{ states('sensor.zon_vermogen_o') | float(0) | round(1) }}"
+            volledig: "{{ has_value('sensor.zon_vermogen_zw') and has_value('sensor.zon_vermogen_o') }}"
+
+        - name: "Zon Opgewekt Vandaag"
+          unique_id: zon_opgewekt_vandaag
+          default_entity_id: sensor.zon_opgewekt_vandaag
+          unit_of_measurement: "kWh"
+          device_class: energy
+          state_class: measurement
+          availability: >-
+            {{ has_value('sensor.zon_vandaag_zw') or has_value('sensor.zon_vandaag_o') }}
+          state: >-
+            {{ (states('sensor.zon_vandaag_zw') | float(0)
+                + states('sensor.zon_vandaag_o') | float(0)) | round(2) }}
+          attributes:
+            volledig: "{{ has_value('sensor.zon_vandaag_zw') and has_value('sensor.zon_vandaag_o') }}"

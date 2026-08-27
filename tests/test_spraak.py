@@ -318,8 +318,8 @@ check("accu weg", zeg("ThuisAccu"), "thuisaccu even niet lezen")
 print("\nZonnepanelen")
 
 wereld(**{
-    "sensor.solar_power_generated_now": "4224.71",
-    "sensor.solar_power_generated_today": "7.3",
+    "sensor.zon_vermogen_nu": "4224.71",
+    "sensor.zon_opgewekt_vandaag": "7.3",
     "sensor.inverter_kroon_18_achtertuin_capacity": "5.0",
     "sensor.inverter_kroon_18_zolder_capacity": "3.0",
 })
@@ -329,13 +329,13 @@ check("volle zon", zeg("Zonnepanelen"),
 # Capacity-sensoren onbereikbaar: terugval op 5+3 kW, en onder de kilowatt
 # spreken we in hele watts.
 wereld(**{
-    "sensor.solar_power_generated_now": "640",
-    "sensor.solar_power_generated_today": "0.9",
+    "sensor.zon_vermogen_nu": "640",
+    "sensor.zon_opgewekt_vandaag": "0.9",
 })
 check("weinig zon", zeg("Zonnepanelen"), ["640 watt", "8 procent", "0,9 kilowattuur"])
 
 # De momentaan-sensor kan wegvallen terwijl de dagteller er nog is.
-wereld(**{"sensor.solar_power_generated_today": "12.1"})
+wereld(**{"sensor.zon_opgewekt_vandaag": "12.1"})
 check("alleen dagteller", zeg("Zonnepanelen"), "12,1 kilowattuur")
 
 wereld()
