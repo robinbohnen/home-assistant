@@ -487,3 +487,68 @@ _Nog geen kinderen opgehaald uit Magister._
 {% endfor -%}
 {%- endif -%}
 {%- endmacro -%}
+
+
+{#- ==========================================================================
+    WEEKTAKEN EN DAGMEDEDELINGEN
+    ==========================================================================
+    De 00:00-afspraken die `lessen_json` er overal uit filtert, maar dan voor de
+    hele periode in plaats van voor één dag - dit is de lijstversie van
+    `mededelingen_json`.
+
+    WAAROM DIT EEN EIGEN KAART IS. Ze stonden tot 2026-08-27 in de kaart "Deze
+    twee weken", en daar lazen ze verkeerd: het zijn afspraken van 00:00 tot
+    00:00 de volgende dag, dus de week-planner zette ze als een blokje van nul
+    minuten in het raster - twee keer zelfs, want die kaart maakt van de begin-
+    en de einddag allebei een blokje. En Magister hangt een weekmededeling aan
+    het BEGIN van de week, wat bij Magister zondag is; daardoor stond zondag als
+    enige weekenddag in een raster met verder alleen schooldagen.
+
+    Ze staan nu op de SCHOOLDAG waar ze bij horen: valt de mededeling in het
+    weekend, dan schuift hij naar de maandag erna. Dat is precies wat "Weektaken
+    voor de week van 7 september" bedoelt.
+
+    Leest de kinderen zelf uit `sensor.magister_data`, net als `overzicht_alle`
+    hieronder - een tweede kind komt er dus vanzelf bij.
+
+    Wat je hier NIET vindt is de inhoud van een weektaak: de API levert `inhoud`
+    voor deze items als `null`, dus verder dan het vak komt HA niet. Voor het
+    werk zelf is `werk()` in de kolom van het kind de plek.
+-#}
+
+{%- macro weektaken_alle(dagen=14) -%}
+{%- set kinderen = state_attr('sensor.magister_data', 'kinderen') or {} -%}
+{%- set vandaag = now().strftime('%Y-%m-%d') -%}
+{%- set grens = (now() + timedelta(days=dagen)).strftime('%Y-%m-%d') -%}
+{%- set ns = namespace(iets=false) -%}
+{%- for naam, k in kinderen.items() -%}
+{%- set items = k.afspraken | default([], true)
+                | rejectattr('is_huiswerk') | rejectattr('is_uitval')
+                | selectattr('start', 'search', ' 00:00:00$')
+                | selectattr('start', 'ge', vandaag)
+                | selectattr('start', 'le', grens ~ ' 23:59:59')
+                | sort(attribute='start') | list -%}
+{%- if items | count > 0 -%}
+{%- if kinderen | count > 1 %}{% if ns.iets %}
+{% endif %}**{{ naam.split(' ') | first }}**
+
+{% endif -%}
+{%- set ns.iets = true -%}
+{%- set dns = namespace(dag='') -%}
+{%- for w in items -%}
+{%- set d0 = strptime(w.start[:10], '%Y-%m-%d') -%}
+{%- set dag = (d0 + timedelta(days=(1 if d0.weekday() == 6 else (2 if d0.weekday() == 5 else 0)))).strftime('%Y-%m-%d') -%}
+{%- if dag != dns.dag -%}
+{%- set dns.dag = dag -%}
+{% if not loop.first %}
+{% endif %}**{{ dagnaam(dag) | capitalize }}**
+
+{% endif -%}
+- {{ vaknaam(w.vak if w.vak else w.omschrijving) }}{% if w.soort == 'Roostervrij' and d0.weekday() < 5 %} — roostervrij{% endif %}
+{% endfor -%}
+{%- endif -%}
+{%- endfor -%}
+{%- if not ns.iets -%}
+_Niets voor de komende {{ dagen }} dagen._
+{%- endif -%}
+{%- endmacro -%}

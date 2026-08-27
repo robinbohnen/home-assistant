@@ -66,6 +66,22 @@ sections:
           {{ overzicht_alle() }}
 
       - type: heading
+        heading: Weektaken
+        heading_style: title
+        icon: mdi:clipboard-text-outline
+
+      # De 00:00-afspraken van Magister: weektaken, "Eerste schoolweek",
+      # studiedagen. Ze stonden in de kaart hieronder en zijn daar met `filter`
+      # uit gehaald - waarom staat bij `weektaken_alle` in `school.jinja`. Kort:
+      # het zijn afspraken van nul minuten, de week-planner zette ze twee keer
+      # in het raster (begin- en einddag), en Magister hangt ze aan zondag.
+      # Hier staan ze op de schooldag waar ze bij horen.
+      - type: markdown
+        content: |-
+          {%- from 'school.jinja' import weektaken_alle -%}
+          {{ weektaken_alle(14) }}
+
+      - type: heading
         heading: Deze twee weken
         heading_style: title
         icon: mdi:calendar-month-outline
@@ -80,14 +96,15 @@ sections:
       # kaart er in de zomervakantie en in de eerste schoolweek uitzag:
       #
       #   hideWeekend            Er is geen school in het weekend, dus zaterdag
-      #                          en zondag zijn hier lege dagen - op één ding
-      #                          na: Magister hangt zijn weekmededelingen
-      #                          ("Eerste schoolweek", "Weektaken") aan het
-      #                          BEGIN van de week, en dat is bij Magister
-      #                          zondag. Het zijn afspraken van 00:00 tot 00:00
-      #                          de volgende dag, dus zonder deze regel stond
-      #                          zondag er wél tussen en zaterdag niet - wat
-      #                          leest als een storing terwijl het klopt.
+      #     + filter             en zondag zijn hier lege dagen. Ze stonden er
+      #                          toch, of liever: zondag stond er en zaterdag
+      #                          niet, omdat Magister zijn weekmededelingen aan
+      #                          het BEGIN van de week hangt en dat bij Magister
+      #                          zondag is. Twee regels dus, en ze doen elk iets
+      #                          anders: `filter` (per kalender, verderop) haalt
+      #                          de mededelingen zelf eruit en zet ze in de
+      #                          kaart "Weektaken" hierboven; `hideWeekend`
+      #                          haalt de dagen weg.
       #                          `days: 14` telt kalenderdagen door, niet
       #                          schooldagen: het venster blijft twee weken,
       #                          er blijven tien dagen van over.
@@ -95,13 +112,6 @@ sections:
       #                          privé-agenda's hier onzichtbaar. Die hoor je
       #                          op de KALENDER-weergave te zien; deze kaart
       #                          gaat over schooldagen.
-      #                          De maandag-helft van zo'n weekmededeling
-      #                          blijft wél staan (als "00:00 - 00:00"): de
-      #                          kalender-entiteit van de integratie maakt van
-      #                          één afspraak van zondag 00:00 tot maandag
-      #                          00:00 twee blokjes van nul minuten. Dat is
-      #                          hier meegenomen als winst - zo staat
-      #                          "Weektaken" op de eerste schooldag van de week.
       #
       #   hideDaysWithoutEvents  Zonder dit staan er veertien dagen onder
       #     + hideToday...       elkaar met "Geen lessen" eronder, en moet je
@@ -144,6 +154,23 @@ sections:
             name: Rooster Logan
             color: "#9fc5e8"
             filterText: '\s+-\s+\S+\s+-\s+\S+$'
+            # Weg met alles wat GEEN lesuur is - dat zijn de dagmededelingen
+            # van Magister ("Weektaken", "Eerste schoolweek", "BV", een
+            # studiedag), die in de kaart "Weektaken" hierboven staan.
+            #
+            # Herkend aan wat er NIET staat in plaats van aan een lijst titels:
+            # een lesuur heet altijd "vakcode - docentcode - klascode", een
+            # mededeling nooit. Een titel opsommen zou betekenen dat elke nieuwe
+            # mededeling die de school verzint hier weer als een blokje van nul
+            # minuten in het raster verschijnt.
+            #
+            # `filter` kijkt naar de ONBEWERKTE titel, dus vóór `filterText` en
+            # `replaceTitleText` eroverheen zijn gegaan - anders zou dit ook de
+            # les "BV - khem - uhv1d" wegstrepen, die na `filterText` net zo
+            # kaal "BV" heet als de weektaak. Zet ze dus niet in de omgekeerde
+            # volgorde en maak er geen kaartbrede `filter:` van, want die geldt
+            # ook voor de privé-agenda.
+            filter: '^(?!.+ - .+ - )'
             # De vakcodes van deze school, overgenomen uit het veld `Vak:` in
             # de omschrijving van de afspraken zelf - dus niet zelf verzonnen.
             # Een code die hier niet in staat blijft gewoon een code: een nieuw
