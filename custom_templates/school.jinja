@@ -538,14 +538,22 @@ _Nog geen kinderen opgehaald uit Magister._
 {%- for w in items -%}
 {%- set d0 = strptime(w.start[:10], '%Y-%m-%d') -%}
 {%- set dag = (d0 + timedelta(days=(1 if d0.weekday() == 6 else (2 if d0.weekday() == 5 else 0)))).strftime('%Y-%m-%d') -%}
+{#- Magister zet naast de vakken ook een kaal item "Weektaken" op de dag, en
+    onder een kop die al Weektaken heet zegt dat niets. Weg ermee, maar alleen
+    als er die dag iets anders staat: is het het enige item, dan zou de dag
+    stilletjes uit de kaart vallen. -#}
+{%- set anders = items | selectattr('start', 'eq', w.start)
+                       | rejectattr('omschrijving', 'eq', w.omschrijving) | list -%}
+{%- if not (w.omschrijving | lower == 'weektaken' and anders | count > 0) -%}
 {%- if dag != dns.dag -%}
-{%- set dns.dag = dag -%}
-{% if not loop.first %}
-{% endif %}**{{ dagnaam(dag) | capitalize }}**
+{%- if dns.dag != '' %}
+{% endif -%}
+{%- set dns.dag = dag %}**{{ dagnaam(dag) | capitalize }}**
 
 {% endif -%}
 - {{ vaknaam(w.vak if w.vak else w.omschrijving) }}{% if w.soort == 'Roostervrij' and d0.weekday() < 5 %} — roostervrij{% endif %}
-{% endfor -%}
+{% endif -%}
+{%- endfor -%}
 {%- endif -%}
 {%- endfor -%}
 {%- if not ns.iets -%}
