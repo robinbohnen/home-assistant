@@ -324,3 +324,71 @@ music_package:
           target:
             entity_id: group.all_sonos
           alias: Turn off all media
+
+    ###########################################################################
+    ## MUZIEK UIT ALS WIJ NAAR BED GAAN
+    ##
+    ## `music_stop_gone` hierboven dekt maar één helft: zijn conditie is
+    ## letterlijk "geen volwassene thuis". Gaan wij zélf naar bed, dan valt de
+    ## avondroutine daar buiten en blijft de radio gewoon doorspelen.
+    ##
+    ## Dat is de nacht van 26 op 27 augustus 2026 ook precies gebeurd. Om
+    ## 22:04:55 zette de slaapkamerknop het alarm op armed_home (logbook:
+    ## context `Bedroom - Buttons pressed`, event `huis_routine`), en om 07:40
+    ## de volgende ochtend stonden woonkamer, keuken, keuken 2 en kantoor nog
+    ## steeds op `playing` met Qmusic - onafgebroken sinds 20:00:53, dus ruim
+    ## elf uur. Dat het niemand wakker heeft gehouden komt alleen doordat ze
+    ## alle vier op volume 0.05 stonden; dat is geen vangnet waar je op kunt
+    ## bouwen, want de Sonos-app draait dat zo weer omhoog.
+    ##
+    ## WAAROM HET EVENT EN NIET HET ALARM
+    ## `huis_routine` met `routine: avond` is het huisbrede naar-bed-signaal uit
+    ## packages/1 - First Floor/Bedroom/Buttons.yaml, en de haak waar de lampen,
+    ## de rolluiken en de airco ook al aan hangen. Op `armed_home` triggeren zou
+    ## een tweede definitie van "nacht" opleveren naast die ene - en armed_home
+    ## gaat ook aan als je 's middags de tuin in loopt. Het bestaande
+    ## `music_stop_gone` blijft daarom staan zoals het is: dat gaat over een
+    ## leeg huis, deze over een slapend huis.
+    ##
+    ## ALLE ELF, OOK DE KINDERKAMERS
+    ## De twee kinderkamers stoppen zichzelf al op hun eigen bedtijd (de
+    ## `bedtime_for_*_media_off`-automatiseringen), maar die ronde ligt uren
+    ## eerder; wat daarna nog is aangezet hoort hier alsnog uit. Dit gebruikt
+    ## `group.all_sonos` uit dit bestand, dezelfde lijst als music_stop_gone,
+    ## zodat er één plek blijft waar staat welke speakers er zijn.
+    ##
+    ## STOPPEN, NIET LOSKOPPELEN
+    ## `media_stop` naar een speaker die in een groep zit gaat naar de
+    ## groepsleider (zie de volgorde-noot in packages/2 - Second Floor/Bedroom
+    ## Mini/Bedtime.yaml). Daar loop je hier niet tegenaan maar profiteer je
+    ## juist van: één stil huis, of je nou de leider of een lid raakt. De groep
+    ## zelf blijft staan zoals hij stond - `play_music` haalt de overkapping en
+    ## de slapende kinderkamers 's ochtends zelf weer uit de woonkamergroep.
+    ##
+    ## `media_stop` en niet `media_pause`: een gepauzeerde Sonos houdt titel en
+    ## artwork vast en toont op het Overzicht-dashboard dus nog steeds muziek in
+    ## een huis dat slaapt. Met stop gaat hij naar `idle` en is de kaart leeg -
+    ## dezelfde afweging als bij Mini hierboven.
+    ###########################################################################
+    - id: music_stop_bedtime
+      alias: General - Music Stop Bedtime
+      description: >-
+        Stopt alle Sonos-spelers zodra de avondroutine van de slaapkamerknop
+        loopt, zodat er 's nachts niets doorspeelt terwijl wij liggen te slapen.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: event
+          event_type: huis_routine
+          event_data:
+            routine: avond
+      conditions: []
+      actions:
+        # Eén speaker die net offline is mag de andere tien niet tegenhouden;
+        # zelfde reden als bij de omroep in Bathroom/Media.yaml.
+        - alias: Alle Sonos-spelers stoppen
+          action: media_player.media_stop
+          continue_on_error: true
+          data: {}
+          target:
+            entity_id: group.all_sonos
