@@ -21,44 +21,61 @@ kitchen_clock_display_package:
       alias: Kitchen - Clock Locations Family
       description: "Display message on clock when someone return home"
       mode: single
+      # EEN BRANCH VOOR ALLE VIER, GEEN VIER BRANCHES
+      # Hier stonden twee `choose`-takken die alleen in de naam verschilden.
+      # Met de kinderen erbij zouden dat er vier worden, en dan is een
+      # wijziging aan de payload (icoon, geluid, scrollsnelheid) vier keer
+      # dezelfde regel aanpassen. Het verschil zit alleen in de naam, dus dat
+      # is het enige wat per trigger nog apart staat.
       triggers:
-        - entity_id: person.samantha_henkelman
+        - trigger: zone
+          entity_id: !secret person_partner
           zone: zone.home
           event: enter
-          trigger: zone
           id: partner
         - trigger: zone
           entity_id: person.robin_bohnen
           zone: zone.home
           event: enter
           id: robin
+        - trigger: zone
+          entity_id: !secret person_maxi
+          zone: zone.home
+          event: enter
+          id: maxi
+        - trigger: zone
+          entity_id: !secret person_mini
+          zone: zone.home
+          event: enter
+          id: mini
       conditions: []
       actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - partner
-              sequence:
-                - data:
-                    topic: clock_1/notify
-                    payload: >-
-                      { "icon": 22078, "color":"FFFFFF", "sound": "notify", "repeat":
-                      2, "text": "{{ states['input_text.naam_partner'].state }} komt
-                      thuis", "stack": false, "scrollSpeed": 75 }
-                  action: mqtt.publish
-            - conditions:
-                - condition: trigger
-                  id:
-                    - robin
-              sequence:
-                - data:
-                    topic: clock_1/notify
-                    payload: >-
-                      { "icon": 22078, "color":"FFFFFF", "sound": "notify", "repeat":
-                      2, "text": "Robin komt thuis", "stack": false, "scrollSpeed": 75
-                      }
-                  action: mqtt.publish
+        # De namen van het gezin staan in `input_text`-velden (zie
+        # packages/9 - Other/Persons.yaml); alleen Robin staat hier letterlijk,
+        # want daar is geen veld voor.
+        - variables:
+            naam: >-
+              {% set namen = {
+                   'partner': states('input_text.naam_partner'),
+                   'robin': 'Robin',
+                   'maxi': states('input_text.naam_maxi'),
+                   'mini': states('input_text.naam_mini') } %}
+              {{ namen.get(trigger.id, '') }}
+        # Zonder naam geen melding: dat gebeurt alleen als een `input_text` nog
+        # `unknown` is (vlak na een herstart), en "komt thuis" zonder wie is
+        # erger dan geen melding.
+        - condition: template
+          value_template: "{{ naam not in ['', 'unknown', 'unavailable'] }}"
+        - action: mqtt.publish
+          data:
+            topic: clock_1/notify
+            # `to_json` op de tekst, niet de naam tussen aanhalingstekens
+            # plakken: een naam met een apostrof of accent sloopt anders de
+            # JSON die de klok krijgt.
+            payload: >-
+              { "icon": 22078, "color":"FFFFFF", "sound": "notify", "repeat":
+              2, "text": {{ (naam ~ " komt thuis") | to_json }}, "stack": false,
+              "scrollSpeed": 75 }
 
     - id: kitchen_clock_display_traveltime
       alias: Kitchen - Clock Time to Travel Work Robin
