@@ -26,6 +26,11 @@ cards:
           --ov-panel-border: 1px solid var(--ov-ink-6);
           --ov-panel-radius: 20px;
           --ov-panel-padding: 13px 16px;
+          /* SCHAALFACTOR VOOR SMALLE SCHERMEN - zie het blok met media queries
+             onderaan dit `style`. Header, kolommen en tijdlijn lezen hem elk
+             als `zoom: var(--ov-zoom)`; de popups bewust niet, die openen
+             schermvullend en mogen op ware grootte blijven. */
+          --ov-zoom: 1;
           gap: 14px !important;
           min-height: calc(100vh - 8px) !important;
           margin: 0 !important;
@@ -36,6 +41,38 @@ cards:
         @media (max-width: 800px) {
           #root { padding: 14px 12px 16px 12px !important; gap: 14px !important; }
         }
+
+        /* ==================== SCHALEN OP EEN TABLET ====================
+           Dit dashboard is getekend op de breedte van het wandpaneel: ~1870px
+           werkruimte (schermbreedte min de marges, sidebar verborgen door
+           kiosk-mode). De drie kolommen hebben op ware grootte samen ongeveer
+           1500px nodig. Een iPad in landschap heeft er 1076 (1180 CSS-px min
+           de sidebar van 56 en de marges van 48), en daar liep de inhoud dus
+           over: personen over hun batterijpercentage, de brandweermelding
+           halverwege een woord afgekapt, de mediakaart buiten de kaartrand.
+
+           Verkleinen in plaats van herindelen. Een tussenstap met twee
+           kolommen (links en rechts onder elkaar, midden ernaast) paste wel,
+           maar maakte de pagina ~650px langer - "2 kolommen en een lange
+           scrolllijst eronder". Met `zoom` blijft de compositie exact die van
+           het paneel en wordt alles alleen kleiner: `zoom` verkleint niet
+           alleen de weergave maar ook de coordinaten, dus de kolom rekent met
+           1076 / 0.72 = 1494px aan ruimte. Dat is precies de breedte waarvoor
+           de kaarten getekend zijn.
+
+           Kleiner is hier niet slechter leesbaar: 14,5px op 72% is 10,4px op
+           een tablet op leesafstand, en dat is hoekgemeten ruimer dan 14,5px
+           op een paneel aan de muur op twee meter.
+
+           De trappen mikken allemaal op ~1500-1650px rekenbreedte; wil je het
+           groter of kleiner, dan is dit blok de enige plek om te draaien.
+           Boven 1650px is er ruimte genoeg en staat de schaal op 1.
+           Onder 1001px valt alles al in een kolom (zie de body-stack) en is
+           schalen niet nodig - dan is er breedte zat voor een kolom. */
+        @media (min-width: 1001px) and (max-width: 1150px) { #root { --ov-zoom: 0.62; } }
+        @media (min-width: 1151px) and (max-width: 1300px) { #root { --ov-zoom: 0.72; } }
+        @media (min-width: 1301px) and (max-width: 1450px) { #root { --ov-zoom: 0.82; } }
+        @media (min-width: 1451px) and (max-width: 1650px) { #root { --ov-zoom: 0.92; } }
     cards:
       # =================== HEADER ===================
       - !include overzicht/header.yaml
@@ -118,32 +155,12 @@ cards:
               grid-template-columns: 1fr 1.95fr 1fr !important;
               gap: 16px !important;
               align-items: start !important;
+              zoom: var(--ov-zoom, 1) !important;
             }
-            /* TABLET (1001-1500px): TWEE KOLOMMEN, NIET DRIE
-               Op een iPad in landschap (1180 CSS-px, sidebar eraf, marges eraf
-               = ~1075px werkruimte) is 1fr van dit raster maar 265px breed. Dat
-               is smaller dan de inhoud van links en rechts: de personenregels
-               liepen over hun batterijpercentage heen, de brandweermelding werd
-               halverwege een woord afgeknipt en de mediakaart paste niet naast
-               zijn twee knoppen. Onder de 1000px viel alles al netjes in een
-               kolom; precies de tabletmaat viel tussen wal en schip.
-               Hier krijgen links en rechts daarom samen EEN kolom (onder
-               elkaar) en staat de middenkolom ernaast over beide rijen. Links
-               wordt daarmee ~450px in plaats van 265px - ruimer dan de 460px
-               die hij op het wandpaneel heeft, dus alles past zonder de
-               inhoud aan te passen. De middenkolom (grafieken) schaalt mee en
-               heeft geen vaste minimumbreedte nodig.
-               De volgorde blijft links-boven en rechts-eronder, zodat je bij
-               het openen dezelfde dingen bovenaan ziet als op het paneel. */
-            @media (min-width: 1001px) and (max-width: 1500px) {
-              #root {
-                grid-template-columns: 1fr 1.35fr !important;
-                grid-template-areas: "links midden" "rechts midden" !important;
-              }
-              #root > *:nth-child(1) { grid-area: links !important; }
-              #root > *:nth-child(2) { grid-area: midden !important; }
-              #root > *:nth-child(3) { grid-area: rechts !important; }
-            }
+            /* Onder de 1000px is er voor drie kolommen ook geschaald geen
+               ruimte meer (een telefoon), dus daar valt alles onder elkaar.
+               Daartussen blijven het drie kolommen en doet --ov-zoom het werk;
+               zie de toelichting bij die variabele bovenaan dit bestand. */
             @media (max-width: 1000px) {
               #root { grid-template-columns: 1fr !important; }
             }
