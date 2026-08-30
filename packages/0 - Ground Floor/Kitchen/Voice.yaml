@@ -391,11 +391,13 @@ keuken_voice_package:
             Ik krijg de stroomprijs even niet binnen.
           {%- else -%}
             {%- set cent = (p * 100) | round(1) | string | replace('.', ',') -%}
-            {#- Vijf niveaus (very_low tot very_high), dus testen op het woord
-                'low' en niet op de hele waarde: komt er ooit een zesde bij,
-                dan blijft dit kloppen. Zie packages/9 - Other/Stroomprijs.yaml. -#}
+            {#- Testen op het woord 'low' en niet op de hele waarde, zodat
+                very_low meetelt. Die vlieger ging niet op voor het zesde
+                niveau: `peak` (2026-08-23) bevat 'high' niet en werd hier als
+                "gemiddeld" voorgelezen op het duurste uur van de dag. Zie
+                packages/9 - Other/Stroomprijs.yaml. -#}
             {%- set goedkoop = 'low' in nu -%}
-            {%- set duur = 'high' in nu -%}
+            {%- set duur = 'high' in nu or nu == 'peak' -%}
             {{ cent }} cent per kilowattuur, dat is
             {{ 'goedkoop' if goedkoop else ('duur' if duur else 'gemiddeld') }}.
             {#- De sensor van het volgende uur kent bewust maar drie standen. -#}

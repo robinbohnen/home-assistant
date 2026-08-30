@@ -139,10 +139,11 @@ cards:
                     [[[
                       var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
                       var p = states['sensor.slimhuys_zonneplan_huidige_prijs'];
-                      // SlimHuys levert vijf niveaus, niet drie. Zonder very_low
-                      // en very_high stond hier letterlijk "tarief very_low".
-                      var lbl = {very_low:'zeer laag', low:'laag', medium:'gemiddeld', high:'hoog', very_high:'zeer hoog'};
-                      var col = {very_low:'var(--ov-ok)', low:'var(--ov-ok)', medium:'var(--ov-warn)', high:'var(--ov-bad)', very_high:'var(--ov-bad)'};
+                      // Zonder very_low en very_high stond hier letterlijk
+                      // "tarief very_low"; `peak` (nieuw op 2026-08-23) gaf om
+                      // dezelfde reden "tarief peak" met een grijze stip.
+                      var lbl = {very_low:'zeer laag', low:'laag', medium:'gemiddeld', high:'hoog', very_high:'zeer hoog', peak:'piek'};
+                      var col = {very_low:'var(--ov-ok)', low:'var(--ov-ok)', medium:'var(--ov-warn)', high:'var(--ov-bad)', very_high:'var(--ov-bad)', peak:'var(--ov-bad)'};
                       var gs = g ? g.state : 'medium';
                       var prijs = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '—';
                       return `<span style="display:flex;align-items:center;gap:1vh;white-space:nowrap;font-size:2.7vh;font-weight:500;color:${/low/.test(gs) ? 'var(--ov-ok)' : 'var(--ov-ink-85)'}">
@@ -412,15 +413,17 @@ cards:
                     if((s.attributes.unit_of_measurement || '') === 'W') prod = prod / 1000;
                   }
                   var groen = prod !== null && prod > 0.1;
-                  // /low/ en /high/ vangen ook very_low en very_high; SlimHuys
-                  // kent vijf niveaus en een test op alleen 'low' miste juist
-                  // het goedkoopste tarief.
+                  // /low/ en /high/ vangen ook very_low en very_high; een test
+                  // op alleen 'low' miste juist het goedkoopste tarief. `peak`
+                  // bevat het woord 'high' NIET en moet er los bij, anders
+                  // leest het duurste uur van de dag als "normaal tarief".
+                  var duur = /high|peak/;
                   var gs = g ? g.state : null;
                   var txt, col;
                   if(gs && /low/.test(gs)){
                     txt = groen ? 'groen en goedkoop' : 'goedkoop';
                     col = 'var(--ov-ok)';
-                  } else if(gs && /high/.test(gs)){
+                  } else if(gs && duur.test(gs)){
                     txt = groen ? 'groen maar duur' : 'duur';
                     col = groen ? 'var(--ov-warn)' : 'var(--ov-bad)';
                   } else {

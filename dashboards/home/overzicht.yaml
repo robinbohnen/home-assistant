@@ -374,11 +374,12 @@ cards:
                 primary: Huidig tarief
                 secondary: "{{ ('€ ' ~ states('sensor.slimhuys_zonneplan_huidige_prijs')) if has_value('sensor.slimhuys_zonneplan_huidige_prijs') else '—' }}"
                 icon: mdi:cash-clock
-                # SlimHuys kent vijf niveaus (very_low t/m very_high); een test
-                # op alleen 'low' liet het goedkoopste tarief grijs.
+                # Een test op alleen 'low' liet het goedkoopste tarief grijs.
+                # `peak` bevat het woord 'high' niet en moet er los bij, anders
+                # is het duurste uur van de dag ook grijs.
                 icon_color: >-
                   {% set n = states('sensor.slimhuys_zonneplan_tariefniveau_nu') %}
-                  {{ 'green' if 'low' in n else ('red' if 'high' in n else 'grey') }}
+                  {{ 'green' if 'low' in n else ('red' if ('high' in n or n == 'peak') else 'grey') }}
               - type: custom:mushroom-template-card
                 entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
                 primary: Thuisbatterij

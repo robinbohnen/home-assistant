@@ -93,13 +93,14 @@ cards:
             [[[
               var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
               var p = states['sensor.slimhuys_zonneplan_huidige_prijs'];
-              // SlimHuys levert vijf niveaus, niet drie. Een niveau dat hier nog
-              // niet in staat valt terug op zijn eigen naam plus een grijze stip,
-              // dus het leest nooit meer als "tarief very_low".
-              var lbl = {very_low:'zeer laag', low:'laag', medium:'gemiddeld', high:'hoog', very_high:'zeer hoog'};
+              // Een niveau dat hier nog niet in staat valt terug op zijn eigen
+              // naam plus een grijze stip. Dat vangnet werkt - maar het is stil:
+              // op 2026-08-23 kwam `peak` erbij en stond er wekenlang "tarief
+              // peak" met een grijze stip, precies op de duurste momenten.
+              var lbl = {very_low:'zeer laag', low:'laag', medium:'gemiddeld', high:'hoog', very_high:'zeer hoog', peak:'piek'};
               // Dezelfde drie kleuren als de legenda onder de stroomprijsgrafiek,
               // zodat deze stip hetzelfde zegt als een balk daar.
-              var col = {very_low:'var(--ov-ok)', low:'var(--ov-ok)', medium:'var(--ov-warn)', high:'var(--ov-bad)', very_high:'var(--ov-bad)'};
+              var col = {very_low:'var(--ov-ok)', low:'var(--ov-ok)', medium:'var(--ov-warn)', high:'var(--ov-bad)', very_high:'var(--ov-bad)', peak:'var(--ov-bad)'};
               var gs = g ? g.state : 'medium';
               var price = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '';
               var txt = /low/.test(gs) ? 'var(--ov-ok)' : 'var(--ov-ink-85)';
@@ -341,11 +342,19 @@ cards:
           # state_not in plaats van een opsomming van de lage niveaus: SlimHuys
           # kent ook very_low/very_high, en met een opsomming bleef de pil juist
           # bij het allergoedkoopste tarief verborgen.
+          #
+          # `peak` MOET HIER IN, ANDERS STAAT DE PRIJS ER TWEE KEER
+          # Deze pil hoort weg te blijven als het NU al duur is - anders staat
+          # naast "tarief piek - EUR 0,373" ook nog "straks duurder - EUR 0,354",
+          # en dat tweede is dan niet eens waar. Sinds SlimHuys op 2026-08-23
+          # `peak` stuurt viel het duurste niveau buiten deze lijst. Zie de kop
+          # van packages/9 - Other/Stroomprijs.yaml.
           - condition: state
             entity: sensor.slimhuys_zonneplan_tariefniveau_nu
             state_not:
               - high
               - very_high
+              - peak
         custom_fields:
           c: |
             [[[

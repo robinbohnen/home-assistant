@@ -274,18 +274,20 @@ sections:
             show_icon: true
             show_state: true
             icon: mdi:transmission-tower
-        # .includes i.p.v. === : het tariefniveau kent vijf waarden
+        # .includes i.p.v. === : het tariefniveau kent meerdere waarden
         # (very_low t/m very_high), dus een test op exact 'low' liet de kaart
-        # juist bij het goedkoopste tarief ongekleurd.
+        # juist bij het goedkoopste tarief ongekleurd. `peak` (nieuw sinds
+        # 2026-08-23) bevat het woord 'high' niet en staat er los bij, anders
+        # blijft de kaart op het duurste uur wit.
         styles: |-
           ha-card {
               ${(hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state || '').includes('low') ? '--bubble-icon-background-color: #AFE1AF !important' : ''}
-              ${(hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state || '').includes('high') ? '--bubble-icon-background-color: #FFCCCB !important' : ''}
+              ${/high|peak/.test(hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state || '') ? '--bubble-icon-background-color: #FFCCCB !important' : ''}
           }
           @media (prefers-color-scheme: dark) {
                .bubble-icon, .bubble-sub-button-1, .bubble-sub-button-2 {
                     ${(hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state || '').includes('low') ? 'color: black !important' : ''}
-                    ${(hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state || '').includes('high') ? 'color: black !important' : ''}
+                    ${/high|peak/.test(hass.states['sensor.slimhuys_zonneplan_tariefniveau_nu'].state || '') ? 'color: black !important' : ''}
               }
           }
       - type: custom:bubble-card
@@ -4253,12 +4255,13 @@ badges:
     color: var(--bubble-default-color)
     label: Huidig tarief
     content: >-
-      {# Vijf niveaus (very_low t/m very_high); met alleen low/medium/high viel
-         het woord bij het goedkoopste tarief helemaal weg. #}
+      {# Met alleen low/medium/high viel het woord bij het goedkoopste tarief
+         helemaal weg; zonder 'peak' stond er sinds 2026-08-23 kaal "Peak". #}
       {% set n = states('sensor.slimhuys_zonneplan_tariefniveau_nu') %}
 
       {{ {'very_low': 'Zeer laag', 'low': 'Laag', 'medium': 'Gemiddeld',
-          'high': 'Hoog', 'very_high': 'Zeer hoog'}.get(n, n | replace('_', ' ') | capitalize) }}
+          'high': 'Hoog', 'very_high': 'Zeer hoog',
+          'peak': 'Piek'}.get(n, n | replace('_', ' ') | capitalize) }}
 
       - € {{ states['sensor.slimhuys_zonneplan_huidige_prijs'].state |
       round(3) }}

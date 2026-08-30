@@ -38,7 +38,9 @@ cards:
                 var su = solar && solar.attributes ? solar.attributes.unit_of_measurement : null;
                 var sw = solar && !isNaN(Number(solar.state)) ? Number(solar.state) * (su === 'kW' ? 1000 : 1) : 0;
                 var green = sw > 100;
-                var duur = g && /high/.test(g.state);
+                // `peak` bevat het woord 'high' niet; zonder die tweede tak
+                // stond op het duurste uur "stroom is normaal tarief".
+                var duur = g && /high|peak/.test(g.state);
                 // Het tarief wint van "groen": met alleen een zon-test stond hier
                 // op het duurste moment van de dag een groene "stroom is groen",
                 // wat leest als "goed moment om iets aan te zetten". Zelfde
@@ -545,7 +547,8 @@ cards:
                 // op schakelt.
                 var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
                 var col = {very_low:'var(--ov-ok)', low:'var(--ov-ok)', medium:'var(--ov-warn)',
-                           high:'var(--ov-bad)', very_high:'var(--ov-bad)'}[g ? g.state : ''] || 'var(--ov-ink-60)';
+                           high:'var(--ov-bad)', very_high:'var(--ov-bad)',
+                           peak:'var(--ov-bad)'}[g ? g.state : ''] || 'var(--ov-ink-60)';
                 // Kwartierblokken als de integratie ze levert, anders de uurblokken.
                 var blok = function(eid){ var e = states[eid]; return (e && e.attributes && e.attributes.raw_today) || []; };
                 var kw = blok('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier');
