@@ -319,7 +319,10 @@ cards:
           styles:
             grid:
               - grid-template-areas: '"n badge" "sub badge"'
-              - grid-template-columns: 1fr auto
+              # Zelfde raster als ov_climate, inclusief de ondergrens van 0:
+              # "591 ppm · PM2.5 2,0 · 53% rv" is een lange regel en liep zonder
+              # dat over de kwaliteitsbadge heen.
+              - grid-template-columns: minmax(0, 1fr) auto
               - align-items: center
               - column-gap: 10px
             card:
@@ -331,11 +334,19 @@ cards:
               n:
                 - grid-area: n
                 - justify-self: start
+                - min-width: 0
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
               sub:
                 - grid-area: sub
                 - justify-self: start
                 - font-size: 12.5px
                 - padding-top: 2px
+                - min-width: 0
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
               badge:
                 - grid-area: badge
                 - justify-self: end
@@ -422,10 +433,11 @@ cards:
         style: |
           #root {
             display: grid !important;
-            grid-template-columns: 1fr auto auto !important;
+            grid-template-columns: minmax(0, 1fr) auto auto !important;
             align-items: center !important;
             gap: 8px !important;
           }
+          #root > *:nth-child(1) { min-width: 0 !important; }
       cards:
         - type: custom:button-card
           entity: sensor.time
@@ -601,7 +613,13 @@ cards:
               - padding: 8px 2px
             grid:
               - grid-template-areas: '"pri msg badge" "pri sub badge"'
-              - grid-template-columns: 44px 1fr auto
+              # De meldingstekst is hieronder al op 46 tekens gekapt, maar die
+              # grens is op de breedte van het wandpaneel gekozen. Op een
+              # smallere kolom passen er minder in en liep de regel de kaart
+              # uit, waar hij midden in een woord werd afgeknipt. Met een
+              # ondergrens van 0 plus de ellipsis hieronder kapt hij af op de
+              # breedte die er werkelijk is.
+              - grid-template-columns: 44px minmax(0, 1fr) auto
               - align-items: center
               - column-gap: 12px
             custom_fields:
@@ -610,9 +628,17 @@ cards:
               msg:
                 - grid-area: msg
                 - justify-self: start
+                - min-width: 0
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
               sub:
                 - grid-area: sub
                 - justify-self: start
+                - min-width: 0
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
               badge:
                 - grid-area: badge
                 - justify-self: end

@@ -2,13 +2,26 @@
 type: horizontal-stack
 card_mod:
   style: |
+    /* DE BEGROETING HOUDT ZIJN BREEDTE, DE PILLEN BREKEN AF
+       Dit stond op `1fr auto`: de pillenrij nam dan haar volle inhoudsbreedte
+       (elke pil is `width: max-content` en breekt niet) en wat overbleef was
+       voor de begroeting. Op een tablet bleef daar te weinig van over en werd
+       "Hallo Robin · zondag 30 augustus" halverwege afgeknipt, terwijl de
+       `flex-wrap` op de pillenrij nooit aan bod kwam - er was immers geen
+       maximum waar hij tegenaan liep.
+       Omgedraaid: de begroeting krijgt zijn eigen breedte (`auto`) en de
+       pillen de rest, met `minmax(0, ...)` zodat die rest ook echt kleiner mag
+       zijn dan de pillen samen. Pas dan doet `flex-wrap` zijn werk en zakt de
+       rij netjes naar een tweede regel. Op het brede wandpaneel verandert er
+       niets: daar passen ze nog steeds op een rij, rechts uitgelijnd. */
     #root {
       display: grid !important;
-      grid-template-columns: 1fr auto !important;
+      grid-template-columns: auto minmax(0, 1fr) !important;
       align-items: center !important;
       gap: 16px !important;
       padding: 2px 4px 4px 4px !important;
     }
+    #root > *:nth-child(2) { min-width: 0 !important; }
     @media (max-width: 800px) {
       #root { grid-template-columns: 1fr !important; gap: 12px !important; }
     }
@@ -49,7 +62,15 @@ cards:
   - type: horizontal-stack
     card_mod:
       style: |
-        #root { gap: 10px !important; flex-wrap: wrap !important; }
+        #root {
+          gap: 10px !important;
+          flex-wrap: wrap !important;
+          /* Rechts uitlijnen doet de flexrij nu zelf: de grid-cel eromheen is
+             sinds bovenstaande wijziging breder dan de pillen, dus zonder dit
+             zouden ze naar links schuiven. Bij afbreken houdt ook de tweede
+             regel daarmee zijn rechterrand. */
+          justify-content: flex-end !important;
+        }
         #root > * { flex: 0 0 auto !important; }
     cards:
       - type: custom:button-card

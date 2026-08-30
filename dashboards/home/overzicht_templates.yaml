@@ -19,7 +19,12 @@ ov_person:
   styles:
     grid:
       - grid-template-areas: '"av info bat"'
-      - grid-template-columns: 34px 1fr auto
+      # `minmax(0, 1fr)` en niet `1fr`: een grid-item mag standaard niet kleiner
+      # worden dan zijn eigen inhoud, dus een lange status ("onderweg · 72 min")
+      # duwde deze kolom breder dan de kaart en liep dan dwars over het
+      # batterijpercentage heen. Met een ondergrens van 0 krimpt de kolom wel en
+      # kapt de tekst af met een ellipsis (zie het `info`-veld hieronder).
+      - grid-template-columns: 34px minmax(0, 1fr) auto
       - align-items: center
       - column-gap: 11px
     card:
@@ -33,6 +38,8 @@ ov_person:
       info:
         - grid-area: info
         - justify-self: start
+        - min-width: 0
+        - overflow: hidden
       bat:
         - grid-area: bat
         - justify-self: end
@@ -72,7 +79,9 @@ ov_person:
             kleur = 'var(--ov-info)';
           }
         }
-        return `<span style="display:flex;align-items:baseline;gap:9px"><span style="font-size:15px;font-weight:600;color:var(--primary-text-color)">${fn}</span><span style="font-size:13px;color:${kleur}">${st}</span></span>`;
+        // De voornaam blijft heel (`flex:0 0 auto`), de status krijgt de rest en
+        // kapt af als die er niet in past - anders schuift hij over de batterij.
+        return `<span style="display:flex;align-items:baseline;gap:9px;min-width:0"><span style="flex:0 0 auto;font-size:15px;font-weight:600;color:var(--primary-text-color)">${fn}</span><span style="flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;color:${kleur}">${st}</span></span>`;
       ]]]
     bat: |
       [[[
@@ -92,8 +101,14 @@ ov_room:
     temp: sensor.none
   styles:
     grid:
+      # Zie ov_person: zonder een ondergrens van 0 groeit een kolom door tot
+      # zijn inhoud past en schuift de samenvatting over de kamernaam heen.
+      # De rekbare kolom is hier de NAAM en niet de samenvatting: van
+      # "Garage / speelkamer" is de helft nog te herkennen, van "22,2° · alles
+      # uit" niet. De naam kapt dus af met een ellipsis, de samenvatting houdt
+      # altijd zijn volle breedte.
       - grid-template-areas: '"n sum dot"'
-      - grid-template-columns: auto 1fr auto
+      - grid-template-columns: minmax(0, 1fr) auto auto
       - align-items: center
       - column-gap: 10px
     card:
@@ -107,6 +122,10 @@ ov_room:
       - font-size: 14.5px
       - font-weight: "500"
       - color: var(--primary-text-color)
+      - min-width: 0
+      - white-space: nowrap
+      - overflow: hidden
+      - text-overflow: ellipsis
     custom_fields:
       sum:
         - grid-area: sum
@@ -140,7 +159,7 @@ ov_room:
         // Alleen kleuren bij uitschieters; anders blijft het rustig.
         var kleur = g < 17 ? 'var(--ov-info)' : (g > 25 ? 'var(--ov-warn)' : 'var(--ov-ink-85)');
         var graden = `<span style="color:${kleur};font-weight:600">${g.toFixed(1).replace('.',',')}°</span>`;
-        return `<span style="display:inline-flex;align-items:baseline;gap:8px">${graden}<span style="color:var(--ov-ink-20)">·</span>${lamp}</span>`;
+        return `<span style="display:inline-flex;align-items:baseline;gap:8px;white-space:nowrap">${graden}<span style="color:var(--ov-ink-20)">·</span>${lamp}</span>`;
       ]]]
     dot: |
       [[[
@@ -162,7 +181,10 @@ ov_bar:
   styles:
     grid:
       - grid-template-areas: '"n bar val"'
-      - grid-template-columns: 205px 1fr 72px
+      # 205px is de gewenste breedte, geen harde eis: op een smalle kolom mag
+      # de naam inleveren (hij kapt af met een ellipsis, zie `name` hieronder)
+      # in plaats van de balk de kaart uit te duwen.
+      - grid-template-columns: minmax(0, 205px) minmax(0, 1fr) 72px
       - align-items: center
       - column-gap: 14px
     card:
@@ -227,7 +249,7 @@ ov_climate:
   styles:
     grid:
       - grid-template-areas: '"n badge" "sub badge"'
-      - grid-template-columns: 1fr auto
+      - grid-template-columns: minmax(0, 1fr) auto
       - align-items: center
       - column-gap: 10px
     card:
@@ -241,6 +263,10 @@ ov_climate:
       - font-size: 14.5px
       - font-weight: "600"
       - color: var(--primary-text-color)
+      - min-width: 0
+      - white-space: nowrap
+      - overflow: hidden
+      - text-overflow: ellipsis
     custom_fields:
       sub:
         - grid-area: sub
@@ -248,6 +274,10 @@ ov_climate:
         - font-size: 12.5px
         - color: var(--ov-ink-58)
         - padding-top: 2px
+        - min-width: 0
+        - white-space: nowrap
+        - overflow: hidden
+        - text-overflow: ellipsis
       badge:
         - grid-area: badge
         - justify-self: end
@@ -325,7 +355,7 @@ ov_toggle:
   styles:
     grid:
       - grid-template-areas: '"ic n badge" "ic sub badge"'
-      - grid-template-columns: 34px 1fr auto
+      - grid-template-columns: 34px minmax(0, 1fr) auto
       - align-items: center
       - column-gap: 12px
     card:
@@ -339,6 +369,10 @@ ov_toggle:
       - font-size: 14.5px
       - font-weight: "600"
       - color: var(--primary-text-color)
+      - min-width: 0
+      - white-space: nowrap
+      - overflow: hidden
+      - text-overflow: ellipsis
     custom_fields:
       ic:
         - grid-area: ic
@@ -348,6 +382,10 @@ ov_toggle:
         - font-size: 12.5px
         - color: var(--ov-ink-58)
         - padding-top: 2px
+        - min-width: 0
+        - white-space: nowrap
+        - overflow: hidden
+        - text-overflow: ellipsis
       badge:
         - grid-area: badge
         - justify-self: end
@@ -385,7 +423,11 @@ ov_listrow:
   styles:
     grid:
       - grid-template-areas: '"ic t" "ic s"'
-      - grid-template-columns: 40px 1fr
+      # Anders dan de regels hierboven kapt deze niet af maar breekt hij af naar
+      # een tweede regel (een afspraaknaam moet leesbaar blijven). Daarvoor is
+      # alleen nodig dat de kolom smaller mag worden dan de tekst; de tekst
+      # zelf staat niet op `nowrap`.
+      - grid-template-columns: 40px minmax(0, 1fr)
       - align-items: center
       - column-gap: 14px
     card:
@@ -402,11 +444,13 @@ ov_listrow:
         - font-size: 14.5px
         - font-weight: "600"
         - color: var(--primary-text-color)
+        - min-width: 0
       s:
         - grid-area: s
         - justify-self: start
         - font-size: 12.5px
         - color: var(--ov-ink-58)
+        - min-width: 0
   custom_fields:
     ic: |
       [[[
@@ -426,9 +470,13 @@ ov_title:
     action: none
   styles:
     grid:
+      # De badge is soms twee pillen breed (AUTO: laadstand + actieradius). Op
+      # een smalle kolom liep die over de titel heen; `minmax(0, ...)` laat de
+      # titelkolom krimpen en `flex-wrap` op de badge laat de pillen afbreken.
       - grid-template-areas: '"t b"'
-      - grid-template-columns: 1fr auto
+      - grid-template-columns: minmax(0, 1fr) auto
       - align-items: center
+      - column-gap: 8px
     card:
       - background: none
       - border: none
@@ -438,6 +486,10 @@ ov_title:
       t:
         - grid-area: t
         - justify-self: start
+        - min-width: 0
+        - white-space: nowrap
+        - overflow: hidden
+        - text-overflow: ellipsis
         - font-size: 12px
         - font-weight: "700"
         - letter-spacing: 1.2px

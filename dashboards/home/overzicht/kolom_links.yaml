@@ -211,15 +211,23 @@ cards:
               - border-top: 1px solid var(--ov-ink-6)
             grid:
               - grid-template-areas: '"n sum dot"'
-              - grid-template-columns: auto 1fr auto
+              # Zelfde raster en zelfde reden als template ov_room hierboven:
+              # de naam is de rekbare kolom en kapt af, de samenvatting
+              # ("1 raam open · niet op slot") houdt zijn breedte.
+              - grid-template-columns: minmax(0, 1fr) auto auto
               - align-items: center
               - column-gap: 10px
             custom_fields:
               n:
                 - justify-self: start
+                - min-width: 0
+                - white-space: nowrap
+                - overflow: hidden
+                - text-overflow: ellipsis
               sum:
                 - justify-self: end
                 - font-size: 13px
+                - white-space: nowrap
               dot:
                 - justify-self: end
           custom_fields:
@@ -343,7 +351,11 @@ cards:
                 var accu = pill((bs === null ? '—' : bs + '%') + (rs === null ? '' : ' · ' + rs + ' km'),
                                 laag ? 'var(--ov-warn)' : 'var(--ov-ok)',
                                 laag ? 'var(--ov-warn-15)' : 'var(--ov-ok-wash-15)', null);
-                return `<span style="display:flex;align-items:center;gap:7px">${pill(lbl, c[1], c[2], c[3])}${accu}</span>`;
+                // Twee pillen naast elkaar passen niet altijd naast de titel
+                // AUTO (smalle kolom, of een lange laadtekst met resterende
+                // tijd). `flex-wrap` laat de tweede dan onder de eerste zakken
+                // in plaats van over de titel heen te lopen.
+                return `<span style="display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:7px">${pill(lbl, c[1], c[2], c[3])}${accu}</span>`;
               ]]]
         # Auto-illustratie (Megane E-Tech, matgrijs) + kilometerstand + klimaatknop
         - type: horizontal-stack
@@ -351,7 +363,7 @@ cards:
             style: |
               #root {
                 display: grid !important;
-                grid-template-columns: 112px 1fr !important;
+                grid-template-columns: 112px minmax(0, 1fr) !important;
                 align-items: center !important;
                 gap: 14px !important;
               }
@@ -591,10 +603,17 @@ cards:
             style: |
               #root {
                 display: grid !important;
-                grid-template-columns: 1fr auto auto !important;
+                /* De twee knoppen zijn samen 84px; wat overblijft is voor de
+                   hoes plus de titelregels. `minmax(0, ...)` + `min-width: 0`
+                   op het eerste vak zorgt dat dat vak ook echt krimpt: zonder
+                   dat hield het zijn inhoudsbreedte en liep de voortgangs-
+                   balk met "volume 14%" de kaart uit (afgeknipt op de rand
+                   in plaats van netjes met een ellipsis). */
+                grid-template-columns: minmax(0, 1fr) auto auto !important;
                 align-items: center !important;
                 gap: 8px !important;
               }
+              #root > *:nth-child(1) { min-width: 0 !important; }
           cards:
             # Nu speelt (tik = multiroom-popup)
             - type: custom:button-card
@@ -619,7 +638,7 @@ cards:
                   - padding: 6px 2px 2px 2px
                 grid:
                   - grid-template-areas: '"art info"'
-                  - grid-template-columns: 60px 1fr
+                  - grid-template-columns: 60px minmax(0, 1fr)
                   - align-items: center
                   - column-gap: 14px
                 custom_fields:
