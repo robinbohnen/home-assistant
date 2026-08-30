@@ -8,7 +8,9 @@
 ##   clock_3  garage      - staat alleen aan als er beweging is, zie onderaan
 ## De laatste twee tonen bewust maar twee dingen: wat de panelen doen en hoe de
 ## thuisaccu ervoor staat. Daarnaast branden hun twee bovenste indicatoren:
-##   indicator 1  stroomprijs nu   groen goedkoop / oranje midden / rood duur
+##   indicator 1  stroomprijs nu, een kleur per tariefniveau:
+##                blauw spotgoedkoop / groen goedkoop / oranje midden /
+##                diep oranje duur / rood spotduur
 ##   indicator 2  bezetting van de dienstdoende ploeg, alleen als het knelt
 ## Een indicator is een stipje van een pixel: het zegt "kijk even" en verder
 ## niets. Alles wat een getal of een naam nodig heeft hoort in een app.
@@ -436,12 +438,24 @@ klokken_package:
           variables:
             # tariefniveau_nu kent VIJF niveaus, zie de kop van
             # packages/9 - Other/Stroomprijs.yaml: een test op alleen 'low' of
-            # 'high' mist juist het goedkoopste en het duurste uur.
+            # 'high' mist juist het goedkoopste en het duurste uur. Elk niveau
+            # krijgt hier zijn eigen kleur, zodat het stipje het verschil
+            # tussen "gewoon duur" en "nu echt niet" ook laat zien.
+            #
+            # LET OP - dit zijn NIET de iOS-systeemkleuren die de apps in dit
+            # bestand gebruiken (#0A84FF / #32D74B / #FF9F0A / #FF3B30). Op een
+            # scherm klopt #FF3B30 als rood, maar een indicator is een enkele
+            # diffuse pixel op vol vermogen, en daar wassen de 59 groen en 48
+            # blauw hem zichtbaar uit naar roze. Vandaar hier kleuren met de
+            # bijmenging eruit geknepen. Wijzig je ze, kijk dan naar de klok en
+            # niet naar de hex.
             prijs_kleur: >-
               {%- set n = states('sensor.slimhuys_zonneplan_tariefniveau_nu') -%}
-              {%- if n in ['very_low', 'low'] -%}[50, 215, 75]
+              {%- if n == 'very_low' -%}[0, 60, 255]
+              {%- elif n == 'low' -%}[50, 215, 75]
               {%- elif n == 'medium' -%}[255, 159, 10]
-              {%- elif n in ['high', 'very_high'] -%}[255, 59, 48]
+              {%- elif n == 'high' -%}[255, 70, 0]
+              {%- elif n == 'very_high' -%}[255, 0, 0]
               {%- else -%}uit{%- endif -%}
             # Zelfde bronvolgorde als de BRW-app op de keukenklok en het
             # dashboard: eerst het `ploegen`-attribuut van de PreCom-webhook,
