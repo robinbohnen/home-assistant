@@ -311,38 +311,74 @@ cards:
             custom_fields:
               t: |
                 [[[
+                  // TWEE GETALLEN, GEEN EEN
+                  // Hier stond één telling onder het kopje "onder 25% of stil".
+                  // Dat "of" is precies het probleem: bijna leeg en niet meer
+                  // melden zijn verschillende storingen met verschillende
+                  // oplossingen (een kabel versus gaan kijken), en bij een getal
+                  // als 3 wist je niet welke van de twee je voor je had. Zie ook
+                  // de kopbalk van het Overzicht, die `batterijen_stil` en
+                  // `kritieke_batterijen` al los noemt - deze kaart liep daar
+                  // achter.
+                  //
+                  // GETELD PER APPARAAT, NET ALS DE LIJST HIERONDER
+                  // De oude telling telde entiteiten terwijl de lijst per
+                  // apparaat groepeert. Een apparaat met zowel een
+                  // percentagesensor als een 'bijna leeg'-binarysensor telde dan
+                  // voor twee en gaf één rij: een badge die niet klopte met wat
+                  // je eronder zag. Zelfde sleutel en zelfde voorrang als daar
+                  // (stil wint van bijna leeg).
                   var d = variables.drempel;
                   var reg = (hass && hass.entities) ? hass.entities : null;
                   var negeerInt = variables.negeer_integraties || [];
                   var negeerNaam = variables.negeer_namen ? new RegExp(variables.negeer_namen, 'i') : null;
-                  var n = Object.keys(states).filter(function(id){
+                  var per = {};
+                  Object.keys(states).forEach(function(id){
                     var s = states[id];
-                    if(!s || !s.attributes || s.attributes.device_class !== 'battery') return false;
+                    if(!s || !s.attributes || s.attributes.device_class !== 'battery') return;
                     // Alleen sensoren MÉTEN een batterij. Een number of select met
                     // device_class battery is een instelling: de Megane heeft
                     // `minimum_charge_level` op 20 en `target_charge_level` op 100
                     // staan, en die eerste kwam hier binnen als "bijna lege
                     // batterij" terwijl de auto gewoon op 99% stond.
-                    if(id.lastIndexOf('sensor.', 0) !== 0 && id.lastIndexOf('binary_sensor.', 0) !== 0) return false;
+                    if(id.lastIndexOf('sensor.', 0) !== 0 && id.lastIndexOf('binary_sensor.', 0) !== 0) return;
                     var e = reg ? reg[id] : null;
-                    if(e && (e.hidden || e.hidden_by)) return false;
-                    if(negeerInt.indexOf((e && e.platform) ? e.platform : '') !== -1) return false;
-                    if(negeerNaam && negeerNaam.test(s.attributes.friendly_name || id)) return false;
+                    if(e && (e.hidden || e.hidden_by)) return;
+                    if(negeerInt.indexOf((e && e.platform) ? e.platform : '') !== -1) return;
+                    if(negeerNaam && negeerNaam.test(s.attributes.friendly_name || id)) return;
                     // Een batterijapparaat op `unavailable` telt mee: die kun je
                     // niet met een schakelaar hebben uitgezet, dus stil betekent
                     // lege batterij of stuk. De pil in de kopbalk noemt precies
                     // dit aantal ("N apparaten stil") en linkt hierheen; stonden
                     // ze hier niet, dan kwam je op een lege lijst uit.
-                    if(s.state === 'unavailable') return true;
-                    if(id.lastIndexOf('binary_sensor.', 0) === 0) return s.state === 'on';
-                    var v = Number(s.state);
-                    return !isNaN(v) && v <= d;
-                  }).length;
-                  var kleur = n === 0 ? 'var(--ov-ok)' : (n > 5 ? 'var(--ov-bad)' : 'var(--ov-warn)');
-                  return `<span style="display:flex;align-items:baseline;gap:12px;width:100%">
+                    var soort = null;
+                    if(s.state === 'unavailable') soort = 'stil';
+                    else if(id.lastIndexOf('binary_sensor.', 0) === 0){ if(s.state === 'on') soort = 'leeg'; }
+                    else { var v = Number(s.state); if(!isNaN(v) && v <= d) soort = 'leeg'; }
+                    if(!soort) return;
+                    var sleutel = (e && e.device_id) ? e.device_id : ('los:' + id);
+                    if(per[sleutel] !== 'stil') per[sleutel] = soort;
+                  });
+                  var leeg = 0, stil = 0;
+                  Object.keys(per).forEach(function(k){ if(per[k] === 'stil') stil++; else leeg++; });
+                  var chip = function(txt, kleur){
+                    return `<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:var(--ov-ink-6)">${txt}</span>`;
+                  };
+                  var chips = '';
+                  if(leeg === 0 && stil === 0){
+                    chips = chip('alles in orde', 'var(--ov-ok)');
+                  } else {
+                    if(leeg > 0) chips += chip(leeg + ' onder ' + d + '%', leeg > 5 ? 'var(--ov-bad)' : 'var(--ov-warn)');
+                    if(stil > 0) chips += chip(stil + ' stil', 'var(--ov-bad)');
+                  }
+                  // De uitleg staat er alleen als er ook echt iets stil is: een
+                  // legenda die er altijd hangt lees je na een week niet meer.
+                  var uitleg = stil > 0
+                    ? `<span style="margin-left:auto;font-size:11.5px;color:var(--ov-ink-40)">stil = meldt zich niet meer</span>`
+                    : '';
+                  return `<span style="display:flex;align-items:baseline;gap:10px;width:100%;flex-wrap:wrap">
                     <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">BATTERIJEN</span>
-                    <span style="font-size:11.5px;color:var(--ov-ink-40)">onder ${d}% of stil</span>
-                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:var(--ov-ink-6)">${n}</span></span>`;
+                    ${chips}${uitleg}</span>`;
                 ]]]
               lijst: |
                 [[[
@@ -362,9 +398,14 @@ cards:
                     // geen metingen.
                     if(id.lastIndexOf('sensor.', 0) !== 0 && id.lastIndexOf('binary_sensor.', 0) !== 0) return;
                     if(negeerNaam && negeerNaam.test(s.attributes.friendly_name || id)) return;
-                    var niveau = null, binair = false, stil = false;
+                    var niveau = null, binair = false, stil = false, sinds = null;
                     if(s.state === 'unavailable'){
                       stil = true;
+                      // Wanneer viel hij stil? Dat is de vraag die de rij moet
+                      // beantwoorden - "stil" alleen zegt niet of het vijf
+                      // minuten of drie weken is, en dat is het hele verschil
+                      // tussen "even kijken" en "kabel pakken".
+                      sinds = s.last_changed ? new Date(s.last_changed).getTime() : null;
                     } else if(id.lastIndexOf('binary_sensor.', 0) === 0){
                       if(s.state !== 'on') return;
                       binair = true;
@@ -386,10 +427,14 @@ cards:
                       : ((s.attributes.friendly_name || id).replace(/ ?batter[iy][j]?[ -]?(level|niveau|low|laag)?/i, '').trim() || id);
                     if(!groepen[integratie]) groepen[integratie] = {};
                     var g = groepen[integratie];
-                    if(!g[sleutel]) g[sleutel] = {naam: naam, gebied: gebied, niveau: niveau, binair: binair, stil: stil, dev_id: devId, ent: id};
+                    if(!g[sleutel]) g[sleutel] = {naam: naam, gebied: gebied, niveau: niveau, binair: binair, stil: stil, sinds: sinds, dev_id: devId, ent: id};
                     else {
                       // percentage wint van een enkel 'laag'-signaal; anders de laagste
                       if(stil) g[sleutel].stil = true;
+                      // De JONGSTE van de stille entiteiten telt: zolang er nog
+                      // eentje meldde was het apparaat niet weg. De oudste nemen
+                      // zou de storing ouder maken dan hij is.
+                      if(sinds !== null && (g[sleutel].sinds === null || sinds > g[sleutel].sinds)) g[sleutel].sinds = sinds;
                       if(niveau !== null && (g[sleutel].niveau === null || niveau < g[sleutel].niveau)) {
                         g[sleutel].niveau = niveau; g[sleutel].binair = false;
                       }
@@ -402,6 +447,27 @@ cards:
                   var kleurVan = function(x){
                     if(x.stil || x.niveau === null) return 'var(--ov-bad)';
                     return x.niveau <= 10 ? 'var(--ov-bad)' : (x.niveau <= 20 ? 'var(--ov-warn)' : 'var(--ov-ink-70)');
+                  };
+                  // Zelfde tekstvorm en dezelfde herstartcorrectie als de
+                  // Matter-kaart hieronder: na een herstart staat elke
+                  // last_changed op het herstartmoment, dus zonder die
+                  // correctie lijkt ieder stil apparaat precies zo lang stil
+                  // als HA draait.
+                  var nu = Date.now();
+                  var startS = states['sensor.home_assistant_gestart'];
+                  var startMs = startS ? new Date(startS.state).getTime() : NaN;
+                  var uptime = isNaN(startMs) ? null : nu - startMs;
+                  var duurTxt = function(ts){
+                    if(ts === null) return 'onbekend hoe lang';
+                    var ms = nu - ts;
+                    if(uptime !== null && Math.abs(ms - uptime) < 180000) return 'sinds de herstart';
+                    var m = Math.floor(ms / 60000);
+                    if(m < 1) return 'net';
+                    if(m < 60) return m + ' min';
+                    var u = Math.floor(m / 60);
+                    if(u < 48) return u + ' uur';
+                    var dg = Math.floor(u / 24);
+                    return dg + ' ' + (dg === 1 ? 'dag' : 'dagen');
                   };
                   var lijstVan = {};
                   namen.forEach(function(g){
@@ -424,10 +490,13 @@ cards:
                   var blokken = namen.map(function(g){
                     var rijen = lijstVan[g].map(function(x){
                       var plek = x.gebied ? `<span style="color:var(--ov-ink-35)"> · ${x.gebied}</span>` : '';
+                      // Bij een stil apparaat staat er hoe lang al; bij een bijna
+                      // lege batterij zegt het percentage rechts het al.
+                      var wanneer = x.stil ? `<span style="color:var(--ov-ink-35)"> · ${duurTxt(x.sinds)} niets gehoord</span>` : '';
                       var pct = x.niveau === null ? 100 : Math.max(2, x.niveau);
                       var waarde = x.stil ? 'stil' : (x.niveau === null ? 'laag' : x.niveau + '%');
                       return klik(x.dev_id, x.ent, `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-top:1px solid var(--ov-ink-4)">
-                        <span style="flex:1;text-align:left;font-size:13.5px;color:var(--ov-ink-85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
+                        <span style="flex:1;text-align:left;font-size:13.5px;color:var(--ov-ink-85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}${wanneer}</span>
                         <span style="width:56px;height:6px;border-radius:3px;background:var(--ov-ink-7);overflow:hidden;flex:0 0 auto">
                           <span style="display:block;width:${pct}%;height:100%;background:${kleurVan(x)}"></span></span>
                         <span style="width:44px;text-align:right;font-size:13px;font-weight:600;color:${kleurVan(x)}">${waarde}</span></div>`);
