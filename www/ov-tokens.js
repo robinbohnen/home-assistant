@@ -53,11 +53,13 @@
       'panel-bg': 'rgba(22,24,31,0.72)', 'panel-bg-2': 'rgba(30,33,42,0.72)',
       'surface': '#161920', 'surface-2': '#1b1f27', 'surface-deep': '#0e1015',
       'surface-blue': 'rgba(8,25,45,0.92)', 'scrim-soft': 'rgba(10,12,18,0.55)',
+      'scrim': 'rgba(0,0,0,0.5)',
     },
     light: {
       'panel-bg': 'rgba(255,255,255,0.72)', 'panel-bg-2': 'rgba(255,255,255,0.86)',
       'surface': '#f4f5f7', 'surface-2': '#eceef2', 'surface-deep': '#e4e7ec',
       'surface-blue': 'rgba(224,236,250,0.92)', 'scrim-soft': 'rgba(240,242,246,0.55)',
+      'scrim': 'rgba(15,18,25,0.32)',
     },
   };
 
@@ -78,14 +80,37 @@
   };
   const lum = (c) => (0.2126*c[0] + 0.7152*c[1] + 0.0722*c[2]) / 255;
 
+  /* Home Assistant zet de themavariabelen niet altijd op <html>: afhankelijk
+     van versie en weergave belanden ze op <home-assistant> of op <body>. Leest
+     dit alleen documentElement, dan komt er niets terug en valt alles terug op
+     donker terwijl het thema licht rendert. Daarom alle drie proberen, en als
+     laatste redmiddel de voorkeur van het besturingssysteem. */
+  const bronnen = () => [root, document.querySelector('home-assistant'), document.body]
+    .filter(Boolean);
+  const lees = (prop) => {
+    for (const el of bronnen()) {
+      const v = getComputedStyle(el).getPropertyValue(prop);
+      if (v && v.trim()) return v;
+    }
+    return '';
+  };
+
   let vorige = '';
   const update = () => {
-    const cs = getComputedStyle(root);
-    const bgRaw = cs.getPropertyValue('--primary-background-color') ||
-                  (document.body && getComputedStyle(document.body).backgroundColor);
-    const inkRaw = cs.getPropertyValue('--primary-text-color');
-    const bg = rgbOf(bgRaw) || [11,13,18];
-    const ink = rgbOf(inkRaw) || (lum(bg) > 0.5 ? [17,17,17] : [255,255,255]);
+    let bg = rgbOf(lees('--primary-background-color'));
+    if (!bg) {
+      for (const el of bronnen()) {
+        const c = rgbOf(getComputedStyle(el).backgroundColor);
+        if (c) { bg = c; break; }
+      }
+    }
+    if (!bg) {
+      const osLicht = window.matchMedia &&
+                      window.matchMedia('(prefers-color-scheme: light)').matches;
+      bg = osLicht ? [250,250,250] : [11,13,18];
+    }
+    const ink = rgbOf(lees('--primary-text-color')) ||
+                (lum(bg) > 0.5 ? [17,17,17] : [255,255,255]);
     const licht = lum(bg) > 0.5;
     /* Zonder deze vergelijking zou het zetten van de properties de observer
        opnieuw laten vuren en had je een oneindige lus. */
@@ -94,6 +119,10 @@
     vorige = sleutel;
 
     root.setAttribute(ATTR, licht ? 'light' : 'dark');
+    /* Diagnosehaakje. `__ovTokens` in de console vertelt in één regel of deze
+       module gedraaid heeft, welke bron de kleur leverde en welke kant hij op
+       is gegaan - dat scheelt een screenshot heen en weer. */
+    window.__ovTokens = { schema: licht ? 'light' : 'dark', bg: bg, ink: ink };
     const st = root.style;
     const acc = ACCENT[licht ? 'light' : 'dark'];
     const surf = SURFACE[licht ? 'light' : 'dark'];
