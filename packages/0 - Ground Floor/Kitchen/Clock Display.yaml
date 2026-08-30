@@ -105,12 +105,24 @@ kitchen_clock_display_package:
           value_template: >-
             {{ states('sensor.robin_reistijd_naar_werk') | float(-1) >= 0 }}
       actions:
-        # RETAIN: FALSE OP `power`, EN MET REDEN
+        # RETAIN: FALSE OP `power` EN `notify`, EN MET REDEN
         # De broker bewaart per topic het laatste bericht. Met `retain: true`
         # bleef hier een `{"power": ...}` van vanochtend staan, die de klok bij
         # elke herverbinding opnieuw binnenkreeg - dan hing de stand van het
         # scherm ineens af van het laatste bericht van een reistijd-app in
         # plaats van van de huisregel in packages/9 - Other/Klokken.yaml.
+        #
+        # `notify` had dezelfde fout en die is duurder dan hij lijkt: een
+        # bewaarde melding wordt bij elke herverbinding opnieuw afgespeeld, dus
+        # de conditie hierboven ("er is een echte reistijd") beschermt alleen
+        # het versturen en niet het herhalen. Op 2026-08-30 stond hier nog een
+        # `{"text": "unknown min naar werk", "duration": 60}` uit de tijd dat de
+        # Routes API uit stond, en die scrolde sindsdien bij iedere reconnect
+        # een minuut lang over de keukenklok.
+        #
+        # LET OP - dit geldt NIET voor `clock_1/custom/...`. Die apps horen juist
+        # bewaard te blijven: dat is precies waarom er na een herstart meteen
+        # weer iets op het scherm staat.
         - data:
             qos: 0
             retain: false
@@ -119,7 +131,7 @@ kitchen_clock_display_package:
           action: mqtt.publish
         - data:
             qos: 0
-            retain: true
+            retain: false
             topic: clock_1/notify
             # Afronden is niet cosmetisch: Waze levert gebroken minuten
             # (27.05, 5.083...) waar Google een heel getal gaf. Zonder round
