@@ -56,11 +56,14 @@
     afwezig         unieke, opgeschoonde namen die zich hebben afgemeld
     wijzigingen     platte lijst van personele wijzigingen sinds de vorige
                     stand, elk {dag, datum, ploeg, persoon, functies, erbij,
-                    eraf, kort}. `dag` is 'vandaag' of 'morgen', `erbij`/`eraf`
-                    zijn periodes ("18:00-22:00"), `kort` is de regel
-                    "Nick Hermans − 18:00-22:00". Filteren op dag of ploeg doe
-                    je met `selectattr` - de lijst gaat over alle drie de
-                    ploegen en over beide dagen.
+                    eraf, richting, kort}. `dag` is 'vandaag' of 'morgen',
+                    `erbij`/`eraf` zijn periodes ("18:00-22:00"), `richting` is
+                    erbij | eraf | beide, en `kort` is de regel voluit:
+                    "Nick Hermans komt erbij 18:00-22:00". Dat staat er met
+                    zoveel woorden omdat een + of een − op een vergrendelscherm
+                    niet te onderscheiden is van het streepje in de tijd zelf.
+                    Filteren op dag of ploeg doe je met `selectattr` - de lijst
+                    gaat over alle drie de ploegen en over beide dagen.
     ploegen         LIJST (geen dict) van {ploeg, dienst, status, aantal,
                     personen, aspiranten}, gesorteerd op letter. Een ploeg
                     waarvan PreCom niets wist ontbreekt gewoon, dus reken niet
@@ -82,6 +85,19 @@
     {%- endif -%}
   {%- endfor -%}
   {{- ns.uit | to_json -}}
+{%- endmacro -%}
+
+{#- Periodes leesbaar maken. PreCom stuurt "15:30-24:00"; een hele dienst
+    komt als "00:00-24:00" binnen en is als woord duidelijker dan als getallen.
+    Het streepje in de tijden blijft staan - dat mag, want de RICHTING staat
+    voortaan in woorden ernaast en niet meer in een + of - dat je met dit
+    streepje kunt verwarren. -#}
+{%- macro periodes(lijst) -%}
+  {%- set ns = namespace(uit=[]) -%}
+  {%- for periode in (lijst or []) -%}
+    {%- set ns.uit = ns.uit + ['de hele dag' if periode == '00:00-24:00' else periode] -%}
+  {%- endfor -%}
+  {{- ns.uit | join(', ') -}}
 {%- endmacro -%}
 
 {%- macro bezetting_json(p) -%}
@@ -148,9 +164,11 @@
                 'functies': w.get('functies', []) or [],
                 'erbij': erbij,
                 'eraf': eraf,
+                'richting': 'beide' if (erbij and eraf) else ('erbij' if erbij else 'eraf'),
                 'kort': naam
-                  ~ (' + ' ~ erbij | join(', ') if erbij else '')
-                  ~ (' − ' ~ eraf | join(', ') if eraf else '') }] -%}
+                  ~ (' komt erbij ' ~ periodes(erbij) | trim if erbij else '')
+                  ~ (',' if erbij and eraf else '')
+                  ~ (' gaat eraf ' ~ periodes(eraf) | trim if eraf else '') }] -%}
           {%- endif -%}
         {%- endfor -%}
       {%- endfor -%}
@@ -217,7 +235,7 @@
 -#}
 {%- macro melding_json(p) -%}
   {%- set v = bezetting_json(p) | trim | from_json -%}
-  {%- set ns = namespace(regels=[]) -%}
+  {%- set ns = namespace(regels=[], erbij=[], eraf=[]) -%}
 
   {%- if v.type == 'ok' -%}
     {%- set duur = duur_sinds(v.was_sinds) | trim -%}
@@ -237,24 +255,45 @@
   {%- set ns.regels = ns.regels + [
     v.aantal ~ ' beschikbaar in ' ~ v.ploeg ~ '-ploeg · kwartier ' ~ v.kwartier] -%}
 
+  {#- Wijzigingen: alleen die van vandaag in de dienstdoende ploeg. De rest
+      (morgen, de andere twee ploegen) staat op het dashboard en heeft op een
+      vergrendelscherm geen betekenis.
+
+      NIET één regel per persoon, maar twee regels: alles wat erbij komt en
+      alles wat eraf gaat, elk onder zijn eigen kopje. Dat is de vraag die je
+      bij zo'n melding stelt ("wie gaat er nou bij of af?") en die beantwoord
+      je niet met een + en een − die op het streepje in "15:30-24:00" lijken.
+      Iemand die in het ene blok komt en in het andere gaat, staat gewoon in
+      allebei de regels - dat is duidelijker dan één regel met twee tekens.
+
+      Deze twee regels staan bewust vóór "Pager uit": dít is wat er veranderd
+      is en wat de statuswissel verklaart, de pagerlijst is achtergrond. -#}
+  {%- set eigen = v.wijzigingen | selectattr('dag', 'eq', 'vandaag')
+                                | selectattr('ploeg', 'eq', v.ploeg) | list -%}
+  {%- for w in eigen -%}
+    {%- if w.erbij -%}
+      {%- set ns.erbij = ns.erbij + [w.persoon ~ ' ' ~ periodes(w.erbij) | trim] -%}
+    {%- endif -%}
+    {%- if w.eraf -%}
+      {%- set ns.eraf = ns.eraf + [w.persoon ~ ' ' ~ periodes(w.eraf) | trim] -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {#- Afgekapt op drie namen per richting: bij een grote schuif is "en nog 4"
+      bruikbaarder dan een melding van drie schermen hoog. -#}
+  {%- if ns.erbij -%}
+    {%- set ns.regels = ns.regels + ['Erbij: ' ~ (ns.erbij[:3] | join(' · '))
+      ~ (' en nog ' ~ (ns.erbij | count - 3) if ns.erbij | count > 3 else '')] -%}
+  {%- endif -%}
+  {%- if ns.eraf -%}
+    {%- set ns.regels = ns.regels + ['Eraf: ' ~ (ns.eraf[:3] | join(' · '))
+      ~ (' en nog ' ~ (ns.eraf | count - 3) if ns.eraf | count > 3 else '')] -%}
+  {%- endif -%}
+
   {#- Pager uit is de enige regel waar iets mee te doen valt: die mensen zijn
       er wel, maar staan niet aan. Daarom staat hij boven de afmeldingen en
       noemen we de namen. -#}
   {%- if v.pager_uit -%}
     {%- set ns.regels = ns.regels + ['Pager uit: ' ~ v.pager_uit | join(', ')] -%}
-  {%- endif -%}
-
-  {#- Wijzigingen: alleen die van vandaag in de dienstdoende ploeg. De rest
-      (morgen, de andere twee ploegen) staat op het dashboard en heeft op een
-      vergrendelscherm geen betekenis. Ook afgekapt: bij een grote schuif is
-      "en 7 meer" bruikbaarder dan een melding van drie schermen hoog. -#}
-  {%- set eigen = v.wijzigingen | selectattr('dag', 'eq', 'vandaag')
-                                | selectattr('ploeg', 'eq', v.ploeg) | list -%}
-  {%- for w in eigen[:4] -%}
-    {%- set ns.regels = ns.regels + [w.kort] -%}
-  {%- endfor -%}
-  {%- if eigen | count > 4 -%}
-    {%- set ns.regels = ns.regels + ['en nog ' ~ (eigen | count - 4) ~ ' wijzigingen'] -%}
   {%- endif -%}
 
   {{- {
