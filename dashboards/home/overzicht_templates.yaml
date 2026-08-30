@@ -45,12 +45,12 @@ ov_person:
         // (net als vroeger) in de tekst ernaast. Afwezig wordt de foto iets
         // gedimd, zodat je op afstand ziet wie er is zonder te lezen.
         var pic = entity && entity.attributes.entity_picture ? entity.attributes.entity_picture : null;
-        var ring = home ? 'rgba(74,222,128,0.75)' : 'rgba(255,255,255,0.18)';
+        var ring = home ? 'var(--ov-ok-75)' : 'var(--ov-ink-18)';
         if(pic){
           return `<div style="width:34px;height:34px;border-radius:50%;border:2px solid ${ring};box-sizing:border-box;background-image:url('${pic}');background-size:cover;background-position:center;${home ? '' : 'filter:grayscale(0.7);opacity:0.7'}"></div>`;
         }
-        var bg = home ? 'rgba(52,168,120,0.16)' : 'rgba(255,255,255,0.06)';
-        var col = home ? '#4ade80' : 'rgba(255,255,255,0.55)';
+        var bg = home ? 'var(--ov-ok-wash-16)' : 'var(--ov-ink-6)';
+        var col = home ? 'var(--ov-ok)' : 'var(--ov-ink-55)';
         return `<div style="width:34px;height:34px;border-radius:50%;background:${bg};color:${col};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;">${n.charAt(0)}</div>`;
       ]]]
     info: |
@@ -58,28 +58,28 @@ ov_person:
         var fn = entity && entity.attributes.friendly_name ? entity.attributes.friendly_name.split(' ')[0] : '?';
         var home = entity && entity.state === 'home';
         var st = home ? 'thuis' : 'afwezig';
-        var kleur = 'rgba(255,255,255,0.52)';
+        var kleur = 'var(--ov-ink-52)';
         if(!home) {
           // In een bekende zone is de person-state de zonenaam zelf; die is
           // informatiever dan "afwezig" of "onderweg", dus die tonen we.
           var zone = entity ? entity.state : '';
           var bekend = zone && ['not_home','unavailable','unknown'].indexOf(zone) === -1;
-          if(bekend) { st = zone; kleur = '#38bdf8'; }
+          if(bekend) { st = zone; kleur = 'var(--ov-info)'; }
           // Reistijd naar huis, als de routesensor een bruikbare waarde heeft.
           var r = states[variables.travel];
           if(r && !isNaN(Number(r.state)) && Number(r.state) > 0) {
             st = (bekend ? zone : 'onderweg') + ' · ' + Math.round(Number(r.state)) + ' min';
-            kleur = '#38bdf8';
+            kleur = 'var(--ov-info)';
           }
         }
-        return `<span style="display:flex;align-items:baseline;gap:9px"><span style="font-size:15px;font-weight:600;color:white">${fn}</span><span style="font-size:13px;color:${kleur}">${st}</span></span>`;
+        return `<span style="display:flex;align-items:baseline;gap:9px"><span style="font-size:15px;font-weight:600;color:var(--primary-text-color)">${fn}</span><span style="font-size:13px;color:${kleur}">${st}</span></span>`;
       ]]]
     bat: |
       [[[
         var b = states[variables.battery];
         if(!b || isNaN(Number(b.state))) return '';
         var v = Math.round(Number(b.state));
-        var c = v <= 10 ? '#ef4444' : (v <= 20 ? '#f59e0b' : 'white');
+        var c = v <= 10 ? 'var(--ov-bad)' : (v <= 20 ? 'var(--ov-warn)' : 'var(--primary-text-color)');
         return `<span style="font-size:15px;font-weight:600;color:${c}">${v}%</span>`;
       ]]]
 
@@ -106,7 +106,7 @@ ov_room:
       - justify-self: start
       - font-size: 14.5px
       - font-weight: "500"
-      - color: white
+      - color: var(--primary-text-color)
     custom_fields:
       sum:
         - grid-area: sum
@@ -121,8 +121,8 @@ ov_room:
         var ls = variables.lights || [];
         var on = ls.filter(e => states[e] && states[e].state === 'on').length;
         var lamp = on === 0
-          ? `<span style="color:rgba(255,255,255,0.60)">alles uit</span>`
-          : `<span style="color:rgba(255,255,255,0.72)">${on} ${on===1?'lamp':'lampen'} aan</span>`;
+          ? `<span style="color:var(--ov-ink-60)">alles uit</span>`
+          : `<span style="color:var(--ov-ink-72)">${on} ${on===1?'lamp':'lampen'} aan</span>`;
         // temp mag één entiteit zijn of een lijstje; de eerste met een bruikbaar
         // getal wint. Klimaatentiteiten leveren hem via current_temperature.
         var bronnen = variables.temp;
@@ -138,15 +138,15 @@ ov_room:
         });
         if(g === null) return lamp;
         // Alleen kleuren bij uitschieters; anders blijft het rustig.
-        var kleur = g < 17 ? '#38bdf8' : (g > 25 ? '#f59e0b' : 'rgba(255,255,255,0.85)');
+        var kleur = g < 17 ? 'var(--ov-info)' : (g > 25 ? 'var(--ov-warn)' : 'var(--ov-ink-85)');
         var graden = `<span style="color:${kleur};font-weight:600">${g.toFixed(1).replace('.',',')}°</span>`;
-        return `<span style="display:inline-flex;align-items:baseline;gap:8px">${graden}<span style="color:rgba(255,255,255,0.2)">·</span>${lamp}</span>`;
+        return `<span style="display:inline-flex;align-items:baseline;gap:8px">${graden}<span style="color:var(--ov-ink-20)">·</span>${lamp}</span>`;
       ]]]
     dot: |
       [[[
         var ls = variables.lights || [];
         var on = ls.filter(e => states[e] && states[e].state === 'on').length;
-        var c = on > 0 ? '#3b82f6' : 'rgba(255,255,255,0.14)';
+        var c = on > 0 ? 'var(--ov-info-strong)' : 'var(--ov-ink-14)';
         return `<div style="width:9px;height:9px;border-radius:50%;background:${c}"></div>`;
       ]]]
 
@@ -174,7 +174,7 @@ ov_bar:
       - grid-area: n
       - justify-self: start
       - font-size: 14px
-      - color: rgba(255,255,255,0.85)
+      - color: var(--ov-ink-85)
       - white-space: nowrap
       - overflow: hidden
       - text-overflow: ellipsis
@@ -209,12 +209,12 @@ ov_bar:
           m = variables.max || 1000;
         }
         var pct = Math.max(2, Math.min(100, v / m * 100));
-        return `<div style="width:100%;height:6px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:#3b82f6;border-radius:3px"></div></div>`;
+        return `<div style="width:100%;height:6px;background:var(--ov-ink-7);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:var(--ov-info-strong);border-radius:3px"></div></div>`;
       ]]]
     val: |
       [[[
         var v = entity && !isNaN(Number(entity.state)) ? Math.round(Number(entity.state)) : 0;
-        return `<span style="font-size:14px;font-weight:600;color:white">${v} W</span>`;
+        return `<span style="font-size:14px;font-weight:600;color:var(--primary-text-color)">${v} W</span>`;
       ]]]
 
 # --- Climate row: name, temp/doel, action badge ----------------------------
@@ -240,13 +240,13 @@ ov_climate:
       - justify-self: start
       - font-size: 14.5px
       - font-weight: "600"
-      - color: white
+      - color: var(--primary-text-color)
     custom_fields:
       sub:
         - grid-area: sub
         - justify-self: start
         - font-size: 12.5px
-        - color: rgba(255,255,255,0.58)
+        - color: var(--ov-ink-58)
         - padding-top: 2px
       badge:
         - grid-area: badge
@@ -278,10 +278,10 @@ ov_climate:
       [[[
         // Geen badge als de airco offline is; de subregel meldt dat al.
         if(!entity || entity.state === 'unavailable' || entity.state === 'unknown') return '';
-        var blauw = ['#38bdf8','rgba(56,189,248,0.15)'];
-        var oranje = ['#f59e0b','rgba(245,158,11,0.15)'];
-        var grijs = ['rgba(255,255,255,0.6)','rgba(255,255,255,0.08)'];
-        var uit = ['rgba(255,255,255,0.5)','rgba(255,255,255,0.06)'];
+        var blauw = ['var(--ov-info)','var(--ov-info-15)'];
+        var oranje = ['var(--ov-warn)','var(--ov-warn-15)'];
+        var grijs = ['var(--ov-ink-60)','var(--ov-ink-8)'];
+        var uit = ['var(--ov-ink-50)','var(--ov-ink-6)'];
         // hvac_action = wat hij nu doet, state = de ingestelde stand.
         // Niet elke airco levert hvac_action, dus beide moeten vertaald worden.
         var map = {cooling:['koelen'].concat(blauw),
@@ -321,7 +321,7 @@ ov_toggle:
   variables:
     mdi: mdi:toggle-switch
     sub: ""
-    aan_kleur: "#4ade80"
+    aan_kleur: "var(--ov-ok)"
   styles:
     grid:
       - grid-template-areas: '"ic n badge" "ic sub badge"'
@@ -338,7 +338,7 @@ ov_toggle:
       - justify-self: start
       - font-size: 14.5px
       - font-weight: "600"
-      - color: white
+      - color: var(--primary-text-color)
     custom_fields:
       ic:
         - grid-area: ic
@@ -346,7 +346,7 @@ ov_toggle:
         - grid-area: sub
         - justify-self: start
         - font-size: 12.5px
-        - color: rgba(255,255,255,0.58)
+        - color: var(--ov-ink-58)
         - padding-top: 2px
       badge:
         - grid-area: badge
@@ -356,8 +356,8 @@ ov_toggle:
       [[[
         var aan = entity && entity.state === 'on';
         var weg = !entity || ['unavailable','unknown'].indexOf(entity.state) !== -1;
-        var col = weg ? 'rgba(255,255,255,0.25)'
-                      : (aan ? variables.aan_kleur : 'rgba(255,255,255,0.35)');
+        var col = weg ? 'var(--ov-ink-25)'
+                      : (aan ? variables.aan_kleur : 'var(--ov-ink-35)');
         return `<ha-icon icon="${variables.mdi}" style="--mdc-icon-size:22px;color:${col}"></ha-icon>`;
       ]]]
     sub: |
@@ -367,10 +367,10 @@ ov_toggle:
         // Een weggevallen schakelaar krijgt bewust geen "uit"-badge: dan lijkt
         // hij bediend terwijl er niets te bedienen valt.
         if(!entity || ['unavailable','unknown'].indexOf(entity.state) !== -1)
-          return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:rgba(255,255,255,0.5);background:rgba(255,255,255,0.06)">geen verbinding</span>`;
+          return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:var(--ov-ink-50);background:var(--ov-ink-6)">geen verbinding</span>`;
         var aan = entity.state === 'on';
-        var kleur = aan ? variables.aan_kleur : 'rgba(255,255,255,0.5)';
-        var vlak = aan ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.06)';
+        var kleur = aan ? variables.aan_kleur : 'var(--ov-ink-50)';
+        var vlak = aan ? 'var(--ov-ok-15)' : 'var(--ov-ink-6)';
         return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:${kleur};background:${vlak}">${aan ? 'aan' : 'uit'}</span>`;
       ]]]
 
@@ -381,7 +381,7 @@ ov_listrow:
   variables:
     title: ""
     mdi: mdi:information
-    kleur: rgba(255,255,255,0.6)
+    kleur: var(--ov-ink-60)
   styles:
     grid:
       - grid-template-areas: '"ic t" "ic s"'
@@ -401,12 +401,12 @@ ov_listrow:
         - justify-self: start
         - font-size: 14.5px
         - font-weight: "600"
-        - color: white
+        - color: var(--primary-text-color)
       s:
         - grid-area: s
         - justify-self: start
         - font-size: 12.5px
-        - color: rgba(255,255,255,0.58)
+        - color: var(--ov-ink-58)
   custom_fields:
     ic: |
       [[[
@@ -441,7 +441,7 @@ ov_title:
         - font-size: 12px
         - font-weight: "700"
         - letter-spacing: 1.2px
-        - color: rgba(255,255,255,0.55)
+        - color: var(--ov-ink-55)
       b:
         - grid-area: b
         - justify-self: end
@@ -451,7 +451,7 @@ ov_title:
     b: |
       [[[
         if(!variables.badge) return '';
-        return `<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:#4ade80;background:rgba(52,168,120,0.15)">${variables.badge}</span>`;
+        return `<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:var(--ov-ok);background:var(--ov-ok-wash-15)">${variables.badge}</span>`;
       ]]]
 
 # --- Header pill -----------------------------------------------------------
@@ -462,8 +462,8 @@ ov_pill:
     grid:
       - grid-template-areas: '"c"'
     card:
-      - background: rgba(255,255,255,0.05)
-      - border: 1px solid rgba(255,255,255,0.06)
+      - background: var(--ov-ink-5)
+      - border: 1px solid var(--ov-ink-6)
       - border-radius: 20px
       - padding: 7px 14px
       - height: auto
@@ -509,7 +509,7 @@ ov_sonos:
 # --- Gedeelde kleuren en tekst ---------------------------------------------
 # button-card kent geen JS-includes, dus de kleurentabel staat in elk veld dat
 # hem nodig heeft opnieuw. Verander je er één, verander ze dan allemaal:
-#   goed #4ade80 · let op #f59e0b · slecht #ef4444 · geen meting wit op 32%
+#   goed var(--ov-ok) · let op var(--ov-warn) · slecht var(--ov-bad) · geen meting wit op 32%
 
 # --- Kamertegel -------------------------------------------------------------
 # Eén sjabloon, twee maten. Een kamer met een aangewezen sensor krijgt de volle
@@ -544,8 +544,8 @@ kamer_tegel:
     action: more-info
   styles:
     card:
-      - background: rgba(255,255,255,0.04)
-      - border: 1px solid rgba(255,255,255,0.07)
+      - background: var(--ov-ink-4)
+      - border: 1px solid var(--ov-ink-7)
       - border-radius: 16px
       - padding: 12px 15px 11px 15px
       - height: 100%
@@ -555,8 +555,8 @@ kamer_tegel:
           [[[
             var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
             var k = L.find(function(x){ return x.slug === variables.slug; });
-            var C = {'goed':'#4ade80','let op':'#f59e0b','slecht':'#ef4444'};
-            var c = C[k ? k.status : ''] || 'rgba(255,255,255,0.10)';
+            var C = {'goed':'var(--ov-ok)','let op':'var(--ov-warn)','slecht':'var(--ov-bad)'};
+            var c = C[k ? k.status : ''] || 'var(--ov-ink-10)';
             return 'inset 3px 0 0 ' + c;
           ]]]
     grid:
@@ -614,7 +614,7 @@ kamer_tegel:
             [[[
               var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
               var k = L.find(function(x){ return x.slug === variables.slug; });
-              return (k && k.gekoppeld === 0) ? 'none' : '1px solid rgba(255,255,255,0.06)';
+              return (k && k.gekoppeld === 0) ? 'none' : '1px solid var(--ov-ink-6)';
             ]]]
   custom_fields:
     ic: |
@@ -622,10 +622,10 @@ kamer_tegel:
         var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
         var k = L.find(function(x){ return x.slug === variables.slug; });
         if(!k) return '';
-        var C = {'goed':['#4ade80','rgba(74,222,128,0.14)'],
-                 'let op':['#f59e0b','rgba(245,158,11,0.14)'],
-                 'slecht':['#ef4444','rgba(239,68,68,0.14)']};
-        var c = C[k.status] || ['rgba(255,255,255,0.32)','rgba(255,255,255,0.05)'];
+        var C = {'goed':['var(--ov-ok)','var(--ov-ok-14)'],
+                 'let op':['var(--ov-warn)','var(--ov-warn-14)'],
+                 'slecht':['var(--ov-bad)','var(--ov-bad-14)']};
+        var c = C[k.status] || ['var(--ov-ink-32)','var(--ov-ink-5)'];
         // Platte tegel krijgt een kleiner vlak; icoon en ronding schalen mee,
         // zodat de twee maten dezelfde verhouding houden (52% en een derde).
         var vlak = k.gekoppeld === 0 ? 34 : 44;
@@ -635,16 +635,16 @@ kamer_tegel:
       [[[
         var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
         var k = L.find(function(x){ return x.slug === variables.slug; });
-        if(!k) return `<span style="font-size:15px;color:#ef4444">? ${variables.slug}</span>`;
-        return `<span style="font-size:15.5px;font-weight:600;color:white">${k.naam}</span>`;
+        if(!k) return `<span style="font-size:15px;color:var(--ov-bad)">? ${variables.slug}</span>`;
+        return `<span style="font-size:15.5px;font-weight:600;color:var(--primary-text-color)">${k.naam}</span>`;
       ]]]
     sub: |
       [[[
         var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
         var k = L.find(function(x){ return x.slug === variables.slug; });
         if(!k) return '';
-        var C = {'let op':'#f59e0b','slecht':'#ef4444'};
-        var c = C[k.status] || 'rgba(255,255,255,0.50)';
+        var C = {'let op':'var(--ov-warn)','slecht':'var(--ov-bad)'};
+        var c = C[k.status] || 'var(--ov-ink-50)';
         var t = k.reden || '';
         if(k.advies) t += ' · ' + k.advies;
         return `<span style="display:block;font-size:12.5px;color:${c};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t}</span>`;
@@ -654,8 +654,8 @@ kamer_tegel:
         var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
         var k = L.find(function(x){ return x.slug === variables.slug; });
         if(!k) return '';
-        var stil = 'rgba(255,255,255,0.20)';
-        var grijs = 'rgba(255,255,255,0.45)';
+        var stil = 'var(--ov-ink-20)';
+        var grijs = 'var(--ov-ink-45)';
         // ICONEN IN DE TEKSTFLOW: `vertical-align:middle` en een expliciete
         // box. Een `ha-icon` is zelf een inline-flex; met een offset in
         // pixels gok je op de regelhoogte en rekt het icoon die regel
@@ -671,7 +671,7 @@ kamer_tegel:
         var b = k.beweging || {};
         var bew;
         if(!b.gemeten) bew = ic('mdi:motion-sensor-off', stil, 13) + `<span style="color:${stil}">geen melder</span>`;
-        else if(b.actief) bew = ic('mdi:motion-sensor', '#4ade80', 13) + `<span style="color:#4ade80">nu aanwezig</span>`;
+        else if(b.actief) bew = ic('mdi:motion-sensor', 'var(--ov-ok)', 13) + `<span style="color:var(--ov-ok)">nu aanwezig</span>`;
         else {
           var mi = b.minuten;
           var t = mi === null ? 'onbekend'
@@ -684,16 +684,16 @@ kamer_tegel:
         var con;
         if(!ct.gemeten) con = `<span style="color:${stil}">geen contact</span>`;
         else if(ct.open === 0) con = `<span style="color:${grijs}">alles dicht</span>`;
-        else con = `<span style="color:#38bdf8">${ct.open} open</span> ` + ic('mdi:window-open-variant', '#38bdf8', 13);
+        else con = `<span style="color:var(--ov-info)">${ct.open} open</span> ` + ic('mdi:window-open-variant', 'var(--ov-info)', 13);
         if(k.gekoppeld === 0){
           return `<div style="font-size:11.5px;line-height:1.55;white-space:nowrap">${bew}<br>${con}</div>`;
         }
         var t2 = (k.metingen || []).find(function(m){ return m.k === 'temp'; });
         var kop;
-        if(!t2 || t2.w === null) kop = `<span style="font-size:17px;color:rgba(255,255,255,0.18)">–</span>`;
+        if(!t2 || t2.w === null) kop = `<span style="font-size:17px;color:var(--ov-ink-18)">–</span>`;
         else {
           // Alleen de uitschieters kleuren; anders is de hele muur bont.
-          var c = t2.score >= 2 ? '#ef4444' : (t2.score === 1 ? '#f59e0b' : 'white');
+          var c = t2.score >= 2 ? 'var(--ov-bad)' : (t2.score === 1 ? 'var(--ov-warn)' : 'var(--primary-text-color)');
           var v = t2.w.toFixed(1).replace('.', ',');
           kop = `<span style="font-size:24px;font-weight:600;letter-spacing:-0.5px;color:${c}${t2.oud ? ';opacity:0.45' : ''}">${v}<span style="font-size:15px;opacity:0.5">°</span></span>`;
         }
@@ -704,16 +704,16 @@ kamer_tegel:
         var delen = orde.map(function(key){
           var m = (k.metingen || []).find(function(x){ return x.k === key; });
           if(!m || m.w === null) return '';
-          var c2 = m.score >= 2 ? '#ef4444' : (m.score === 1 ? '#f59e0b' : 'rgba(255,255,255,0.72)');
+          var c2 = m.score >= 2 ? 'var(--ov-bad)' : (m.score === 1 ? 'var(--ov-warn)' : 'var(--ov-ink-72)');
           var v2, lab;
           if(key === 'rv'){ v2 = Math.round(m.w) + '%'; lab = 'RV'; }
           else if(key === 'co2'){ v2 = Math.round(m.w); lab = 'CO₂'; }
           else if(key === 'lux'){ v2 = Math.round(m.w); lab = 'lx'; }
           else { v2 = (Math.round(m.w * 10) / 10).toString().replace('.', ','); lab = 'PM2.5'; }
-          return `<span style="color:${c2}${m.oud ? ';opacity:0.45' : ''}">${v2}</span><span style="color:rgba(255,255,255,0.34)"> ${lab}</span>`;
+          return `<span style="color:${c2}${m.oud ? ';opacity:0.45' : ''}">${v2}</span><span style="color:var(--ov-ink-34)"> ${lab}</span>`;
         }).filter(function(x){ return x !== ''; });
         var strip = delen.length
-          ? `<div style="font-size:11.5px;margin-top:1px;white-space:nowrap">${delen.join('<span style="color:rgba(255,255,255,0.18)"> · </span>')}</div>`
+          ? `<div style="font-size:11.5px;margin-top:1px;white-space:nowrap">${delen.join('<span style="color:var(--ov-ink-18)"> · </span>')}</div>`
           : '';
         return kop + strip;
       ]]]
@@ -724,15 +724,15 @@ kamer_tegel:
         // Bij een platte tegel staan beweging en contacten al rechtsboven; de
         // stijlen hierboven vouwen deze rij dan tot nul pixels dicht.
         if(!k || k.gekoppeld === 0) return '';
-        var stil = 'rgba(255,255,255,0.20)';
-        var grijs = 'rgba(255,255,255,0.45)';
+        var stil = 'var(--ov-ink-20)';
+        var grijs = 'var(--ov-ink-45)';
         function ic(naam, kleur){
           return `<ha-icon icon="${naam}" style="--mdc-icon-size:14px;width:14px;height:14px;vertical-align:middle;color:${kleur}"></ha-icon> `;
         }
         var b = k.beweging || {};
         var links;
         if(!b.gemeten) links = ic('mdi:motion-sensor-off', stil) + `<span style="color:${stil}">geen melder</span>`;
-        else if(b.actief) links = ic('mdi:motion-sensor', '#4ade80') + `<span style="color:#4ade80">nu aanwezig</span>`;
+        else if(b.actief) links = ic('mdi:motion-sensor', 'var(--ov-ok)') + `<span style="color:var(--ov-ok)">nu aanwezig</span>`;
         else {
           var m = b.minuten;
           var t = m === null ? 'onbekend'
@@ -745,7 +745,7 @@ kamer_tegel:
         var rechts;
         if(!ct.gemeten) rechts = `<span style="color:${stil}">geen contact</span>` + ' ' + ic('mdi:door-closed', stil);
         else if(ct.open === 0) rechts = `<span style="color:${grijs}">alles dicht</span>` + ' ' + ic('mdi:door-closed', grijs);
-        else rechts = `<span style="color:#38bdf8">${ct.open} open</span>` + ' ' + ic('mdi:window-open-variant', '#38bdf8');
+        else rechts = `<span style="color:var(--ov-info)">${ct.open} open</span>` + ' ' + ic('mdi:window-open-variant', 'var(--ov-info)');
         return `<div style="display:grid;grid-template-columns:1fr auto;width:100%;font-size:12px"><div style="text-align:left">${links}</div><div style="text-align:right">${rechts}</div></div>`;
       ]]]
 
@@ -771,8 +771,8 @@ kamer_detail:
     slug: ""
   styles:
     card:
-      - background: rgba(255,255,255,0.04)
-      - border: 1px solid rgba(255,255,255,0.07)
+      - background: var(--ov-ink-4)
+      - border: 1px solid var(--ov-ink-7)
       - border-radius: 16px
       - padding: 16px 18px
     grid:
@@ -798,11 +798,11 @@ kamer_detail:
       [[[
         var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
         var k = L.find(function(x){ return x.slug === variables.slug; });
-        if(!k) return `<span style="font-size:14px;color:#f59e0b">sensor.kamers heeft nog geen waarde</span>`;
-        var C = {'goed':'#4ade80','let op':'#f59e0b','slecht':'#ef4444'};
-        var c = C[k.status] || 'rgba(255,255,255,0.45)';
+        if(!k) return `<span style="font-size:14px;color:var(--ov-warn)">sensor.kamers heeft nog geen waarde</span>`;
+        var C = {'goed':'var(--ov-ok)','let op':'var(--ov-warn)','slecht':'var(--ov-bad)'};
+        var c = C[k.status] || 'var(--ov-ink-45)';
         var r = `<div style="font-size:16px;font-weight:600;color:${c}">${k.status} — ${k.reden}</div>`;
-        if(k.advies) r += `<div style="font-size:13px;color:rgba(255,255,255,0.55);margin-top:3px">${k.advies}</div>`;
+        if(k.advies) r += `<div style="font-size:13px;color:var(--ov-ink-55);margin-top:3px">${k.advies}</div>`;
         return r;
       ]]]
     bronnen: |
@@ -818,16 +818,16 @@ kamer_detail:
           var t = k.gekoppeld === 0
             ? 'Aan deze ruimte is geen sensor gekoppeld. Wijs er één aan bij <code>klimaat</code> in <code>custom_templates/kamers.jinja</code>.'
             : 'De aangewezen sensor geeft geen waarde door — batterij of verbinding.';
-          return `<div style="font-size:13px;color:rgba(255,255,255,0.45);line-height:1.5">${t}</div>`;
+          return `<div style="font-size:13px;color:var(--ov-ink-45);line-height:1.5">${t}</div>`;
         }
         var r = m.map(function(x){
-          var C = {2:'#ef4444', 1:'#f59e0b'};
-          var c = C[x.score] || 'rgba(255,255,255,0.88)';
+          var C = {2:'var(--ov-bad)', 1:'var(--ov-warn)'};
+          var c = C[x.score] || 'var(--ov-ink-88)';
           var v = (Math.round(x.w * 10) / 10).toString().replace('.', ',') + x.eenheid;
-          return `<div style="display:grid;grid-template-columns:56px auto 1fr;align-items:baseline;column-gap:10px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.05)">`
-            + `<div style="font-size:10px;letter-spacing:0.6px;text-transform:uppercase;color:rgba(255,255,255,0.36)">${x.label}</div>`
+          return `<div style="display:grid;grid-template-columns:56px auto 1fr;align-items:baseline;column-gap:10px;padding:5px 0;border-top:1px solid var(--ov-ink-5)">`
+            + `<div style="font-size:10px;letter-spacing:0.6px;text-transform:uppercase;color:var(--ov-ink-36)">${x.label}</div>`
             + `<div style="font-size:14px;font-weight:600;color:${c}${x.oud ? ';opacity:0.45' : ''}">${v}${x.oud ? ' ·&nbsp;oud' : ''}</div>`
-            + `<div style="font-size:11px;color:rgba(255,255,255,0.30);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right">${x.id}</div>`
+            + `<div style="font-size:11px;color:var(--ov-ink-30);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right">${x.id}</div>`
             + `</div>`;
         }).join('');
         // De tegel toont sinds 2026-08-03 alleen de metingen die er zijn. Wat
@@ -837,7 +837,7 @@ kamer_detail:
         var mist = (k.metingen || []).filter(function(x){ return x.w === null; })
                                      .map(function(x){ return x.label; });
         var staart = mist.length
-          ? `<div style="font-size:11.5px;color:rgba(255,255,255,0.28);padding:7px 0 0 0;border-top:1px solid rgba(255,255,255,0.05)">niet gemeten: ${mist.join(', ')}</div>`
+          ? `<div style="font-size:11.5px;color:var(--ov-ink-28);padding:7px 0 0 0;border-top:1px solid var(--ov-ink-5)">niet gemeten: ${mist.join(', ')}</div>`
           : '';
         return `<div style="width:100%">${r}${staart}</div>`;
       ]]]
@@ -865,8 +865,8 @@ kamer_onderhoud_knop:
   show_state: false
   styles:
     card:
-      - background: rgba(255,255,255,0.03)
-      - border: 1px solid rgba(255,255,255,0.06)
+      - background: var(--ov-ink-3)
+      - border: 1px solid var(--ov-ink-6)
       - border-radius: 14px
       - padding: 11px 16px
     grid:
@@ -882,15 +882,15 @@ kamer_onderhoud_knop:
       [[[
         var s = states['sensor.kamers_niet_gekoppeld'];
         var n = s ? ((s.attributes.sensoren || []).length) : 0;
-        var grijs = 'rgba(255,255,255,0.45)';
+        var grijs = 'var(--ov-ink-45)';
         function ic(naam, kleur){
           return `<ha-icon icon="${naam}" style="--mdc-icon-size:15px;width:15px;height:15px;vertical-align:middle;color:${kleur}"></ha-icon> `;
         }
-        if(!s) return `<span style="font-size:13px;color:#f59e0b">${ic('mdi:help-circle-outline','#f59e0b')}sensor.kamers_niet_gekoppeld bestaat nog niet</span>`;
-        if(n === 0) return `<span style="font-size:13px;color:${grijs}">${ic('mdi:check', '#4ade80')}Alle meetsensoren zijn gekoppeld</span>`;
+        if(!s) return `<span style="font-size:13px;color:var(--ov-warn)">${ic('mdi:help-circle-outline','var(--ov-warn)')}sensor.kamers_niet_gekoppeld bestaat nog niet</span>`;
+        if(n === 0) return `<span style="font-size:13px;color:${grijs}">${ic('mdi:check', 'var(--ov-ok)')}Alle meetsensoren zijn gekoppeld</span>`;
         return `<div style="display:grid;grid-template-columns:1fr auto;align-items:center;font-size:13px">`
           + `<div style="text-align:left;color:${grijs}">${ic('mdi:link-variant-off', grijs)}${n} sensor${n > 1 ? 'en' : ''} niet gekoppeld</div>`
-          + `<div style="text-align:right;color:rgba(255,255,255,0.28)">bekijken ›</div></div>`;
+          + `<div style="text-align:right;color:var(--ov-ink-28)">bekijken ›</div></div>`;
       ]]]
 
 # --- De lijst in de pop-up --------------------------------------------------
@@ -903,8 +903,8 @@ kamer_onderhoud_lijst:
     action: none
   styles:
     card:
-      - background: rgba(255,255,255,0.04)
-      - border: 1px solid rgba(255,255,255,0.07)
+      - background: var(--ov-ink-4)
+      - border: 1px solid var(--ov-ink-7)
       - border-radius: 16px
       - padding: 16px 18px
     grid:
@@ -925,8 +925,8 @@ kamer_onderhoud_lijst:
       [[[
         var s = states['sensor.kamers_niet_gekoppeld'];
         var L = s ? (s.attributes.sensoren || []) : [];
-        if(!L.length) return `<div style="font-size:14px;color:#4ade80">Alle meetsensoren zijn gekoppeld.</div>`;
-        return `<div style="font-size:13px;color:rgba(255,255,255,0.50);line-height:1.55">`
+        if(!L.length) return `<div style="font-size:14px;color:var(--ov-ok)">Alle meetsensoren zijn gekoppeld.</div>`;
+        return `<div style="font-size:13px;color:var(--ov-ink-50);line-height:1.55">`
           + `Deze hangen in een ruimte van dit overzicht maar leveren er geen waarde voor. `
           + `Bewust? Zet ze in <code>negeer</code>. Anders in <code>klimaat</code> of <code>voorkeur</code>, `
           + `in <code>custom_templates/kamers.jinja</code>.</div>`;
@@ -943,10 +943,10 @@ kamer_onderhoud_lijst:
         });
         var r = Object.keys(per).sort().map(function(kamer){
           var ids = per[kamer].sort().map(function(id){
-            return `<div style="font-family:monospace;font-size:11px;color:rgba(255,255,255,0.32);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${id}</div>`;
+            return `<div style="font-family:monospace;font-size:11px;color:var(--ov-ink-32);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${id}</div>`;
           }).join('');
-          return `<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,0.05)">`
-            + `<div style="font-size:13px;font-weight:600;color:white;margin-bottom:3px">${kamer} <span style="font-weight:400;color:rgba(255,255,255,0.30)">· ${per[kamer].length}</span></div>`
+          return `<div style="padding:8px 0;border-top:1px solid var(--ov-ink-5)">`
+            + `<div style="font-size:13px;font-weight:600;color:var(--primary-text-color);margin-bottom:3px">${kamer} <span style="font-weight:400;color:var(--ov-ink-30)">· ${per[kamer].length}</span></div>`
             + `${ids}</div>`;
         }).join('');
         return `<div style="width:100%">${r}</div>`;

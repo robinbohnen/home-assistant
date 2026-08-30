@@ -63,7 +63,7 @@ icon: mdi:monitor
 panel: true
 # Kern-eigenschap van de view: dit is een gewone view-property en werkt dus
 # ook zonder card-mod/thema in de Cast-sessie.
-background: "#0b0d12"
+background: "var(--primary-background-color)"
 cards:
   - type: vertical-stack
     cards:
@@ -105,8 +105,8 @@ cards:
                   var mnd = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
                   var t = ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
                   return `<span style="display:flex;align-items:baseline;gap:2.2vh">
-                    <span style="font-size:6.5vh;font-weight:700;color:white;line-height:1">${t}</span>
-                    <span style="font-size:3.1vh;color:rgba(255,255,255,0.72)">${dagen[d.getDay()]} ${d.getDate()} ${mnd[d.getMonth()]}</span>
+                    <span style="font-size:6.5vh;font-weight:700;color:var(--primary-text-color);line-height:1">${t}</span>
+                    <span style="font-size:3.1vh;color:var(--ov-ink-72)">${dagen[d.getDay()]} ${d.getDate()} ${mnd[d.getMonth()]}</span>
                   </span>`;
                 ]]]
           - type: horizontal-stack
@@ -121,8 +121,8 @@ cards:
                 styles:
                   card:
                     - background: >
-                        [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && /low/.test(g.state)) ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
-                    - border: 1px solid rgba(255,255,255,0.07)
+                        [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && /low/.test(g.state)) ? 'var(--ov-ok-wash-14)' : 'var(--ov-ink-5)'; ]]]
+                    - border: 1px solid var(--ov-ink-7)
                     - border-radius: 999px
                     - box-shadow: none
                     - padding: 1vh 1.8vh
@@ -142,11 +142,11 @@ cards:
                       // SlimHuys levert vijf niveaus, niet drie. Zonder very_low
                       // en very_high stond hier letterlijk "tarief very_low".
                       var lbl = {very_low:'zeer laag', low:'laag', medium:'gemiddeld', high:'hoog', very_high:'zeer hoog'};
-                      var col = {very_low:'#4ade80', low:'#4ade80', medium:'#f59e0b', high:'#ef4444', very_high:'#ef4444'};
+                      var col = {very_low:'var(--ov-ok)', low:'var(--ov-ok)', medium:'var(--ov-warn)', high:'var(--ov-bad)', very_high:'var(--ov-bad)'};
                       var gs = g ? g.state : 'medium';
                       var prijs = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '—';
-                      return `<span style="display:flex;align-items:center;gap:1vh;white-space:nowrap;font-size:2.7vh;font-weight:500;color:${/low/.test(gs) ? '#4ade80' : 'rgba(255,255,255,0.85)'}">
-                        <span style="width:1.1vh;height:1.1vh;border-radius:50%;background:${col[gs]||'#888'}"></span>tarief ${lbl[gs]||String(gs).replace(/_/g,' ')} · ${prijs}</span>`;
+                      return `<span style="display:flex;align-items:center;gap:1vh;white-space:nowrap;font-size:2.7vh;font-weight:500;color:${/low/.test(gs) ? 'var(--ov-ok)' : 'var(--ov-ink-85)'}">
+                        <span style="width:1.1vh;height:1.1vh;border-radius:50%;background:${col[gs]||'var(--ov-ink-55)'}"></span>tarief ${lbl[gs]||String(gs).replace(/_/g,' ')} · ${prijs}</span>`;
                     ]]]
               - type: custom:button-card
                 entity: weather.knmi_thuis
@@ -157,8 +157,8 @@ cards:
                   action: none
                 styles:
                   card:
-                    - background: rgba(255,255,255,0.05)
-                    - border: 1px solid rgba(255,255,255,0.07)
+                    - background: var(--ov-ink-5)
+                    - border: 1px solid var(--ov-ink-7)
                     - border-radius: 999px
                     - box-shadow: none
                     - padding: 1vh 1.8vh
@@ -178,8 +178,8 @@ cards:
                       var map = {sunny:'zonnig','clear-night':'helder',cloudy:'bewolkt',partlycloudy:'half bewolkt',rainy:'regen',pouring:'zware regen',snowy:'sneeuw','snowy-rainy':'natte sneeuw',fog:'mist',windy:'winderig','windy-variant':'winderig',hail:'hagel',lightning:'onweer','lightning-rainy':'onweer',exceptional:'extreem'};
                       var ico = {sunny:'mdi:weather-sunny','clear-night':'mdi:weather-night',cloudy:'mdi:weather-cloudy',partlycloudy:'mdi:weather-partly-cloudy',rainy:'mdi:weather-rainy',pouring:'mdi:weather-pouring',snowy:'mdi:weather-snowy','snowy-rainy':'mdi:weather-snowy-rainy',fog:'mdi:weather-fog',windy:'mdi:weather-windy','windy-variant':'mdi:weather-windy-variant',hail:'mdi:weather-hail',lightning:'mdi:weather-lightning','lightning-rainy':'mdi:weather-lightning-rainy',exceptional:'mdi:weather-cloudy-alert'};
                       var t = w.attributes.temperature;
-                      return `<span style="display:flex;align-items:center;gap:1vh;white-space:nowrap;font-size:2.7vh;color:rgba(255,255,255,0.8)">
-                        <ha-icon icon="${ico[w.state]||'mdi:weather-cloudy'}" style="--mdc-icon-size:3.1vh;color:rgba(255,255,255,0.6)"></ha-icon>
+                      return `<span style="display:flex;align-items:center;gap:1vh;white-space:nowrap;font-size:2.7vh;color:var(--ov-ink-80)">
+                        <ha-icon icon="${ico[w.state]||'mdi:weather-cloudy'}" style="--mdc-icon-size:3.1vh;color:var(--ov-ink-60)"></ha-icon>
                         ${map[w.state]||w.state} · ${t != null ? Math.round(t) : '—'}°</span>`;
                     ]]]
 
@@ -207,8 +207,8 @@ cards:
               action: none
             styles:
               card:
-                  - background: rgba(255,255,255,0.06)
-                  - border: 1px solid rgba(255,255,255,0.18)
+                  - background: var(--ov-ink-6)
+                  - border: 1px solid var(--ov-ink-18)
                   - border-radius: 18px
                   - box-shadow: none
                   - padding: 1.6vh 2vh
@@ -247,13 +247,13 @@ cards:
                   var ds = states['input_select.brandweer_dienstdoende_ploeg'];
                   var p = ds && ds.state ? ds.state.charAt(0).toUpperCase() : null;
                   var staart = (p && 'ABC'.indexOf(p) !== -1)
-                    ? `<span style="color:#38bdf8;font-weight:600">${p}-ploeg heeft dienst</span>`
-                    : `<span style="color:rgba(255,255,255,0.62)">dienst onbekend</span>`;
+                    ? `<span style="color:var(--ov-info);font-weight:600">${p}-ploeg heeft dienst</span>`
+                    : `<span style="color:var(--ov-ink-62)">dienst onbekend</span>`;
                   var r = states['sensor.robin_reistijd_naar_brandweer_uden'];
                   var kazerne = (r && !isNaN(Number(r.state)))
-                    ? `<span style="font-size:2.2vh;color:rgba(255,255,255,0.68);margin-left:auto;white-space:nowrap">kazerne ${Math.round(Number(r.state))} min</span>` : '';
+                    ? `<span style="font-size:2.2vh;color:var(--ov-ink-68);margin-left:auto;white-space:nowrap">kazerne ${Math.round(Number(r.state))} min</span>` : '';
                   return `<span style="display:flex;align-items:baseline;gap:1.2vh;width:100%">
-                    <span style="font-size:2.5vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.68)">BRANDWEER</span>
+                    <span style="font-size:2.5vh;font-weight:700;letter-spacing:0.12vh;color:var(--ov-ink-68)">BRANDWEER</span>
                     <span style="font-size:2.5vh">${staart}</span>${kazerne}</span>`;
                 ]]]
               # Aantal en kleur komen bij voorkeur uit sensor.brandweer_bezetting
@@ -272,13 +272,13 @@ cards:
                   var attrs = (bez && bez.attributes) ? bez.attributes : {};
                   var uitWebhook = {};
                   (attrs.ploegen || []).forEach(function(p){ uitWebhook[p.ploeg] = p; });
-                  var kleuren = {onderbezet:'#ef4444', krap:'#f59e0b'};
+                  var kleuren = {onderbezet:'var(--ov-bad)', krap:'var(--ov-warn)'};
                   var cellen = ['A','B','C'].map(function(letter){
                     var w = uitWebhook[letter];
                     var s = states['sensor.bezetting_ploeg_' + letter.toLowerCase()];
                     var n = w ? w.aantal : (s && !isNaN(Number(s.state)) ? Number(s.state) : null);
-                    var col = w ? (kleuren[w.status] || '#4ade80')
-                            : (n === null ? 'rgba(255,255,255,0.35)' : (n < 4 ? '#ef4444' : (n < 6 ? '#f59e0b' : '#4ade80')));
+                    var col = w ? (kleuren[w.status] || 'var(--ov-ok)')
+                            : (n === null ? 'var(--ov-ink-35)' : (n < 4 ? 'var(--ov-bad)' : (n < 6 ? 'var(--ov-warn)' : 'var(--ov-ok)')));
                     var aan = letter === dienst;
                     // De functiedetails in de payload gaan alleen over de
                     // dienstdoende ploeg; de andere twee hebben enkel een status.
@@ -294,10 +294,10 @@ cards:
                     var onder = label
                       ? `<span style="display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:1.7vh;font-weight:700;letter-spacing:0.08vh;color:${col}">${label.toUpperCase()}</span>`
                       : (aan
-                        ? `<span style="font-size:1.7vh;font-weight:700;letter-spacing:0.08vh;color:#38bdf8">DIENST</span>`
+                        ? `<span style="font-size:1.7vh;font-weight:700;letter-spacing:0.08vh;color:var(--ov-info)">DIENST</span>`
                         : `<span style="font-size:1.7vh">&nbsp;</span>`);
-                    return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:0.2vh;padding:1vh 0 0.8vh 0;border-radius:1.4vh;background:${aan ? 'rgba(56,189,248,0.12)' : 'rgba(255,255,255,0.04)'};border:1px solid ${aan ? 'rgba(56,189,248,0.35)' : 'rgba(255,255,255,0.06)'}">
-                      <span style="font-size:2.1vh;font-weight:700;letter-spacing:0.1vh;color:${aan ? '#38bdf8' : 'rgba(255,255,255,0.7)'}">${letter}</span>
+                    return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:0.2vh;padding:1vh 0 0.8vh 0;border-radius:1.4vh;background:${aan ? 'var(--ov-info-12)' : 'var(--ov-ink-4)'};border:1px solid ${aan ? 'var(--ov-info-35)' : 'var(--ov-ink-6)'}">
+                      <span style="font-size:2.1vh;font-weight:700;letter-spacing:0.1vh;color:${aan ? 'var(--ov-info)' : 'var(--ov-ink-70)'}">${letter}</span>
                       <span style="font-size:4.7vh;font-weight:700;line-height:1.05;color:${col}">${n === null ? '—' : n}</span>${onder}</div>`;
                   });
                   return `<div style="display:flex;gap:1.2vh">${cellen.join('')}</div>`;
@@ -310,10 +310,10 @@ cards:
                   if(tot === null && perPloeg.every(function(x){ return x[1] === null; })) return '';
                   var cel = function(waarde, label, groot){
                     return `<div style="display:flex;flex-direction:column;align-items:center;gap:0.2vh">
-                      <span style="font-size:${groot ? '2.8vh' : '2.2vh'};font-weight:700;color:${groot ? 'white' : 'rgba(255,255,255,0.8)'}">${waarde === null ? '—' : waarde}</span>
-                      <span style="font-size:1.8vh;color:rgba(255,255,255,0.68)">${label}</span></div>`;
+                      <span style="font-size:${groot ? '2.8vh' : '2.2vh'};font-weight:700;color:${groot ? 'var(--primary-text-color)' : 'var(--ov-ink-80)'}">${waarde === null ? '—' : waarde}</span>
+                      <span style="font-size:1.8vh;color:var(--ov-ink-68)">${label}</span></div>`;
                   };
-                  return `<div style="display:flex;justify-content:space-around;align-items:end;width:100%;box-sizing:border-box;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">
+                  return `<div style="display:flex;justify-content:space-around;align-items:end;width:100%;box-sizing:border-box;border-top:1px solid var(--ov-ink-7);padding-top:1.2vh">
                     ${cel(tot, 'mijn uitrukken', true)}
                     ${perPloeg.map(function(x){ return cel(x[1], x[0] + '-ploeg', false); }).join('')}</div>`;
                 ]]]
@@ -321,7 +321,7 @@ cards:
                 [[[
                   var e = states['input_text.brandweer_laatste_melding'];
                   var tekst = e && e.state ? e.state : '';
-                  if(!tekst) return `<span style="font-size:2.5vh;color:rgba(255,255,255,0.62)">geen recente melding</span>`;
+                  if(!tekst) return `<span style="font-size:2.5vh;color:var(--ov-ink-62)">geen recente melding</span>`;
                   var m = tekst.match(/^\s*([A-Pa-p])\s*(\d)/);
                   var code = m ? (m[1] + m[2]).toUpperCase() : null;
                   var kort = tekst.replace(/^\s*[A-Pa-p]\s*\d\s*/, '');
@@ -344,15 +344,15 @@ cards:
                     if(!isNaN(dt.getTime())) wanneer = dt.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}) + ' ' + ('0'+dt.getHours()).slice(-2)+':'+('0'+dt.getMinutes()).slice(-2);
                   }
                   var badge = code
-                    ? `<div style="min-width:5.7vh;padding:0.4vh 1vh;border-radius:1vh;background:rgba(245,158,11,0.16);color:#f59e0b;font-size:2.5vh;font-weight:700;text-align:center">${code}</div>`
-                    : `<ha-icon icon="mdi:fire-truck" style="--mdc-icon-size:3.4vh;color:#f59e0b"></ha-icon>`;
-                  return `<div style="display:flex;align-items:center;justify-content:flex-start;width:100%;box-sizing:border-box;gap:1.4vh;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">${badge}
+                    ? `<div style="min-width:5.7vh;padding:0.4vh 1vh;border-radius:1vh;background:var(--ov-warn-16);color:var(--ov-warn);font-size:2.5vh;font-weight:700;text-align:center">${code}</div>`
+                    : `<ha-icon icon="mdi:fire-truck" style="--mdc-icon-size:3.4vh;color:var(--ov-warn)"></ha-icon>`;
+                  return `<div style="display:flex;align-items:center;justify-content:flex-start;width:100%;box-sizing:border-box;gap:1.4vh;border-top:1px solid var(--ov-ink-7);padding-top:1.2vh">${badge}
                     <div style="display:flex;flex-direction:column;gap:0.3vh;overflow:hidden">
-                      <span style="font-size:2.5vh;line-height:1.2;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${kort}</span>
-                      <span style="display:inline-flex;align-items:center;gap:0.8vh;font-size:2.1vh;line-height:1;color:rgba(255,255,255,0.68)">
+                      <span style="font-size:2.5vh;line-height:1.2;font-weight:600;color:var(--primary-text-color);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${kort}</span>
+                      <span style="display:inline-flex;align-items:center;gap:0.8vh;font-size:2.1vh;line-height:1;color:var(--ov-ink-68)">
                         <span>${wanneer}</span>${voertuigen.length
-                        ? `<span style="color:rgba(255,255,255,0.25)">·</span>
-                        <span style="display:inline-flex;align-items:center;gap:0.5vh"><ha-icon icon="mdi:fire-truck" style="--mdc-icon-size:2.1vh;color:rgba(255,255,255,0.5)"></ha-icon>${voertuigen.join(', ')}</span>`
+                        ? `<span style="color:var(--ov-ink-25)">·</span>
+                        <span style="display:inline-flex;align-items:center;gap:0.5vh"><ha-icon icon="mdi:fire-truck" style="--mdc-icon-size:2.1vh;color:var(--ov-ink-50)"></ha-icon>${voertuigen.join(', ')}</span>`
                         : ''}</span></div></div>`;
                 ]]]
 
@@ -368,8 +368,8 @@ cards:
               laadvenster_uren: 3
             styles:
               card:
-                  - background: rgba(255,255,255,0.06)
-                  - border: 1px solid rgba(255,255,255,0.18)
+                  - background: var(--ov-ink-6)
+                  - border: 1px solid var(--ov-ink-18)
                   - border-radius: 18px
                   - box-shadow: none
                   - padding: 1.6vh 2vh
@@ -419,22 +419,22 @@ cards:
                   var txt, col;
                   if(gs && /low/.test(gs)){
                     txt = groen ? 'groen en goedkoop' : 'goedkoop';
-                    col = '#4ade80';
+                    col = 'var(--ov-ok)';
                   } else if(gs && /high/.test(gs)){
                     txt = groen ? 'groen maar duur' : 'duur';
-                    col = groen ? '#f59e0b' : '#ef4444';
+                    col = groen ? 'var(--ov-warn)' : 'var(--ov-bad)';
                   } else {
                     txt = groen ? 'groen · normaal tarief' : 'normaal tarief';
-                    col = groen ? '#4ade80' : 'rgba(255,255,255,0.6)';
+                    col = groen ? 'var(--ov-ok)' : 'var(--ov-ink-60)';
                   }
                   var k = states['sensor.total_costs_today_calculated'];
                   var kosten = '';
                   if(k && !isNaN(Number(k.state))){
                     var kv = Number(k.state);
-                    kosten = `<span style="font-size:2.2vh;margin-left:auto;white-space:nowrap;color:${kv < 0 ? '#4ade80' : 'rgba(255,255,255,0.72)'}">€ ${kv.toFixed(2).replace('.',',')} vandaag</span>`;
+                    kosten = `<span style="font-size:2.2vh;margin-left:auto;white-space:nowrap;color:${kv < 0 ? 'var(--ov-ok)' : 'var(--ov-ink-72)'}">€ ${kv.toFixed(2).replace('.',',')} vandaag</span>`;
                   }
                   return `<span style="display:flex;align-items:baseline;gap:1.2vh;width:100%">
-                    <span style="font-size:2.5vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.68)">ENERGIE · NU</span>
+                    <span style="font-size:2.5vh;font-weight:700;letter-spacing:0.12vh;color:var(--ov-ink-68)">ENERGIE · NU</span>
                     <span style="font-size:2.5vh;color:${col}">stroom is ${txt}</span>${kosten}</span>`;
                 ]]]
               cijfers: |
@@ -474,17 +474,17 @@ cards:
                   var klein = function(waarde, label, kleur){
                     return `<div style="display:flex;flex-direction:column;gap:0.3vh">
                       <span style="font-size:4.2vh;font-weight:700;line-height:1;color:${kleur}">${waarde}</span>
-                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.7)">${label}</span></div>`;
+                      <span style="font-size:2.1vh;color:var(--ov-ink-70)">${label}</span></div>`;
                   };
-                  var nettoKleur = (netto !== null && netto < 0) ? '#4ade80' : 'white';
+                  var nettoKleur = (netto !== null && netto < 0) ? 'var(--ov-ok)' : 'var(--primary-text-color)';
                   return `<div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1.1fr;align-items:end;column-gap:1.2vh">
                     <div style="display:flex;flex-direction:column;gap:0.3vh">
                       <span><span style="font-size:7vh;font-weight:700;line-height:1;color:${nettoKleur}">${fmt(netto)}</span>
-                      <span style="font-size:2.6vh;color:rgba(255,255,255,0.72)">kW</span></span>
-                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.7)">netto verbruik</span></div>
-                    ${klein(fmt(prod), 'productie', '#4ade80')}
-                    ${klein(fmt(verbr), 'huis verbruik', '#3b82f6')}
-                    ${klein(socv === null ? '—' : socv + '%', 'batterij' + bmode, 'white')}
+                      <span style="font-size:2.6vh;color:var(--ov-ink-72)">kW</span></span>
+                      <span style="font-size:2.1vh;color:var(--ov-ink-70)">netto verbruik</span></div>
+                    ${klein(fmt(prod), 'productie', 'var(--ov-ok)')}
+                    ${klein(fmt(verbr), 'huis verbruik', 'var(--ov-info-strong)')}
+                    ${klein(socv === null ? '—' : socv + '%', 'batterij' + bmode, 'var(--primary-text-color)')}
                   </div>`;
                 ]]]
               strook: |
@@ -506,7 +506,7 @@ cards:
                     var d = new Date(e.start), p = Number(e.value);
                     return (isNaN(d.getTime()) || isNaN(p)) ? null : {t: d.getTime(), p: p};
                   }).filter(Boolean).sort(function(a,b){ return a.t - b.t; });
-                  if(slots.length < 2) return `<span style="font-size:2.1vh;color:rgba(255,255,255,0.35)">geen prijsvoorspelling</span>`;
+                  if(slots.length < 2) return `<span style="font-size:2.1vh;color:var(--ov-ink-35)">geen prijsvoorspelling</span>`;
                   var stap = slots[1].t - slots[0].t;
                   var perDag = {};
                   slots.forEach(function(s){
@@ -541,14 +541,14 @@ cards:
                     var d = perDag[new Date(s.t).toDateString()];
                     var spreiding = d.max - d.min;
                     var r = spreiding < 0.02 ? 0.5 : (s.p - d.min) / spreiding;
-                    var kleur = r <= 0.33 ? '#4ade80' : (r >= 0.66 ? '#ef4444' : '#f59e0b');
+                    var kleur = r <= 0.33 ? 'var(--ov-ok)' : (r >= 0.66 ? 'var(--ov-bad)' : 'var(--ov-warn)');
                     var a = klem(pct(s.t)), b = klem(pct(s.t + stap));
                     if(b - a <= 0.05) return;
                     // Prijs in het blok: op een wandpaneel is er geen hover, dus
                     // het getal moet zichtbaar zijn.
                     var inVenster = beste && s.t < beste.tot && s.t + stap > beste.van;
                     var etiket = (!inVenster && (b - a) >= 5)
-                      ? `<span style="font-size:1.6vh;font-weight:700;color:rgba(0,0,0,0.72)">${(b - a) >= 7 ? '€' : ''}${euro(s.p)}</span>` : '';
+                      ? `<span style="font-size:1.6vh;font-weight:700;color:var(--ov-on-accent)">${(b - a) >= 7 ? '€' : ''}${euro(s.p)}</span>` : '';
                     blokken.push(`<div style="position:absolute;left:${a}%;width:${b-a}%;top:0;bottom:0;background:${kleur};opacity:0.85;display:flex;align-items:center;justify-content:center;overflow:hidden">${etiket}</div>`);
                   });
 
@@ -560,16 +560,16 @@ cards:
                     var ba = klem(pct(beste.van)), bb = klem(pct(beste.tot));
                     // Cyaan op groen is onleesbaar: donkere chip eronder.
                     var chip = (bb - ba) > 12
-                      ? `<span style="font-size:1.7vh;font-weight:700;color:#e0f2fe;letter-spacing:0.05vh;background:rgba(8,25,45,0.92);padding:0 0.7vh;border-radius:0.4vh;line-height:1.25;white-space:nowrap">LADEN</span>`
+                      ? `<span style="font-size:1.7vh;font-weight:700;color:var(--ov-on-surface-blue);letter-spacing:0.05vh;background:var(--ov-surface-blue);padding:0 0.7vh;border-radius:0.4vh;line-height:1.25;white-space:nowrap">LADEN</span>`
                       : '';
-                    if(bb - ba > 1) beugel = `<div style="position:absolute;left:${ba}%;width:${bb-ba}%;top:-0.3vh;height:3.8vh;border:0.25vh solid #38bdf8;border-radius:0.6vh;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden">${chip}</div>`;
+                    if(bb - ba > 1) beugel = `<div style="position:absolute;left:${ba}%;width:${bb-ba}%;top:-0.3vh;height:3.8vh;border:0.25vh solid var(--ov-info);border-radius:0.6vh;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden">${chip}</div>`;
                     // De huidige prijs staat al in de pil in de kopbalk, dus die
                     // niet nog eens hier.
                     var dur = null;
                     slots.forEach(function(s){ if(s.t >= nu && s.t <= eind && (dur === null || s.p > dur.p)) dur = s; });
                     regel = `<div style="position:absolute;left:0;right:0;top:7vh;display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:0.8vh;text-align:left">
-                      <span style="width:1.1vh;height:1.1vh;border-radius:50%;background:#38bdf8"></span>
-                      <span style="font-size:1.9vh;color:rgba(255,255,255,0.7);white-space:nowrap;text-align:left">goedkoopst laden <span style="color:white;font-weight:600">${klok(beste.van)}–${klok(beste.tot)}</span> · gem. € ${euro(beste.gem)}${dur === null ? '' : ` · duurst ${klok(dur.t)} € ${euro(dur.p)}`}</span></div>`;
+                      <span style="width:1.1vh;height:1.1vh;border-radius:50%;background:var(--ov-info)"></span>
+                      <span style="font-size:1.9vh;color:var(--ov-ink-70);white-space:nowrap;text-align:left">goedkoopst laden <span style="color:var(--primary-text-color);font-weight:600">${klok(beste.van)}–${klok(beste.tot)}</span> · gem. € ${euro(beste.gem)}${dur === null ? '' : ` · duurst ${klok(dur.t)} € ${euro(dur.p)}`}</span></div>`;
                   }
 
                   var assen = [];
@@ -578,11 +578,11 @@ cards:
                   for(var x = u.getTime(); x < eind; x += 10800000){
                     var px = pct(x);
                     if(px < 3 || px > 97) continue;
-                    assen.push(`<div style="position:absolute;left:${px}%;transform:translateX(-50%);top:4.2vh;font-size:1.8vh;color:rgba(255,255,255,0.68)">${('0'+new Date(x).getHours()).slice(-2)}:00</div>`);
+                    assen.push(`<div style="position:absolute;left:${px}%;transform:translateX(-50%);top:4.2vh;font-size:1.8vh;color:var(--ov-ink-68)">${('0'+new Date(x).getHours()).slice(-2)}:00</div>`);
                   }
                   return `<div style="position:relative;width:100%;height:${regel ? '9.6vh' : '6.8vh'}">
-                    <div style="position:absolute;left:0;right:0;top:0;height:3.2vh;border-radius:0.5vh;overflow:hidden;background:rgba(255,255,255,0.05)">${blokken.join('')}</div>
-                    <div style="position:absolute;left:${klem(pct(nu))}%;top:0;height:3.2vh;border-left:2px dashed rgba(255,255,255,0.85)"></div>
+                    <div style="position:absolute;left:0;right:0;top:0;height:3.2vh;border-radius:0.5vh;overflow:hidden;background:var(--ov-ink-5)">${blokken.join('')}</div>
+                    <div style="position:absolute;left:${klem(pct(nu))}%;top:0;height:3.2vh;border-left:2px dashed var(--ov-ink-85)"></div>
                     ${beugel}
                     ${assen.join('')}
                     ${regel}</div>`;
@@ -603,8 +603,8 @@ cards:
               action: none
             styles:
               card:
-                  - background: rgba(255,255,255,0.06)
-                  - border: 1px solid rgba(255,255,255,0.18)
+                  - background: var(--ov-ink-6)
+                  - border: 1px solid var(--ov-ink-18)
                   - border-radius: 18px
                   - box-shadow: none
                   - padding: 1.6vh 2vh
@@ -636,12 +636,12 @@ cards:
                   - justify-self: stretch
             custom_fields:
               t: |
-                [[[ return `<span style="font-size:2.5vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.68)">VANDAAG</span>`; ]]]
+                [[[ return `<span style="font-size:2.5vh;font-weight:700;letter-spacing:0.12vh;color:var(--ov-ink-68)">VANDAAG</span>`; ]]]
               afval: |
                 [[[
                   // PBD vóór papier: "Drinkkartons" bevat 'karton'
-                  var soorten = [[/gft|groente|tuin/i,'#4ade80'], [/pbd|plastic|blik|drank/i,'#f59e0b'], [/papier/i,'#38bdf8'], [/rest/i,'rgba(255,255,255,0.7)']];
-                  var kleurVan = function(v){ for(var i=0;i<soorten.length;i++) if(soorten[i][0].test(v)) return soorten[i][1]; return 'rgba(255,255,255,0.35)'; };
+                  var soorten = [[/gft|groente|tuin/i,'var(--ov-ok)'], [/pbd|plastic|blik|drank/i,'var(--ov-warn)'], [/papier/i,'var(--ov-info)'], [/rest/i,'var(--ov-ink-70)']];
+                  var kleurVan = function(v){ for(var i=0;i<soorten.length;i++) if(soorten[i][0].test(v)) return soorten[i][1]; return 'var(--ov-ink-35)'; };
                   var regel = function(id, label){
                     var e = states[id];
                     // Hier stond `!== 'Geen'` met een hoofdletter terwijl de
@@ -658,15 +658,15 @@ cards:
                     var stuk = !raw || /^unavailable$/i.test(raw);
                     var v = (stuk || /^(geen|unknown)$/i.test(raw)) ? null : raw;
                     var leeg = stuk ? 'onbekend' : 'geen ophaal';
-                    var kl = v ? kleurVan(v) : 'rgba(255,255,255,0.3)';
+                    var kl = v ? kleurVan(v) : 'var(--ov-ink-30)';
                     if(v && v.length > 30) v = v.slice(0,29) + '…';
                     // Grid met vaste kolommen + expliciete text-align: flexbox in
                     // een button-card custom field wordt door de kaart zelf
                     // gecentreerd/uitgespreid, een grid dat 100% vult niet.
                     return `<div style="display:grid;grid-template-columns:auto 9vh 1fr;align-items:center;column-gap:1.2vh;width:100%;text-align:left">
                       <ha-icon icon="mdi:trash-can-outline" style="--mdc-icon-size:3.1vh;color:${kl}"></ha-icon>
-                      <span style="font-size:2.2vh;color:rgba(255,255,255,0.7);text-align:left">${label}</span>
-                      <span style="font-size:2.6vh;font-weight:600;text-align:left;color:${v ? kl : 'rgba(255,255,255,0.35)'}">${v || leeg}</span></div>`;
+                      <span style="font-size:2.2vh;color:var(--ov-ink-70);text-align:left">${label}</span>
+                      <span style="font-size:2.6vh;font-weight:600;text-align:left;color:${v ? kl : 'var(--ov-ink-35)'}">${v || leeg}</span></div>`;
                   };
                   return `<div style="display:grid;row-gap:0.9vh;width:100%;text-align:left">
                     ${regel('sensor.afvalinfo_home_trash_type_today','vandaag')}
@@ -720,20 +720,20 @@ cards:
                   // afval en de voetregel.
                   var maxRijen = 4;
                   var omhullend = function(inhoud){
-                    return `<div style="display:grid;row-gap:0.7vh;width:100%;box-sizing:border-box;text-align:left;border-top:1px solid rgba(255,255,255,0.07);padding-top:1vh">${inhoud}</div>`;
+                    return `<div style="display:grid;row-gap:0.7vh;width:100%;box-sizing:border-box;text-align:left;border-top:1px solid var(--ov-ink-7);padding-top:1vh">${inhoud}</div>`;
                   };
-                  if(!items.length) return omhullend(`<span style="font-size:2.4vh;color:rgba(255,255,255,0.55);text-align:left">niets meer vandaag of morgen</span>`);
+                  if(!items.length) return omhullend(`<span style="font-size:2.4vh;color:var(--ov-ink-55);text-align:left">niets meer vandaag of morgen</span>`);
                   var rijen = items.slice(0, maxRijen).map(function(a){
                     var morgen = a.datum !== vandaag;
                     var tijd = a.hele_dag ? 'dag' : (a.tijd || '');
                     // tijd | titel (rekt op) | agenda: kolommen vullen exact 100%,
                     // dus de kaart kan er niets meer aan uitspreiden.
                     return `<div style="display:grid;grid-template-columns:9vh 1fr auto;align-items:baseline;column-gap:1.2vh;width:100%;text-align:left">
-                      <span style="font-size:2.2vh;font-weight:700;white-space:nowrap;text-align:left;color:${morgen ? 'rgba(255,255,255,0.45)' : '#38bdf8'}">${morgen ? 'mo ' : ''}${tijd}</span>
-                      <span style="font-size:2.4vh;text-align:left;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${morgen ? 'rgba(255,255,255,0.72)' : 'white'}">${esc(a.titel)}</span>
-                      <span style="font-size:1.9vh;color:rgba(255,255,255,0.45);white-space:nowrap;text-align:right">${esc(a.agenda)}</span></div>`;
+                      <span style="font-size:2.2vh;font-weight:700;white-space:nowrap;text-align:left;color:${morgen ? 'var(--ov-ink-45)' : 'var(--ov-info)'}">${morgen ? 'mo ' : ''}${tijd}</span>
+                      <span style="font-size:2.4vh;text-align:left;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${morgen ? 'var(--ov-ink-72)' : 'var(--primary-text-color)'}">${esc(a.titel)}</span>
+                      <span style="font-size:1.9vh;color:var(--ov-ink-45);white-space:nowrap;text-align:right">${esc(a.agenda)}</span></div>`;
                   });
-                  if(items.length > maxRijen) rijen.push(`<span style="font-size:1.9vh;color:rgba(255,255,255,0.42);text-align:left">+${items.length - maxRijen} meer</span>`);
+                  if(items.length > maxRijen) rijen.push(`<span style="font-size:1.9vh;color:var(--ov-ink-42);text-align:left">+${items.length - maxRijen} meer</span>`);
                   return omhullend(rijen.join(''));
                 ]]]
               voet: |
@@ -745,7 +745,7 @@ cards:
                   var blok = function(icon, kleur, tekst){
                     return `<span style="display:inline-grid;grid-template-columns:auto auto;align-items:center;column-gap:0.8vh;white-space:nowrap">
                       <ha-icon icon="${icon}" style="--mdc-icon-size:2.6vh;color:${kleur}"></ha-icon>
-                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.7)">${tekst}</span></span>`;
+                      <span style="font-size:2.1vh;color:var(--ov-ink-70)">${tekst}</span></span>`;
                   };
                   var delen = [];
                   var z = states['sun.sun'];
@@ -754,7 +754,7 @@ cards:
                     var t = boven ? z.attributes.next_setting : z.attributes.next_rising;
                     if(t){
                       var d = new Date(t);
-                      if(!isNaN(d.getTime())) delen.push(blok(boven ? 'mdi:weather-sunset-down' : 'mdi:weather-sunset-up', '#f59e0b', (boven ? 'zon onder ' : 'zon op ') + klok(d)));
+                      if(!isNaN(d.getTime())) delen.push(blok(boven ? 'mdi:weather-sunset-down' : 'mdi:weather-sunset-up', 'var(--ov-warn)', (boven ? 'zon onder ' : 'zon op ') + klok(d)));
                     }
                   }
                   var n = states['sensor.neerslag_komende_30_minuten'];
@@ -762,13 +762,13 @@ cards:
                     var mm = Number(n.state);
                     var eenheid = (n.attributes && n.attributes.unit_of_measurement) || '';
                     delen.push(mm > 0
-                      ? blok('mdi:weather-pouring', '#38bdf8', `regen komend halfuur · ${mm.toFixed(1).replace('.',',')} ${eenheid}`.trim())
-                      : blok('mdi:weather-partly-cloudy', 'rgba(255,255,255,0.5)', 'droog komend halfuur'));
+                      ? blok('mdi:weather-pouring', 'var(--ov-info)', `regen komend halfuur · ${mm.toFixed(1).replace('.',',')} ${eenheid}`.trim())
+                      : blok('mdi:weather-partly-cloudy', 'var(--ov-ink-50)', 'droog komend halfuur'));
                   }
                   if(!delen.length) return '';
                   // Laatste kolom is een lege 1fr die de restruimte opslokt, zodat
                   // de blokken links blijven staan.
-                  return `<div style="display:grid;grid-template-columns:${delen.map(function(){ return 'auto'; }).join(' ')} 1fr;align-items:center;column-gap:2.4vh;width:100%;box-sizing:border-box;text-align:left;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">${delen.join('')}<span></span></div>`;
+                  return `<div style="display:grid;grid-template-columns:${delen.map(function(){ return 'auto'; }).join(' ')} 1fr;align-items:center;column-gap:2.4vh;width:100%;box-sizing:border-box;text-align:left;border-top:1px solid var(--ov-ink-7);padding-top:1.2vh">${delen.join('')}<span></span></div>`;
                 ]]]
 
         # ---------- PERSONEN ----------
@@ -781,8 +781,8 @@ cards:
               action: none
             styles:
               card:
-                  - background: rgba(255,255,255,0.06)
-                  - border: 1px solid rgba(255,255,255,0.18)
+                  - background: var(--ov-ink-6)
+                  - border: 1px solid var(--ov-ink-18)
                   - border-radius: 18px
                   - box-shadow: none
                   - padding: 1.6vh 2vh
@@ -813,8 +813,8 @@ cards:
                   var ppl = ['person.robin_bohnen','person.samantha_henkelman','person.emma_bohnen','person.logan_veen'];
                   var n = ppl.filter(function(e){ return states[e] && states[e].state === 'home'; }).length;
                   return `<span style="display:flex;align-items:baseline;gap:1.2vh">
-                    <span style="font-size:2.5vh;font-weight:700;letter-spacing:0.12vh;color:rgba(255,255,255,0.68)">PERSONEN</span>
-                    <span style="font-size:2.2vh;font-weight:600;padding:0.3vh 1.2vh;border-radius:999px;color:#4ade80;background:rgba(52,168,120,0.15)">${n} thuis</span></span>`;
+                    <span style="font-size:2.5vh;font-weight:700;letter-spacing:0.12vh;color:var(--ov-ink-68)">PERSONEN</span>
+                    <span style="font-size:2.2vh;font-weight:600;padding:0.3vh 1.2vh;border-radius:999px;color:var(--ov-ok);background:var(--ov-ok-wash-15)">${n} thuis</span></span>`;
                 ]]]
               mensen: |
                 [[[
@@ -830,21 +830,21 @@ cards:
                     var naam = p.attributes.friendly_name ? p.attributes.friendly_name.split(' ')[0] : '?';
                     var thuis = p.state === 'home';
                     var st = thuis ? 'thuis' : 'afwezig';
-                    var stKleur = 'rgba(255,255,255,0.7)';
+                    var stKleur = 'var(--ov-ink-70)';
                     if(!thuis){
                       // In een bekende zone is de person-state de zonenaam zelf;
                       // die tonen we in plaats van "afwezig", net als op Overzicht.
                       var bekend = p.state && ['not_home','unavailable','unknown'].indexOf(p.state) === -1;
-                      if(bekend){ st = p.state; stKleur = '#38bdf8'; }
+                      if(bekend){ st = p.state; stKleur = 'var(--ov-info)'; }
                       var r = states[m[2]];
                       if(r && !isNaN(Number(r.state)) && Number(r.state) > 0){
                         st = (bekend ? p.state + ' · ' : '') + Math.round(Number(r.state)) + ' min';
-                        stKleur = '#38bdf8';
+                        stKleur = 'var(--ov-info)';
                       }
                     }
                     var b = states[m[1]];
                     var acc = b && !isNaN(Number(b.state)) ? Math.round(Number(b.state)) : null;
-                    var accKleur = acc === null ? 'rgba(255,255,255,0.3)' : (acc <= 10 ? '#ef4444' : (acc <= 20 ? '#f59e0b' : 'rgba(255,255,255,0.75)'));
+                    var accKleur = acc === null ? 'var(--ov-ink-30)' : (acc <= 10 ? 'var(--ov-bad)' : (acc <= 20 ? 'var(--ov-warn)' : 'var(--ov-ink-75)'));
                     // Foto uit de person-entiteit, net als op het overzichtsdashboard:
                     // thuis/afwezig zit in de ringkleur, afwezig dimt de foto zodat je
                     // van een afstand ziet wie er is zonder te lezen. Zonder foto valt
@@ -865,13 +865,13 @@ cards:
                       pic = String(basis).replace(/\/$/, '') + pic;
                     }
                     var av = pic
-                      ? `<div style="width:8vh;height:8vh;border-radius:50%;box-sizing:border-box;border:0.3vh solid ${thuis ? 'rgba(74,222,128,0.75)' : 'rgba(255,255,255,0.18)'};
+                      ? `<div style="width:8vh;height:8vh;border-radius:50%;box-sizing:border-box;border:0.3vh solid ${thuis ? 'var(--ov-ok-75)' : 'var(--ov-ink-18)'};
                            background-image:url('${pic}');background-size:cover;background-position:center;${thuis ? '' : 'filter:grayscale(0.7);opacity:0.7'}"></div>`
                       : `<div style="width:8vh;height:8vh;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:3.8vh;font-weight:600;
-                           background:${thuis ? 'rgba(52,168,120,0.16)' : 'rgba(255,255,255,0.06)'};color:${thuis ? '#4ade80' : 'rgba(255,255,255,0.72)'}">${naam.charAt(0)}</div>`;
+                           background:${thuis ? 'var(--ov-ok-wash-16)' : 'var(--ov-ink-6)'};color:${thuis ? 'var(--ov-ok)' : 'var(--ov-ink-72)'}">${naam.charAt(0)}</div>`;
                     return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0.5vh">
                       ${av}
-                      <span style="font-size:2.5vh;font-weight:600;color:white">${naam}</span>
+                      <span style="font-size:2.5vh;font-weight:600;color:var(--primary-text-color)">${naam}</span>
                       <span style="font-size:2.1vh;color:${stKleur};max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${st}</span>
                       <span style="font-size:2.1vh;font-weight:600;color:${accKleur}">${acc === null ? '—' : acc + '%'}</span></div>`;
                   });
@@ -909,22 +909,22 @@ cards:
                   var cel = function(icon, label, waarde, kleur){
                     return `<div style="display:grid;grid-template-columns:auto auto 1fr;align-items:center;column-gap:1vh;min-width:0;text-align:left">
                       <ha-icon icon="${icon}" style="--mdc-icon-size:2.8vh;color:${kleur}"></ha-icon>
-                      <span style="font-size:2.1vh;color:rgba(255,255,255,0.62);white-space:nowrap;text-align:left">${label}</span>
+                      <span style="font-size:2.1vh;color:var(--ov-ink-62);white-space:nowrap;text-align:left">${label}</span>
                       <span style="font-size:2.2vh;font-weight:600;color:${kleur};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right">${waarde}</span></div>`;
                   };
                   var cellen = [];
 
                   var dOpen = telOpen(buitendeuren);
                   cellen.push(dOpen === null
-                    ? cel('mdi:door-closed', 'buitendeuren', 'onbekend', 'rgba(255,255,255,0.35)')
+                    ? cel('mdi:door-closed', 'buitendeuren', 'onbekend', 'var(--ov-ink-35)')
                     : cel(dOpen ? 'mdi:door-open' : 'mdi:door-closed', 'buitendeuren',
-                          dOpen ? dOpen + ' open' : 'dicht', dOpen ? '#f59e0b' : 'rgba(255,255,255,0.7)'));
+                          dOpen ? dOpen + ' open' : 'dicht', dOpen ? 'var(--ov-warn)' : 'var(--ov-ink-70)'));
 
                   var rOpen = leden('binary_sensor.all_windows');
                   cellen.push(rOpen === null
-                    ? cel('mdi:window-closed-variant', 'ramen', 'onbekend', 'rgba(255,255,255,0.35)')
+                    ? cel('mdi:window-closed-variant', 'ramen', 'onbekend', 'var(--ov-ink-35)')
                     : cel(rOpen ? 'mdi:window-open-variant' : 'mdi:window-closed-variant', 'ramen',
-                          rOpen ? rOpen + ' open' : 'dicht', rOpen ? '#f59e0b' : 'rgba(255,255,255,0.7)'));
+                          rOpen ? rOpen + ' open' : 'dicht', rOpen ? 'var(--ov-warn)' : 'var(--ov-ink-70)'));
 
                   // Alle kamergroepen volgen de *_lampen-conventie, dus nieuwe
                   // ruimtes tellen automatisch mee.
@@ -932,7 +932,7 @@ cards:
                     return /^light\..*_lampen$/.test(id) && states[id].state === 'on';
                   }).length;
                   cellen.push(cel(aan ? 'mdi:lightbulb-on' : 'mdi:lightbulb-off-outline', 'lampen',
-                                  aan ? aan + ' aan' : 'alles uit', aan ? '#f59e0b' : 'rgba(255,255,255,0.7)'));
+                                  aan ? aan + ' aan' : 'alles uit', aan ? 'var(--ov-warn)' : 'var(--ov-ink-70)'));
 
                   var c = states['cover.achtertuin_zonnescherm'];
                   var m = {open:'uit', closed:'ingetrokken', opening:'gaat uit', closing:'gaat in'};
@@ -940,7 +940,7 @@ cards:
                   var schermTxt = c ? (m[c.state] || c.state) : 'onbekend';
                   if(pos !== null && pos > 0 && pos < 100) schermTxt = pos + '%';
                   cellen.push(cel('mdi:blinds-horizontal', 'zonnescherm', schermTxt,
-                                  c && c.state !== 'closed' ? '#4ade80' : 'rgba(255,255,255,0.7)'));
+                                  c && c.state !== 'closed' ? 'var(--ov-ok)' : 'var(--ov-ink-70)'));
 
                   var graden = function(id){
                     var e = states[id];
@@ -949,7 +949,7 @@ cards:
                   var binnen = graden('sensor.woonkamer_woonkamer_multisensor_temperatuur');
                   var buiten = graden('sensor.knmi_temperatuur');
                   var fmt = function(v){ return v === null ? '—' : v.toFixed(1).replace('.',',') + '°'; };
-                  cellen.push(cel('mdi:home-thermometer', 'binnen', `${fmt(binnen)} · buiten ${fmt(buiten)}`, 'rgba(255,255,255,0.8)'));
+                  cellen.push(cel('mdi:home-thermometer', 'binnen', `${fmt(binnen)} · buiten ${fmt(buiten)}`, 'var(--ov-ink-80)'));
 
                   var accu = graden('sensor.hrh85f_batterij');
                   var km = graden('sensor.hrh85f_battery_autonomy');
@@ -958,7 +958,7 @@ cards:
                   var autoTxt = accu === null ? 'onbekend'
                     : Math.round(accu) + '%' + (km === null ? '' : ' · ' + Math.round(km) + ' km') + (laadt ? ' · laadt' : '');
                   cellen.push(cel(laadt ? 'mdi:ev-station' : 'mdi:car-electric', 'auto', autoTxt,
-                                  accu !== null && accu <= 20 ? '#f59e0b' : (laadt ? '#4ade80' : 'rgba(255,255,255,0.8)')));
+                                  accu !== null && accu <= 20 ? 'var(--ov-warn)' : (laadt ? 'var(--ov-ok)' : 'var(--ov-ink-80)')));
 
-                  return `<div style="display:grid;grid-template-columns:1fr 1fr;column-gap:2.4vh;row-gap:0.9vh;width:100%;box-sizing:border-box;text-align:left;border-top:1px solid rgba(255,255,255,0.07);padding-top:1.2vh">${cellen.join('')}</div>`;
+                  return `<div style="display:grid;grid-template-columns:1fr 1fr;column-gap:2.4vh;row-gap:0.9vh;width:100%;box-sizing:border-box;text-align:left;border-top:1px solid var(--ov-ink-7);padding-top:1.2vh">${cellen.join('')}</div>`;
                 ]]]

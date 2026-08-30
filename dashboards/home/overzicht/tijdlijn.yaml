@@ -37,7 +37,7 @@ card:
             var t = new Date(z.attributes.next_setting);
             var klok = ('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2);
             var op = z.state === 'below_horizon';
-            return `<span style="font-size:12px;color:rgba(255,255,255,0.55)">${op ? 'zon op' : 'zon onder'} ${klok}</span>`;
+            return `<span style="font-size:12px;color:var(--ov-ink-55)">${op ? 'zon op' : 'zon onder'} ${klok}</span>`;
           ]]]
     - type: custom:button-card
       entity: sensor.slimhuys_zonneplan_huidige_prijs
@@ -101,7 +101,7 @@ card:
             }
             nachten.forEach(function(n){
               var a = klem(pct(n[0])), b = klem(pct(n[1]));
-              if(b - a > 0.2) lagen.push(`<div style="position:absolute;left:${a}%;width:${b-a}%;top:0;height:${H.zon}px;background:rgba(10,12,18,0.55)"></div>`);
+              if(b - a > 0.2) lagen.push(`<div style="position:absolute;left:${a}%;width:${b-a}%;top:0;height:${H.zon}px;background:var(--ov-scrim-soft)"></div>`);
             });
 
             // ---------- laag 2: zon ----------
@@ -206,10 +206,10 @@ card:
               var laatsteX = klem(pct(zichtbaar[zichtbaar.length-1].t)).toFixed(2);
               var streep = zonBron === 'benadering' ? 'stroke-dasharray="2 2"' : '';
               lagen.push(`<svg viewBox="0 0 100 ${H.zon}" preserveAspectRatio="none" style="position:absolute;left:0;top:0;width:100%;height:${H.zon}px">
-                <path d="${d} L${laatsteX},${H.zon} L${eersteX},${H.zon} Z" fill="rgba(74,222,128,0.16)"/>
-                <path d="${d}" fill="none" stroke="#4ade80" stroke-width="0.6" vector-effect="non-scaling-stroke" ${streep}/>
+                <path d="${d} L${laatsteX},${H.zon} L${eersteX},${H.zon} Z" fill="var(--ov-ok-16)"/>
+                <path d="${d}" fill="none" stroke="var(--ov-ok)" stroke-width="0.6" vector-effect="non-scaling-stroke" ${streep}/>
               </svg>`);
-              lagen.push(`<div style="position:absolute;left:6px;top:2px;font-size:9.5px;color:rgba(255,255,255,0.45)">zon ${zonBron === 'benadering' ? '(benadering)' : '(verwacht)'}</div>`);
+              lagen.push(`<div style="position:absolute;left:6px;top:2px;font-size:9.5px;color:var(--ov-ink-45)">zon ${zonBron === 'benadering' ? '(benadering)' : '(verwacht)'}</div>`);
             }
 
             // ---------- laag 3: prijsblokken ----------
@@ -256,13 +256,13 @@ card:
               var d = perDag[new Date(s.t).toDateString()];
               var spreiding = d.max - d.min;
               var r = spreiding < 0.02 ? 0.5 : (s.p - d.min) / spreiding;
-              var kleur = r <= 0.33 ? '#4ade80' : (r >= 0.66 ? '#ef4444' : '#f59e0b');
+              var kleur = r <= 0.33 ? 'var(--ov-ok)' : (r >= 0.66 ? 'var(--ov-bad)' : 'var(--ov-warn)');
               var a = klem(pct(s.t)), b = klem(pct(s.t + stap));
               if(b - a <= 0.05) return;
               var inVenster = beste && s.t < beste.tot && s.t + stap > beste.van;
               var etiket = '';
               if(!inVenster && (b - a) >= 3.5){
-                etiket = `<span style="font-size:8px;font-weight:700;color:rgba(0,0,0,0.72);letter-spacing:-0.2px">${(b - a) >= 6 ? '€' : ''}${euro(s.p)}</span>`;
+                etiket = `<span style="font-size:8px;font-weight:700;color:var(--ov-on-accent);letter-spacing:-0.2px">${(b - a) >= 6 ? '€' : ''}${euro(s.p)}</span>`;
               }
               lagen.push(`<div title="${klok(s.t)} · € ${s.p.toFixed(3)}" style="position:absolute;left:${a}%;width:${b-a}%;top:${top.prijs}px;height:${H.prijs}px;background:${kleur};opacity:0.85;display:flex;align-items:center;justify-content:center;overflow:hidden">${etiket}</div>`);
             });
@@ -276,9 +276,9 @@ card:
               // Cyaan op een groen/amber blok is onleesbaar, dus het etiket krijgt
               // een donkere chip; zo blijft het leesbaar op elke blokkleur.
               var etiket = tekst
-                ? `<span style="font-size:8.5px;font-weight:700;color:#e0f2fe;letter-spacing:0.4px;background:rgba(8,25,45,0.92);padding:0 4px;border-radius:3px;line-height:1.2">${tekst}</span>`
+                ? `<span style="font-size:8.5px;font-weight:700;color:var(--ov-on-surface-blue);letter-spacing:0.4px;background:var(--ov-surface-blue);padding:0 4px;border-radius:3px;line-height:1.2">${tekst}</span>`
                 : '';
-              if(b - a > 1) lagen.push(`<div title="goedkoopst laden" style="position:absolute;left:${a}%;width:${b-a}%;top:${top.prijs - 2}px;height:${H.prijs + 4}px;border:1.5px solid #38bdf8;border-radius:4px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap">${etiket}</div>`);
+              if(b - a > 1) lagen.push(`<div title="goedkoopst laden" style="position:absolute;left:${a}%;width:${b-a}%;top:${top.prijs - 2}px;height:${H.prijs + 4}px;border:1.5px solid var(--ov-info);border-radius:4px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap">${etiket}</div>`);
             }
 
             // ---------- laag 4: markers ----------
@@ -291,7 +291,7 @@ card:
                 lijst.forEach(function(a){
                   if(a.hele_dag || !a.tijd) return;
                   var t = new Date(a.datum + 'T' + a.tijd + ':00').getTime();
-                  if(!isNaN(t)) markers.push({t: t, icon: 'mdi:calendar', kleur: '#38bdf8', tekst: a.titel});
+                  if(!isNaN(t)) markers.push({t: t, icon: 'mdi:calendar', kleur: 'var(--ov-info)', tekst: a.titel});
                 });
               });
             } else {
@@ -302,16 +302,16 @@ card:
                 var e = states[c[0]];
                 if(!e || !e.attributes || !e.attributes.start_time || e.attributes.all_day) return;
                 var t = new Date(String(e.attributes.start_time).replace(' ','T')).getTime();
-                if(!isNaN(t)) markers.push({t: t, icon: 'mdi:calendar', kleur: '#38bdf8', tekst: e.attributes.message || c[1]});
+                if(!isNaN(t)) markers.push({t: t, icon: 'mdi:calendar', kleur: 'var(--ov-info)', tekst: e.attributes.message || c[1]});
               });
             }
-            if(onder) markers.push({t: onder, icon: 'mdi:weather-sunset-down', kleur: '#f59e0b', tekst: 'zonsondergang'});
-            if(op && op < eind) markers.push({t: op, icon: 'mdi:weather-sunset-up', kleur: '#f59e0b', tekst: 'zonsopkomst'});
+            if(onder) markers.push({t: onder, icon: 'mdi:weather-sunset-down', kleur: 'var(--ov-warn)', tekst: 'zonsondergang'});
+            if(op && op < eind) markers.push({t: op, icon: 'mdi:weather-sunset-up', kleur: 'var(--ov-warn)', tekst: 'zonsopkomst'});
             var afval = states['sensor.afvalinfo_home_trash_type_tomorrow'];
             if(afval && afval.state && afval.state !== 'Geen'){
               var m = new Date(); m.setDate(m.getDate() + 1); m.setHours(7, 30, 0, 0);
-              var soorten = [[/gft|groente|tuin/i,'#4ade80'], [/pbd|plastic|blik|drank/i,'#f59e0b'], [/papier/i,'#38bdf8']];
-              var kl = 'rgba(255,255,255,0.7)';
+              var soorten = [[/gft|groente|tuin/i,'var(--ov-ok)'], [/pbd|plastic|blik|drank/i,'var(--ov-warn)'], [/papier/i,'var(--ov-info)']];
+              var kl = 'var(--ov-ink-70)';
               for(var i=0;i<soorten.length;i++) if(soorten[i][0].test(afval.state)) { kl = soorten[i][1]; break; }
               markers.push({t: m.getTime(), icon: 'mdi:trash-can-outline', kleur: kl, tekst: afval.state});
             }
@@ -332,10 +332,10 @@ card:
             var bedLogan = bedTijd('input_datetime.bedtime_maxi', 'input_datetime.bedtime_maxi_weekend');
             var bedEmma = bedTijd('input_datetime.bedtime_mini', 'input_datetime.bedtime_mini_weekend');
             if(bedLogan !== null && bedLogan === bedEmma){
-              markers.push({t: bedLogan, icon: 'mdi:sleep', kleur: '#a78bfa', tekst: 'bedtijd Logan & Emma'});
+              markers.push({t: bedLogan, icon: 'mdi:sleep', kleur: 'var(--ov-accent)', tekst: 'bedtijd Logan & Emma'});
             } else {
-              if(bedLogan !== null) markers.push({t: bedLogan, icon: 'mdi:sleep', kleur: '#a78bfa', tekst: 'bedtijd Logan'});
-              if(bedEmma !== null) markers.push({t: bedEmma, icon: 'mdi:sleep', kleur: '#a78bfa', tekst: 'bedtijd Emma'});
+              if(bedLogan !== null) markers.push({t: bedLogan, icon: 'mdi:sleep', kleur: 'var(--ov-accent)', tekst: 'bedtijd Logan'});
+              if(bedEmma !== null) markers.push({t: bedEmma, icon: 'mdi:sleep', kleur: 'var(--ov-accent)', tekst: 'bedtijd Emma'});
             }
             // Droger: wanneer het programma klaar is, zolang er echt één
             // loopt. De eindtijd-sensor houdt buiten een programma zijn oude
@@ -344,7 +344,7 @@ card:
             var drE = states['sensor.droger_programma_eindtijd'];
             if(drS && drS.state === 'run' && drE && drE.state){
               var drT = new Date(drE.state).getTime();
-              if(!isNaN(drT)) markers.push({t: drT, icon: 'mdi:tumble-dryer', kleur: '#38bdf8', tekst: 'droger klaar'});
+              if(!isNaN(drT)) markers.push({t: drT, icon: 'mdi:tumble-dryer', kleur: 'var(--ov-info)', tekst: 'droger klaar'});
             }
 
             markers = markers.filter(function(m){ return m.t >= start && m.t <= eind; })
@@ -383,22 +383,22 @@ card:
                 var regel = `<ha-icon icon="${p.m.icon}" style="--mdc-icon-size:12px;width:12px;height:12px;vertical-align:middle;color:${p.m.kleur}"></ha-icon> ${klok(p.m.t)}`;
                 if(!tekst || ruimte < 6 || p.x > 93){
                   // te weinig ruimte voor tekst: alleen icoon + tijd, gecentreerd
-                  lagen.push(`<div title="${tip}" style="position:absolute;left:${Math.min(p.x, 96)}%;transform:translateX(-50%);top:${y}px;white-space:nowrap;font-size:10px;color:rgba(255,255,255,0.62)">${regel}</div>`);
+                  lagen.push(`<div title="${tip}" style="position:absolute;left:${Math.min(p.x, 96)}%;transform:translateX(-50%);top:${y}px;white-space:nowrap;font-size:10px;color:var(--ov-ink-62)">${regel}</div>`);
                   return;
                 }
                 // Links uitgelijnd zodat de tekst de vrije ruimte naar rechts in
                 // loopt; -7px trekt het icoon terug op het echte tijdstip. De
                 // breedte stopt vóór de volgende marker in dezelfde rij.
-                lagen.push(`<div title="${tip}" style="position:absolute;left:${p.x}%;width:${ruimte}%;margin-left:-7px;top:${y}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:rgba(255,255,255,0.62)">${regel} <span style="color:rgba(255,255,255,0.42)">${tekst}</span></div>`);
+                lagen.push(`<div title="${tip}" style="position:absolute;left:${p.x}%;width:${ruimte}%;margin-left:-7px;top:${y}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:var(--ov-ink-62)">${regel} <span style="color:var(--ov-ink-42)">${tekst}</span></div>`);
               });
             });
 
             if(verborgen > 0){
-              lagen.push(`<div title="${verborgen} extra afspraak/afspraken passen niet naast elkaar" style="position:absolute;right:0;top:${top.markers}px;font-size:9.5px;color:rgba(255,255,255,0.45)">+${verborgen} meer</div>`);
+              lagen.push(`<div title="${verborgen} extra afspraak/afspraken passen niet naast elkaar" style="position:absolute;right:0;top:${top.markers}px;font-size:9.5px;color:var(--ov-ink-45)">+${verborgen} meer</div>`);
             }
 
             // ---------- laag 5: nu ----------
-            lagen.push(`<div style="position:absolute;left:${klem(pct(nu))}%;top:0;height:${top.as - 2}px;border-left:1px dashed rgba(255,255,255,0.75)"></div>`);
+            lagen.push(`<div style="position:absolute;left:${klem(pct(nu))}%;top:0;height:${top.as - 2}px;border-left:1px dashed var(--ov-ink-75)"></div>`);
 
             // ---------- laag 6: tijdas ----------
             var eersteUur = new Date(start);
@@ -408,7 +408,7 @@ card:
             for(var t = eersteUur.getTime(); t < eind; t += 7200000){
               var x = pct(t);
               if(x < 2 || x > 98) continue;
-              lagen.push(`<div style="position:absolute;left:${x}%;transform:translateX(-50%);top:${top.as}px;font-size:9.5px;color:rgba(255,255,255,0.5)">${klok(t)}</div>`);
+              lagen.push(`<div style="position:absolute;left:${x}%;transform:translateX(-50%);top:${top.as}px;font-size:9.5px;color:var(--ov-ink-50)">${klok(t)}</div>`);
             }
 
             return `<div style="position:relative;width:100%;height:${totaal}px">${lagen.join('')}</div>`;

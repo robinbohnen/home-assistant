@@ -20,20 +20,20 @@ title: Systeem
 path: systeem
 icon: mdi:heart-pulse
 panel: true
-background: "#0b0d12"
+background: "var(--primary-background-color)"
 cards:
   - type: vertical-stack
     card_mod:
       style: |
         :host { height: 100% !important; }
         #root {
-          --ov-panel-bg: rgba(22,24,31,0.72);
-          --ov-panel-border: 1px solid rgba(255,255,255,0.06);
+          /* Kleurtokens komen uit www/ov-tokens.js, zie overzicht.yaml. */
+          --ov-panel-border: 1px solid var(--ov-ink-6);
           gap: 16px !important;
           min-height: calc(100vh - 8px) !important;
           margin: 0 !important;
           padding: 20px 24px 24px 24px !important;
-          background: #0b0d12 !important;
+          background: var(--primary-background-color) !important;
           box-sizing: border-box !important;
         }
     cards:
@@ -125,11 +125,11 @@ cards:
                     var integratie = (e && e.platform) ? e.platform : id.split('.')[0];
                     return afgeleid.indexOf(integratie) === -1 && ruis.indexOf(integratie) === -1;
                   }).length;
-                  var kleur = n === 0 ? '#4ade80' : (n > 10 ? '#ef4444' : '#f59e0b');
+                  var kleur = n === 0 ? 'var(--ov-ok)' : (n > 10 ? 'var(--ov-bad)' : 'var(--ov-warn)');
                   return `<span style="display:flex;align-items:baseline;gap:12px;width:100%">
-                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:rgba(255,255,255,0.55)">STORINGEN</span>
-                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:rgba(255,255,255,0.06)">${n}</span>
-                    <span style="margin-left:auto;font-size:11.5px;color:rgba(255,255,255,0.4)">${alles} onbeschikbaar totaal</span></span>`;
+                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">STORINGEN</span>
+                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:var(--ov-ink-6)">${n}</span>
+                    <span style="margin-left:auto;font-size:11.5px;color:var(--ov-ink-40)">${alles} onbeschikbaar totaal</span></span>`;
                 ]]]
               lijst: |
                 [[[
@@ -203,10 +203,10 @@ cards:
                     return d + ' ' + (d === 1 ? 'dag' : 'dagen');
                   };
                   var duurKleur = function(ms){
-                    if(ms === null) return 'rgba(255,255,255,0.4)';
-                    if(ms > 7 * 86400000) return '#ef4444';
-                    if(ms > 86400000) return '#f59e0b';
-                    return 'rgba(255,255,255,0.6)';
+                    if(ms === null) return 'var(--ov-ink-40)';
+                    if(ms > 7 * 86400000) return 'var(--ov-bad)';
+                    if(ms > 86400000) return 'var(--ov-warn)';
+                    return 'var(--ov-ink-60)';
                   };
                   // Rij klikbaar maken; zie de toelichting bij de Matter-kaart.
                   var klik = function(devId, entId, inner){
@@ -229,42 +229,42 @@ cards:
                     var app = grp.apparaten;
                     var teveel = Math.max(0, app.length - limiet);
                     var rijen = app.slice(0, limiet).map(function(x){
-                      var plek = x.gebied ? `<span style="color:rgba(255,255,255,0.35)"> · ${x.gebied}</span>` : '';
+                      var plek = x.gebied ? `<span style="color:var(--ov-ink-35)"> · ${x.gebied}</span>` : '';
                       var aantal = x.aantal > 1
-                        ? `<span style="font-size:11.5px;color:rgba(255,255,255,0.45);white-space:nowrap">${x.aantal} entiteiten</span>` : '';
-                      return klik(x.dev_id, x.ent, `<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.04)">
-                        <span style="flex:1;text-align:left;font-size:13.5px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
+                        ? `<span style="font-size:11.5px;color:var(--ov-ink-45);white-space:nowrap">${x.aantal} entiteiten</span>` : '';
+                      return klik(x.dev_id, x.ent, `<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-top:1px solid var(--ov-ink-4)">
+                        <span style="flex:1;text-align:left;font-size:13.5px;color:var(--ov-ink-85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
                         ${aantal}
                         <span style="font-size:13px;font-weight:600;white-space:nowrap;color:${duurKleur(x.duur)}">${duurTxt(x.duur)}</span></div>`);
                     }).join('');
                     return `<div style="margin-bottom:12px">
                       <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:2px;text-align:left">
-                        <span style="font-size:12.5px;font-weight:700;color:#38bdf8">${grp.naam}</span>
-                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${app.every(function(x){ return x.los; })
+                        <span style="font-size:12.5px;font-weight:700;color:var(--ov-info)">${grp.naam}</span>
+                        <span style="font-size:11.5px;color:var(--ov-ink-40)">${app.every(function(x){ return x.los; })
                           ? `${grp.entiteiten} entiteiten`
                           : `${app.length} ${app.length === 1 ? 'apparaat' : 'apparaten'} · ${grp.entiteiten} entiteiten`}</span></div>
                       ${rijen}
-                      ${teveel ? `<div style="padding:5px 0;font-size:12px;color:rgba(255,255,255,0.45);text-align:left">+ ${teveel} ${teveel === 1 ? 'apparaat' : 'apparaten'} meer</div>` : ''}</div>`;
+                      ${teveel ? `<div style="padding:5px 0;font-size:12px;color:var(--ov-ink-45);text-align:left">+ ${teveel} ${teveel === 1 ? 'apparaat' : 'apparaten'} meer</div>` : ''}</div>`;
                   }).join('');
-                  if(!storing.entiteiten) blokken = `<div style="font-size:14px;color:#4ade80;text-align:left">Geen storingen.</div>`;
+                  if(!storing.entiteiten) blokken = `<div style="font-size:14px;color:var(--ov-ok);text-align:left">Geen storingen.</div>`;
                   // De rest verdwijnt niet uit beeld, maar telt niet mee: één
                   // regel per bak met de uitsplitsing per integratie erachter.
                   var voet = function(kop, uitleg, t){
                     if(!t.entiteiten) return '';
                     var stukjes = t.per.map(function(p){
-                      return `<span style="white-space:nowrap"><span style="color:rgba(255,255,255,0.7)">${p.naam}</span> <span style="color:rgba(255,255,255,0.45)">${p.entiteiten}</span></span>`;
-                    }).join('<span style="color:rgba(255,255,255,0.2)"> · </span>');
-                    return `<div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;margin-top:8px">
+                      return `<span style="white-space:nowrap"><span style="color:var(--ov-ink-70)">${p.naam}</span> <span style="color:var(--ov-ink-45)">${p.entiteiten}</span></span>`;
+                    }).join('<span style="color:var(--ov-ink-20)"> · </span>');
+                    return `<div style="border-top:1px solid var(--ov-ink-8);padding-top:10px;margin-top:8px">
                       <div style="display:flex;align-items:baseline;gap:8px;text-align:left">
-                        <span style="font-size:12.5px;font-weight:700;color:rgba(255,255,255,0.55)">${kop}</span>
-                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${t.entiteiten} entiteiten</span></div>
-                      <div style="font-size:11.5px;color:rgba(255,255,255,0.3);text-align:left;padding:1px 0 3px">${uitleg}</div>
+                        <span style="font-size:12.5px;font-weight:700;color:var(--ov-ink-55)">${kop}</span>
+                        <span style="font-size:11.5px;color:var(--ov-ink-40)">${t.entiteiten} entiteiten</span></div>
+                      <div style="font-size:11.5px;color:var(--ov-ink-30);text-align:left;padding:1px 0 3px">${uitleg}</div>
                       <div style="font-size:12.5px;line-height:1.7;text-align:left">${stukjes}</div></div>`;
                   };
                   var overig = voet('weesentiteiten', 'integratie bestaat niet meer — op te ruimen in het entiteitenregister', telVan(bakken.wees))
                     + voet('afgeleide sensoren', 'spiegelen een andere entiteit; vallen om als hun bron omvalt', telVan(bakken.afgeleid))
                     + voet('komen en gaan', 'clients die niet altijd aanwezig zijn — weg is hier normaal', telVan(bakken.ruis));
-                  var waarschuwing = reg ? '' : `<div style="font-size:11.5px;color:#f59e0b;padding-bottom:8px">Entiteitenregister niet beschikbaar — gegroepeerd op domein in plaats van integratie.</div>`;
+                  var waarschuwing = reg ? '' : `<div style="font-size:11.5px;color:var(--ov-warn);padding-bottom:8px">Entiteitenregister niet beschikbaar — gegroepeerd op domein in plaats van integratie.</div>`;
                   return `<div style="max-height:calc(100vh - 190px);overflow-y:auto">${waarschuwing}${blokken}${overig}</div>`;
                 ]]]
 
@@ -338,11 +338,11 @@ cards:
                     var v = Number(s.state);
                     return !isNaN(v) && v <= d;
                   }).length;
-                  var kleur = n === 0 ? '#4ade80' : (n > 5 ? '#ef4444' : '#f59e0b');
+                  var kleur = n === 0 ? 'var(--ov-ok)' : (n > 5 ? 'var(--ov-bad)' : 'var(--ov-warn)');
                   return `<span style="display:flex;align-items:baseline;gap:12px;width:100%">
-                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:rgba(255,255,255,0.55)">BATTERIJEN</span>
-                    <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">onder ${d}% of stil</span>
-                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:rgba(255,255,255,0.06)">${n}</span></span>`;
+                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">BATTERIJEN</span>
+                    <span style="font-size:11.5px;color:var(--ov-ink-40)">onder ${d}% of stil</span>
+                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:var(--ov-ink-6)">${n}</span></span>`;
                 ]]]
               lijst: |
                 [[[
@@ -396,12 +396,12 @@ cards:
                     }
                   });
                   var namen = Object.keys(groepen);
-                  if(!namen.length) return `<span style="font-size:14px;color:#4ade80">Geen bijna lege of stille batterijen.</span>`;
+                  if(!namen.length) return `<span style="font-size:14px;color:var(--ov-ok)">Geen bijna lege of stille batterijen.</span>`;
                   // Stil bovenaan (-2), dan een kaal 'laag'-signaal (-1), dan op percentage.
                   var sleutelVan = function(x){ return x.stil ? -2 : (x.niveau === null ? -1 : x.niveau); };
                   var kleurVan = function(x){
-                    if(x.stil || x.niveau === null) return '#ef4444';
-                    return x.niveau <= 10 ? '#ef4444' : (x.niveau <= 20 ? '#f59e0b' : 'rgba(255,255,255,0.7)');
+                    if(x.stil || x.niveau === null) return 'var(--ov-bad)';
+                    return x.niveau <= 10 ? 'var(--ov-bad)' : (x.niveau <= 20 ? 'var(--ov-warn)' : 'var(--ov-ink-70)');
                   };
                   var lijstVan = {};
                   namen.forEach(function(g){
@@ -423,19 +423,19 @@ cards:
                   };
                   var blokken = namen.map(function(g){
                     var rijen = lijstVan[g].map(function(x){
-                      var plek = x.gebied ? `<span style="color:rgba(255,255,255,0.35)"> · ${x.gebied}</span>` : '';
+                      var plek = x.gebied ? `<span style="color:var(--ov-ink-35)"> · ${x.gebied}</span>` : '';
                       var pct = x.niveau === null ? 100 : Math.max(2, x.niveau);
                       var waarde = x.stil ? 'stil' : (x.niveau === null ? 'laag' : x.niveau + '%');
-                      return klik(x.dev_id, x.ent, `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.04)">
-                        <span style="flex:1;text-align:left;font-size:13.5px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
-                        <span style="width:56px;height:6px;border-radius:3px;background:rgba(255,255,255,0.07);overflow:hidden;flex:0 0 auto">
+                      return klik(x.dev_id, x.ent, `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-top:1px solid var(--ov-ink-4)">
+                        <span style="flex:1;text-align:left;font-size:13.5px;color:var(--ov-ink-85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
+                        <span style="width:56px;height:6px;border-radius:3px;background:var(--ov-ink-7);overflow:hidden;flex:0 0 auto">
                           <span style="display:block;width:${pct}%;height:100%;background:${kleurVan(x)}"></span></span>
                         <span style="width:44px;text-align:right;font-size:13px;font-weight:600;color:${kleurVan(x)}">${waarde}</span></div>`);
                     }).join('');
                     return `<div style="margin-bottom:12px">
                       <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:2px;text-align:left">
-                        <span style="font-size:12.5px;font-weight:700;color:#38bdf8">${g}</span>
-                        <span style="font-size:11.5px;color:rgba(255,255,255,0.4)">${lijstVan[g].length}</span></div>
+                        <span style="font-size:12.5px;font-weight:700;color:var(--ov-info)">${g}</span>
+                        <span style="font-size:11.5px;color:var(--ov-ink-40)">${lijstVan[g].length}</span></div>
                       ${rijen}</div>`;
                   }).join('');
                   return `<div style="max-height:calc(100vh - 190px);overflow-y:auto">${blokken}</div>`;
@@ -493,9 +493,9 @@ cards:
                   });
                   var n = Object.keys(devs).length;
                   return `<span style="display:flex;align-items:baseline;gap:12px;width:100%">
-                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:rgba(255,255,255,0.55)">MATTER</span>
-                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:rgba(255,255,255,0.7);background:rgba(255,255,255,0.06)">${n}</span>
-                    <span style="margin-left:auto;font-size:11.5px;color:rgba(255,255,255,0.4)">oudste eerst</span></span>`;
+                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">MATTER</span>
+                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:var(--ov-ink-70);background:var(--ov-ink-6)">${n}</span>
+                    <span style="margin-left:auto;font-size:11.5px;color:var(--ov-ink-40)">oudste eerst</span></span>`;
                 ]]]
               lijst: |
                 [[[
@@ -503,7 +503,7 @@ cards:
                   var reg = (hass && hass.entities) ? hass.entities : null;
                   var apparaten = (hass && hass.devices) ? hass.devices : null;
                   var gebieden = (hass && hass.areas) ? hass.areas : null;
-                  if(!reg) return `<span style="font-size:12.5px;color:#f59e0b">Entiteitenregister niet beschikbaar — Matter-apparaten zijn niet te herkennen.</span>`;
+                  if(!reg) return `<span style="font-size:12.5px;color:var(--ov-warn)">Entiteitenregister niet beschikbaar — Matter-apparaten zijn niet te herkennen.</span>`;
                   // Na een herstart staat elke last_updated op het herstartmoment,
                   // dus zonder deze correctie lijkt ieder stil apparaat precies zo
                   // lang stil als HA draait. Zie de kaart hierboven.
@@ -533,7 +533,7 @@ cards:
                     if(tijd !== null && (g.laatst === null || tijd > g.laatst)) g.laatst = tijd;
                   });
                   var lijst = Object.keys(groepen).map(function(k){ return groepen[k]; });
-                  if(!lijst.length) return `<span style="font-size:14px;color:rgba(255,255,255,0.6)">Geen Matter-apparaten gevonden.</span>`;
+                  if(!lijst.length) return `<span style="font-size:14px;color:var(--ov-ink-60)">Geen Matter-apparaten gevonden.</span>`;
                   // Oudste eerst; apparaten zonder tijdstempel helemaal bovenaan
                   lijst.sort(function(a,b){
                     if(a.laatst === b.laatst) return a.naam.localeCompare(b.naam);
@@ -555,10 +555,10 @@ cards:
                   var oud = (variables.oud_uren || 6) * 3600000;
                   var stil = (variables.stil_uren || 24) * 3600000;
                   var kleurVan = function(ms){
-                    if(ms === null) return '#ef4444';
-                    if(ms > stil) return '#ef4444';
-                    if(ms > oud) return '#f59e0b';
-                    return 'rgba(255,255,255,0.6)';
+                    if(ms === null) return 'var(--ov-bad)';
+                    if(ms > stil) return 'var(--ov-bad)';
+                    if(ms > oud) return 'var(--ov-warn)';
+                    return 'var(--ov-ink-60)';
                   };
                   // Rij klikbaar maken. Drie dingen zitten een gewone link hier
                   // in de weg, dus alle drie afgevangen:
@@ -587,14 +587,14 @@ cards:
                   };
                   var rijen = lijst.map(function(x){
                     var sinds = x.laatst === null ? null : nu - x.laatst;
-                    var plek = x.gebied ? `<span style="color:rgba(255,255,255,0.35)"> · ${x.gebied}</span>` : '';
+                    var plek = x.gebied ? `<span style="color:var(--ov-ink-35)"> · ${x.gebied}</span>` : '';
                     // Alleen melden als het hele apparaat weg is; losse entiteiten
                     // die op unavailable staan zeggen te weinig om te tonen.
                     var status = x.weg === x.aantal
-                      ? `<span style="font-size:11.5px;font-weight:600;color:#ef4444;white-space:nowrap">niet bereikbaar</span>`
-                      : `<span style="font-size:11.5px;color:rgba(255,255,255,0.45);white-space:nowrap">${x.aantal} ${x.aantal === 1 ? 'entiteit' : 'entiteiten'}</span>`;
-                    return klik(x.dev_id, x.ent, `<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-top:1px solid rgba(255,255,255,0.04)">
-                      <span style="flex:1;text-align:left;font-size:13.5px;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
+                      ? `<span style="font-size:11.5px;font-weight:600;color:var(--ov-bad);white-space:nowrap">niet bereikbaar</span>`
+                      : `<span style="font-size:11.5px;color:var(--ov-ink-45);white-space:nowrap">${x.aantal} ${x.aantal === 1 ? 'entiteit' : 'entiteiten'}</span>`;
+                    return klik(x.dev_id, x.ent, `<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-top:1px solid var(--ov-ink-4)">
+                      <span style="flex:1;text-align:left;font-size:13.5px;color:var(--ov-ink-85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
                       ${status}
                       <span style="font-size:13px;font-weight:600;white-space:nowrap;color:${kleurVan(sinds)}">${duurTxt(sinds)}</span></div>`);
                   }).join('');

@@ -46,13 +46,13 @@ cards:
                 var txt, col;
                 if(cheap){
                   txt = green ? 'stroom is groen en goedkoop' : 'stroom is goedkoop';
-                  col = '#4ade80';
+                  col = 'var(--ov-ok)';
                 } else if(duur){
                   txt = green ? 'stroom is groen maar duur' : 'stroom is duur';
-                  col = green ? '#f59e0b' : '#ef4444';
+                  col = green ? 'var(--ov-warn)' : 'var(--ov-bad)';
                 } else {
                   txt = green ? 'stroom is groen' : 'normaal tarief';
-                  col = green ? '#4ade80' : 'rgba(255,255,255,0.6)';
+                  col = green ? 'var(--ov-ok)' : 'var(--ov-ink-60)';
                 }
                 return `<span style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:${col}"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span>${txt}</span>`;
               ]]]
@@ -172,8 +172,8 @@ cards:
                 var kw = function(v){ return v === null ? '—' : v.toFixed(2).replace('.',','); };
 
                 // ---------- teksten ----------
-                var GROEN = '#4ade80', BLAUW = '#3b82f6', GEEL = '#FFD60A';
-                var WIT = 'rgba(255,255,255,0.85)', GRIJS = 'rgba(255,255,255,0.55)';
+                var GROEN = 'var(--ov-ok)', BLAUW = 'var(--ov-info-strong)', GEEL = 'var(--ov-clip)';
+                var WIT = 'var(--ov-ink-85)', GRIJS = 'var(--ov-ink-55)';
                 var zonActief = zonKw !== null && zonKw * 1000 > 50;
                 var deel = function(naam, p){
                   if(p === null) return '';
@@ -199,7 +199,7 @@ cards:
                 // ---------- lijnenveld ----------
                 // Alleen paden, dus dit mag horizontaal uitrekken
                 // (preserveAspectRatio=none); non-scaling-stroke houdt ze 2px.
-                var LIJN_UIT = 'rgba(255,255,255,0.10)';
+                var LIJN_UIT = 'var(--ov-ink-10)';
                 var lijn = function(d, kleur, actief, richting){
                   var basis = `<path d="${d}" fill="none" stroke="${LIJN_UIT}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
                   if(!actief) return basis;
@@ -211,8 +211,8 @@ cards:
                 return `<div style="display:grid;grid-template-columns:auto minmax(60px,1fr) auto;align-items:center;column-gap:14px;width:100%">
                   <div style="display:flex;flex-direction:column;gap:2px">
                     ${knoop(kw(zonKw) + ' kW', GROEN, zonLabel)}
-                    ${knoop(netWaarde, terug ? GROEN : 'white', netLabel)}
-                    ${knoop(accuWaarde, 'white', accuLabel)}
+                    ${knoop(netWaarde, terug ? GROEN : 'var(--primary-text-color)', netLabel)}
+                    ${knoop(accuWaarde, 'var(--primary-text-color)', accuLabel)}
                   </div>
                   <svg viewBox="0 0 300 106" preserveAspectRatio="none" style="display:block;width:100%;height:106px">
                     ${lijn('M2,17 C 120,17 180,45 298,45', GROEN, zonActief, 1)}
@@ -220,7 +220,7 @@ cards:
                     ${lijn('M2,89 C 120,89 180,61 298,61', WIT, accuActief, accuMode === 'ontlaadt' ? 1 : -1)}
                   </svg>
                   <div style="display:flex;flex-direction:column;justify-content:center">
-                    <div style="line-height:1;white-space:nowrap"><span style="font-size:30px;font-weight:700;color:white">${kw(verbruik)}</span> <span style="font-size:13px;color:${GRIJS}">kW</span></div>
+                    <div style="line-height:1;white-space:nowrap"><span style="font-size:30px;font-weight:700;color:var(--primary-text-color)">${kw(verbruik)}</span> <span style="font-size:13px;color:${GRIJS}">kW</span></div>
                     <div style="font-size:11.5px;line-height:1.35;color:${GRIJS};padding-top:3px;white-space:nowrap"><ha-icon icon="mdi:home-lightning-bolt-outline" style="--mdc-icon-size:13px;width:13px;height:13px;vertical-align:middle;color:${GRIJS}"></ha-icon> huis · verbruik</div>
                   </div>
                 </div>`;
@@ -273,7 +273,7 @@ cards:
                   tickAmount: 3
                   labels:
                     style:
-                      colors: "rgba(255,255,255,0.5)"
+                      colors: "var(--ov-ink-50)"
                       fontSize: "10px"
                     formatter: |
                       EVAL:function(v) { return (v === null || v === undefined) ? '' : Number(v).toFixed(1).replace('.', ',') + ' kW'; }
@@ -287,7 +287,7 @@ cards:
                   labels:
                     show: true
                     style:
-                      colors: "rgba(255,255,255,0.5)"
+                      colors: "var(--ov-ink-50)"
                       fontSize: "10px"
                     datetimeFormatter:
                       hour: "HH:mm"
@@ -301,7 +301,7 @@ cards:
                 - entity: sensor.zon_vermogen_nu
                   name: productie
                   type: area
-                  color: "#4ade80"
+                  color: "var(--ov-ok)"
                   curve: smooth
                   stroke_width: 2
                   opacity: 0.22
@@ -345,7 +345,7 @@ cards:
                 - entity: sensor.huis_verbruik
                   name: huis
                   type: line
-                  color: "#3b82f6"
+                  color: "var(--ov-info-strong)"
                   curve: smooth
                   stroke_width: 2
                   opacity: 1
@@ -388,9 +388,9 @@ cards:
                   custom_fields:
                     regel: |
                       [[[
-                        return `<span style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;font-size:11.5px;color:rgba(255,255,255,0.52)">
-                          <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:#3b82f6"></span>live · wat het huis trekt</span>
-                          <span style="color:rgba(255,255,255,0.38);white-space:nowrap">laatste 30 min</span></span>`;
+                        return `<span style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;font-size:11.5px;color:var(--ov-ink-52)">
+                          <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:var(--ov-info-strong)"></span>live · wat het huis trekt</span>
+                          <span style="color:var(--ov-ink-38);white-space:nowrap">laatste 30 min</span></span>`;
                       ]]]
                 - type: custom:apexcharts-card
                   # Geen x-as: de kopregel zegt al "laatste 30 min" en de as
@@ -429,7 +429,7 @@ cards:
                       tickAmount: 2
                       labels:
                         style:
-                          colors: "rgba(255,255,255,0.5)"
+                          colors: "var(--ov-ink-50)"
                           fontSize: "10px"
                         formatter: |
                           EVAL:function(v) { return (v === null || v === undefined) ? '' : Number(v).toFixed(1).replace('.', ',') + ' kW'; }
@@ -450,7 +450,7 @@ cards:
                     - entity: sensor.huis_verbruik
                       name: huis
                       type: area
-                      color: "#3b82f6"
+                      color: "var(--ov-info-strong)"
                       curve: smooth
                       stroke_width: 2
                       opacity: 0.18
@@ -477,7 +477,7 @@ cards:
                 c: |
                   [[[
                     var g = states['sensor.zon_opgewekt_vandaag'];
-                    return `<span style="color:rgba(255,255,255,0.8)">vandaag opgewekt · ${g && !isNaN(Number(g.state)) ? Number(g.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
+                    return `<span style="color:var(--ov-ink-80)">vandaag opgewekt · ${g && !isNaN(Number(g.state)) ? Number(g.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
                   ]]]
             - type: custom:button-card
               template: ov_pill
@@ -488,7 +488,7 @@ cards:
                 c: |
                   [[[
                     var f = states['sensor.forecast_solar_production_today'];
-                    return `<span style="color:rgba(255,255,255,0.8)">verwacht · ${f && !isNaN(Number(f.state)) ? Number(f.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
+                    return `<span style="color:var(--ov-ink-80)">verwacht · ${f && !isNaN(Number(f.state)) ? Number(f.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
                   ]]]
             - type: custom:button-card
               template: ov_pill
@@ -499,7 +499,7 @@ cards:
                 c: |
                   [[[
                     var g = states['sensor.zonneplan_gas_consumption_today'];
-                    return `<span style="color:rgba(255,255,255,0.8)">gas · ${g && !isNaN(Number(g.state)) ? Number(g.state).toFixed(2).replace('.',',') : '—'} m³</span>`;
+                    return `<span style="color:var(--ov-ink-80)">gas · ${g && !isNaN(Number(g.state)) ? Number(g.state).toFixed(2).replace('.',',') : '—'} m³</span>`;
                   ]]]
             - type: custom:button-card
               template: ov_pill
@@ -511,7 +511,7 @@ cards:
                   [[[
                     var k = states['sensor.total_costs_today_calculated'];
                     var v = k && !isNaN(Number(k.state)) ? Number(k.state) : 0;
-                    var col = v < 0 ? '#4ade80' : 'rgba(255,255,255,0.85)';
+                    var col = v < 0 ? 'var(--ov-ok)' : 'var(--ov-ink-85)';
                     return `<span style="color:${col};font-weight:600">kosten vandaag · € ${v.toFixed(2).replace('.',',')}</span>`;
                   ]]]
   # STROOMPRIJS (vandaag + morgen)
@@ -544,8 +544,8 @@ cards:
                 // hetzelfde zegt als de pil in de header en waar de batterij
                 // op schakelt.
                 var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
-                var col = {very_low:'#4ade80', low:'#4ade80', medium:'#f59e0b',
-                           high:'#ef4444', very_high:'#ef4444'}[g ? g.state : ''] || 'rgba(255,255,255,0.6)';
+                var col = {very_low:'var(--ov-ok)', low:'var(--ov-ok)', medium:'var(--ov-warn)',
+                           high:'var(--ov-bad)', very_high:'var(--ov-bad)'}[g ? g.state : ''] || 'var(--ov-ink-60)';
                 // Kwartierblokken als de integratie ze levert, anders de uurblokken.
                 var blok = function(eid){ var e = states[eid]; return (e && e.attributes && e.attributes.raw_today) || []; };
                 var kw = blok('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier');
@@ -562,7 +562,7 @@ cards:
                 var nuTxt = nu !== null ? '€ ' + nu.toFixed(3).replace('.',',') : '—';
                 var klok = function(d){ return ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2); };
                 var tip = best ? ` · laagste ${klok(best.d)}` : '';
-                return `<span style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:rgba(255,255,255,0.65)"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span><span style="color:white;font-weight:600">nu ${nuTxt}</span>${tip}</span>`;
+                return `<span style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ov-ink-65)"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span><span style="color:var(--primary-text-color);font-weight:600">nu ${nuTxt}</span>${tip}</span>`;
               ]]]
         - type: custom:apexcharts-card
           # Meeschuivend venster: 3 uur terug tot 27 uur vooruit. Een vast
@@ -577,7 +577,7 @@ cards:
           # wit annotatieblok bovenin de grafiek.
           now:
             show: true
-            color: rgba(255,255,255,0.75)
+            color: var(--ov-ink-75)
           card_mod:
             style: |
               ha-card { background: none !important; box-shadow: none !important; border: none !important; }
@@ -602,7 +602,7 @@ cards:
               tickAmount: 3
               labels:
                 style:
-                  colors: "rgba(255,255,255,0.5)"
+                  colors: "var(--ov-ink-50)"
                   fontSize: "10px"
                 formatter: |
                   EVAL:function(v) { return (v === null || v === undefined) ? '' : '€ ' + Number(v).toFixed(2).replace('.', ','); }
@@ -618,7 +618,7 @@ cards:
               labels:
                 show: true
                 style:
-                  colors: "rgba(255,255,255,0.5)"
+                  colors: "var(--ov-ink-50)"
                   fontSize: "10px"
                 datetimeFormatter:
                   minute: "HH:mm"
@@ -655,7 +655,7 @@ cards:
             - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
               name: goedkoop
               type: column
-              color: "#4ade80"
+              color: "var(--ov-ok)"
               opacity: 1
               stroke_width: 1
               float_precision: 3
@@ -703,7 +703,7 @@ cards:
             - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
               name: gemiddeld
               type: column
-              color: "#f59e0b"
+              color: "var(--ov-warn)"
               opacity: 1
               stroke_width: 1
               float_precision: 3
@@ -751,7 +751,7 @@ cards:
             - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
               name: duur
               type: column
-              color: "#ef4444"
+              color: "var(--ov-bad)"
               opacity: 1
               stroke_width: 1
               float_precision: 3
@@ -850,22 +850,22 @@ cards:
                   return `<span style="display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap">`
                     + `<span style="color:${col};font-size:10px;opacity:0.85">${pijl}</span>`
                     + `<span style="color:${col};font-weight:600">€ ${x.p.toFixed(3).replace('.',',')}</span>`
-                    + `<span style="color:rgba(255,255,255,0.32);font-size:11px">${klok(x.d)}</span></span>`;
+                    + `<span style="color:var(--ov-ink-32);font-size:11px">${klok(x.d)}</span></span>`;
                 };
                 // nowrap per dagdeel, zodat een regel hoogstens tussen "vandaag"
                 // en "morgen" breekt en niet middenin een prijs.
                 var deel = function(lbl, x){
-                  var kop = `<span style="color:rgba(255,255,255,0.45);font-size:11px;letter-spacing:0.3px">${lbl}</span>`;
+                  var kop = `<span style="color:var(--ov-ink-45);font-size:11px;letter-spacing:0.3px">${lbl}</span>`;
                   var inhoud = x
-                    ? `${kop}${f(x.lo,'#4ade80','▼')}${f(x.hi,'#ef4444','▲')}`
-                    : `${kop}<span style="color:rgba(255,255,255,0.3)">nog niet bekend</span>`;
+                    ? `${kop}${f(x.lo,'var(--ov-ok)','▼')}${f(x.hi,'var(--ov-bad)','▲')}`
+                    : `${kop}<span style="color:var(--ov-ink-30)">nog niet bekend</span>`;
                   return `<span style="display:inline-flex;align-items:baseline;gap:14px;white-space:nowrap">${inhoud}</span>`;
                 };
                 var vandaag = extremen('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today');
                 var morgen = extremen('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow');
                 var dagen = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 34px;font-size:12.5px">${deel('vandaag', vandaag)}${deel('morgen', morgen)}</span>`;
                 var dot = function(c, lbl){ return `<span style="display:inline-flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${lbl}</span>`; };
-                var legenda = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;font-size:11.5px;color:rgba(255,255,255,0.52)">${dot('#4ade80','goedkoop')}${dot('#f59e0b','gemiddeld')}${dot('#ef4444','duur')}</span>`;
+                var legenda = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;font-size:11.5px;color:var(--ov-ink-52)">${dot('var(--ov-ok)','goedkoop')}${dot('var(--ov-warn)','gemiddeld')}${dot('var(--ov-bad)','duur')}</span>`;
                 // space-between en niet margin-left:auto: zodra de legenda naar
                 // een eigen regel zakt, hoort hij daar links te beginnen.
                 return `<span style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 24px;width:100%">${dagen}${legenda}</span>`;
@@ -938,21 +938,21 @@ cards:
                 var straksAllin = leesWaarde((allinNu && allinNu.attributes) ? allinNu.attributes.next_negative_start : null);
                 var straks = lees('sensor.slimhuys_zonneplan_volgende_negatieve_prijs');
                 if(allinNu && allinNu.state === 'on') {
-                  delen.push(`<span style="color:#4ade80">${ico('mdi:flash', 'color:#4ade80')} prijs is nu negatief</span>`);
+                  delen.push(`<span style="color:var(--ov-ok)">${ico('mdi:flash', 'color:var(--ov-ok)')} prijs is nu negatief</span>`);
                 } else if(straksAllin) {
                   // Het moment waarop je wél betaald krijgt; dat weegt zwaarder
                   // dan een marktprijs die nu toevallig onder nul staat.
-                  delen.push(`<span style="color:#4ade80">${ico('mdi:flash-outline', 'color:#4ade80')} negatief vanaf <span style="color:white">${wanneer(straksAllin)}</span></span>`);
+                  delen.push(`<span style="color:var(--ov-ok)">${ico('mdi:flash-outline', 'color:var(--ov-ok)')} negatief vanaf <span style="color:var(--primary-text-color)">${wanneer(straksAllin)}</span></span>`);
                 } else if(epexNu && epexNu.state === 'on') {
                   // Goedkoopste moment van de dag, maar je betaalt nog steeds -
                   // dus geen groen en niet "negatief" zonder meer.
                   var nog = euro(epexNu.attributes ? epexNu.attributes.total_now : null);
-                  delen.push(`<span>${ico('mdi:flash-outline')} marktprijs negatief${nog ? ` · je betaalt nog <span style="color:white">${nog}</span>` : ''}</span>`);
+                  delen.push(`<span>${ico('mdi:flash-outline')} marktprijs negatief${nog ? ` · je betaalt nog <span style="color:var(--primary-text-color)">${nog}</span>` : ''}</span>`);
                 } else if(straks) {
-                  delen.push(`<span>${ico('mdi:flash-outline')} marktprijs negatief vanaf <span style="color:white">${wanneer(straks)}</span></span>`);
+                  delen.push(`<span>${ico('mdi:flash-outline')} marktprijs negatief vanaf <span style="color:var(--primary-text-color)">${wanneer(straks)}</span></span>`);
                 }
                 var tips = delen.length
-                  ? `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;font-size:12px;color:rgba(255,255,255,0.55)">${delen.map(function(d){ return `<span style="white-space:nowrap">${d}</span>`; }).join('<span style="opacity:0.25">·</span>')}</span>`
+                  ? `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;font-size:12px;color:var(--ov-ink-55)">${delen.map(function(d){ return `<span style="white-space:nowrap">${d}</span>`; }).join('<span style="opacity:0.25">·</span>')}</span>`
                   : '';
                 // hoe fijn de prijsblokken zijn (kwartier of uur)
                 var pv = states['sensor.slimhuys_zonneplan_prijzen_vandaag'];
@@ -962,7 +962,7 @@ cards:
                   var lbl = m === 15 ? 'kwartierprijzen' : (m === 60 ? 'uurprijzen' : `prijzen per ${m} min`);
                   // margin-left:auto en niet space-between: zonder tip blijft het
                   // label dan alsnog rechts staan in plaats van links.
-                  gran = `<span style="margin-left:auto;white-space:nowrap;font-size:11.5px;color:rgba(255,255,255,0.4)">${lbl}</span>`;
+                  gran = `<span style="margin-left:auto;white-space:nowrap;font-size:11.5px;color:var(--ov-ink-40)">${lbl}</span>`;
                 }
                 if(!tips && !gran) return '';
                 return `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px;width:100%">${tips}${gran}</span>`;
@@ -1028,7 +1028,7 @@ cards:
                   // kop van packages/9 - Other/Veelgebruikers.yaml); is de lijst
                   // leeg dan meldt geen enkele stekker zich.
                   var stil = !entity || entity.state === 'unavailable' || entity.state === 'unknown';
-                  return `<div style="padding:7px 2px;font-size:13.5px;color:rgba(255,255,255,0.45)">${stil ? 'nog geen meting' : 'geen stekker meldt zich'}</div>`;
+                  return `<div style="padding:7px 2px;font-size:13.5px;color:var(--ov-ink-45)">${stil ? 'nog geen meting' : 'geen stekker meldt zich'}</div>`;
                 }
                 // Schaal op de zwaarste van dit moment, anders zijn alle balkjes
                 // even kort zodra er niets groots aanstaat. Ondergrens 10 W.
@@ -1040,8 +1040,8 @@ cards:
                   // een koffiemachine van 1200 W.
                   var uit = !r.watt;
                   return `<div style="display:grid;grid-template-columns:205px 1fr 72px;column-gap:14px;align-items:center;padding:7px 2px">
-                    <span style="font-size:14px;color:rgba(255,255,255,${uit ? '0.5' : '0.85'});white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.naam}</span>
-                    <div style="width:100%;height:6px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${uit ? 'rgba(255,255,255,0.12)' : '#3b82f6'};border-radius:3px"></div></div>
-                    <span style="font-size:14px;font-weight:600;color:${uit ? 'rgba(255,255,255,0.45)' : 'white'};text-align:right">${r.watt} W</span></div>`;
+                    <span style="font-size:14px;color:var(--ov-ink-${uit ? '50' : '85'});white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.naam}</span>
+                    <div style="width:100%;height:6px;background:var(--ov-ink-7);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${uit ? 'var(--ov-ink-12)' : 'var(--ov-info-strong)'};border-radius:3px"></div></div>
+                    <span style="font-size:14px;font-weight:600;color:${uit ? 'var(--ov-ink-45)' : 'var(--primary-text-color)'};text-align:right">${r.watt} W</span></div>`;
                 }).join('');
               ]]]

@@ -44,7 +44,7 @@ cards:
           var months = ['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
           var t = ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
           var ds = `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} · ${t}`;
-          return `<span style="display:flex;align-items:baseline;gap:12px"><span style="font-size:22px;font-weight:700;color:white">Hallo ${u}</span><span style="font-size:14px;color:rgba(255,255,255,0.52)">${ds}</span></span>`;
+          return `<span style="display:flex;align-items:baseline;gap:12px"><span style="font-size:22px;font-weight:700;color:var(--primary-text-color)">Hallo ${u}</span><span style="font-size:14px;color:var(--ov-ink-52)">${ds}</span></span>`;
         ]]]
   - type: horizontal-stack
     card_mod:
@@ -59,9 +59,9 @@ cards:
         styles:
           card:
             - background: >
-                [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && /low/.test(g.state)) ? 'rgba(52,168,120,0.14)' : 'rgba(255,255,255,0.05)'; ]]]
+                [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && /low/.test(g.state)) ? 'var(--ov-ok-wash-14)' : 'var(--ov-ink-5)'; ]]]
             - border: >
-                [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && /low/.test(g.state)) ? '1px solid rgba(52,168,120,0.28)' : '1px solid rgba(255,255,255,0.06)'; ]]]
+                [[[ var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu']; return (g && /low/.test(g.state)) ? '1px solid var(--ov-ok-wash-28)' : '1px solid var(--ov-ink-6)'; ]]]
         custom_fields:
           c: |
             [[[
@@ -73,11 +73,11 @@ cards:
               var lbl = {very_low:'zeer laag', low:'laag', medium:'gemiddeld', high:'hoog', very_high:'zeer hoog'};
               // Dezelfde drie kleuren als de legenda onder de stroomprijsgrafiek,
               // zodat deze stip hetzelfde zegt als een balk daar.
-              var col = {very_low:'#4ade80', low:'#4ade80', medium:'#f59e0b', high:'#ef4444', very_high:'#ef4444'};
+              var col = {very_low:'var(--ov-ok)', low:'var(--ov-ok)', medium:'var(--ov-warn)', high:'var(--ov-bad)', very_high:'var(--ov-bad)'};
               var gs = g ? g.state : 'medium';
               var price = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '';
-              var txt = /low/.test(gs) ? '#4ade80' : 'rgba(255,255,255,0.85)';
-              return `<span style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:${col[gs]||'#888'}"></span><span style="color:${txt}">tarief ${lbl[gs]||String(gs).replace(/_/g,' ')} · ${price}</span></span>`;
+              var txt = /low/.test(gs) ? 'var(--ov-ok)' : 'var(--ov-ink-85)';
+              return `<span style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:50%;background:${col[gs]||'var(--ov-ink-55)'}"></span><span style="color:${txt}">tarief ${lbl[gs]||String(gs).replace(/_/g,' ')} · ${price}</span></span>`;
             ]]]
       # Conditioneel: er is aangebeld (blijft 3 min staan, zie Dashboard Context.yaml).
       # Staat vooraan omdat er dan iemand voor de deur kan staan.
@@ -93,8 +93,8 @@ cards:
             state: "on"
         styles:
           card:
-            - background: rgba(245,158,11,0.16)
-            - border: 1px solid rgba(245,158,11,0.35)
+            - background: var(--ov-warn-16)
+            - border: 1px solid var(--ov-warn-35)
         custom_fields:
           c: |
             [[[
@@ -103,7 +103,7 @@ cards:
               var d = states['binary_sensor.deurbel_recent'];
               var t = d && d.last_changed ? new Date(d.last_changed) : null;
               var klok = (t && !isNaN(t.getTime())) ? ('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2) : '';
-              return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:doorbell-video" style="--mdc-icon-size:16px"></ha-icon>er is aangebeld${klok ? ' · ' + klok : ''}</span>`;
+              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-warn)"><ha-icon icon="mdi:doorbell-video" style="--mdc-icon-size:16px"></ha-icon>er is aangebeld${klok ? ' · ' + klok : ''}</span>`;
             ]]]
       # Conditioneel: het huis heeft een vraag gesteld (satelliet + telefoon,
       # zie script.spraak_vraag_stellen in Kitchen/Voice.yaml) en het
@@ -128,8 +128,8 @@ cards:
             state_not: ""
         styles:
           card:
-            - background: rgba(56,189,248,0.14)
-            - border: 1px solid rgba(56,189,248,0.32)
+            - background: var(--ov-info-14)
+            - border: 1px solid var(--ov-info-32)
         custom_fields:
           c: |
             [[[
@@ -141,7 +141,7 @@ cards:
                             spa_gratis: 'spa opwarmen op gratis stroom?',
                             spa_warm: 'spa opwarmen?'})[sleutel]
                           || (sleutel.replace(/_/g, ' ') + '?');
-              return `<span style="display:flex;align-items:center;gap:7px;color:#38bdf8"><ha-icon icon="mdi:comment-question-outline" style="--mdc-icon-size:16px"></ha-icon>vraag · ${tekst}</span>`;
+              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-info)"><ha-icon icon="mdi:comment-question-outline" style="--mdc-icon-size:16px"></ha-icon>vraag · ${tekst}</span>`;
             ]]]
       # Conditioneel: er is iets stuk in huis. Tikken gaat naar het
       # systeem-dashboard, waar de volledige lijst per integratie staat.
@@ -183,7 +183,7 @@ cards:
               // afkappen laat vanzelf het minst dringende (updates) vallen.
               var rest = delen.length - 3;
               var tekst = delen.slice(0, 3).join(' · ') + (rest > 0 ? ' · +' + rest : '');
-              return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:heart-pulse" style="--mdc-icon-size:16px"></ha-icon>${tekst}</span>`;
+              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-warn)"><ha-icon icon="mdi:heart-pulse" style="--mdc-icon-size:16px"></ha-icon>${tekst}</span>`;
             ]]]
       # Conditioneel: auto laadt
       - type: custom:button-card
@@ -201,7 +201,7 @@ cards:
             [[[
               var b = states['sensor.hrh85f_batterij'];
               var pct = b && !isNaN(Number(b.state)) ? Math.round(Number(b.state)) : '—';
-              return `<span style="display:flex;align-items:center;gap:7px;color:#4ade80"><ha-icon icon="mdi:ev-station" style="--mdc-icon-size:16px"></ha-icon>auto laadt · ${pct}%</span>`;
+              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-ok)"><ha-icon icon="mdi:ev-station" style="--mdc-icon-size:16px"></ha-icon>auto laadt · ${pct}%</span>`;
             ]]]
       # Conditioneel: alarm ingeschakeld
       - type: custom:button-card
@@ -241,7 +241,7 @@ cards:
               var lbl = {armed_away:'weg', armed_home:'thuis', armed_night:'nacht', armed_vacation:'vakantie'};
               var s = entity ? entity.state : '';
               var m = lbl[s] || String(s).replace('armed_','').replace(/_/g,' ');
-              return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:shield-lock" style="--mdc-icon-size:16px"></ha-icon>alarm ${m} · tik om uit te zetten</span>`;
+              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-warn)"><ha-icon icon="mdi:shield-lock" style="--mdc-icon-size:16px"></ha-icon>alarm ${m} · tik om uit te zetten</span>`;
             ]]]
       # Conditioneel: de pc van Logan staat aan. Alleen dan zegt zijn gametijd
       # van vandaag iets; staat de pc uit, dan blijft de pil helemaal weg.
@@ -272,9 +272,9 @@ cards:
         styles:
           card:
             - background: >
-                [[[ var g = states['sensor.pc_logan_gametijd'], l = states['input_number.pc_logan_gametijd_limiet']; return (g && l && Number(g.state) > Number(l.state)) ? 'rgba(239,68,68,0.16)' : 'rgba(255,255,255,0.05)'; ]]]
+                [[[ var g = states['sensor.pc_logan_gametijd'], l = states['input_number.pc_logan_gametijd_limiet']; return (g && l && Number(g.state) > Number(l.state)) ? 'var(--ov-bad-16)' : 'var(--ov-ink-5)'; ]]]
             - border: >
-                [[[ var g = states['sensor.pc_logan_gametijd'], l = states['input_number.pc_logan_gametijd_limiet']; return (g && l && Number(g.state) > Number(l.state)) ? '1px solid rgba(239,68,68,0.35)' : '1px solid rgba(255,255,255,0.06)'; ]]]
+                [[[ var g = states['sensor.pc_logan_gametijd'], l = states['input_number.pc_logan_gametijd_limiet']; return (g && l && Number(g.state) > Number(l.state)) ? '1px solid var(--ov-bad-35)' : '1px solid var(--ov-ink-6)'; ]]]
         custom_fields:
           c: |
             [[[
@@ -298,7 +298,7 @@ cards:
               // én je kon niet zien dat de limiet zelf verkeerd stond (die stond
               // toen op 15 minuten in plaats van 90). De vorm is nu vast en
               // alleen de kleur zegt of het te veel is.
-              var col = over ? '#ef4444' : 'rgba(255,255,255,0.7)';
+              var col = over ? 'var(--ov-bad)' : 'var(--ov-ink-70)';
               var staart = lim === null ? '' : ' van ' + kort(lim);
               return `<span style="display:flex;align-items:center;gap:7px;color:${col}"><ha-icon icon="mdi:desktop-tower-monitor" style="--mdc-icon-size:16px;color:${col}"></ha-icon>gametijd Logan \u00b7 ${kort(m)}${staart}</span>`;
             ]]]
@@ -325,7 +325,7 @@ cards:
             [[[
               var p = states['sensor.stroomprijs_volgend_uur'];
               var price = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '';
-              return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:trending-up" style="--mdc-icon-size:16px"></ha-icon>straks duurder${price ? ' · ' + price : ''}</span>`;
+              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-warn)"><ha-icon icon="mdi:trending-up" style="--mdc-icon-size:16px"></ha-icon>straks duurder${price ? ' · ' + price : ''}</span>`;
             ]]]
       # Conditioneel: regen op komst
       - type: custom:button-card
@@ -342,7 +342,7 @@ cards:
             [[[
               var r = states['sensor.neerslag_komende_30_minuten'];
               var mm = r && !isNaN(Number(r.state)) ? Number(r.state).toFixed(1).replace('.',',') : '?';
-              return `<span style="display:flex;align-items:center;gap:7px;color:#38bdf8"><ha-icon icon="mdi:weather-pouring" style="--mdc-icon-size:16px"></ha-icon>regen · ${mm} mm (30 min)</span>`;
+              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-info)"><ha-icon icon="mdi:weather-pouring" style="--mdc-icon-size:16px"></ha-icon>regen · ${mm} mm (30 min)</span>`;
             ]]]
       # Conditioneel: iemand onderweg naar huis
       - type: custom:button-card
@@ -372,7 +372,7 @@ cards:
                 }
               });
               if(!best) return '';
-              return `<span style="display:flex;align-items:center;gap:7px;color:rgba(255,255,255,0.85)"><ha-icon icon="mdi:car" style="--mdc-icon-size:16px;color:#4ade80"></ha-icon>${best.name} thuis · ${Math.round(best.t)} min</span>`;
+              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-ink-85)"><ha-icon icon="mdi:car" style="--mdc-icon-size:16px;color:var(--ov-ok)"></ha-icon>${best.name} thuis · ${Math.round(best.t)} min</span>`;
             ]]]
       # Conditioneel: zonnescherm-tip (veel zon + scherm nog niet uit).
       # Voor deze cover geldt: open = uitgeschoven, closed = ingetrokken
@@ -395,7 +395,7 @@ cards:
         custom_fields:
           c: |
             [[[
-              return `<span style="display:flex;align-items:center;gap:7px;color:#f59e0b"><ha-icon icon="mdi:blinds-horizontal" style="--mdc-icon-size:16px"></ha-icon>veel zon · zonnescherm uit?</span>`;
+              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-warn)"><ha-icon icon="mdi:blinds-horizontal" style="--mdc-icon-size:16px"></ha-icon>veel zon · zonnescherm uit?</span>`;
             ]]]
       - type: custom:button-card
         template: ov_pill
@@ -412,5 +412,5 @@ cards:
               var icon = {sunny:'mdi:weather-sunny', 'clear-night':'mdi:weather-night', cloudy:'mdi:weather-cloudy', partlycloudy:'mdi:weather-partly-cloudy', rainy:'mdi:weather-rainy', pouring:'mdi:weather-pouring', snowy:'mdi:weather-snowy', 'snowy-rainy':'mdi:weather-snowy-rainy', fog:'mdi:weather-fog', windy:'mdi:weather-windy', 'windy-variant':'mdi:weather-windy-variant', hail:'mdi:weather-hail', lightning:'mdi:weather-lightning', 'lightning-rainy':'mdi:weather-lightning-rainy', exceptional:'mdi:weather-cloudy-alert'};
               var s = map[w.state] || w.state;
               var ic = icon[w.state] || 'mdi:weather-cloudy';
-              return `<span style="display:flex;align-items:center;gap:7px;color:rgba(255,255,255,0.7)"><ha-icon icon="${ic}" style="--mdc-icon-size:16px;color:rgba(255,255,255,0.65)"></ha-icon>${s} · ${t != null ? Math.round(t) : '—'}°</span>`;
+              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-ink-70)"><ha-icon icon="${ic}" style="--mdc-icon-size:16px;color:var(--ov-ink-65)"></ha-icon>${s} · ${t != null ? Math.round(t) : '—'}°</span>`;
             ]]]
