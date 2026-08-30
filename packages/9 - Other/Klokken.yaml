@@ -436,11 +436,25 @@ klokken_package:
       actions:
         - alias: Beide kleuren bepalen
           variables:
-            # tariefniveau_nu kent VIJF niveaus, zie de kop van
+            # tariefniveau_nu kent ZES niveaus, zie de kop van
             # packages/9 - Other/Stroomprijs.yaml: een test op alleen 'low' of
             # 'high' mist juist het goedkoopste en het duurste uur. Elk niveau
             # krijgt hier zijn eigen kleur, zodat het stipje het verschil
             # tussen "gewoon duur" en "nu echt niet" ook laat zien.
+            #
+            # `peak` IS ER OP 2026-08-23 BIJ GEKOMEN
+            # SlimHuys stuurt sindsdien `peak` in plaats van `very_high` (de
+            # `level`-attribuut van sensor.slimhuys_zonneplan_huidige_prijs
+            # zegt hetzelfde). Die viel hieronder in de else-tak, dus ging het
+            # stipje juist op de duurste uren UIT - precies wanneer je hem
+            # nodig hebt. `very_high` blijft staan voor het geval de
+            # integratie terugdraait; een niveau te veel kost niets.
+            #
+            # ELKE ONBEKENDE WAARDE DOOFT HET STIPJE, EN DAT IS HET GEVAAR
+            # Er staat geen alarm op: verzint de integratie morgen weer een
+            # nieuwe naam, dan is het stipje stil weg en merk je dat pas als je
+            # er naar zoekt. Zie ook packages/9 - Other/Battery.yaml, dat op
+            # dezelfde lijst niveaus stuurt.
             #
             # LET OP - dit zijn NIET de iOS-systeemkleuren die de apps in dit
             # bestand gebruiken (#0A84FF / #32D74B / #FF9F0A / #FF3B30). Op een
@@ -455,7 +469,7 @@ klokken_package:
               {%- elif n == 'low' -%}[50, 215, 75]
               {%- elif n == 'medium' -%}[255, 159, 10]
               {%- elif n == 'high' -%}[255, 70, 0]
-              {%- elif n == 'very_high' -%}[255, 0, 0]
+              {%- elif n in ['very_high', 'peak'] -%}[255, 0, 0]
               {%- else -%}uit{%- endif -%}
             # Zelfde bronvolgorde als de BRW-app op de keukenklok en het
             # dashboard: eerst het `ploegen`-attribuut van de PreCom-webhook,
