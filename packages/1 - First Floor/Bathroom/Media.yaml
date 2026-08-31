@@ -33,43 +33,54 @@ bathroom_media_package:
     ## DEUR STAAT OPEN
     ##########################################################################
     ##
-    ## Twee minuten open en dan één keer omroepen op de badkamerspeaker.
+    ## Twee minuten open, en daarna elke minuut omroepen op de badkamerspeaker
+    ## zolang hij open blijft. Tot 31 augustus 2026 was dit één omroep per
+    ## keer-open; nu blijft de badkamer erom vragen tot de deur dicht is.
     ##
     ## HOE VAAK DIT GAAT AFGAAN
     ## Nagemeten over 12 t/m 15 augustus 2026: de deur ging 61 keer open, maar
     ## bleef maar 11 keer langer dan twee minuten open - zo'n drie of vier keer
     ## per dag. De rest zijn passages van een paar seconden. Die twee minuten
-    ## zijn dus een echte zeef en geen vertraging.
+    ## zijn dus een echte zeef en geen vertraging, en alleen die elf openingen
+    ## komen aan het herhalen toe.
     ##
-    ## WAAROM DE NACHTREM, EN WAAROM HET EEN KLOK IS EN GEEN SENSOR
-    ## In diezelfde meting stond de deur op 15 augustus vanaf 01:56 ruim vier
-    ## uur open. Een stem in de badkamer om twee uur 's nachts maakt het halve
-    ## huis wakker voor een deur waar op dat moment niemand bij staat.
+    ## HET VENSTER: VAN OPSTAAN TOT 20:00
+    ## De ondergrens is geen klok maar `input_boolean.klimaat_wakker`, het
+    ## bestaande wakker-signaal van het huis: aan bij de ochtenddruk op de
+    ## slaapkamerknop, en anders vanzelf om 10:00 (gedefinieerd in
+    ## packages/9 - Other/Klimaat Zonwering.yaml). Een stem die elke minuut
+    ## terugkomt is een ander soort melding dan één zin; daar hoort een echt
+    ## opstaan-signaal bij en geen kale 06:30.
     ##
-    ## Hier stond eerst `binary_sensor.huis_slaapt`, het huisbrede nachtvenster
-    ## dat de overlopen ook gebruiken. Dat is voor deze melding te ruim, aan
-    ## allebei de kanten:
-    ##   - 's avonds slaat hij om op de laatste kinderbedtijd. In de historie
-    ##     van 12 t/m 14 augustus was dat 19:00, 19:00 en 19:34 - een
-    ##     badkamerbezoek om acht uur zou dus al zwijgen.
-    ##   - 's ochtends blijft hij `on` tot iemand de slaapkamerknop indrukt.
-    ##     Op 15 augustus stond de deur vanaf 06:33 zesendertig minuten open
-    ##     terwijl de sensor `on` was (pas om 07:08 wakker). Juist de
-    ##     doucheochtend waar je dit voor wilt.
+    ## Let wel op wat dat kost. In diezelfde meting stond de deur op 15
+    ## augustus vanaf 06:33 zesendertig minuten open, terwijl er pas om 07:08
+    ## op de knop werd gedrukt. Die vroege doucheochtend blijft nu stil tot
+    ## 07:08, waar de oude klok van 06:30 hem meteen pakte. Wil je dat terug,
+    ## vervang dan de wakker-conditie hieronder door `condition: time` met
+    ## `after: "06:30:00"`.
     ##
-    ## Van de elf lange openingen in die drie dagen valt er precies één buiten
-    ## 06:30-22:30, en dat is die van 01:56. Een kale klok haalt er dus alleen
-    ## uit wat eruit moet. Verzet de grenzen gerust; er hangt verder niets aan.
+    ## Staat de deur al open op het moment dat het huis wakker wordt, dan komt
+    ## er geen deurtrigger meer - vandaar de tweede trigger op klimaat_wakker.
+    ## De 20:00 aan de andere kant is een kale klok; er hangt verder niets aan,
+    ## dus verzetten mag.
+    ##
+    ## WAAROM ALLE VOORWAARDEN IN DE `while` STAAN EN NIET IN `conditions`
+    ## De lus moet niet alleen goed beginnen maar vooral goed stoppen: gaat de
+    ## deur dicht of slaat de klok 20:00, dan hoort de eerstvolgende ronde niet
+    ## meer te komen. Eén set voorwaarden in `while` doet allebei en kan niet
+    ## uit elkaar gaan lopen met een tweede set erboven.
     ##########################################################################
     - id: bathroom_door_open_announce
       alias: Badkamer - Deur staat open
       description: >-
-        Roept eenmalig op de badkamerspeaker om dat de badkamerdeur openstaat,
-        twee minuten nadat hij is opengegaan.
-      # Eenmalig zit al in de trigger: die vuurt één keer per keer-open. Single
-      # + silent dekt alleen het geval dat de vorige omroep nog bezig is.
-      mode: single
-      max_exceeded: silent
+        Roept elke minuut op de badkamerspeaker om dat de badkamerdeur
+        openstaat, vanaf twee minuten nadat hij is opengegaan, zolang het huis
+        wakker is en het nog geen 20:00 is.
+      # `restart` en niet `single`: een lopende lus blijft na het dichtgaan nog
+      # tot een minuut in zijn `delay` hangen. Met `single` zou een deur die in
+      # dat gat opnieuw opengaat de nieuwe start missen; nu neemt de verse
+      # trigger het gewoon over.
+      mode: restart
       triggers:
         - trigger: state
           entity_id: binary_sensor.badkamer_deur_contact
@@ -81,28 +92,56 @@ bathroom_media_package:
             - unknown
             - unavailable
           for: "00:02:00"
-      conditions:
-        - alias: Niet midden in de nacht
-          condition: time
-          after: "06:30:00"
-          before: "22:30:00"
+        # Wordt het huis wakker gemeld terwijl de deur al openstaat, dan is er
+        # geen deurtrigger meer die komt. Deze pakt dat moment op; de `while`
+        # hieronder bewaakt of die deur dan echt lang genoeg open is.
+        - trigger: state
+          entity_id: input_boolean.klimaat_wakker
+          to: "on"
+      conditions: []
       actions:
-        # Zelfde vorm als de douchemeldingen in Douche.yaml: `announce: true`
-        # duikt onder de muziek door op déze speaker (de badkamer hangt tijdens
-        # het douchen meestal aan de woonkamergroep, zie hierboven), de
-        # clipvolume van 50 staat los van het speakervolume, en
-        # `continue_on_error` houdt een weggevallen Sonos uit het log.
-        - alias: Omroepen op de badkamerspeaker
-          action: media_player.play_media
-          continue_on_error: true
-          target:
-            entity_id: media_player.badkamer_sonos
-          data:
-            announce: true
-            extra:
-              volume: 50
-            media:
-              media_content_type: music
-              media_content_id: >-
-                media-source://tts/tts.google_translate_nl_nl?message={{
-                'De badkamerdeur staat open.' | urlencode }}
+        - alias: Elke minuut omroepen zolang de deur openstaat
+          repeat:
+            while:
+              # Die `for` is de zeef van twee minuten uit de kop. In latere
+              # rondes staat de deur al langer open en is hij vanzelf waar; hij
+              # doet dus alleen bij de eerste ronde werk, ook als de lus via de
+              # wakker-trigger begint.
+              - alias: Deur staat langer dan twee minuten open
+                condition: state
+                entity_id: binary_sensor.badkamer_deur_contact
+                state: "on"
+                for: "00:02:00"
+              - alias: Het huis is op
+                condition: state
+                entity_id: input_boolean.klimaat_wakker
+                state: "on"
+              - alias: Nog geen 20:00
+                condition: time
+                before: "20:00:00"
+            sequence:
+              # Zelfde vorm als de douchemeldingen in Douche.yaml: `announce:
+              # true` duikt onder de muziek door op déze speaker (de badkamer
+              # hangt tijdens het douchen meestal aan de woonkamergroep, zie
+              # hierboven), de clipvolume van 50 staat los van het
+              # speakervolume, en `continue_on_error` houdt een weggevallen
+              # Sonos uit het log - en breekt de lus niet af.
+              - alias: Omroepen op de badkamerspeaker
+                action: media_player.play_media
+                continue_on_error: true
+                target:
+                  entity_id: media_player.badkamer_sonos
+                data:
+                  announce: true
+                  extra:
+                    volume: 50
+                  media:
+                    media_content_type: music
+                    media_content_id: >-
+                      media-source://tts/tts.google_translate_nl_nl?message={{
+                      'De badkamerdeur staat open.' | urlencode }}
+              # De wachttijd staat ná de omroep, dus de eerste komt meteen bij
+              # het aanslaan van de trigger. Gaat de deur tijdens dit minuutje
+              # dicht, dan valt de lus er aan de bovenkant uit; er komt geen
+              # omroep meer achteraan.
+              - delay: "00:01:00"
