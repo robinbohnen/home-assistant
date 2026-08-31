@@ -45,6 +45,37 @@
 ## Wat hij NIET ziet: een wisseling waarbij de kraan blijft lopen. Dan is er
 ## voor deze meter niets gebeurd en telt hij door vanaf de eerste. Daar is met
 ## een huisbrede waterhoeveelheid niet omheen te komen.
+##
+## HET DEBIET BLIJFT SOMS HANGEN - EN DAAROM BESLIST DE METERSTAND
+## Op 31 augustus 2026 om 07:45 riep de badkamer "je doucht nu vijf minuten"
+## terwijl er niemand stond. Het debiet meldde van 07:40:13 tot 07:43:27 netjes
+## 6 L/min, drie minuten lang. De meterstand telde in diezelfde drie minuten
+## GEEN ENKELE liter bij: 36.126 om 07:40:09 en om 07:46 nog steeds 36.126. Er
+## liep dus geen water. Wat er gebeurde: er ging één liter door de meter, en
+## `sensor.meterkast_slimhuys_zonneplan_waterdebiet` bleef daarna op de 6 L/min
+## van die ene puls staan in plaats van naar nul te vallen.
+##
+## Dat is geen incident maar het vaste patroon. Over 17 t/m 31 augustus liep er
+## 111 keer langer dan een minuut "water". Zeventien daarvan bleven de hele tijd
+## vlak op 6,0 - en juist die zeventien leverden 1 of 2 gemeten liters op, waar
+## het debiet er 7 tot 19 beloofde. Bij de overige 94 klopte de belofte binnen
+## tien procent met de meter. Vlak op 6,0 is dus geen laag stroompje water maar
+## een sensor die blijft hangen. Geen van de 21 echte douchebeurten in die twee
+## weken bleef onder de 18 L/min piek.
+##
+## Sindsdien beslist niet het debiet maar `sensor.slimhuys_zonneplan_water_totaal`
+## of er gedoucht wordt, op twee plekken:
+##   - BIJ DE START: de meter moet in de laatste 45 seconden nog een liter
+##     hebben bijgeteld. Tijdens de 21 echte douchebeurten zat er nooit meer dan
+##     20 seconden tussen twee literstappen (vaak vijf), en op 31 augustus stond
+##     hij bij het afgaan van de trigger al 64 seconden stil. Die 45 ligt daar
+##     ruim tussenin.
+##   - BIJ ELKE KNIPPER: er moet in dat blok van vijf minuten minstens 30 liter
+##     doorheen zijn gegaan. Echte blokken zitten op 36 tot 54 liter; het
+##     valse alarm van 31 augustus kwam op 1.
+##
+## Het debiet blijft de STARTtrigger, want die is snel. Hij mag alleen niet meer
+## in zijn eentje beslissen.
 ##############################################################################
 
 bathroom_shower_package:
@@ -76,9 +107,24 @@ bathroom_shower_package:
         - condition: state
           entity_id: light.badkamer_lampen
           state: "on"
+        # En de poort die van "het debiet beweert iets" echt water maakt. Zie
+        # de kop: het debiet blijft na een enkele liter op 6 L/min hangen.
+        - alias: De meter telt op dit moment ook echt liters
+          condition: template
+          value_template: >-
+            {% set m = states.sensor.slimhuys_zonneplan_water_totaal %}
+            {{ m is not none
+               and m.state not in ['unknown', 'unavailable']
+               and (now() - m.last_changed).total_seconds() < 45 }}
       actions:
         - repeat:
             sequence:
+              # De meterstand aan het begin van dit blok. Staat vóór het wachten,
+              # dus hij hoort bij de vijf minuten die hierna komen, en wordt elke
+              # ronde opnieuw gezet.
+              - variables:
+                  liter_blok_start: >-
+                    {{ states('sensor.slimhuys_zonneplan_water_totaal') | float(0) * 1000 }}
               # WACHTEN TOT HET VOLGENDE VIJFMINUTENPUNT, OF TOT HET KLAAR IS
               #
               # De eerste ronde wacht vier minuten en niet vijf: de trigger
@@ -108,26 +154,35 @@ bathroom_shower_package:
                     for: "00:01:00"
                 timeout: "{{ '00:04:00' if repeat.index == 1 else '00:05:00' }}"
                 continue_on_timeout: true
-              # EÉN UITGANG, EN DIE KIJKT NAAR DE TOESTAND ZELF
-              # Niet naar `wait.trigger`, want een `numeric_state`-trigger met
-              # `for` heeft een overgang nodig. Valt het debiet net tijdens de
+              # EÉN UITGANG, EN DIE MEET WAT ER ECHT DOOR DE METER GING
+              # Niet naar `wait.trigger` kijken, want een `numeric_state`-trigger
+              # met `for` heeft een overgang nodig. Valt het debiet net tijdens de
               # knipper hierboven terug naar nul, dan is die overgang al geweest
               # voordat de volgende `wait_for_trigger` staat te kijken en vuurt
               # hij nooit meer - en dan zou de lus vrolijk doorknipperen tot de
-              # bovengrens. Deze controle leest gewoon hoe het er nú voor staat
-              # en heeft dat probleem niet; de triggers hierboven zijn er alleen
-              # om er snel bij te zijn.
+              # bovengrens. De triggers hierboven zijn er dus alleen om er snel
+              # bij te zijn; deze controle beslist.
+              #
+              # Hij telt liters en geen seconden stilstand, en dat is precies wat
+              # er op 31 augustus 2026 misging. Toen keek deze plek naar "staat
+              # het debiet al twee minuten stil": het water was 106 seconden voor
+              # de knipper gestopt, dus die drempel werd op veertien seconden na
+              # niet gehaald en de omroep ging alsnog. Een blok van vijf minuten
+              # halen of niet halen is geen wedstrijdje tegen de klok meer.
+              #
+              # Dertig liter, terwijl een echt blok er 36 tot 54 telt en het
+              # valse alarm op 1 kwam: zie de kop. De eerste ronde wacht vier
+              # minuten in plaats van vijf en heeft dus wat minder marge - 36
+              # liter was daar de laagste gemeten waarde.
               - alias: Douche voorbij of niemand meer in de badkamer
                 if:
                   - condition: or
                     conditions:
-                      - alias: Water staat al twee minuten stil
+                      - alias: Er ging dit blok te weinig water doorheen voor een douche
                         condition: template
                         value_template: >-
-                          {% set s = states.sensor.meterkast_slimhuys_zonneplan_waterdebiet %}
-                          {{ s is not none
-                             and s.state | float(0) < 1
-                             and (now() - s.last_changed).total_seconds() > 120 }}
+                          {{ states('sensor.slimhuys_zonneplan_water_totaal') | float(0) * 1000
+                             - (liter_blok_start | float(0)) < 30 }}
                       - condition: state
                         entity_id: light.badkamer_lampen
                         state: "off"
@@ -146,24 +201,35 @@ bathroom_shower_package:
                   # het vangnet: de Sonos kan uit staan, losgekoppeld zijn of
                   # net onbereikbaar. Het licht is er altijd, en tweemaal
                   # knipperen blijft "tien minuten". Boven de vijf houdt het op.
+                  # Alleen knipperen als de lamp aan is. `light.turn_on` met
+                  # `effect: blink` doet namelijk allebei: knipperen én aanzetten.
+                  # Op 31 augustus 2026 om 07:45:14 zette deze actie de lamp aan
+                  # in een lege badkamer - hij was 39 seconden eerder uitgegaan,
+                  # dus net te kort voor de minuut van de uitgang hierboven. De
+                  # stem is er nog steeds; die stoort een leeg vertrek niet.
                   - alias: Kort knipperen met de badkamerlampen
-                    repeat:
-                      count: "{{ [blok | int(1), 5] | min }}"
-                      sequence:
-                        # `effect: blink` is de Identify-knipper van het
-                        # zigbee-apparaat zelf: één commando, geen stand die
-                        # onthouden en teruggezet moet worden. Dat is hier het
-                        # verschil tussen wel en niet veilig -
-                        # dimmen-en-herstellen laat de badkamer op 1% staan
-                        # zodra dat tweede commando sneuvelt, en dat gebeurt in
-                        # dit huis nu eenmaal.
-                        - action: light.turn_on
-                          target:
-                            entity_id: light.badkamer_lampen
-                          data:
-                            effect: blink
-                          continue_on_error: true
-                        - delay: "00:00:02"
+                    if:
+                      - condition: state
+                        entity_id: light.badkamer_lampen
+                        state: "on"
+                    then:
+                      - repeat:
+                          count: "{{ [blok | int(1), 5] | min }}"
+                          sequence:
+                            # `effect: blink` is de Identify-knipper van het
+                            # zigbee-apparaat zelf: één commando, geen stand die
+                            # onthouden en teruggezet moet worden. Dat is hier het
+                            # verschil tussen wel en niet veilig -
+                            # dimmen-en-herstellen laat de badkamer op 1% staan
+                            # zodra dat tweede commando sneuvelt, en dat gebeurt in
+                            # dit huis nu eenmaal.
+                            - action: light.turn_on
+                              target:
+                                entity_id: light.badkamer_lampen
+                              data:
+                                effect: blink
+                              continue_on_error: true
+                            - delay: "00:00:02"
                   # `announce: true` is de audioclip-functie van Sonos: hij
                   # duikt onder de muziek door op déze speaker en pakt daarna
                   # de draad weer op. Belangrijk hier, want de badkamerspeaker
@@ -249,6 +315,18 @@ bathroom_shower_package:
         - condition: state
           entity_id: light.badkamer_lampen
           state: "on"
+        # Zelfde poort als bij de douchetimer, en om dezelfde reden: een debiet
+        # dat op 6 L/min blijft hangen is geen water. Zonder deze conditie ging
+        # deze automatisering bij zo'n spookmelding een uur lang in de
+        # `wait_for_trigger` staan, en `mode: single` hield de douche die daarna
+        # wél kwam buiten de deur.
+        - alias: De meter telt op dit moment ook echt liters
+          condition: template
+          value_template: >-
+            {% set m = states.sensor.slimhuys_zonneplan_water_totaal %}
+            {{ m is not none
+               and m.state not in ['unknown', 'unavailable']
+               and (now() - m.last_changed).total_seconds() < 45 }}
       variables:
         # Automatiseringsvariabelen worden bij het afgaan van de trigger
         # gerenderd, dus dit is de meterstand van het moment dat de kraan
