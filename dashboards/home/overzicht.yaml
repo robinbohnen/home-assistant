@@ -261,7 +261,8 @@ cards:
                 icon: mdi:account
                 icon_color: "{{ 'green' if is_state('person.robin_bohnen','home') else 'grey' }}"
                 tap_action:
-                  action: more-info
+                  action: navigate
+                  navigation_path: "#ov-persoon-robin"
               - type: custom:mushroom-template-card
                 entity: person.samantha_henkelman
                 primary: Samantha
@@ -270,7 +271,8 @@ cards:
                 icon: mdi:account
                 icon_color: "{{ 'green' if is_state('person.samantha_henkelman','home') else 'grey' }}"
                 tap_action:
-                  action: more-info
+                  action: navigate
+                  navigation_path: "#ov-persoon-samantha"
               - type: custom:mushroom-template-card
                 entity: person.emma_bohnen
                 primary: Emma
@@ -279,7 +281,8 @@ cards:
                 icon: mdi:account
                 icon_color: "{{ 'green' if is_state('person.emma_bohnen','home') else 'grey' }}"
                 tap_action:
-                  action: more-info
+                  action: navigate
+                  navigation_path: "#ov-persoon-emma"
               - type: custom:mushroom-template-card
                 entity: person.logan_veen
                 primary: Logan
@@ -288,7 +291,8 @@ cards:
                 icon: mdi:account
                 icon_color: "{{ 'green' if is_state('person.logan_veen','home') else 'grey' }}"
                 tap_action:
-                  action: more-info
+                  action: navigate
+                  navigation_path: "#ov-persoon-logan"
           - type: map
             default_zoom: 11
             hours_to_show: 12
@@ -298,6 +302,147 @@ cards:
               - person.samantha_henkelman
               - person.emma_bohnen
               - person.logan_veen
+      # =================== PERSOON-POPUPS (met spoor) ===================
+      # De more-info van een person-entiteit toont alleen de huidige locatie:
+      # een kaartje met één speld, geen route. Wie wil zien waar iemand net
+      # vandaan komt ("is ze de wijk al uit?") heeft daar niets aan. Vandaar
+      # per persoon een eigen popup met een map-kaart die wél `hours_to_show`
+      # zet; dat is de enige knop waarmee de kaart een spoor tekent.
+      #
+      # Twee uur is bewust kort: dat is ongeveer een schoolrit of een boodschap
+      # heen-en-terug, en het spoor blijft leesbaar. Langer terugkijken kan met
+      # de gezamenlijke kaart in #ov-personen (12 uur). Wil je hier een ander
+      # venster, dan is `hours_to_show` per kaart de enige regel die je aanraakt.
+      #
+      # NIET DOEN: de device_tracker van de app in plaats van de person-entiteit
+      # gebruiken "omdat die nauwkeuriger is". De person-entiteit valt terug op
+      # de router-tracker als de app zwijgt; de kaart tekent dan alsnog het
+      # laatste GPS-punt door. Ruil je hem om, dan is het spoor leeg zodra
+      # iemand thuis op wifi zit.
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-persoon-robin"
+        name: Robin
+        icon: mdi:account
+        width_desktop: *ov_popup_width
+        styles: *ov_popup
+        cards:
+          - type: custom:mushroom-template-card
+            entity: person.robin_bohnen
+            primary: Robin
+            secondary: >-
+              {% set p = states('person.robin_bohnen') %}{% set m = states('sensor.robin_reistijd_naar_huis') | float(-1) %}{{ 'Thuis' if p == 'home' else ('Afwezig' if p in ['not_home','unknown','unavailable'] else p) }}{{ (' · ' ~ (m | round(0) | int) ~ ' min naar huis') if p != 'home' and m > 0 else '' }}{{ (' · ' ~ states('sensor.iphone_van_robin_battery_level') ~ '%') if has_value('sensor.iphone_van_robin_battery_level') else '' }}
+            icon: mdi:account
+            icon_color: "{{ 'green' if is_state('person.robin_bohnen','home') else 'grey' }}"
+            tap_action:
+              action: more-info
+          - type: map
+            default_zoom: 12
+            hours_to_show: 2
+            aspect_ratio: "16:9"
+            entities:
+              - person.robin_bohnen
+          - type: custom:mushroom-template-card
+            primary: Alle personen
+            secondary: Kaart van het hele gezin, 12 uur terug
+            icon: mdi:account-group
+            icon_color: blue
+            tap_action:
+              action: navigate
+              navigation_path: "#ov-personen"
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-persoon-samantha"
+        name: Samantha
+        icon: mdi:account
+        width_desktop: *ov_popup_width
+        styles: *ov_popup
+        cards:
+          - type: custom:mushroom-template-card
+            entity: person.samantha_henkelman
+            primary: Samantha
+            secondary: >-
+              {% set p = states('person.samantha_henkelman') %}{% set m = states('sensor.samantha_reistijd_naar_huis') | float(-1) %}{{ 'Thuis' if p == 'home' else ('Afwezig' if p in ['not_home','unknown','unavailable'] else p) }}{{ (' · ' ~ (m | round(0) | int) ~ ' min naar huis') if p != 'home' and m > 0 else '' }}{{ (' · ' ~ states('sensor.iphone_van_samantha_battery_level') ~ '%') if has_value('sensor.iphone_van_samantha_battery_level') else '' }}
+            icon: mdi:account
+            icon_color: "{{ 'green' if is_state('person.samantha_henkelman','home') else 'grey' }}"
+            tap_action:
+              action: more-info
+          - type: map
+            default_zoom: 12
+            hours_to_show: 2
+            aspect_ratio: "16:9"
+            entities:
+              - person.samantha_henkelman
+          - type: custom:mushroom-template-card
+            primary: Alle personen
+            secondary: Kaart van het hele gezin, 12 uur terug
+            icon: mdi:account-group
+            icon_color: blue
+            tap_action:
+              action: navigate
+              navigation_path: "#ov-personen"
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-persoon-emma"
+        name: Emma
+        icon: mdi:account
+        width_desktop: *ov_popup_width
+        styles: *ov_popup
+        cards:
+          - type: custom:mushroom-template-card
+            entity: person.emma_bohnen
+            primary: Emma
+            secondary: >-
+              {% set p = states('person.emma_bohnen') %}{% set m = states('sensor.emma_reistijd_naar_huis') | float(-1) %}{{ 'Thuis' if p == 'home' else ('Afwezig' if p in ['not_home','unknown','unavailable'] else p) }}{{ (' · ' ~ (m | round(0) | int) ~ ' min naar huis') if p != 'home' and m > 0 else '' }}{{ (' · ' ~ states('sensor.iphone_van_emma_battery_level') ~ '%') if has_value('sensor.iphone_van_emma_battery_level') else '' }}
+            icon: mdi:account
+            icon_color: "{{ 'green' if is_state('person.emma_bohnen','home') else 'grey' }}"
+            tap_action:
+              action: more-info
+          - type: map
+            default_zoom: 12
+            hours_to_show: 2
+            aspect_ratio: "16:9"
+            entities:
+              - person.emma_bohnen
+          - type: custom:mushroom-template-card
+            primary: Alle personen
+            secondary: Kaart van het hele gezin, 12 uur terug
+            icon: mdi:account-group
+            icon_color: blue
+            tap_action:
+              action: navigate
+              navigation_path: "#ov-personen"
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-persoon-logan"
+        name: Logan
+        icon: mdi:account
+        width_desktop: *ov_popup_width
+        styles: *ov_popup
+        cards:
+          - type: custom:mushroom-template-card
+            entity: person.logan_veen
+            primary: Logan
+            secondary: >-
+              {% set p = states('person.logan_veen') %}{% set m = states('sensor.logan_reistijd_naar_huis') | float(-1) %}{{ 'Thuis' if p == 'home' else ('Afwezig' if p in ['not_home','unknown','unavailable'] else p) }}{{ (' · ' ~ (m | round(0) | int) ~ ' min naar huis') if p != 'home' and m > 0 else '' }}{{ (' · ' ~ states('sensor.iphone_battery_level') ~ '%') if has_value('sensor.iphone_battery_level') else '' }}
+            icon: mdi:account
+            icon_color: "{{ 'green' if is_state('person.logan_veen','home') else 'grey' }}"
+            tap_action:
+              action: more-info
+          - type: map
+            default_zoom: 12
+            hours_to_show: 2
+            aspect_ratio: "16:9"
+            entities:
+              - person.logan_veen
+          - type: custom:mushroom-template-card
+            primary: Alle personen
+            secondary: Kaart van het hele gezin, 12 uur terug
+            icon: mdi:account-group
+            icon_color: blue
+            tap_action:
+              action: navigate
+              navigation_path: "#ov-personen"
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-energie"
