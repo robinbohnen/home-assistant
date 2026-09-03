@@ -85,7 +85,14 @@ card:
             var pct = function(t){ return (t - start) / (eind - start) * 100; };
             var klem = function(v){ return Math.max(0, Math.min(100, v)); };
             var klok = function(t){ var d = new Date(t); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); };
-            var H = {zon: 20, prijs: 12, markers: 27, as: 10};
+            // H.as moet de hele REGELBOX van de tijdas dekken, niet de
+            // lettergrootte: 9,5px tekst rendert met `line-height: normal` een
+            // box van ~11,4px, en wat daarvan buiten `totaal` valt knipt
+            // `ha-card` weg (die staat op `overflow: hidden`). Op 10px waren de
+            // onderkanten van de cijfers eraf. Hieronder staat daarom een vaste
+            // `line-height` op de labels, zodat dit getal klopt en niet van de
+            // browser afhangt.
+            var H = {zon: 20, prijs: 12, markers: 27, as: 13};
             var top = {zon: 0, prijs: 22, markers: 36, as: 0};
             // Markers staan in twee rijen; met tekst erbij moeten die rijen ver
             // genoeg uit elkaar liggen om als aparte regels te lezen (bij 9px liep
@@ -424,7 +431,7 @@ card:
             for(var t = eersteUur.getTime(); t < eind; t += 7200000){
               var x = pct(t);
               if(x < 2 || x > 98) continue;
-              lagen.push(`<div style="position:absolute;left:${x}%;transform:translateX(-50%);top:${top.as}px;font-size:9.5px;color:var(--ov-ink-50)">${klok(t)}</div>`);
+              lagen.push(`<div style="position:absolute;left:${x}%;transform:translateX(-50%);top:${top.as}px;font-size:9.5px;line-height:${H.as}px;color:var(--ov-ink-50)">${klok(t)}</div>`);
             }
 
             return `<div style="position:relative;width:100%;height:${totaal}px">${lagen.join('')}</div>`;
