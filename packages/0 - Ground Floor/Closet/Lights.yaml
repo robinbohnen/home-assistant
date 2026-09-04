@@ -21,7 +21,33 @@ closet_lights_package:
         path: robin/motion_light.yaml
         input:
           bewegingssensor: binary_sensor.trapkast_beweging_occupancy
+          # HET DEURCONTACT, SINDS 4 SEPTEMBER 2026
+          # Dezelfde twee rollen als bij de meterkast (packages/0 - Ground
+          # Floor/Meterkast/Lights.yaml): het contact vangt het OPENEN af - dat
+          # is sneller dan de melder en werkt ook als je alleen even met je arm
+          # naar binnen gaat - en `uit_uitstel` hieronder vangt het STAAN af,
+          # want in een kast sta je stil en verliest een PIR je.
+          deur_contacten:
+            - binary_sensor.trapkast_trapkast_deur_deur
           lamp:
             - light.trapkast_lampen
           schakelaar: input_boolean.enable_pir_closet
           helderheid: input_number.lights_closet_percentage
+          # ZOLANG DE DEUR OPENSTAAT BLIJFT HET LICHT AAN
+          # Zelfde constructie als het waterdebiet in de badkamer: geen veto op
+          # het uitzetten maar een pauze. Gaat de deur dicht, dan lopen de
+          # gewone twee minuten na de laatste beweging alsnog af.
+          #
+          # Een contact dat `unavailable` meldt telt hier niet als open, dus
+          # dan gaat het licht gewoon uit na de wachttijd. Dat is dezelfde
+          # keuze als bij de meterkast: een sensor die weg is ziet niemand, en
+          # een kastlamp die uitgaat is onschadelijk.
+          #
+          # De blueprint kapt dit uitstel na een uur af (120 rondjes van dertig
+          # seconden). Blijft de deur openstaan, dan gaat het licht dus alsnog
+          # uit; loopt er daarna iemand, dan zet de melder hem gewoon weer aan.
+          uit_uitstel:
+            - alias: De kastdeur staat open
+              condition: state
+              entity_id: binary_sensor.trapkast_trapkast_deur_deur
+              state: "on"
