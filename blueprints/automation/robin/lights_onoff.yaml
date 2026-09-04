@@ -42,9 +42,17 @@ blueprint:
     min_version: 2024.10.0
   input:
     lamp:
-      name: Lamp
+      name: Lamp(en)
+      description: >-
+        Eén of meer lampgroepen van deze kamer. Meerdere is nodig sinds een
+        kamer uit twee protocollen kan bestaan: de woonkamer heeft
+        `light.woonkamer_lampen` (Zigbee2MQTT-groep met de vier Hue-lampen) én
+        `light.woonkamer_spots` (HA-groep met de vier Matter-spots), en een
+        Z2M-groep kan geen Matter-lamp bevatten. Geef ook bij één groep een
+        lijst op - de selector eist dat.
       selector:
         entity:
+          multiple: true
           filter:
             domain: light
     aan_bij_thuiskomst:
@@ -90,9 +98,9 @@ blueprint:
       description: >-
         Voor lampgroepen waarbij een uit met transition niet altijd aankomt en
         er dus één lamp blijft branden. Aan = na het uitzetten wachten tot de
-        lamp uit meldt en anders binnen twee seconden nog een keer uit sturen,
-        zonder transition. Let op: staat de overgangstijd hoger dan twee
-        seconden, dan kapt die tweede het uitfaden af.
+        lampen uit melden en anders binnen twee seconden nog een keer uit
+        sturen, zonder transition. Let op: staat de overgangstijd hoger dan
+        twee seconden, dan kapt die tweede het uitfaden af.
       default: false
       selector:
         boolean:
@@ -226,12 +234,22 @@ actions:
               # tweede ging ook af als de lamp allang uit was, en dat is een
               # onnodig commando over Zigbee. Wachten tot de lamp uit meldt
               # levert hetzelfde op en is meestal binnen een fractie klaar.
-              - wait_template: "{{ is_state(lamp, 'off') }}"
+              #
+              # `expand` in plaats van `is_state`: `lamp` is sinds de
+              # Matter-omzetting een lijst. Voor een HA-groep levert expand de
+              # losse lampen op, voor een Zigbee2MQTT-groep de groep zelf (die
+              # heeft `group_entities` en geen `entity_id`) - in beide gevallen
+              # is "er staat er nog één aan" het antwoord dat we zoeken.
+              - wait_template: >-
+                  {{ expand(lamp) | selectattr('state', 'eq', 'on')
+                     | list | count == 0 }}
                 timeout: "00:00:02"
                 continue_on_timeout: true
               - if:
                   - condition: template
-                    value_template: "{{ is_state(lamp, 'on') }}"
+                    value_template: >-
+                      {{ expand(lamp) | selectattr('state', 'eq', 'on')
+                         | list | count > 0 }}
                 then:
                   - action: light.turn_off
                     target:

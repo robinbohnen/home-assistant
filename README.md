@@ -93,8 +93,10 @@ intent and every intent still has a sentence. This one needs `pyyaml` too.
 
 | Device  | Quantity | Connection | Home Assistant | Notes |
 | ------------- | :---: | ------------- | ------------- | ------------- |
-| [Ikea Tradfri bulb GU10](https://www.ikea.com/nl/en/p/tradfri-led-bulb-gu10-345-lumen-wireless-dimmable-colour-and-white-spectrum-70547474/) | 46 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led spots GU10 with colour |
-| [Ikea Tradfri bulb E27](https://www.ikea.com/nl/en/p/tradfri-led-bulb-e27-806-lumen-wireless-dimmable-colour-and-white-spectrum-globe-opal-white-30547471/) | 10 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led bulb E27 with colour |
+| [Ikea Tradfri bulb GU10](https://www.ikea.com/nl/en/p/tradfri-led-bulb-gu10-345-lumen-wireless-dimmable-colour-and-white-spectrum-70547474/) | 42 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led spots GU10 with colour |
+| [Ikea Tradfri bulb E27](https://www.ikea.com/nl/en/p/tradfri-led-bulb-e27-806-lumen-wireless-dimmable-colour-and-white-spectrum-globe-opal-white-30547471/) | 8 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led bulb E27 with colour |
+| Ikea Kajplats GU10 CWS 470lm | 4 | Matter | [Matter](https://www.home-assistant.io/integrations/matter/) | Living room ceiling spots, replaced the Tradfri GU10s. Cannot join a zigbee2mqtt group, see docs/matter-lampgroepen.md |
+| Ikea Kajplats E27 CWS globe 1055lm | 2 | Matter | [Matter](https://www.home-assistant.io/integrations/matter/) | Dining table pendants, replaced the Tradfri E27s |
 | [Ikea Tradfri Driver with ledstrip](https://www.ikea.com/nl/en/p/tradfri-driver-for-wireless-control-smart-grey-60342656/) | 1 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led driver for strip |
 | [Humble One Smart](https://amzn.to/40JOj6z) | 1 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Wireless light |
 | Ikea Leptiter downlight (discontinued) | 8 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led spots |
@@ -229,7 +231,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | KNMI | [Link](https://github.com/golles/ha-knmi/blob/main/README.md) | Monitor Dutch Weather and alarms |
 | La Marzocco | [Link](https://www.home-assistant.io/integrations/lamarzocco) | Control the delicious coffee machine |
 | LOQED Touch Smart Lock | [Link](https://www.home-assistant.io/integrations/loqed) | Control the smartlock |
-| Matter (BETA) | [Link](https://www.home-assistant.io/integrations/matter) | Not used yet |
+| Matter | [Link](https://www.home-assistant.io/integrations/matter) | Ikea Kajplats lights, replacing the Tradfri bulbs room by room |
 | Melcloud | [Link](https://www.home-assistant.io/integrations/melcloud) | Integration for Mitsubushi Electric Airco |
 | Meteorologisk institutt (Met.no) | [Link](https://www.home-assistant.io/integrations/met) | Check local weather |
 | Microsoft 365 - Calendar | [Link](https://github.com/RogerSelwyn/MS365-Calendar) | Microsoft 365 plugin for calendar integration |
@@ -266,7 +268,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Speedtest.net | [Link](https://www.home-assistant.io/integrations/speedtestdotnet) | Monitor local network |
 | Spotify | [Link](https://www.home-assistant.io/integrations/spotify) | The Spotify media player integration lets you control your Spotify account playback and browse the Spotify media library |
 | System Monitor | [Link](https://www.home-assistant.io/integrations/systemmonitor) | Check all sensors of the system |
-| Thread | [Link](https://www.home-assistant.io/integrations/thread) | Not used yet |
+| Thread | [Link](https://www.home-assistant.io/integrations/thread) | Network for the Matter devices, monitored by packages/9 - Other/Thread.yaml |
 | UniFi Network | [Link](https://www.home-assistant.io/integrations/unifi) | Monitor network devices |
 | UniFi Protect | [Link](https://www.home-assistant.io/integrations/unifiprotect) | Integrate cameras to Home Assistant |
 | Waze Reistijd | [Link](https://www.home-assistant.io/integrations/waze_travel_time) | Calculate time to travel home or work |

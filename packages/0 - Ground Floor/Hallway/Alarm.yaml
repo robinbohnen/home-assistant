@@ -139,16 +139,26 @@ hallway_alarm_package:
                     entity_id: light.eettafel_lampen
                   action: light.turn_off
               alias: Eettafel
+            # Twee groepen sinds de spots op Matter zitten; `condition: or`
+            # want brandt er maar één, dan moet die ronde er nog steeds langs.
+            # Zie de kop van packages/0 - Ground Floor/Livingroom/Lights.yaml.
             - if:
-                - condition: state
-                  entity_id: light.woonkamer_lampen
-                  state: "on"
+                - condition: or
+                  conditions:
+                    - condition: state
+                      entity_id: light.woonkamer_lampen
+                      state: "on"
+                    - condition: state
+                      entity_id: light.woonkamer_spots
+                      state: "on"
               then:
                 - metadata: {}
                   data: {}
                   action: light.turn_off
                   target:
-                    entity_id: light.woonkamer_lampen
+                    entity_id:
+                      - light.woonkamer_lampen
+                      - light.woonkamer_spots
               alias: Woonkamer
             - if:
                 - condition: state

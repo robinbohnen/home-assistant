@@ -27,8 +27,15 @@ alarm_package:
               state: triggered
       actions:
         - if:
+            # Eén `condition: state` met twee entiteiten eist dat ze ALLEBEI
+            # uit zijn - en dat is hier de vraag: is het donker in de kamer.
+            # De plafondspots zitten sinds 4 september 2026 in
+            # `light.woonkamer_spots` en niet meer in de Zigbee2MQTT-groep;
+            # zie de kop van packages/0 - Ground Floor/Livingroom/Lights.yaml.
             - condition: state
-              entity_id: light.woonkamer_lampen
+              entity_id:
+                - light.woonkamer_lampen
+                - light.woonkamer_spots
               state: "off"
             - condition: or
               conditions:
@@ -51,6 +58,11 @@ alarm_package:
               target:
                 entity_id:
                   - light.woonkamer_lampen
+                  # De Matter-spots kunnen geen `effect`; HA filtert een
+                  # parameter die een lamp niet ondersteunt er per entiteit uit
+                  # (`filter_turn_on_params`), dus ze gaan gewoon voluit aan en
+                  # ademen alleen niet mee. Zelfde verhaal bij `flash` hieronder.
+                  - light.woonkamer_spots
                   - light.eettafel_lampen
                   - light.keuken_lampen
                   - light.achtertuin_lampen
@@ -86,6 +98,7 @@ alarm_package:
             scene_id: voor_alarm_afschrikking
             snapshot_entities:
               - light.woonkamer_lampen
+              - light.woonkamer_spots
               - light.eettafel_lampen
               - light.keuken_lampen
               - light.speelkamer_lampen
@@ -136,6 +149,7 @@ alarm_package:
           target:
             entity_id:
               - light.woonkamer_lampen
+              - light.woonkamer_spots
               - light.eettafel_lampen
               - light.keuken_lampen
               - light.speelkamer_lampen
@@ -191,6 +205,7 @@ alarm_package:
                     target:
                       entity_id:
                         - light.woonkamer_lampen
+                        - light.woonkamer_spots
                         - light.eettafel_lampen
                         - light.keuken_lampen
                         - light.speelkamer_lampen

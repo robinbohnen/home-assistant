@@ -94,25 +94,48 @@ livingroom_media_package:
                 - klaar
       # De samenstelling van de lampgroepen blijft in de groepen zelf staan;
       # hier wordt hij alleen uitgelezen. Twee accessors omdat het twee soorten
-      # groepen zijn: `light.tv_kast_lampen` is een oude platformgroep en heeft
-      # het attribuut `entity_id`, `light.woonkamer_lampen` is een helper-groep
-      # en heeft `group_entities`. `expand()` werkt op die tweede soort niet -
-      # dat geeft gewoon de groep zelf terug, geen leden.
+      # groepen zijn. Een HA-groep publiceert zijn leden als `entity_id`
+      # (`light.tv_kast_lampen`, `light.woonkamer_spots`,
+      # `light.eettafel_lampen`), een ZIGBEE2MQTT-groep als `group_entities`
+      # (`light.woonkamer_lampen`, `light.keuken_lampen`). `expand()` werkt op
+      # die tweede soort niet - dat geeft gewoon de groep zelf terug, geen
+      # leden.
+      #
+      # SINDS DE MATTER-OMZETTING (4 september 2026) STAAN ZE DOOR ELKAAR
+      # De vier plafondspots zitten niet meer in de Z2M-groep
+      # `light.woonkamer_lampen` maar in de HA-groep `light.woonkamer_spots`;
+      # ze moeten er hier weer bij, anders dimt een film wel de tafellamp maar
+      # niet het plafond en mist de momentopname ze ook. Zie de kop van
+      # Lights.yaml in deze map.
+      #
+      # Daarom vragen de regels hieronder om ALLEBEI de attributen met een
+      # `or`. Zet je een volgende kamer om naar Matter, dan wisselt zijn groep
+      # van soort en dus van attribuutnaam - met één vaste naam zou deze
+      # variabele dan stilletjes leeg worden, en een leeg `entity_id` in
+      # `light.turn_on` is geen fout maar gewoon een commando dat niets doet.
       variables:
         bias: >-
           {{ (state_attr('light.tv_kast_lampen', 'entity_id') or []) | list
              + ['light.woonkamer_hue_signe_gradient'] }}
         plafond: >-
-          {{ (state_attr('light.woonkamer_lampen', 'group_entities') or [])
-             | reject('in', bias) | list }}
+          {{ ((state_attr('light.woonkamer_lampen', 'group_entities')
+               or state_attr('light.woonkamer_lampen', 'entity_id') or [])
+              | reject('in', bias) | list)
+             + ((state_attr('light.woonkamer_spots', 'entity_id')
+                 or state_attr('light.woonkamer_spots', 'group_entities')
+                 or []) | list) }}
         # Alles wat de momentopname moet vasthouden, als losse lampen. Een
         # groep in de momentopname zetten werkt ook, maar dan komt iedereen
         # terug op dezelfde helderheid en is het verschil tussen de tafellamp
         # en de spots weg.
         alle_lampen: >-
           {{ plafond + bias
-             + (state_attr('light.keuken_lampen', 'group_entities') or [])
-             + (state_attr('light.eettafel_lampen', 'group_entities') or []) }}
+             + ((state_attr('light.keuken_lampen', 'group_entities')
+                 or state_attr('light.keuken_lampen', 'entity_id')
+                 or []) | list)
+             + ((state_attr('light.eettafel_lampen', 'group_entities')
+                 or state_attr('light.eettafel_lampen', 'entity_id')
+                 or []) | list) }}
         # De twee AWTRIX-klokken die vanuit de bank te zien zijn. De garageklok
         # hoort er niet bij: die kijkt niemand op tijdens een film.
         #
@@ -230,6 +253,7 @@ livingroom_media_package:
                 - variables:
                     branden: >-
                       {{ ['light.woonkamer_lampen',
+                          'light.woonkamer_spots',
                           'light.keuken_lampen',
                           'light.eettafel_lampen'] | select('is_state', 'on') | list }}
                 - if:
@@ -254,9 +278,15 @@ livingroom_media_package:
                 - condition: numeric_state
                   entity_id: sensor.achtertuin_zon_luminance
                   below: 1000
-                - condition: state
-                  entity_id: light.woonkamer_lampen
-                  state: "on"
+                - alias: Er brandt woonkamerlicht
+                  condition: or
+                  conditions:
+                    - condition: state
+                      entity_id: light.woonkamer_lampen
+                      state: "on"
+                    - condition: state
+                      entity_id: light.woonkamer_spots
+                      state: "on"
               then:
                 - action: light.turn_on
                   target:

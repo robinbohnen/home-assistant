@@ -715,16 +715,28 @@ brandweer_package:
                 # bedoeling - bij een nachtelijke uitruk wil je gewoon licht
                 # om je spullen te vinden, geen rood/blauw ademende lampen
                 # (Robin, 14 augustus 2026).
+                #
+                # Twee groepen sinds de plafondspots op Matter zitten: de
+                # Zigbee2MQTT-groep met de Hue-lampen en de HA-groep met de
+                # spots (zie de kop van packages/0 - Ground Floor/Livingroom/
+                # Lights.yaml). Brandde er één van de twee, dan is er iemand op
+                # en mag het effect komen.
                 - condition: template
                   alias: Woonkamerlampen brandden al vóór de melding
                   value_template: >-
-                    {{ 'light.woonkamer_lampen' not in lampen_vooraf_uit }}
+                    {{ 'light.woonkamer_lampen' not in lampen_vooraf_uit
+                       or 'light.woonkamer_spots' not in lampen_vooraf_uit }}
                 # De live check blijft er alleen bij voor `unavailable`: een
                 # weggevallen groep staat niet in de uit-lijst en zou anders
                 # als "aan" doortellen.
-                - condition: state
-                  entity_id: light.woonkamer_lampen
-                  state: "on"
+                - condition: or
+                  conditions:
+                    - condition: state
+                      entity_id: light.woonkamer_lampen
+                      state: "on"
+                    - condition: state
+                      entity_id: light.woonkamer_spots
+                      state: "on"
               then:
                 - if:
                     - condition: template

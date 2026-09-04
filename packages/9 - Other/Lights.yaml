@@ -44,9 +44,21 @@ light_package:
         - trigger: time_pattern
           minutes: /5
       conditions:
-        - condition: state
-          entity_id: light.woonkamer_lampen
-          state: "on"
+        # DE POORTWACHTER VAN DE HELE RONDE
+        # Zolang deze onwaar is gebeurt er niets, dus hier hoort élke
+        # woonkamergroep in. Sinds de plafondspots op Matter zitten
+        # (`light.woonkamer_spots`, buiten de Z2M-groep) zou een avond waarop
+        # alleen het plafond nog brandt anders nooit meer opgeruimd worden -
+        # en het alarm dus ook niet aangaan.
+        - alias: Er brandt nog woonkamerlicht
+          condition: or
+          conditions:
+            - condition: state
+              entity_id: light.woonkamer_lampen
+              state: "on"
+            - condition: state
+              entity_id: light.woonkamer_spots
+              state: "on"
         - condition: or
           conditions:
             - condition: and
@@ -116,6 +128,11 @@ light_package:
             # krijgen.
             entity_id: &binnen_lampen
               - light.woonkamer_lampen
+              # De vier plafondspots. Staan sinds 4 september 2026 in een eigen
+              # HA-groep omdat ze op Matter zitten en dus niet in de
+              # Zigbee2MQTT-groep hierboven kunnen. Zie de kop van
+              # packages/0 - Ground Floor/Livingroom/Lights.yaml.
+              - light.woonkamer_spots
               - light.garage_lampen
               - light.speelkamer_lampen
               - light.keuken_lampen

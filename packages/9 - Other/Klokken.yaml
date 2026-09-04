@@ -132,10 +132,16 @@ klokken_package:
             # zwart blijft omdat Alarmo even weg was is erger dan een scherm
             # dat aan staat terwijl het huis op scherp had gestaan - dat
             # laatste zie je meteen, het eerste zoek je een avond.
+            #
+            # Allebei de woonkamergroepen: de vier plafondspots zitten sinds
+            # de Matter-omzetting in `light.woonkamer_spots` en niet meer in
+            # de Zigbee2MQTT-groep `light.woonkamer_lampen`. Zie de kop van
+            # packages/0 - Ground Floor/Livingroom/Lights.yaml.
             klok_aan: >-
               {{ states('alarm_control_panel.alarmo')
                  in ['disarmed', 'unavailable', 'unknown']
-                 or is_state('light.woonkamer_lampen', 'on') }}
+                 or is_state('light.woonkamer_lampen', 'on')
+                 or is_state('light.woonkamer_spots', 'on') }}
             # Een sessie die niet op pauze staat. De pauze-tak van
             # `livingroom_media_playing` gaat af als de Apple TV op `paused` of
             # `idle` springt en zet de klokken juist wel op 50%, dus die twee
@@ -581,7 +587,9 @@ klokken_package:
             - armed_vacation
             - armed_custom_bypass
         - trigger: state
-          entity_id: light.woonkamer_lampen
+          entity_id:
+            - light.woonkamer_lampen
+            - light.woonkamer_spots
           to:
             - "on"
             - "off"

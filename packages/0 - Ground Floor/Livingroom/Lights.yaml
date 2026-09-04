@@ -1,3 +1,33 @@
+##############################################################################
+## TWEE LAMPGROEPEN VOOR ÉÉN KAMER (4 september 2026)
+##
+## De vier plafondspots zijn van IKEA TRADFRI (Zigbee, via zigbee2mqtt) naar
+## IKEA KAJPLATS (Matter) gegaan. `light.woonkamer_lampen` is een
+## ZIGBEE2MQTT-GROEP, geen HA-helper: daar kan een Matter-lamp per definitie
+## niet in, want die groep leeft in het Zigbee-netwerk. De spots zaten er dus
+## in één klap uit, en omdat de hele config alleen `light.woonkamer_lampen`
+## noemt, raakte geen enkele automatisering ze nog aan.
+##
+## Sindsdien is de woonkamer twee groepen:
+##   light.woonkamer_lampen  Z2M-groep 7: Signe, 2 Play bars, Hue tafellamp
+##   light.woonkamer_spots   HA-groephelper: de 4 Matter-spots
+##
+## ALLEBEI NOEMEN, OVERAL. Wie hier een lamp bijzet of een nieuwe
+## automatisering schrijft: de spots staan niet in `woonkamer_lampen` en komen
+## daar ook nooit meer in. De volledige lijst plekken die het paar kennen staat
+## in `docs/matter-lampgroepen.md`, samen met het recept voor de volgende
+## ruimte die omgaat.
+##
+## Twee dingen kunnen de spots niet en de Hue-lampen wel: `effect` en `flash`.
+## De spots melden alleen TRANSITION (supported_features 32) en hebben geen
+## effectlijst. Dat is geen reden om ze uit die aanroepen te laten: HA gooit
+## een parameter die een lamp niet ondersteunt er per entiteit uit
+## (`filter_turn_on_params` in de light-integratie), dus `effect: breathe` en
+## `flash: long` in Alarm.yaml zetten de spots gewoon aan zonder te ademen of
+## te knipperen. De kleuraanroepen van Brandweer blijven wel bewust bij de
+## Hue-lampen: die staan in de eigen Z2M-groepen brw_groep_1 en brw_groep_2.
+##############################################################################
+
 livingsroom_lights_package:
   input_number:
     lights_livingroom_percentage:
@@ -21,7 +51,9 @@ livingsroom_lights_package:
       use_blueprint:
         path: robin/lights_onoff.yaml
         input:
-          lamp: light.woonkamer_lampen
+          lamp:
+            - light.woonkamer_lampen
+            - light.woonkamer_spots
           helderheid: input_number.lights_livingroom_percentage
           # Groep van losse lampen: één uit-commando met transition laat er
           # geregeld eentje branden.
@@ -40,20 +72,30 @@ livingsroom_lights_package:
     - id: livingroom_lights_ambient_fill
       alias: Livingroom - Ambient fill lights (low luminance)
       description: >
-        Zet humble + ledstrip aan op laag niveau als woonkamer_lampen aan zijn
-        en buiten-lux onder 1000 zakt. Zet ze uit als woonkamer_lampen uit gaan.
+        Zet humble + ledstrip aan op laag niveau als er woonkamerlicht brandt
+        (Hue-groep of de Matter-spots) en buiten-lux onder 1000 zakt. Zet ze
+        uit zodra allebei de groepen uit zijn.
       mode: restart
       triggers:
         - trigger: numeric_state
           entity_id: sensor.achtertuin_zon_luminance
           below: 1000
           id: lux_laag
+        # Allebei de groepen als trigger, en de uit-tak eist hieronder dat ze
+        # ook allebei uit zijn. Zou alleen `woonkamer_lampen` hier staan, dan
+        # bleef het aanvullicht weg op een avond waarop je alleen de spots
+        # aandoet - en zou het uitgaan van de Hue-lampen het aanvullicht doven
+        # terwijl de spots nog branden.
         - trigger: state
-          entity_id: light.woonkamer_lampen
+          entity_id:
+            - light.woonkamer_lampen
+            - light.woonkamer_spots
           to: "on"
           id: lampen_aan
         - trigger: state
-          entity_id: light.woonkamer_lampen
+          entity_id:
+            - light.woonkamer_lampen
+            - light.woonkamer_spots
           to: "off"
           id: lampen_uit
       actions:
@@ -63,9 +105,15 @@ livingsroom_lights_package:
                   id:
                     - lux_laag
                     - lampen_aan
-                - condition: state
-                  entity_id: light.woonkamer_lampen
-                  state: "on"
+                - alias: Er brandt woonkamerlicht
+                  condition: or
+                  conditions:
+                    - condition: state
+                      entity_id: light.woonkamer_lampen
+                      state: "on"
+                    - condition: state
+                      entity_id: light.woonkamer_spots
+                      state: "on"
                 - condition: numeric_state
                   entity_id: sensor.achtertuin_zon_luminance
                   below: 1000
@@ -85,6 +133,14 @@ livingsroom_lights_package:
             - conditions:
                 - condition: trigger
                   id: lampen_uit
+                # Eén `condition: state` met twee entiteiten eist dat ze
+                # ALLEBEI uit zijn - dat is hier precies de bedoeling.
+                - alias: Allebei de woonkamergroepen uit
+                  condition: state
+                  entity_id:
+                    - light.woonkamer_lampen
+                    - light.woonkamer_spots
+                  state: "off"
               sequence:
                 - action: light.turn_off
                   target:
@@ -104,10 +160,17 @@ livingsroom_lights_package:
         # rgb_color komt er soms als tuple uit en na een herstart (uit de
         # database, via JSON) als lijst. Vergelijken met een tuple-literal
         # klopte dus maar de helft van de tijd; `| list` maakt beide gelijk.
+        #
+        # Allebei de woonkamergroepen bekijken: staat de kamer in zo'n kleur,
+        # dan doet meestal maar één van de twee mee (de spots kunnen wel hs/xy
+        # maar krijgen die kleuren nergens automatisch), en dan hoort de hele
+        # kamer alsnog terug naar 2600 K.
         - condition: template
           value_template: >-
             {{ (state_attr('light.woonkamer_lampen', 'rgb_color') or []) | list
-               in [[254, 67, 255], [11, 0, 255]] }}
+                 in [[254, 67, 255], [11, 0, 255]]
+               or (state_attr('light.woonkamer_spots', 'rgb_color') or []) | list
+                 in [[254, 67, 255], [11, 0, 255]] }}
       actions:
         - action: light.turn_on
           metadata: {}
@@ -116,4 +179,5 @@ livingsroom_lights_package:
           target:
             entity_id:
               - light.woonkamer_lampen
+              - light.woonkamer_spots
               - light.achtertuin_lampen
