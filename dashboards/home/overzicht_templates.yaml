@@ -459,6 +459,116 @@ ov_listrow:
     t: |
       [[[ return variables.title; ]]]
 
+# --- Luchtregel: CO2, fijnstof en vocht op één regel met kwaliteitsbadge ----
+# Stond tot 4 september 2026 uitgeschreven in `overzicht/kolom_rechts.yaml` als
+# één kaart voor de woonkamer. Toen Maxi's kamer er een multisensor bij kreeg
+# was de keuze: die negentig regels JS er een tweede keer in plakken, of ze hier
+# één keer neerzetten. Dat laatste dus - anders lopen de drempels van de twee
+# kamers vroeg of laat uit elkaar.
+#
+# De instantie zet zelf `entity` (de luchtkwaliteits-entiteit, die stuurt ook de
+# badge én zorgt dat de kaart hertekent) en `tap_action`.
+ov_lucht:
+  show_icon: false
+  show_name: false
+  show_state: false
+  variables:
+    naam: Lucht
+    co2: sensor.none
+    pm25: sensor.none
+    rv: sensor.none
+  styles:
+    grid:
+      - grid-template-areas: '"n badge" "sub badge"'
+      # Zelfde raster als ov_climate, inclusief de ondergrens van 0:
+      # "591 ppm · PM2.5 2,0 · 53% rv" is een lange regel en liep zonder dat
+      # over de kwaliteitsbadge heen.
+      - grid-template-columns: minmax(0, 1fr) auto
+      - align-items: center
+      - column-gap: 10px
+    card:
+      - background: none
+      - border: none
+      - box-shadow: none
+      - padding: 11px 2px
+    custom_fields:
+      n:
+        - grid-area: n
+        - justify-self: start
+        - min-width: 0
+        - white-space: nowrap
+        - overflow: hidden
+        - text-overflow: ellipsis
+      sub:
+        - grid-area: sub
+        - justify-self: start
+        - font-size: 12.5px
+        - padding-top: 2px
+        - min-width: 0
+        - white-space: nowrap
+        - overflow: hidden
+        - text-overflow: ellipsis
+      badge:
+        - grid-area: badge
+        - justify-self: end
+  custom_fields:
+    n: |
+      [[[
+        return `<span style="font-size:14.5px;font-weight:600;color:var(--primary-text-color)">${variables.naam}</span>`;
+      ]]]
+    sub: |
+      [[[
+        var grijs = 'var(--ov-ink-58)';
+        // getal ophalen; null als de sensor er niet is of niets zinnigs geeft
+        var num = function(id){
+          var e = id ? states[id] : null;
+          if(!e || isNaN(Number(e.state))) return null;
+          return Number(e.state);
+        };
+        // tekst() krijgt de waarde binnen, zodat een ontbrekende sensor
+        // hier stopt in plaats van in de opmaak van een null.
+        var deel = function(waarde, tekst, drempel, alarm){
+          if(waarde === null) return null;
+          var kleur = waarde >= alarm ? 'var(--ov-bad)' : (waarde >= drempel ? 'var(--ov-warn)' : grijs);
+          return `<span style="color:${kleur};font-weight:${waarde >= drempel ? 600 : 400}">${tekst(waarde)}</span>`;
+        };
+        var co2 = num(variables.co2);
+        var pm = num(variables.pm25);
+        var rv = num(variables.rv);
+        var d = [];
+        // CO2: boven ~800 ppm wordt het benauwd, boven 1200 echt ventileren
+        var c = deel(co2, v => `${Math.round(v)} ppm`, 800, 1200);
+        if(c) d.push(c);
+        // PM2.5: WHO-daggemiddelde ligt op 15 µg/m³
+        var p = deel(pm, v => `PM2.5 ${v.toFixed(1).replace('.',',')}`, 15, 35);
+        if(p) d.push(p);
+        if(rv !== null) {
+          // Vocht knijpt aan twee kanten: te droog én te vochtig is mis
+          var kleur = (rv < 30 || rv > 70) ? 'var(--ov-warn)' : grijs;
+          d.push(`<span style="color:${kleur}">${Math.round(rv)}% rv</span>`);
+        }
+        if(!d.length) return `<span style="color:${grijs}">geen meting</span>`;
+        return d.join(`<span style="color:var(--ov-ink-20)"> · </span>`);
+      ]]]
+    badge: |
+      [[[
+        if(!entity || entity.state === 'unavailable' || entity.state === 'unknown') return '';
+        var groen = ['var(--ov-ok)','var(--ov-ok-15)'];
+        var grijs = ['var(--ov-ink-60)','var(--ov-ink-8)'];
+        var oranje = ['var(--ov-warn)','var(--ov-warn-15)'];
+        var rood = ['var(--ov-bad)','var(--ov-bad-15)'];
+        var map = {excellent:['uitstekend'].concat(groen),
+                   good:['goed'].concat(groen),
+                   fair:['redelijk'].concat(grijs),
+                   moderate:['matig'].concat(oranje),
+                   poor:['slecht'].concat(oranje),
+                   very_poor:['zeer slecht'].concat(rood),
+                   extremely_poor:['extreem slecht'].concat(rood)};
+        var m = map[entity.state];
+        if(!m) m = [String(entity.state).replace(/_/g,' ')].concat(grijs);
+        return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:${m[1]};background:${m[2]}">${m[0]}</span>`;
+      ]]]
+
 # --- Panel title (uppercase label, optional right badge) -------------------
 ov_title:
   show_name: false

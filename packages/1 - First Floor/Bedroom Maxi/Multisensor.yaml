@@ -1,0 +1,147 @@
+##############################################################################
+## DE MULTISENSOR IN MAXI'S KAMER (4 september 2026)
+##
+## IKEA ALPSTUGA (Matter). Meet temperatuur, luchtvochtigheid, CO2 en fijnstof
+## en heeft een SCHERMPJE dat standaard altijd aan staat - in een slaapkamer is
+## dat een lampje naast het bed. `switch.slaapkamer_logan_slaapkamer_maxi_
+## multisensor_display` zet het uit; de automatisering hieronder doet dat vanaf
+## Maxi's bedtijd en zet het weer aan zodra het huis wakker is.
+##
+## Deze sensor is sinds vandaag ook DE thermometer van deze kamer. Dat staat
+## aangewezen in `custom_templates/kamers.jinja` (de kamertegel, die haalt via
+## `device_entities()` meteen ook CO2, fijnstof en vocht op), in
+## `custom_templates/klimaat.jinja` (de zone `slaapkamer_logan`, waar de
+## zonwering- en airco-adviezen op rekenen) en in de min_max van
+## `packages/2 - Second Floor/Attic/AC.yaml`. De oudere TIMMERFLOTTE blijft
+## hangen als terugval; zie de toelichting in kamers.jinja.
+##
+## De bewegingssensor (IKEA MYGGSPRAY,
+## `binary_sensor.slaapkamer_logan_slaapkamer_maxi_beweging_bezetting`) hangt
+## er sinds dezelfde middag. Die stuurt bewust nog niets aan: de kamertegel
+## pikt beweging per area vanzelf op, en licht in deze kamer loopt via de knop
+## en de bedtijdregels, niet via een melder.
+##############################################################################
+
+bedroom_maxi_multisensor_package:
+  template:
+    - binary_sensor:
+        # "Maxi hoort te slapen." Twee helften, dezelfde vorm als
+        # `binary_sensor.huis_slaapt` in Bedtime.yaml hiernaast:
+        #
+        #   avond   vanaf zijn eigen bedtijd van vandaag. Vrijdag en zaterdag
+        #           telt de weekendhelper; dat is dezelfde verdeling als de
+        #           bedtijd-markers op de tijdlijn en het omroepvenster in
+        #           PC.yaml (`weekday() in [4, 5]`).
+        #   ochtend na middernacht, tot het huis zichzelf wakker meldt
+        #           (`input_boolean.klimaat_wakker`, gezet door de
+        #           slaapkamerknop en uiterlijk om 10:00 vanuit
+        #           packages/9 - Other/Klimaat Zonwering.yaml).
+        #
+        # De grens van 12:00 in de ochtendhelft is dezelfde noodrem als bij
+        # `huis_slaapt`: raakt die vlag overdag uit, dan is het huis daarmee
+        # niet ineens weer in slaap en hoeft het schermpje niet uit.
+        #
+        # Bewust GEEN `availability`: valt een helper weg, dan hoort hier 'off'
+        # uit te komen (scherm aan) en niet `unavailable`. Een sensor die
+        # `unknown` wordt zou de automatisering hieronder stil laten staan in
+        # de stand waarin hij toevallig stond.
+        - name: Slaapkamer Maxi slaaptijd
+          unique_id: slaapkamer_maxi_slaaptijd
+          icon: mdi:sleep
+          state: >
+            {% set helper = 'input_datetime.bedtime_maxi_weekend'
+                            if now().weekday() in [4, 5]
+                            else 'input_datetime.bedtime_maxi' %}
+            {% set bed = states(helper) %}
+            {% set bed = bed if ':' in bed else '21:30:00' %}
+            {% set na_bedtijd = now() >= today_at(bed) %}
+            {% set voor_wakker = now().hour < 12
+               and is_state('input_boolean.klimaat_wakker', 'off') %}
+            {{ na_bedtijd or voor_wakker }}
+          attributes:
+            bedtijd_vandaag: >
+              {% set helper = 'input_datetime.bedtime_maxi_weekend'
+                              if now().weekday() in [4, 5]
+                              else 'input_datetime.bedtime_maxi' %}
+              {% set bed = states(helper) %}
+              {{ bed if ':' in bed else '21:30:00' }}
+
+  automation:
+    ###########################################################################
+    ## SCHERMPJE UIT ZOLANG HIJ SLAAPT
+    ##
+    ## Het commando gaat er ONVOORWAARDELIJK uit; er staat geen check op de
+    ## huidige stand van de switch voor. Dat is expres: precies de storing die
+    ## je wil afvangen (een apparaat dat na een stroomonderbreking terugkomt met
+    ## het scherm aan terwijl HA nog 'off' rapporteert) is de storing waar zo'n
+    ## check langs kijkt. Zelfde redenering als de dubbele uit bij het
+    ## bewegingslicht.
+    ##
+    ## De vijf triggers, en waarom ze er alle vijf zijn:
+    ##   slaaptijd   de gewone wissel, 's avonds op de bedtijd en 's ochtends
+    ##               zodra het huis wakker is
+    ##   herstart    HA weet na een herstart niet wat er tussendoor gebeurd is
+    ##   terug       het apparaat komt terug uit `unavailable` (Thread-hik,
+    ##               stroom eraf); IKEA zet het scherm dan weer aan
+    ##   aangegaan   iemand drukt op het knopje, of het apparaat doet het zelf
+    ##   vangnet     elk half uur opnieuw sturen zolang het uit hoort te zijn.
+    ##               Alleen die kant op: een scherm dat 's nachts brandt is het
+    ##               probleem, een scherm dat overdag uit staat niet.
+    ###########################################################################
+    - id: bedroom_maxi_multisensor_display
+      alias: Bedroom Maxi - Multisensor scherm
+      description: >-
+        Zet het schermpje van de multisensor uit vanaf Maxi's bedtijd en weer
+        aan zodra het huis wakker is.
+      mode: restart
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.slaapkamer_maxi_slaaptijd
+          to:
+            - "on"
+            - "off"
+          id: slaaptijd
+        - trigger: homeassistant
+          event: start
+          id: herstart
+        - trigger: state
+          entity_id: switch.slaapkamer_logan_slaapkamer_maxi_multisensor_display
+          from: unavailable
+          id: terug
+        - trigger: state
+          entity_id: switch.slaapkamer_logan_slaapkamer_maxi_multisensor_display
+          to: "on"
+          id: aangegaan
+        - trigger: time_pattern
+          minutes: /30
+          id: vangnet
+      conditions: []
+      actions:
+        - choose:
+            - alias: Hij slaapt - scherm uit
+              conditions:
+                - condition: state
+                  entity_id: binary_sensor.slaapkamer_maxi_slaaptijd
+                  state: "on"
+              sequence:
+                - action: switch.turn_off
+                  target:
+                    entity_id: switch.slaapkamer_logan_slaapkamer_maxi_multisensor_display
+            # Het vangnet doet bewust niets in deze richting: overdag hoeft er
+            # niet elk half uur een commando naar een scherm dat al aan staat.
+            - alias: Het huis is wakker - scherm aan
+              conditions:
+                - condition: not
+                  conditions:
+                    - condition: trigger
+                      id: vangnet
+                - condition: state
+                  entity_id: binary_sensor.slaapkamer_maxi_slaaptijd
+                  state: "off"
+              sequence:
+                - action: switch.turn_on
+                  target:
+                    entity_id: switch.slaapkamer_logan_slaapkamer_maxi_multisensor_display
+        # Geen `default`: staat de slaaptijd-sensor op `unknown` (kan alleen
+        # vlak na een herstart, voordat het template één keer gerenderd is),
+        # dan is niets doen beter dan gokken.

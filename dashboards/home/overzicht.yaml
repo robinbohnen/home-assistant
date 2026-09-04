@@ -1054,6 +1054,161 @@ cards:
               exclude:
                 - state: unavailable
                 - state: unknown
+      # --------- Lucht slaapkamer Maxi ---------
+      # Zelfde opzet als de woonkamer hierboven, met twee dingen erbij die
+      # alleen hier spelen: het schermpje van de sensor (dat 's nachts uit
+      # hoort te staan, zie packages/1 - First Floor/Bedroom Maxi/
+      # Multisensor.yaml) en de bewegingssensor die er sinds dezelfde middag
+      # hangt.
+      #
+      # Bewust korter dan de woonkamerpopup: hier is CO2 het verhaal. Vocht en
+      # fijnstof staan als tegel met hun kleur, en wie de grafiek daarvan wil
+      # vindt hem via more-info op die tegel.
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-lucht-maxi"
+        name: Lucht slaapkamer Maxi
+        icon: mdi:air-filter
+        width_desktop: *ov_popup_width
+        styles: *ov_popup
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide
+                primary: CO₂
+                secondary: >-
+                  {{ (states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide') | round(0) ~ ' ppm')
+                     if has_value('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide') else '—' }}
+                icon: mdi:molecule-co2
+                # float(-1) als sein voor "geen meting": met float(0) viel een
+                # uitgevallen sensor onder elke drempel en stond het icoon
+                # groen, alsof de lucht prima was.
+                icon_color: >-
+                  {% set v = states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide') | float(-1) %}
+                  {{ 'grey' if v < 0 else ('red' if v >= 1200 else ('orange' if v >= 800 else 'green')) }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur
+                primary: Temperatuur
+                secondary: >-
+                  {{ (states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur') | round(1) ~ '°')
+                     if has_value('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur') else '—' }}
+                icon: mdi:thermometer
+                # Slaapkamergrenzen uit custom_templates/kamers.jinja: onder 15
+                # of boven 24 is het mis, 18-21 is het comfortvenster.
+                icon_color: >-
+                  {% set v = states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur') | float(-99) %}
+                  {{ 'grey' if v == -99 else ('red' if (v < 13 or v > 24) else ('orange' if (v < 15 or v > 21) else 'green')) }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtvochtigheid
+                primary: Luchtvochtigheid
+                secondary: >-
+                  {{ (states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtvochtigheid') | round(0) ~ '% rv')
+                     if has_value('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtvochtigheid') else '—' }}
+                icon: mdi:water-percent
+                # Vocht knijpt aan twee kanten: te droog is net zo goed mis.
+                icon_color: >-
+                  {% set v = states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtvochtigheid') | float(-1) %}
+                  {{ 'grey' if v < 0 else ('orange' if (v < 30 or v > 70) else 'green') }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5
+                primary: Fijnstof
+                secondary: >-
+                  {{ ('PM2.5 ' ~ states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5'))
+                     if has_value('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5') else '—' }}
+                icon: mdi:blur
+                icon_color: >-
+                  {% set v = states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5') | float(-1) %}
+                  {{ 'grey' if v < 0 else ('red' if v >= 35 else ('orange' if v >= 15 else 'green')) }}
+                tap_action:
+                  action: more-info
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            header:
+              show: true
+              title: CO₂ (24 uur)
+            # Dezelfde drempels als de kleuren op de KLIMAAT-kaart.
+            apex_config:
+              chart:
+                height: 150
+              annotations:
+                yaxis:
+                  - y: 800
+                    borderColor: "var(--ov-warn)"
+                    strokeDashArray: 4
+                  - y: 1200
+                    borderColor: "var(--ov-bad)"
+                    strokeDashArray: 4
+            series:
+              - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide
+                name: CO₂
+                type: area
+                color: "var(--ov-info)"
+                stroke_width: 2
+                float_precision: 0
+                group_by:
+                  duration: 10m
+                  func: avg
+          - type: custom:mushroom-title-card
+            subtitle: De sensor zelf
+          - type: custom:mushroom-entity-card
+            entity: switch.slaapkamer_logan_slaapkamer_maxi_multisensor_display
+            name: Schermpje
+            icon: mdi:monitor-small
+            tap_action:
+              action: toggle
+          # Waarom het scherm uit staat: hoort zo, of iemand zette het uit.
+          - type: custom:mushroom-template-card
+            entity: binary_sensor.slaapkamer_maxi_slaaptijd
+            primary: Slaaptijd
+            secondary: >-
+              {% if is_state('binary_sensor.slaapkamer_maxi_slaaptijd', 'on') %}
+                Scherm hoort uit
+              {% else %}
+                Bedtijd vandaag {{ (state_attr('binary_sensor.slaapkamer_maxi_slaaptijd', 'bedtijd_vandaag') or '')[:5] }}
+              {% endif %}
+            icon: mdi:sleep
+            icon_color: >-
+              {{ 'blue' if is_state('binary_sensor.slaapkamer_maxi_slaaptijd', 'on') else 'grey' }}
+          - type: custom:mushroom-entity-card
+            entity: binary_sensor.slaapkamer_logan_slaapkamer_maxi_beweging_bezetting
+            name: Beweging
+            secondary_info: last-changed
+          # Vangnet: alles wat deze twee apparaten verder nog leveren en
+          # hierboven geen eigen tegel heeft. Glob, dus een nieuwe meting
+          # verschijnt vanzelf.
+          - type: custom:mushroom-title-card
+            title: Alle metingen van deze sensoren
+          - type: custom:auto-entities
+            show_empty: false
+            card:
+              type: grid
+              columns: 2
+              square: false
+            card_param: cards
+            sort:
+              method: friendly_name
+            filter:
+              include:
+                - entity_id: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_*
+                  options: &ov_lucht_maxi_tegel
+                    type: custom:mushroom-entity-card
+                    secondary_info: last-changed
+                    tap_action:
+                      action: more-info
+                - entity_id: sensor.slaapkamer_logan_slaapkamer_maxi_beweging_*
+                  options: *ov_lucht_maxi_tegel
+              exclude:
+                - state: unavailable
+                - state: unknown
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-brandweer"
@@ -1936,15 +2091,20 @@ cards:
                   {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
                 tap_action:
                   action: more-info
+              # Sinds 4 september 2026 de multisensor, dezelfde bron die
+              # kamers.jinja en klimaat.jinja voor deze kamer aanwijzen. De
+              # oude TIMMERFLOTTE hangt er nog als terugval, maar één tegel
+              # hoort één bron te tonen - anders staan er op hetzelfde scherm
+              # twee temperaturen voor dezelfde kamer.
               - type: custom:mushroom-template-card
-                entity: sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur
+                entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur
                 primary: Slaapkamer Logan
                 secondary: >-
-                  {% set t = states('sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur') | float(none) %}
+                  {% set t = states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur') | float(none) %}
                   {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
                 icon: mdi:bed-single-outline
                 icon_color: >-
-                  {% set t = states('sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur') | float(none) %}
+                  {% set t = states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur') | float(none) %}
                   {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
                 tap_action:
                   action: more-info

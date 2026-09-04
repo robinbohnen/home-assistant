@@ -211,6 +211,74 @@ sections:
           - entity: counter.airco_storingen_zolder
             name: Mislukte starts vandaag
 
+      #########################################################################
+      ## Kamerlucht
+      #########################################################################
+      ## Twee kamers hebben een multisensor die verder kijkt dan temperatuur.
+      ## De woonkamer heeft die al langer (en staat hierboven al als "Kamer nu"
+      ## bij de airco); Maxi's kamer sinds 4 september 2026. Juist een
+      ## kinderkamer met de deur dicht loopt 's nachts vol CO2, en dat zie je
+      ## aan de temperatuur niet.
+      ##
+      ## Het schermpje staat hier bewust mét zijn slaaptijd-sensor erbij: zo is
+      ## in één oogopslag te zien of het uit staat omdat het hoort, of omdat
+      ## iemand het uitzette. De automatisering staat in
+      ## packages/1 - First Floor/Bedroom Maxi/Multisensor.yaml.
+
+      - type: heading
+        heading: Kamerlucht
+        heading_style: title
+        icon: mdi:air-filter
+
+      - type: entities
+        title: Slaapkamer Maxi
+        state_color: true
+        show_header_toggle: false
+        entities:
+          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur
+            name: Temperatuur
+          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtvochtigheid
+            name: Luchtvochtigheid
+          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide
+            name: CO₂
+          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5
+            name: Fijnstof PM2.5
+          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtkwaliteit
+            name: Luchtkwaliteit
+          - type: divider
+          - entity: binary_sensor.slaapkamer_logan_slaapkamer_maxi_beweging_bezetting
+            name: Beweging
+            secondary_info: last-changed
+          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_beweging_licht
+            name: Licht in de kamer
+          - type: divider
+          - entity: switch.slaapkamer_logan_slaapkamer_maxi_multisensor_display
+            name: Schermpje
+          - entity: binary_sensor.slaapkamer_maxi_slaaptijd
+            name: Slaaptijd (dan hoort het scherm uit)
+            secondary_info: last-changed
+          - entity: binary_sensor.slaapkamer_maxi_slaaptijd
+            type: attribute
+            attribute: bedtijd_vandaag
+            name: Bedtijd vandaag
+          - type: divider
+          # Hangt er nog en meet dezelfde kamer. Springt alleen in als de
+          # multisensor uitvalt; zie custom_templates/kamers.jinja.
+          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur
+            name: Terugval-thermometer
+
+      # De nacht is hier het interessante stuk: met de deur dicht loopt CO2 op
+      # tot iemand 's ochtends de deur opendoet. Standaardkaart, zoals de rest
+      # van deze weergave.
+      - type: history-graph
+        title: Slaapkamer Maxi - afgelopen 24 uur
+        hours_to_show: 24
+        entities:
+          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide
+            name: CO₂
+          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur
+            name: Temperatuur
+
       - type: entities
         title: Instellingen airco
         state_color: true

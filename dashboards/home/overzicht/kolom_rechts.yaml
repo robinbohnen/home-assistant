@@ -302,109 +302,39 @@ cards:
             - condition: state
               entity: binary_sensor.backyard_spa_aanwezig
               state: "on"
-        # Lucht woonkamer (multisensor): CO2, fijnstof en vocht op één regel,
-        # met de luchtkwaliteitsklasse als badge. Zelfde grid als ov_climate,
-        # maar de subregel bouwt zijn eigen waarden op dus geen template.
+        # Lucht per kamer: CO2, fijnstof en vocht op één regel, met de
+        # luchtkwaliteitsklasse als badge. De opmaak en de drempels staan in
+        # `ov_lucht` in overzicht_templates.yaml, want sinds 4 september 2026
+        # staat deze regel er twee keer: de woonkamer en Maxi's kamer.
+        #
+        # `entity` is de luchtkwaliteits-entiteit: die kleurt de badge en zorgt
+        # dat de kaart hertekent als er een nieuwe meting binnenkomt. Tikken
+        # gaat naar de popup en niet naar more-info - deze regel vat drie
+        # metingen samen en more-info gaf de grafiek van alleen de klasse.
         - type: custom:button-card
+          template: ov_lucht
           entity: sensor.woonkamer_woonkamer_multisensor_luchtkwaliteit
-          show_icon: false
-          show_name: false
-          show_state: false
-          # Deze regel vat drie metingen samen; more-info gaf de geschiedenis
-          # van alleen de luchtkwaliteitsklasse. De popup heeft CO2, fijnstof
-          # en vocht elk als eigen grafiek.
           tap_action:
             action: navigate
             navigation_path: "#ov-lucht"
-          styles:
-            grid:
-              - grid-template-areas: '"n badge" "sub badge"'
-              # Zelfde raster als ov_climate, inclusief de ondergrens van 0:
-              # "591 ppm · PM2.5 2,0 · 53% rv" is een lange regel en liep zonder
-              # dat over de kwaliteitsbadge heen.
-              - grid-template-columns: minmax(0, 1fr) auto
-              - align-items: center
-              - column-gap: 10px
-            card:
-              - background: none
-              - border: none
-              - box-shadow: none
-              - padding: 11px 2px
-            custom_fields:
-              n:
-                - grid-area: n
-                - justify-self: start
-                - min-width: 0
-                - white-space: nowrap
-                - overflow: hidden
-                - text-overflow: ellipsis
-              sub:
-                - grid-area: sub
-                - justify-self: start
-                - font-size: 12.5px
-                - padding-top: 2px
-                - min-width: 0
-                - white-space: nowrap
-                - overflow: hidden
-                - text-overflow: ellipsis
-              badge:
-                - grid-area: badge
-                - justify-self: end
-          custom_fields:
-            n: |
-              [[[ return `<span style="font-size:14.5px;font-weight:600;color:var(--primary-text-color)">Lucht woonkamer</span>`; ]]]
-            sub: |
-              [[[
-                var grijs = 'var(--ov-ink-58)';
-                // getal ophalen; null als de sensor er niet is of niets zinnigs geeft
-                var num = function(id){
-                  var e = states[id];
-                  if(!e || isNaN(Number(e.state))) return null;
-                  return Number(e.state);
-                };
-                // tekst() krijgt de waarde binnen, zodat een ontbrekende sensor
-                // hier stopt in plaats van in de opmaak van een null.
-                var deel = function(waarde, tekst, drempel, alarm){
-                  if(waarde === null) return null;
-                  var kleur = waarde >= alarm ? 'var(--ov-bad)' : (waarde >= drempel ? 'var(--ov-warn)' : grijs);
-                  return `<span style="color:${kleur};font-weight:${waarde >= drempel ? 600 : 400}">${tekst(waarde)}</span>`;
-                };
-                var co2 = num('sensor.woonkamer_woonkamer_multisensor_kooldioxide');
-                var pm = num('sensor.woonkamer_woonkamer_multisensor_pm2_5');
-                var rv = num('sensor.woonkamer_woonkamer_multisensor_luchtvochtigheid');
-                var d = [];
-                // CO2: boven ~800 ppm wordt het benauwd, boven 1200 echt ventileren
-                var c = deel(co2, v => `${Math.round(v)} ppm`, 800, 1200);
-                if(c) d.push(c);
-                // PM2.5: WHO-daggemiddelde ligt op 15 µg/m³
-                var p = deel(pm, v => `PM2.5 ${v.toFixed(1).replace('.',',')}`, 15, 35);
-                if(p) d.push(p);
-                if(rv !== null) {
-                  // Vocht knijpt aan twee kanten: te droog én te vochtig is mis
-                  var kleur = (rv < 30 || rv > 70) ? 'var(--ov-warn)' : grijs;
-                  d.push(`<span style="color:${kleur}">${Math.round(rv)}% rv</span>`);
-                }
-                if(!d.length) return `<span style="color:${grijs}">geen meting</span>`;
-                return d.join(`<span style="color:var(--ov-ink-20)"> · </span>`);
-              ]]]
-            badge: |
-              [[[
-                if(!entity || entity.state === 'unavailable' || entity.state === 'unknown') return '';
-                var groen = ['var(--ov-ok)','var(--ov-ok-15)'];
-                var grijs = ['var(--ov-ink-60)','var(--ov-ink-8)'];
-                var oranje = ['var(--ov-warn)','var(--ov-warn-15)'];
-                var rood = ['var(--ov-bad)','var(--ov-bad-15)'];
-                var map = {excellent:['uitstekend'].concat(groen),
-                           good:['goed'].concat(groen),
-                           fair:['redelijk'].concat(grijs),
-                           moderate:['matig'].concat(oranje),
-                           poor:['slecht'].concat(oranje),
-                           very_poor:['zeer slecht'].concat(rood),
-                           extremely_poor:['extreem slecht'].concat(rood)};
-                var m = map[entity.state];
-                if(!m) m = [String(entity.state).replace(/_/g,' ')].concat(grijs);
-                return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:${m[1]};background:${m[2]}">${m[0]}</span>`;
-              ]]]
+          variables:
+            naam: Lucht woonkamer
+            co2: sensor.woonkamer_woonkamer_multisensor_kooldioxide
+            pm25: sensor.woonkamer_woonkamer_multisensor_pm2_5
+            rv: sensor.woonkamer_woonkamer_multisensor_luchtvochtigheid
+        # Maxi's kamer. Een kinderkamer met de deur dicht is juist de plek waar
+        # CO2 oploopt terwijl de temperatuur niets bijzonders laat zien.
+        - type: custom:button-card
+          template: ov_lucht
+          entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtkwaliteit
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-lucht-maxi"
+          variables:
+            naam: Lucht Maxi
+            co2: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide
+            pm25: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5
+            rv: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtvochtigheid
         # De zonnescherm-regel met knoppen die hier stond is 2026-08-16
         # vervallen: de status staat al op de Buiten-regel in RUIMTES en de
         # bediening (knoppen + positie) in de #ov-outside-popup. Twee plekken
