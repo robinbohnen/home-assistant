@@ -1061,9 +1061,10 @@ cards:
       # Multisensor.yaml) en de bewegingssensor die er sinds dezelfde middag
       # hangt.
       #
-      # Bewust korter dan de woonkamerpopup: hier is CO2 het verhaal. Vocht en
-      # fijnstof staan als tegel met hun kleur, en wie de grafiek daarvan wil
-      # vindt hem via more-info op die tegel.
+      # Dezelfde vier tegels en drie grafieken als de woonkamer, met dezelfde
+      # drempels. Eerder stond hier Temperatuur in plaats van Luchtkwaliteit en
+      # alleen een CO2-grafiek; dat maakte de twee popups zonder reden
+      # verschillend. Temperatuur staat nog wel in de lijst onderaan.
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-lucht-maxi"
@@ -1092,17 +1093,15 @@ cards:
                 tap_action:
                   action: more-info
               - type: custom:mushroom-template-card
-                entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur
-                primary: Temperatuur
+                entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5
+                primary: Fijnstof
                 secondary: >-
-                  {{ (states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur') | round(1) ~ '°')
-                     if has_value('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur') else '—' }}
-                icon: mdi:thermometer
-                # Slaapkamergrenzen uit custom_templates/kamers.jinja: onder 15
-                # of boven 24 is het mis, 18-21 is het comfortvenster.
+                  {{ ('PM2.5 ' ~ states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5'))
+                     if has_value('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5') else '—' }}
+                icon: mdi:blur
                 icon_color: >-
-                  {% set v = states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur') | float(-99) %}
-                  {{ 'grey' if v == -99 else ('red' if (v < 13 or v > 24) else ('orange' if (v < 15 or v > 21) else 'green')) }}
+                  {% set v = states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5') | float(-1) %}
+                  {{ 'grey' if v < 0 else ('red' if v >= 35 else ('orange' if v >= 15 else 'green')) }}
                 tap_action:
                   action: more-info
               - type: custom:mushroom-template-card
@@ -1119,15 +1118,21 @@ cards:
                 tap_action:
                   action: more-info
               - type: custom:mushroom-template-card
-                entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5
-                primary: Fijnstof
+                entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtkwaliteit
+                primary: Luchtkwaliteit
                 secondary: >-
-                  {{ ('PM2.5 ' ~ states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5'))
-                     if has_value('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5') else '—' }}
-                icon: mdi:blur
+                  {% set m = {'excellent': 'uitstekend', 'good': 'goed', 'fair': 'redelijk',
+                              'moderate': 'matig', 'poor': 'slecht', 'very_poor': 'zeer slecht',
+                              'extremely_poor': 'extreem slecht'} %}
+                  {% set s = states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtkwaliteit') %}
+                  {{ m.get(s, s | replace('_', ' '))
+                     if has_value('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtkwaliteit') else '—' }}
+                icon: mdi:air-filter
                 icon_color: >-
-                  {% set v = states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5') | float(-1) %}
-                  {{ 'grey' if v < 0 else ('red' if v >= 35 else ('orange' if v >= 15 else 'green')) }}
+                  {% set s = states('sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtkwaliteit') %}
+                  {{ 'green' if s in ['excellent', 'good'] else
+                     ('red' if s in ['very_poor', 'extremely_poor'] else
+                     ('orange' if s in ['moderate', 'poor'] else 'grey')) }}
                 tap_action:
                   action: more-info
           - type: custom:apexcharts-card
@@ -1152,6 +1157,56 @@ cards:
                 name: CO₂
                 type: area
                 color: "var(--ov-info)"
+                stroke_width: 2
+                float_precision: 0
+                group_by:
+                  duration: 10m
+                  func: avg
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            header:
+              show: true
+              title: Fijnstof PM2.5 (24 uur)
+            # WHO-daggemiddelde ligt op 15 µg/m³.
+            apex_config:
+              chart:
+                height: 150
+              annotations:
+                yaxis:
+                  - y: 15
+                    borderColor: "var(--ov-warn)"
+                    strokeDashArray: 4
+            series:
+              - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5
+                name: PM2.5
+                type: area
+                color: "var(--ov-accent)"
+                stroke_width: 2
+                float_precision: 1
+                group_by:
+                  duration: 10m
+                  func: avg
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            header:
+              show: true
+              title: Luchtvochtigheid (24 uur)
+            apex_config:
+              chart:
+                height: 150
+              annotations:
+                yaxis:
+                  - y: 30
+                    borderColor: "var(--ov-warn)"
+                    strokeDashArray: 4
+                  - y: 70
+                    borderColor: "var(--ov-warn)"
+                    strokeDashArray: 4
+            series:
+              - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtvochtigheid
+                name: Luchtvochtigheid
+                type: line
+                color: "var(--ov-ok)"
                 stroke_width: 2
                 float_precision: 0
                 group_by:
