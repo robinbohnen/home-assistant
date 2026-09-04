@@ -94,9 +94,9 @@ intent and every intent still has a sentence. This one needs `pyyaml` too.
 | Device  | Quantity | Connection | Home Assistant | Notes |
 | ------------- | :---: | ------------- | ------------- | ------------- |
 | [Ikea Tradfri bulb GU10](https://www.ikea.com/nl/en/p/tradfri-led-bulb-gu10-345-lumen-wireless-dimmable-colour-and-white-spectrum-70547474/) | 42 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led spots GU10 with colour |
-| [Ikea Tradfri bulb E27](https://www.ikea.com/nl/en/p/tradfri-led-bulb-e27-806-lumen-wireless-dimmable-colour-and-white-spectrum-globe-opal-white-30547471/) | 8 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led bulb E27 with colour |
+| [Ikea Tradfri bulb E27](https://www.ikea.com/nl/en/p/tradfri-led-bulb-e27-806-lumen-wireless-dimmable-colour-and-white-spectrum-globe-opal-white-30547471/) | 7 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led bulb E27 with colour |
 | Ikea Kajplats GU10 CWS 470lm | 4 | Matter | [Matter](https://www.home-assistant.io/integrations/matter/) | Living room ceiling spots, replaced the Tradfri GU10s. Cannot join a zigbee2mqtt group, see docs/matter-lampgroepen.md |
-| Ikea Kajplats E27 CWS globe 1055lm | 2 | Matter | [Matter](https://www.home-assistant.io/integrations/matter/) | Dining table pendants, replaced the Tradfri E27s |
+| Ikea Kajplats E27 CWS globe 1055lm | 3 | Matter | [Matter](https://www.home-assistant.io/integrations/matter/) | Two dining table pendants and the hallway cupboard lamp, all replacing Tradfri E27s |
 | [Ikea Tradfri Driver with ledstrip](https://www.ikea.com/nl/en/p/tradfri-driver-for-wireless-control-smart-grey-60342656/) | 1 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led driver for strip |
 | [Humble One Smart](https://amzn.to/40JOj6z) | 1 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Wireless light |
 | Ikea Leptiter downlight (discontinued) | 8 | Zigbee | [MQTT](https://www.home-assistant.io/integrations/mqtt/) | Led spots |

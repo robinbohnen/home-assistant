@@ -1,10 +1,10 @@
 # Lampgroepen na de overstap naar Matter
 
 De IKEA TRADFRI-lampen (Zigbee, via zigbee2mqtt) worden vervangen door IKEA
-KAJPLATS (Matter). Op 4 september 2026 waren de eerste twee ruimtes aan de
-beurt: de twee hanglampen boven de eettafel en de vier plafondspots in de
-woonkamer. Dit stuk legt vast waar dat aan raakt, want het is niet alleen een
-lamp verwisselen.
+KAJPLATS (Matter). Op 4 september 2026 gingen de eerste drie plekken om: de
+twee hanglampen boven de eettafel, de vier plafondspots in de woonkamer en de
+kastlamp in de entree. Dit stuk legt vast waar dat aan raakt, want het is niet
+alleen een lamp verwisselen.
 
 ## De kern: een Zigbee2MQTT-groep kan geen Matter-lamp bevatten
 
@@ -38,16 +38,22 @@ naam** (`eettafel_lampen`), dan ontstaat `light.eettafel_lampen` opnieuw en
 hoeft er in de config geen letter te veranderen — de twintig verwijzingen naar
 die groep blijven kloppen.
 
-**Maar een deel gaat over (woonkamer).** De Z2M-groep blijft bestaan voor wat
-er nog op Zigbee zit, dus de naam is bezet en de ruimte heeft vanaf dan twee
-groepen:
+**Maar een deel gaat over (woonkamer, entree).** De Z2M-groep blijft bestaan
+voor wat er nog op Zigbee zit, dus de naam is bezet en de ruimte heeft vanaf
+dan twee ingangen:
 
 | Entiteit | Soort | Inhoud |
 | --- | --- | --- |
 | `light.woonkamer_lampen` | Z2M-groep 7 | Hue Signe, 2 Play bars, Hue tafellamp |
 | `light.woonkamer_spots` | HA-groephelper | de 4 Matter-plafondspots |
+| `light.entree_lampen` | Z2M-groep 1 | hanglamp, schoenenkast-ledstrip |
+| `light.entree_entree_kast_lamp` | losse Matter-lamp | de kastlamp |
 
-Die twee horen overal samen genoemd te worden. De plekken die dat sinds
+Bij de entree is het één lamp, dus daar is geen helper voor gemaakt: de
+entiteit staat gewoon naast de groep. Een helper met één lid voegt niets toe
+behalve een naam die kan gaan afwijken.
+
+Zo'n paar hoort overal samen genoemd te worden. De plekken die dat sinds
 4 september doen:
 
 | Bestand | Wat |
@@ -56,6 +62,7 @@ Die twee horen overal samen genoemd te worden. De plekken die dat sinds
 | `packages/0 - Ground Floor/Livingroom/Media.yaml` | `plafond` in `script.woonkamer_media_licht`, de terugzet-tak, de humble-check |
 | `packages/0 - Ground Floor/Livingroom/Cast.yaml` | opnieuw casten zodra er licht aangaat |
 | `packages/0 - Ground Floor/Hallway/Alarm.yaml` | de vertrekronde |
+| `packages/0 - Ground Floor/Hallway/Lights.yaml` | het bewegingslicht van de entree (blueprint) |
 | `packages/0 - Ground Floor/Kitchen/Voice.yaml` | intent "doe de lichten uit" |
 | `packages/9 - Other/Lights.yaml` | poortwachter van de slaapronde én `&binnen_lampen` (dus ook de nachtsweep) |
 | `packages/9 - Other/Alarm.yaml` | donkertest, waarschuwing, momentopname, alles-aan, flitslus |
@@ -68,7 +75,22 @@ Die twee horen overal samen genoemd te worden. De plekken die dat sinds
 
 `dashboards/home/dashboard.yaml` is bewust overgeslagen: die view staat sinds
 14 augustus 2026 uit in `ui-lovelace.yaml`. Zet je hem ooit terug, dan moeten
-de spots daar alsnog bij.
+de spots en de entree-kastlamp daar alsnog bij.
+
+## De blueprints accepteren sindsdien meerdere lampen
+
+`lights_onoff.yaml` en `motion_light.yaml` hadden allebei één `lamp`-invoer met
+een entity-selector. Een kamer met twee protocollen past daar niet in, dus de
+selector staat nu op `multiple: true` en **elke instantie geeft een lijst op,
+ook als het er maar één is** - met `multiple` weigert de selector een kale
+string.
+
+De templates binnenin gebruiken daardoor `expand(lamp)` in plaats van
+`is_state(lamp, ...)`. Let op wat expand per soort teruggeeft: bij een HA-groep
+de losse lampen, bij een Zigbee2MQTT-groep de groep zelf (die heeft
+`group_entities` en geen `entity_id`). Voor de vragen die deze blueprints
+stellen - "brandt er nog eentje?" en "meldt er nog eentje hard `off`?" - klopt
+allebei.
 
 ## Drie dingen die geen probleem blijken
 

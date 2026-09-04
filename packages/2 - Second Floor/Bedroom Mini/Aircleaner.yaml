@@ -1,0 +1,70 @@
+##############################################################################
+## LUCHTREINIGER SLAAPKAMER MINI (4 september 2026)
+##
+## Hij draait alleen als er niemand last van heeft: er is niemand thuis, of het
+## licht in haar kamer is uit én het is geen bedtijd. De regel zelf staat in
+## `blueprints/automation/robin/luchtreiniger_kamer.yaml`, want Maxi heeft
+## sinds dezelfde middag precies dezelfde reiniger met precies dezelfde regel.
+##
+## `light.slaapkamer_mini_lampen` is de Z2M-groep met alle vijf lampen van de
+## kamer (vier spots + de staande lamp), dus "uit" betekent hier echt donker.
+##
+## Deze kamer geeft geen `aanwezig_extra` mee. Bij Logan wel: daar staat een pc
+## die met de lamp uit gewoon doordraait.
+##############################################################################
+
+bedroom_mini_aircleaner_package:
+  template:
+    - binary_sensor:
+        # "Emma hoort te slapen." Zelfde vorm en dezelfde twee helften als
+        # `binary_sensor.slaapkamer_maxi_slaaptijd` in packages/1 - First
+        # Floor/Bedroom Maxi/Multisensor.yaml; die twee horen gelijk te blijven.
+        #
+        #   avond   vanaf haar eigen bedtijd van vandaag. Vrijdag en zaterdag
+        #           telt de weekendhelper, dezelfde verdeling als de
+        #           bedtijd-markers op de tijdlijn (`weekday() in [4, 5]`).
+        #   ochtend na middernacht, tot het huis zichzelf wakker meldt
+        #           (`input_boolean.klimaat_wakker`, gezet door de
+        #           slaapkamerknop en uiterlijk om 10:00 vanuit
+        #           packages/9 - Other/Klimaat Zonwering.yaml).
+        #
+        # De grens van 12:00 in de ochtendhelft is de noodrem: raakt die vlag
+        # overdag uit, dan is het huis daarmee niet ineens weer in slaap.
+        #
+        # Bewust GEEN `availability`: valt een helper weg, dan hoort hier 'off'
+        # uit te komen. `unknown` zou de automatisering in de stand laten staan
+        # waarin hij toevallig stond.
+        - name: Slaapkamer Mini slaaptijd
+          unique_id: slaapkamer_mini_slaaptijd
+          icon: mdi:sleep
+          state: >
+            {% set helper = 'input_datetime.bedtime_mini_weekend'
+                            if now().weekday() in [4, 5]
+                            else 'input_datetime.bedtime_mini' %}
+            {% set bed = states(helper) %}
+            {% set bed = bed if ':' in bed else '21:30:00' %}
+            {% set na_bedtijd = now() >= today_at(bed) %}
+            {% set voor_wakker = now().hour < 12
+               and is_state('input_boolean.klimaat_wakker', 'off') %}
+            {{ na_bedtijd or voor_wakker }}
+          attributes:
+            bedtijd_vandaag: >
+              {% set helper = 'input_datetime.bedtime_mini_weekend'
+                              if now().weekday() in [4, 5]
+                              else 'input_datetime.bedtime_mini' %}
+              {% set bed = states(helper) %}
+              {{ bed if ':' in bed else '21:30:00' }}
+
+  automation:
+    - id: bedroom_mini_aircleaner
+      alias: Bedroom Mini - Luchtreiniger
+      description: >-
+        Zet de luchtreiniger in Emma's kamer aan als er niemand thuis is, of
+        als het licht daar uit is en het geen bedtijd is.
+      use_blueprint:
+        path: robin/luchtreiniger_kamer.yaml
+        input:
+          reiniger: switch.slaapkamer_emma_slaapkamer_mini_stopcontact_luchtreiniger
+          lampen:
+            - light.slaapkamer_mini_lampen
+          slaaptijd: binary_sensor.slaapkamer_mini_slaaptijd

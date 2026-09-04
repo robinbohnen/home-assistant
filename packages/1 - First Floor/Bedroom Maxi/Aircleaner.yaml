@@ -1,0 +1,59 @@
+##############################################################################
+## LUCHTREINIGER SLAAPKAMER MAXI (4 september 2026)
+##
+## Zelfde regel en dezelfde blueprint als bij Emma
+## (packages/2 - Second Floor/Bedroom Mini/Aircleaner.yaml): aan als er niemand
+## thuis is, of als het licht uit is en het geen bedtijd is. De regel zelf
+## staat in `blueprints/automation/robin/luchtreiniger_kamer.yaml`.
+##
+## TWEE VERSCHILLEN MET EMMA'S KAMER, ALLEBEI OMDAT DEZE KAMER ANDERS IS
+##
+## 1. TWEE LICHTEN IN PLAATS VAN ÉÉN GROEP.
+##    `light.slaapkamer_maxi_lampen` is een Z2M-groep met alleen de hanglamp;
+##    de losse lamp naast het bed zit daar niet in. Die is ook het nachtlampje
+##    dat `bedtime_for_maxi_lights_off` in Bedtime.yaml na bedtijd een kwartier
+##    op 1% zet. Ze moeten allebei uit melden voordat de reiniger aan mag.
+##
+## 2. DE PC TELT MEE ALS AANWEZIGHEID.
+##    "Licht uit" betekent in Emma's kamer dat ze er niet is. Hier niet: gamen
+##    met de lamp uit is precies wat er 's avonds gebeurt, en dan zou de
+##    reiniger aanslaan terwijl Logan er zit. `binary_sensor.pc_logan_aan`
+##    (PC.yaml, boven de 50 W met twee minuten aan en drie minuten uit
+##    vertraging) is daar het bestaande signaal voor, dus die gaat als
+##    `aanwezig_extra` mee én als trigger - anders zou het omslaan pas bij de
+##    halfuurronde opgemerkt worden.
+##
+##    Wat er bewust NIET in zit is de bewegingsmelder van deze kamer. Die staat
+##    'off' zodra hij een paar minuten stilzit achter zijn bureau of ligt te
+##    lezen, en dan zou de reiniger aanslaan terwijl hij er gewoon is.
+##############################################################################
+
+bedroom_maxi_aircleaner_package:
+  automation:
+    - id: bedroom_maxi_aircleaner
+      alias: Bedroom Maxi - Luchtreiniger
+      description: >-
+        Zet de luchtreiniger in Logans kamer aan als er niemand thuis is, of
+        als het licht daar uit is, zijn pc uit staat en het geen bedtijd is.
+      use_blueprint:
+        path: robin/luchtreiniger_kamer.yaml
+        input:
+          reiniger: switch.slaapkamer_logan_slaapkamer_maxi_stopcontact_luchtreiniger
+          lampen:
+            - light.slaapkamer_maxi_lampen
+            - light.slaapkamer_losse_lamp_maxi
+          # Staat al in packages/1 - First Floor/Bedroom Maxi/Multisensor.yaml,
+          # waar hij ook het schermpje van de multisensor uitzet.
+          slaaptijd: binary_sensor.slaapkamer_maxi_slaaptijd
+          aanwezig_extra:
+            - alias: De pc van Logan staat aan
+              condition: state
+              entity_id: binary_sensor.pc_logan_aan
+              state: "on"
+          extra_triggers:
+            - trigger: state
+              entity_id: binary_sensor.pc_logan_aan
+              to:
+                - "on"
+                - "off"
+              id: pc

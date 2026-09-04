@@ -1,0 +1,181 @@
+# Luchtreiniger in een kinderkamer: aan als niemand er last van heeft.
+#
+# De twee reinigers beneden (packages/0 - Ground Floor/Livingroom/
+# Aircleaners.yaml) draaien op een heel andere regel - het alarm plus een
+# fijnstofpiek van het koken. Die gaat over LUCHT. Deze gaat over GELUID: het
+# ding blaast hoorbaar, en dat mag niet terwijl er iemand in de kamer zit of
+# ligt te slapen. Vandaar dat hier geen PM2.5 in voorkomt.
+#
+# De regel:
+#
+#   aan  = er is niemand thuis
+#          OF (alle lampen in de kamer zijn uit
+#              EN het is geen bedtijd
+#              EN er is geen ander teken van leven in die kamer)
+#   uit  = in alle andere gevallen
+#
+# Gebruikt door:
+#   packages/2 - Second Floor/Bedroom Mini/Aircleaner.yaml   (Emma)
+#   packages/1 - First Floor/Bedroom Maxi/Aircleaner.yaml    (Logan)
+#
+# Twee dingen die hier bewust zo staan:
+#
+#   1. EEN LAMP DIE `unavailable` MELDT TELT NIET ALS UIT. Valt de lampgroep
+#      weg, dan weten we niet of het donker is en blijft de reiniger uit. Die
+#      kant op is de goede: een reiniger die niet draait merkt niemand, eentje
+#      die naast een slapend kind staat te blazen wel. (Bij het licht in de
+#      meterkast is precies de omgekeerde keuze gemaakt, en om dezelfde reden:
+#      daar is de tolerante kant de onschadelijke.)
+#   2. HET COMMANDO GAAT ONVOORWAARDELIJK, er staat geen check op de huidige
+#      stand van de stekker voor. Deze stekkers staan op `power_on_behavior:
+#      previous` en kunnen na een stroomonderbreking verkeerd terugkomen -
+#      precies de storing waar een check op de state langs kijkt.
+blueprint:
+  name: Luchtreiniger in een kamer
+  description: >-
+    Zet een luchtreiniger aan als er niemand thuis is, of als het licht in de
+    kamer uit is en het geen bedtijd is. In alle andere gevallen uit.
+  author: Robin Bohnen
+  domain: automation
+  homeassistant:
+    # Trigger- en conditieselectors als invoer bestaan sinds 2024.10.
+    min_version: 2024.10.0
+  input:
+    reiniger:
+      name: Luchtreiniger
+      description: De stekker waar de reiniger aan hangt.
+      selector:
+        entity:
+          filter:
+            domain: switch
+    lampen:
+      name: Lampen van de kamer
+      description: >-
+        Alle lampen die "er is hier iemand" betekenen. Ze moeten ALLEMAAL uit
+        melden voordat de reiniger aan mag. Een groep mag ook; die telt dan als
+        één.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            domain: light
+    slaaptijd:
+      name: Slaaptijd-sensor
+      description: >-
+        `binary_sensor.slaapkamer_*_slaaptijd`: aan van de bedtijd van dit kind
+        tot het huis zichzelf wakker meldt.
+      selector:
+        entity:
+          filter:
+            domain: binary_sensor
+    aanwezig_extra:
+      name: Andere tekenen van leven (optioneel)
+      description: >-
+        Condities die betekenen "er is hier iemand", ook al is het licht uit.
+        Zolang er één waar is blijft de reiniger uit. Bij Logan is dat zijn pc:
+        gamen met de lamp uit is precies het geval waarin licht-uit niets
+        zegt. Meerdere gelden als OF. Leeg = alleen op het licht afgaan.
+      default: []
+      selector:
+        condition:
+    extra_triggers:
+      name: Triggers voor die tekenen van leven (optioneel)
+      description: >-
+        De conditie hierboven wordt niet vanzelf opnieuw bekeken als hij
+        omslaat. Geef hier dezelfde entiteit als trigger mee, anders wacht je
+        op de halfuurronde.
+      default: []
+      selector:
+        trigger:
+
+mode: restart
+
+# !input werkt niet binnen templates; alles wat een template nodig heeft gaat
+# via deze variabelen.
+variables:
+  lampen: !input lampen
+
+triggers:
+  # Iemand komt thuis of vertrekt. `zone.home` telt de personen in de
+  # thuiszone; elke wijziging is dus een moment om opnieuw te kijken.
+  - trigger: state
+    entity_id: zone.home
+    id: aanwezigheid
+  # Licht aan = meteen uit (er is iemand). Licht uit krijgt een minuut: even
+  # het licht uit en weer aan hoort geen klik op de stekker op te leveren.
+  - trigger: state
+    entity_id: !input lampen
+    to: "on"
+    id: licht_aan
+  - trigger: state
+    entity_id: !input lampen
+    to: "off"
+    for: "00:01:00"
+    id: licht_uit
+  - trigger: state
+    entity_id: !input slaaptijd
+    to:
+      - "on"
+      - "off"
+    id: slaaptijd
+  - trigger: homeassistant
+    event: start
+    id: herstart
+  # Vangnet: een stekker die na een stroomonderbreking terugkomt of een gemist
+  # commando wordt binnen het half uur rechtgezet.
+  - trigger: time_pattern
+    minutes: /30
+    id: vangnet
+  # Genest triggers-blok: zo voeg je een trigger-selector-input samen met de
+  # vaste triggers hierboven. De input direct als lijstitem plakken
+  # (`- !input ...`) is ongeldig en laat élke instantie stuklopen met "kon niet
+  # worden ingesteld", ook met default [].
+  - triggers: !input extra_triggers
+
+conditions: []
+
+actions:
+  - choose:
+      - alias: Niemand thuis, of donker en rustig
+        conditions:
+          - condition: or
+            conditions:
+              - alias: "Er is niemand thuis"
+                condition: numeric_state
+                entity_id: zone.home
+                below: 1
+              - alias: "Donker, geen bedtijd, en geen teken van leven"
+                condition: and
+                conditions:
+                  # Alle opgegeven lampen melden hard `off`. `rejectattr` in
+                  # plaats van `selectattr`: zo telt `unavailable` niet als uit.
+                  # De tweede helft vangt af dat een lijst met alleen
+                  # niet-bestaande entiteiten (expand laat die weg) als "alles
+                  # uit" zou lezen.
+                  - alias: "Alle lampen uit"
+                    condition: template
+                    value_template: >-
+                      {{ expand(lampen) | rejectattr('state', 'eq', 'off')
+                         | list | count == 0
+                         and expand(lampen) | list | count > 0 }}
+                  - condition: state
+                    entity_id: !input slaaptijd
+                    state: "off"
+                  # Lege lijst = geen extra signalen: `condition: or` zonder
+                  # condities is onwaar, en `not` daarvan is waar, dus dan
+                  # blokkeert hier niets.
+                  - alias: "Geen ander teken van leven in de kamer"
+                    condition: not
+                    conditions:
+                      - condition: or
+                        conditions: !input aanwezig_extra
+        sequence:
+          - action: switch.turn_on
+            target:
+              entity_id: !input reiniger
+    # Alles wat hierboven niet waar is - inclusief een `zone.home` die niets
+    # zinnigs meldt en een lampgroep die wegvalt - komt hier terecht.
+    default:
+      - action: switch.turn_off
+        target:
+          entity_id: !input reiniger

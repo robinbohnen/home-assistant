@@ -1956,6 +1956,8 @@ cards:
                       - light.keuken_lampen
                       - light.eettafel_lampen
                       - light.entree_lampen
+                      # Eigen entiteit sinds de kastlamp op Matter zit.
+                      - light.entree_entree_kast_lamp
                       - light.trapkast_lampen
           - type: grid
             columns: 3
@@ -1984,6 +1986,11 @@ cards:
               - type: custom:mushroom-light-card
                 entity: light.entree_lampen
                 name: Entree
+                show_brightness_control: true
+                use_light_color: true
+              - type: custom:mushroom-light-card
+                entity: light.entree_entree_kast_lamp
+                name: Entree kast
                 show_brightness_control: true
                 use_light_color: true
               - type: custom:mushroom-light-card
@@ -2695,6 +2702,29 @@ cards:
                 icon: mdi:air-purifier
                 icon_color: >-
                   {{ 'green' if is_state('switch.eettafel_eettafel_stopcontact_luchtreiniger','on') else 'grey' }}
+                tap_action:
+                  action: toggle
+              # Draait automatisch, zie packages/2 - Second Floor/Bedroom Mini/
+              # Aircleaner.yaml. De subregel zegt daarom waarom hij uit staat -
+              # anders lijkt een uitstaande reiniger een vergeten knop.
+              - type: custom:mushroom-template-card
+                entity: switch.slaapkamer_emma_slaapkamer_mini_stopcontact_luchtreiniger
+                primary: Luchtreiniger Emma
+                secondary: >-
+                  {% if is_state('switch.slaapkamer_emma_slaapkamer_mini_stopcontact_luchtreiniger','on') %}Aan{% elif is_state('binary_sensor.slaapkamer_mini_slaaptijd','on') %}Uit · bedtijd{% elif is_state('light.slaapkamer_mini_lampen','on') %}Uit · licht aan{% else %}Uit{% endif %}
+                icon: mdi:air-purifier
+                icon_color: >-
+                  {{ 'green' if is_state('switch.slaapkamer_emma_slaapkamer_mini_stopcontact_luchtreiniger','on') else 'grey' }}
+                tap_action:
+                  action: toggle
+              - type: custom:mushroom-template-card
+                entity: switch.slaapkamer_logan_slaapkamer_maxi_stopcontact_luchtreiniger
+                primary: Luchtreiniger Logan
+                secondary: >-
+                  {% if is_state('switch.slaapkamer_logan_slaapkamer_maxi_stopcontact_luchtreiniger','on') %}Aan{% elif is_state('binary_sensor.slaapkamer_maxi_slaaptijd','on') %}Uit · bedtijd{% elif is_state('light.slaapkamer_maxi_lampen','on') %}Uit · licht aan{% elif is_state('binary_sensor.pc_logan_aan','on') %}Uit · pc aan{% else %}Uit{% endif %}
+                icon: mdi:air-purifier
+                icon_color: >-
+                  {{ 'green' if is_state('switch.slaapkamer_logan_slaapkamer_maxi_stopcontact_luchtreiniger','on') else 'grey' }}
                 tap_action:
                   action: toggle
               - type: custom:mushroom-template-card
