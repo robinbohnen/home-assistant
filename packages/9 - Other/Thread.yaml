@@ -65,6 +65,43 @@
 ## Dít bestand lost dat sowieso niet op; het zorgt er alleen voor dat je het
 ## merkt en dat de boel zichzelf terugzet.
 ##
+## WAT ER OP 4 SEPTEMBER 2026 GEBEURDE, EN WAAROM DIT BESTAND VERANDERDE
+## Dezelfde storing, andere oorzaak: de SLZB verloor drie keer stroom. Zijn
+## eigen log (`http://192.168.2.207/api2?action=5`) zegt `Reboot reason:
+## POWERON` bij de starts van 09:50:28, 10:13:00 en 10:24:38. Dat is een echte
+## voedingsonderbreking - een commando van hieruit logt `SOFTWARE`, dat is op
+## 4 september nagemeten toen de automatisering hieronder zelf drukte. De eerste
+## onderbreking viel vijf minuten na de herstart van HA om 09:45, en dat was de
+## NUC die uit de meterkast ging; de SLZB hangt op poort 1 van diezelfde
+## PoE-switch. Verder viel er niets op die switch weg, dus het zat in die ene
+## kabel of poort, niet in het PoE-budget.
+##
+## Zigbee overleefde het en Thread niet, en dat verschil is leerzaam:
+## Zigbee2MQTT draait als systemd-service op een andere machine en verbindt na
+## elke reboot opnieuw (in het SLZB-log staat dan `[CC2674P10] New client`). De
+## OTBR-add-on stopt bij "too many rcp failures" en komt niet uit zichzelf
+## terug - op poort 6638 meldde zich daarna niemand meer. Dat is precies waarom
+## de ladder hieronder de add-on expliciet aanraakt.
+##
+## DE WAAKHOND ZELF ZWEEG 45 MINUTEN, EN DAT IS HIER GEREPAREERD
+## `sensor.thread_matter_onbereikbaar` was een gewone template-sensor. Om 09:52
+## stond hij op 346 van de 494. Om 09:57:10 werd de Matter-integratie herladen,
+## gaf `integration_entities('matter')` heel even een lege lijst, en viel de
+## teller in 50 ms van 346 naar 0. Daar bleef hij staan tot 10:26, want zonder
+## Matter-entiteiten in de template staat er ook niets meer waarop hij opnieuw
+## rendert. Een template die zijn eigen bron kwijt is, bevriest - hij meldt geen
+## fout, hij blijft gewoon het laatste getal tonen.
+##
+## Twee dingen daaruit, allebei hieronder verwerkt:
+##
+##   1. De teller is tijdgestuurd geworden. Elke minuut opnieuw kijken kan niet
+##      bevriezen, en een glitch van 50 ms valt vrijwel altijd tussen twee
+##      metingen door.
+##   2. De binary_sensor rekende met de attributen `totaal` en `aandeel`, en die
+##      werden als losse templates op eigen momenten gerenderd. In de historie
+##      van die ochtend staat letterlijk `state=2` naast `aandeel=50`. Hij leest
+##      nu de state en `totaal` van dezelfde render.
+##
 ## WAAROM DE MATER-ENTITEITEN DE MELDER ZIJN EN NIET DE ADD-ON
 ## De Supervisor maakt per add-on wél een `binary_sensor.*_running`, maar die
 ## staat standaard uit en moet per hand aangezet worden. Bovendien zegt "de
@@ -101,12 +138,31 @@
 thread_package:
 
   template:
-    - sensor:
-        # Hoeveel Matter-entiteiten er onbereikbaar zijn. `integration_entities`
-        # geeft alles wat aan de Matter-config-entry hangt, dus ook Matter-
-        # over-wifi. Dat is met opzet: die blijven bij een Thread-storing juist
-        # wél bereikbaar en houden zo het percentage laag, wat een prima rem is
-        # op vals alarm.
+    # Hoeveel Matter-entiteiten er onbereikbaar zijn. `integration_entities`
+    # geeft alles wat aan de Matter-config-entry hangt, dus ook Matter-over-wifi.
+    # Dat is met opzet: die blijven bij een Thread-storing juist wél bereikbaar
+    # en houden zo het percentage laag, wat een prima rem is op vals alarm.
+    # (Op 4 september 2026 stond er overigens geen enkel wifi-apparaat tussen:
+    # alle 42 zijn IKEA-over-Thread, dus die rem deed toen niets.)
+    #
+    # TIJDGESTUURD, om twee redenen. De goedkope: dit loopt over honderden
+    # entiteiten en zou als gewone template-sensor bij élke Matter-wijziging
+    # opnieuw rekenen - honderden keren per seconde tijdens een storing. De
+    # belangrijke: een gewone template-sensor bevriest zodra de Matter-
+    # integratie herlaadt en `integration_entities` even leeg is. Zie de uitleg
+    # over 4 september bovenaan dit bestand.
+    #
+    # Elke minuut is ruim genoeg voor iets waar tien minuten `delay_on` op zit.
+    # Zelfde opzet als `sensor.zigbee_apparaten_onbereikbaar` in Zigbee.yaml.
+    # De `homeassistant`-trigger staat erbij omdat een trigger-sensor tot zijn
+    # eerste vuurbeurt `unknown` blijft; na een reload duurt dat hooguit een
+    # minuut, na een herstart nul seconden.
+    - trigger:
+        - trigger: time_pattern
+          minutes: "/1"
+        - trigger: homeassistant
+          event: start
+      sensor:
         - name: "Thread Matter onbereikbaar"
           unique_id: thread_matter_onbereikbaar
           icon: mdi:access-point-network
@@ -122,6 +178,7 @@ thread_package:
             {{ ns.n }}
           attributes:
             totaal: "{{ integration_entities('matter') | count }}"
+            # Alleen om af te lezen; de binary_sensor rekent zelf, zie daar.
             aandeel: >
               {% set alle = integration_entities('matter') %}
               {% set ns = namespace(n=0) %}
@@ -131,6 +188,11 @@ thread_package:
                 {% endif %}
               {% endfor %}
               {{ 0 if alle | count == 0 else (100 * ns.n / (alle | count)) | round(0) }}
+            # Afgetopt op twintig. Bij een dode border router zijn dit er
+            # bijna vijfhonderd, en dan is dit attribuut ruim boven de 16 kB
+            # waar de recorder over klaagt - elke minuut opnieuw weggeschreven.
+            # Voor "wat mis ik" zijn de eerste twintig genoeg; het exacte aantal
+            # staat in de state.
             namen: >
               {% set ns = namespace(namen=[]) %}
               {% for e in integration_entities('matter') %}
@@ -138,12 +200,23 @@ thread_package:
                   {% set ns.namen = ns.namen + [state_attr(e, 'friendly_name') or e] %}
                 {% endif %}
               {% endfor %}
-              {{ ns.namen | join(', ') }}
+              {{ ns.namen[:20] | join(', ') }}{{ ', en %d meer' % (ns.namen | count - 20)
+                 if ns.namen | count > 20 else '' }}
 
     - binary_sensor:
         # De drempel: minstens drie Matter-entiteiten in totaal (anders zegt een
         # percentage niets) én minstens 70% ervan weg. Eén apparaat met een lege
         # batterij haalt dat niet; een dode border router wel.
+        #
+        # Het percentage wordt hier uitgerekend uit de state en `totaal` van de
+        # sensor hierboven, en niet meer uit een apart `aandeel`-attribuut. Die
+        # twee waren losse templates die op eigen momenten renderden en elkaar
+        # tegenspraken: in de historie van 4 september staat `state=2` naast
+        # `aandeel=50`. Nu de sensor tijdgestuurd is, komen state en attributen
+        # uit dezelfde beurt en klopt de som per definitie.
+        #
+        # `int(-1)` op de state vangt de `unknown` op waarmee een trigger-sensor
+        # begint; die mag geen storing heten.
         #
         # `delay_on` van tien minuten vangt het normale beeld na een herstart
         # van HA op: dan is álles even onbereikbaar. Tien minuten is ruim langer
@@ -157,11 +230,10 @@ thread_package:
           delay_on: "00:10:00"
           delay_off: "00:01:00"
           state: >
+            {% set weg = states('sensor.thread_matter_onbereikbaar') | int(-1) %}
             {% set alles = state_attr('sensor.thread_matter_onbereikbaar', 'totaal')
                            | int(0) %}
-            {% set aandeel = state_attr('sensor.thread_matter_onbereikbaar', 'aandeel')
-                             | float(0) %}
-            {{ alles >= 3 and aandeel >= 70 }}
+            {{ weg >= 0 and alles >= 3 and (100 * weg / alles) >= 70 }}
 
   automation:
     ###########################################################################
