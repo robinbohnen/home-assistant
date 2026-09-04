@@ -26,6 +26,32 @@
 ## very_high als high.
 ##############################################################################
 
+##############################################################################
+## DE ACCU IS ZIJN EIGEN METER KWIJT (4 september 2026)
+##
+## `user_work_mode` staat op `anti-feed`: zelfverbruik / nul-teruglevering.
+## Dat werkt alleen als de accu zelf ziet wat er op het net gebeurt, en dat
+## deed zijn EIGEN P1-METER. Sinds de meterkast is omgebouwd is die er niet
+## meer, en dus is "de accu doet het zelf" geen veilige stand meer maar een
+## gok.
+##
+## Wat daarop is aangepast: de rust-tak en het vangnet van de kwartierregie
+## houden de accu nu STIL (`control_mode: enable` + `forcible: stop`) in plaats
+## van hem terug te geven. Zie de toelichting op beide plekken.
+##
+## Wat er BEWUST niet is aangepast, en waar je dus op moet letten zolang die
+## meter weg is:
+##   * `battery_kwartierregie_uit` - zet je de regie uit, dan gaat de accu
+##     alsnog naar zijn eigen (blinde) programma. Dat is de vluchtroute: als
+##     HA de weg kwijt is wil je niet dat hij de accu bevroren achterlaat.
+##   * de drie `disable`-takken in "Disable charging when no low pricing" -
+##     dat oude regime draait alleen als de kwartierregie UIT staat.
+##
+## Zodra de P1-meter terug is (of er een CT-klem hangt) mogen de rust-tak en
+## het vangnet weer op `disable`; dan doet de accu tussen de blokken door weer
+## zelfverbruik en dat is meer waard dan stilstaan.
+##############################################################################
+
 battery_package:
 
   input_boolean:
@@ -345,8 +371,29 @@ battery_package:
         # zou een laadblok dat begon terwijl de zon leverde nooit alsnog uit
         # het net gaan laden als er een wolk voorbij komt - de tak hieronder
         # wordt alleen bij een trigger opnieuw gewogen.
+        #
+        # DE TWEE MINUTEN ZIJN GEEN SMAAK MAAR EEN REM (4 september 2026)
+        # Deze vlag volgt het teken van het netvermogen op de seconde, en de
+        # slimme meter meldt ~2 keer per seconde. Gemeten op 4 september:
+        # 2130 wisselingen op één dag, 603 in het uur van 13:00 tot 14:00 -
+        # soms twee per seconde. Elke wisseling triggerde deze automatisering,
+        # en elke run die er doorheen kwam schreef twee registers naar de accu
+        # over RS485. In datzelfde uur ging `rs485_control_mode` daardoor 24
+        # keer heen en weer, met tussenpozen van dertien seconden: geforceerd
+        # laden, loslaten, geforceerd laden.
+        #
+        # `mode: single` verborg dat alleen maar - de meeste runs vielen stil
+        # weg met `max_exceeded: silent`, dus in het logboek zag je er 24 van
+        # de tweeduizend. Met de rust-tak die de accu nu VASTHOUDT (enable +
+        # stop) zou datzelfde geklapper geforceerd laden en geforceerd stoppen
+        # gaan afwisselen, en dat is werk voor de omvormer.
+        #
+        # Twee minuten stabiel is nog steeds ruim binnen het kwartier waar de
+        # regie op stuurt, en een wolk die langer dan twee minuten voor de zon
+        # blijft hangen is precies het geval waarvoor deze trigger bestaat.
         - trigger: state
           entity_id: switch.live_energieverbruik_totaal_negatief
+          for: "00:02:00"
           not_from:
             - unknown
             - unavailable
@@ -380,14 +427,27 @@ battery_package:
                 # NIET UIT HET NET LADEN TERWIJL DE ZON AL OVERSCHOT LEVERT.
                 # De goedkope blokken liggen midden op de dag, precies wanneer
                 # de panelen leveren. Geforceerd laden koopt dan stroom die we
-                # net gratis het net op sturen. Staat deze vlag aan, dan valt
-                # de tak door naar `default` en doet de accu zijn eigen
-                # programma - en dat is anti-feed, dus die vult zich vanzelf
-                # met het overschot. Zelfde bron als de gratis-stoken-regel
-                # van de jacuzzi (packages/3 - Outside/Backyard/Spa.yaml).
+                # net gratis het net op sturen. Zelfde bron als de
+                # gratis-stoken-regel van de jacuzzi (packages/3 - Outside/
+                # Backyard/Spa.yaml).
+                #
+                # LET OP, DIT KLOPTE NIET MEER (4 september 2026)
+                # Hier stond: "dan valt de tak door naar `default` en doet de
+                # accu zijn eigen programma - en dat is anti-feed, dus die vult
+                # zich vanzelf met het overschot." Precies dat is weggevallen
+                # toen de accu zijn eigen P1-meter kwijtraakte; `default` houdt
+                # hem nu stil. Bij overschot laadt de accu dus NIET meer
+                # vanzelf mee - dat komt pas terug als die meter er weer is.
+                # Deze tak blijft wél kloppen: uit het net kopen wat je net
+                # gratis wegstuurt, is in beide gevallen fout.
+                #
+                # De `for` is dezelfde rem als op de trigger hierboven: zonder
+                # dat kan een run alsnog precies op een flikkering van een halve
+                # seconde landen en dan alsnog het verkeerde besluit nemen.
                 - condition: state
                   entity_id: switch.live_energieverbruik_totaal_negatief
                   state: "off"
+                  for: "00:02:00"
                 # EN NIET LADEN ALS DE ZON HET MORGEN TOCH DOET.
                 # Welke voorspelling telt, hangt van de klok af:
                 #   overdag en 's nachts vóór twaalven -> wat er vandaag nog
@@ -502,11 +562,27 @@ battery_package:
                   target:
                     entity_id: number.lilygo_rs485_marstek_forcible_discharge_power
           # Alles wat geen laad- of ontlaadblok is - inclusief een tak
-          # hierboven die op zijn eigen rem stukliep - gaat terug naar het
-          # eigen programma van de accu. Dat is bewust de default en niet een
-          # aparte `rust`-tak: blijft er ooit een stand over die hier niet
-          # genoemd staat, dan is "de accu doet het zelf" de veilige uitkomst.
-          # Geen sluiproute dus, maar de enige veilige eindstand.
+          # hierboven die op zijn eigen rem stukliep - komt hier terecht. Geen
+          # sluiproute dus, maar de enige veilige eindstand.
+          #
+          # SINDS 4 SEPTEMBER 2026 IS "STIL" DE VEILIGE EINDSTAND, NIET "ZELF"
+          # Hier stond `control_mode: disable`, oftewel: geef de accu terug aan
+          # zijn eigen programma. Dat programma is `user_work_mode: anti-feed`
+          # (zelfverbruik / nul-teruglevering), en dat kan alleen als de accu
+          # zelf ziet wat er op het net gebeurt. Dat deed zijn EIGEN P1-METER,
+          # en die is er niet meer sinds de meterkast is omgebouwd.
+          #
+          # Blind teruggeven betekende: de accu doet maar wat. Gemeten op
+          # 4 september om 16:48 - hij begon op 2,5 kW uit het net te laden
+          # terwijl het kwartierplan op `rust` stond, de prijs op 0,19 (de
+          # laadgrens lag op 0,115) en het huis al 14 kW van het net trok.
+          #
+          # `enable` + `stop` houdt hem stil: hij doet niets in plaats van iets
+          # verkeerds. De prijs daarvan is dat er tussen de blokken door geen
+          # zelfverbruik meer is - overschot gaat dus het net op in plaats van
+          # de accu in. Zodra die P1-meter terug is (of er een CT-klem hangt)
+          # is `disable` hier weer de betere stand; dan is dit de enige regel
+          # die terug moet.
           default:
             - action: select.select_option
               data:
@@ -515,7 +591,7 @@ battery_package:
                 entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
             - action: select.select_option
               data:
-                option: disable
+                option: enable
               target:
                 entity_id: select.lilygo_rs485_marstek_rs485_control_mode
 
@@ -753,8 +829,13 @@ battery_package:
             # trigger het omzet, en die komt niet meer als de tariefsensor
             # wegvalt: dan blijft de batterij leegtrekken zonder dat er nog
             # iets meekijkt. Hetzelfde geldt zodra de ondergrens bereikt is of
-            # de prijs negatief wordt. Terug naar het eigen programma van de
-            # batterij is in al die gevallen de veilige stand.
+            # de prijs negatief wordt.
+            #
+            # Ook hier `enable` + `stop` en niet meer `disable` (4 september
+            # 2026, zelfde reden als bij de rust-tak hierboven): een rem hoort
+            # te remmen. Teruggeven aan een programma dat zonder zijn P1-meter
+            # niet weet wat het net doet, is precies wat deze tak moet
+            # voorkomen.
             - conditions:
                 - condition: trigger
                   id:
@@ -774,7 +855,7 @@ battery_package:
                 - action: select.select_option
                   metadata: {}
                   data:
-                    option: disable
+                    option: enable
                   target:
                     entity_id: select.lilygo_rs485_marstek_rs485_control_mode
                 - action: logbook.log
