@@ -3,19 +3,48 @@ meterkast_lights_package:
   #############################################################################
   ## Ledstrip meterkast
   ##
-  ## Deur open -> ledstrip 5 minuten aan, daarna weer uit.
-  ## mode: restart zodat de 5 minuten opnieuw beginnen als de deur binnen die
-  ## tijd nogmaals opengaat (anders gaat het licht uit terwijl je nog bezig bent).
+  ## Deur open OF beweging -> ledstrip aan. Uit vijf minuten nadat het allebei
+  ## stil is: deur dicht én geen beweging meer.
+  ##
+  ## WAAROM DE BEWEGINGSSENSOR ERBIJ MOEST (4 september 2026)
+  ## Hiervoor hing alles aan het deurcontact: open = vijf minuten licht, en dan
+  ## uit. Die vijf minuten liepen vanaf het OPENGAAN van de deur, dus wie er
+  ## langer mee bezig was stond na vijf minuten in het donker met de deur wijd
+  ## open. De deur nog eens open- en dichtdoen was de enige manier om de tijd
+  ## opnieuw te starten (`mode: restart` op diezelfde trigger).
+  ##
+  ## Nu telt de tijd pas vanaf het moment dat het stil is. De deur en de melder
+  ## zijn allebei "iemand is hier": de deur vangt het openen af (de melder heeft
+  ## een paar tellen nodig en kijkt bovendien niet om de hoek), de melder vangt
+  ## het staan en frunniken af nadat de deur alweer dicht is.
+  ##
+  ## `not is_state(..., 'on')` en niet `is_state(..., 'off')`
+  ## Allebei de sensoren zijn Matter op batterij en kunnen wegvallen. Met
+  ## `is_state(..., 'off')` is een `unavailable` melder niet "rustig" maar
+  ## "onbekend", en dan loopt de wachtregel hieronder nooit af en blijft de
+  ## strip branden tot de noodrem. Andersom geredeneerd: een sensor die weg is,
+  ## ziet niemand, en dan mag het licht gewoon uit. Zelfde valkuil als het dode
+  ## raamcontact dat een rolgordijn blokkeerde.
   ##
   ## Gebruikte entiteiten:
-  ##   binary_sensor.meterkast_meterkast_deur_deur        (deurcontact, on = open)
-  ##   switch.meterkast_meterkast_stopcontact_ledstrip    (ledstrip)
+  ##   binary_sensor.meterkast_meterkast_deur_deur          (deurcontact, on = open)
+  ##   binary_sensor.meterkast_meterkast_beweging_bezetting (PIR, on = beweging)
+  ##   switch.meterkast_meterkast_stopcontact_ledstrip      (ledstrip)
+  ##
+  ## De `id` blijft `lights_door_meterkast`: daar hangt
+  ## `automation.meterkast_ledstrip_bij_deur_open` aan vast. De alias mag mee
+  ## met de nieuwe lading, het entity_id volgt die niet (de registry wint).
   #############################################################################
 
   automation:
     - id: lights_door_meterkast
-      alias: Meterkast - Ledstrip bij deur open
-      description: "Zet de ledstrip in de meterkast 5 minuten aan als de deur opengaat"
+      alias: Meterkast - Ledstrip bij deur of beweging
+      description: >-
+        Zet de ledstrip in de meterkast aan zodra de deur opengaat of er
+        beweging is, en vijf minuten nadat het allebei stil is weer uit.
+      # restart: elke nieuwe deur- of bewegingstrigger begint de reeks opnieuw,
+      # dus ook midden in de nabrandtijd. Zo kan de strip niet uitgaan terwijl
+      # er weer iemand voor staat.
       mode: restart
       triggers:
         - trigger: state
@@ -23,6 +52,11 @@ meterkast_lights_package:
             - binary_sensor.meterkast_meterkast_deur_deur
           to: "on"
           id: deuropen
+        - trigger: state
+          entity_id:
+            - binary_sensor.meterkast_meterkast_beweging_bezetting
+          to: "on"
+          id: beweging
       conditions: []
       actions:
         - action: switch.turn_on
@@ -30,6 +64,21 @@ meterkast_lights_package:
           data: {}
           target:
             entity_id: switch.meterkast_meterkast_stopcontact_ledstrip
+        # Wachten tot het allebei rustig is. Blijft de deur open staan, dan
+        # blijft de strip dus branden - dat is de bedoeling zolang er iemand
+        # bezig is.
+        #
+        # De noodrem van een half uur is er voor de deur die iemand open laat
+        # staan: dan valt hij door naar de nabrandtijd en gaat de strip alsnog
+        # uit. Loopt er daarna toch nog iemand, dan zet de bewegingstrigger hem
+        # gewoon weer aan.
+        - wait_template: >-
+            {{ not is_state('binary_sensor.meterkast_meterkast_deur_deur', 'on')
+               and not is_state('binary_sensor.meterkast_meterkast_beweging_bezetting', 'on') }}
+          timeout: "00:30:00"
+          continue_on_timeout: true
+        # Dezelfde vijf minuten als vroeger, maar nu geteld vanaf "het is stil"
+        # in plaats van vanaf "de deur ging open".
         - delay:
             hours: 0
             minutes: 5
