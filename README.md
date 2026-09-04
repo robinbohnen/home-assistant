@@ -210,7 +210,6 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | CPU-Snelheid | [Link](https://www.home-assistant.io/integrations/cpuspeed) | Add sensors for monitoring CPU speed |
 | Cryptoinfo Advanced | [Link](https://github.com/TheHolyRoger/hass-cryptoinfo) | Crypto prices for the portfolio value on the dashboard |
 | DLNA Digital Media Renderer | [Link](https://www.home-assistant.io/integrations/dlna_dmr) | Control DLNA enabled devices |
-| DSMR Smart Meter | [Link](https://www.home-assistant.io/integrations/dsmr) | Monitoring power and gas usage |
 | Eheim digital | [Link](https://www.home-assistant.io/integrations/eheimdigital) | Aquarium heater integration |
 | Electricity Maps | [Link](https://www.home-assistant.io/integrations/co2signal) | Add CO2 sensor |
 | ENTSO-e Transparency Platform | [Link](https://github.com/JaccoR/hass-entso-e) | Check ultra flexibel energy prices |
@@ -261,6 +260,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | RESTful command | [Link](https://www.home-assistant.io/integrations/rest_command) | Send commands to non-local stuff |
 | Samsung Smart TV | [Link](https://www.home-assistant.io/integrations/samsungtv) | Check and interact with TVs |
 | Scrape | [Link](https://www.home-assistant.io/integrations/scrape) | Get some information from the WWW |
+| SlimHuys | [Link](https://github.com/SlimHuys/slimhuys-homeassistant) | Reads the P1 smart meter (power, gas, water) and the dynamic energy prices |
 | SMLight SLZB | [Link](https://www.home-assistant.io/integrations/smlight/) | Integrate the SLZB-MR03 into Home Assistant and fetch information (firmware etc.) |
 | Sonos | [Link](https://www.home-assistant.io/integrations/sonos) | Control media players of Sonos |
 | Speedtest.net | [Link](https://www.home-assistant.io/integrations/speedtestdotnet) | Monitor local network |

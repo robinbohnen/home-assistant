@@ -457,11 +457,19 @@ cards:
               show: true
               title: Verbruik & productie (24u)
             series:
-              - entity: sensor.electricity_meter_energieverbruik
+              # Netafname. Kwam tot 04-09-2026 in kW uit DSMR
+              # (`sensor.electricity_meter_energieverbruik`); SlimHuys meet in W,
+              # vandaar de deling hieronder.
+              - entity: sensor.slimhuys_zonneplan_actief_vermogen
                 name: Verbruik
                 type: area
                 color: "var(--ov-info-strong)"
                 stroke_width: 2
+                float_precision: 2
+                transform: >-
+                  var v = Number(x);
+                  return (x === null || x === undefined || isNaN(v))
+                    ? null : v / 1000;
                 group_by:
                   duration: 5m
                   func: avg
@@ -471,9 +479,11 @@ cards:
                 color: "var(--ov-ok)"
                 stroke_width: 2
                 float_precision: 2
-                # Deze sensor staat in W en het verbruik in kW; zonder gelijk-
-                # trekken drukt de productie (duizendtallen) de verbruikslijn
-                # plat tegen de nullijn. Zelfde transform als in kolom_midden.
+                # Beide reeksen komen nu in W binnen en gaan hier naar kW, zodat
+                # de grafiek dezelfde eenheid houdt als toen het verbruik nog in
+                # kW uit DSMR kwam. Zonder gelijktrekken drukt de reeks in
+                # duizendtallen de ander plat tegen de nullijn. Zelfde transform
+                # als in kolom_midden.
                 transform: >-
                   return hass.states['sensor.zon_vermogen_nu']
                     .attributes.unit_of_measurement === 'W' ? x / 1000 : x;

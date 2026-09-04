@@ -6,14 +6,33 @@ electricity_package:
           turn_off: []
           turn_on: []
           default_entity_id: switch.live_energieverbruik_totaal_negatief
-          state: "{{ states('sensor.live_energieverbruik_totaal', 0) | float(0) <= 0 }}"
+          # De guard stond er niet en `states(entity, 0)` leest niet als een
+          # standaardwaarde: die 0 is de parameter `rounded`. Zonder bron werd
+          # 'unavailable' dus `float(0)` -> 0 -> `on`, en dan kleurde de tegel
+          # "Totaal" op het dashboard groen alsof we terugleverden. Dat viel op
+          # toen DSMR eruit ging (04-09-2026): de kaart stond op teruglevering
+          # terwijl er niets gemeten werd. Bron weg = geen claim, dus `off`.
+          state: >-
+            {{ has_value('sensor.live_energieverbruik_totaal')
+               and states('sensor.live_energieverbruik_totaal') | float(0) <= 0 }}
     - sensor:
         - name: "Live Energieverbruik Totaal"
           unique_id: live_energieverbruik_totaal
-          state: "{{ (states('sensor.electricity_meter_energieverbruik') | float(0) - states('sensor.electricity_meter_energieproductie') | float(0)) | round(4) }}"
+          # NETTO OP DE AANSLUITING: positief = afname, negatief = teruglevering.
+          # Kwam tot 04-09-2026 uit DSMR als `energieverbruik - energieproductie`
+          # (allebei kW). De NUC hangt niet meer in de meterkast, dus de P1-kabel
+          # is weg en die integratie is verwijderd; SlimHuys leest de meter nu.
+          #
+          # Dat is meteen een aftreksom minder: SlimHuys publiceert het netto
+          # zelf. Bij ~2,3 metingen per seconde leverde het verschil van twee
+          # los vernieuwende sensoren geregeld een oude min een nieuwe waarde op
+          # - zichtbaar als pieken van honderden watts die er nooit waren.
+          #
+          # SlimHuys meet in W; deze sensor blijft in kW, want `huis_verbruik`
+          # hieronder en alle energiekaarten rekenen daarmee.
+          state: "{{ (states('sensor.meterkast_slimhuys_zonneplan_netto_vermogen') | float(0) / 1000) | round(3) }}"
           availability: >-
-            {{ states('sensor.electricity_meter_energieverbruik') not in ['unavailable', 'unknown']
-               and states('sensor.electricity_meter_energieproductie') not in ['unavailable', 'unknown'] }}
+            {{ states('sensor.meterkast_slimhuys_zonneplan_netto_vermogen') not in ['unavailable', 'unknown'] }}
           unit_of_measurement: "kW"
           device_class: "power"
           state_class: "measurement"
@@ -26,8 +45,9 @@ electricity_package:
     # meetruis voor, dus dat wordt op 0 afgekapt.
     #
     # BEWUST GESAMPLED EN NIET STATE-GEDREVEN: de slimme meter meldt zich
-    # meerdere keren per seconde (nagemeten 24-08-2026: ~8.300 punten in
-    # 20 minuten). Een gewone template-sensor rendert op elke bronupdate en
+    # meerdere keren per seconde (via DSMR nagemeten 24-08-2026: ~8.300 punten
+    # in 20 minuten; via SlimHuys op 04-09-2026 ~2.800, dus dezelfde orde en
+    # dezelfde reden). Een gewone template-sensor rendert op elke bronupdate en
     # zou de recorder daarmee volschrijven. Elke 5 s (was 15 s; Robin wilde
     # de live-strook sneller zien bewegen) is ~17.000 rijen per dag - ruim
     # binnen wat de recorder aankan, en de kaart tekent bij elke update.

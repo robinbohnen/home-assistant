@@ -1139,13 +1139,18 @@ sections:
         show_name: true
         icon: mdi:power
         sub_button:
-          - entity: sensor.electricity_meter_energieverbruik
+          # Afname en teruglevering komen sinds 04-09-2026 van SlimHuys in
+          # plaats van DSMR. Ze staan daardoor in W en "Totaal" hiernaast in kW;
+          # een sub_button kan niet omrekenen, en er twee template-sensoren voor
+          # bijhouden zou twee extra bronnen van ~2 metingen per seconde in de
+          # recorder zetten. Dat is de mengeling niet waard.
+          - entity: sensor.slimhuys_zonneplan_actief_vermogen
             show_name: true
             show_state: true
             name: Verbruik
             state_background: false
             icon: mdi:power-socket-eu
-          - entity: sensor.electricity_meter_energieproductie
+          - entity: sensor.slimhuys_zonneplan_teruglevering_vermogen
             state_background: false
             show_name: true
             show_state: true
@@ -3618,10 +3623,20 @@ sections:
                 x:
                   show: false
             series:
-              - entity: sensor.electricity_meter_energieverbruik
+              # Netafname, tot 04-09-2026 in kW uit DSMR. SlimHuys meet in W,
+              # dus hier naar kW zodat de as `kw_gebruik` blijft kloppen. De
+              # transform draait ook op statistiek-punten (apexcharts-card haalt
+              # ze allebei door `_transformAndFill`), dus dit werkt met
+              # `statistics:` net zo goed als op ruwe historie.
+              - entity: sensor.slimhuys_zonneplan_actief_vermogen
                 statistics:
                   type: mean
                   period: 5minute
+                transform: >-
+                  var v = Number(x);
+                  return (x === null || x === undefined || isNaN(v))
+                    ? null : v / 1000;
+                float_precision: 2
                 group_by:
                   duration: 15m
                   func: avg
