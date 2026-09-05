@@ -35,9 +35,21 @@
 ## meer, en dus is "de accu doet het zelf" geen veilige stand meer maar een
 ## gok.
 ##
-## Wat daarop is aangepast: de rust-tak en het vangnet van de kwartierregie
-## houden de accu nu STIL (`control_mode: enable` + `forcible: stop`) in plaats
-## van hem terug te geven. Zie de toelichting op beide plekken.
+## Wat daarop is aangepast:
+##
+##   1. De rust-tak en het vangnet van de kwartierregie houden de accu nu STIL
+##      (`control_mode: enable` + `forcible: stop`) in plaats van hem terug te
+##      geven. Zie de toelichting op beide plekken.
+##   2. Er is een ZONVANGST-tak bij (5 september 2026). Die doet de laadhelft
+##      van wat anti-feed deed: bij aanhoudend overschot laadt hij geforceerd
+##      op een setpoint dat het overschot volgt. Aanleiding: op 5 september om
+##      08:51 was er 1,29 kWh teruggeleverd vóór negenen terwijl de accu op 35%
+##      stond met 3,33 kWh ruimte. De ontlaadhelft (huisverbruik dekken) doet
+##      de kwartierregie 's avonds al met zijn dure blokken.
+##
+## Allebei zijn OVERBRUGGING. Komt die meter terug, dan doet de accu dit zelf,
+## sneller en zonder deze omweg - dan mag de zonvangst-tak eruit en de rust-tak
+## terug op `disable`.
 ##
 ## Wat er BEWUST niet is aangepast, en waar je dus op moet letten zolang die
 ## meter weg is:
@@ -48,8 +60,9 @@
 ##     dat oude regime draait alleen als de kwartierregie UIT staat.
 ##
 ## Zodra de P1-meter terug is (of er een CT-klem hangt) mogen de rust-tak en
-## het vangnet weer op `disable`; dan doet de accu tussen de blokken door weer
-## zelfverbruik en dat is meer waard dan stilstaan.
+## het vangnet weer op `disable` en kan de zonvangst eruit; dan doet de accu
+## tussen de blokken door weer zelfverbruik, en dat is scherper dan wat HA er
+## via een RS485-brug van kan maken.
 ##############################################################################
 
 battery_package:
@@ -397,6 +410,21 @@ battery_package:
           not_from:
             - unknown
             - unavailable
+        # DE TIK VAN VIJF MINUTEN IS VOOR DE ZONVANGST (5 september 2026)
+        # De overschot-vlag hierboven staat op een zonnige ochtend gewoon een
+        # uur lang `on`, dus die triggert dan niet meer - en het kwartierplan
+        # verandert alleen op de kwartiergrens. Zonder deze tik zou het
+        # laadsetpoint van de zonvangst een kwartier op zijn oude waarde
+        # blijven staan terwijl de zon doorstijgt of juist wegvalt. Bij wegvallen
+        # is dat geen gemiste opbrengst maar inkoop uit het net.
+        #
+        # Vijf minuten en niet één: elke ronde stuurt twee selects en een getal
+        # naar de omvormer. De laad- en ontlaadtakken sturen daarmee ook elke
+        # vijf minuten hun stand opnieuw, en dat is hier geen bijwerking maar
+        # precies goed - dezelfde redenering als de dubbele uit bij het
+        # bewegingslicht: een stand die HA denkt te kennen, kan gedreven zijn.
+        - trigger: time_pattern
+          minutes: "/5"
         # De zonverwachting wordt door de dag heen bijgesteld. Zonder deze
         # triggers zou een laadblok dat begon toen de voorspelling nog mager
         # was, blijven laden nadat hij is opgeschroefd (en omgekeerd).
@@ -411,6 +439,47 @@ battery_package:
         - condition: state
           entity_id: input_boolean.batterij_kwartierregie
           state: "on"
+      # Op automatiseringsniveau, want de zonvangst-tak hieronder heeft ze
+      # nodig in zijn CONDITIE (is er genoeg overschot?) én in zijn ACTIE (op
+      # welk vermogen zetten we hem dan?). Ze worden één keer per run gerend,
+      # dus condities en actie rekenen gegarandeerd met hetzelfde getal.
+      variables:
+        # Het netto netvermogen: POSITIEF bij afname, NEGATIEF bij
+        # teruglevering. `netto_vermogen` rekent actief min teruglevering al
+        # voor ons uit - zelf aftrekken combineert bij ~2 metingen per seconde
+        # geregeld een oude met een nieuwe waarde. Zie [[slimhuys-p1-bron]] en
+        # de kop van packages/9 - Other/Electricity.yaml.
+        netto: >-
+          {{ states('sensor.meterkast_slimhuys_zonneplan_netto_vermogen')
+             | float(0) }}
+        # Wat de accu op dit moment zélf al opneemt. `ac_power` is negatief
+        # tijdens laden, dus dit is positief zodra hij laadt en 0 als hij stil
+        # staat of ontlaadt.
+        accu_laadt: >-
+          {{ [0, 0 - (states('sensor.lilygo_rs485_marstek_ac_power')
+                      | float(0))] | max }}
+        # HET NIEUWE SETPOINT = WAT HIJ NU AL PAKT, MIN WAT ER VAN HET NET KOMT
+        #
+        # Die eerste term is de terugkoppeling en die moet er staan: zonder
+        # `accu_laadt` regelt hij zichzelf weg. Zodra hij begint te laden zakt
+        # de teruglevering immers naar nul, en dan zou "hoeveel gaat er het net
+        # op" 0 zeggen en het setpoint terug naar 0 gaan - en zo aan het
+        # klapperen slaan.
+        #
+        # En `- netto` en niet `+ overschot`: het moet twee kanten op kunnen.
+        # Laadt hij 2000 W terwijl er 200 W uit het NET bij komt, dan hoort het
+        # setpoint naar 1800 te zakken. Een variant die alleen naar de
+        # teruglevering keek (afgekapt op nul) hield in dat geval 2000 aan en
+        # kon dus alleen omhoog regelen - nagerekend op 5 september 2026 en
+        # daarop aangepast.
+        #
+        # Afgerond op stappen van 50 W: anders verschuift dit getal bij elke
+        # ronde een paar watt en schrijf je de omvormer vol met verschillen die
+        # hij toch niet haalt.
+        zonvangst_vermogen: >-
+          {{ ([ [0, (accu_laadt | float(0)) - (netto | float(0))] | max,
+                states('number.lilygo_rs485_marstek_max_charge_power')
+                | float(2500) ] | min / 50) | round(0) * 50 }}
       actions:
         - choose:
             - alias: Laden in een goedkoop kwartier
@@ -561,6 +630,76 @@ battery_package:
                       {{ states('number.lilygo_rs485_marstek_max_discharge_power') | float(800) }}
                   target:
                     entity_id: number.lilygo_rs485_marstek_forcible_discharge_power
+            ###################################################################
+            ## ZONVANGST - overschot in de accu in plaats van het net op
+            ###################################################################
+            # Dit is de laadhelft van wat de accu vroeger zelf deed. Anti-feed
+            # ving het overschot op zonder dat HA eraan te pas kwam; zonder
+            # zijn eigen P1-meter kan hij dat niet meer, en dan gaat het het
+            # net op. Gemeten op 5 september om 08:51: 1,29 kWh teruggeleverd
+            # vóór negenen, terwijl de accu op 35% stond met 3,33 kWh ruimte.
+            #
+            # STAAT BEWUST ONDER DE TWEE PRIJSTAKKEN
+            # Een laad- of ontlaadblok wint dus altijd. Twee gevallen komen
+            # hier terecht en allebei horen ze hier:
+            #   * plan `rust` met zon op het dak - precies waar deze tak voor is
+            #   * plan `laden` dat op zijn eigen overschot-rem stukliep. Die tak
+            #     weigert uit het NET te kopen wat we net gratis wegsturen; dan
+            #     is dit hetzelfde laden, maar dan van de zon.
+            #
+            # HET SETPOINT VOLGT HET OVERSCHOT, MAAR MET EEN STAP VAN MINUTEN
+            # `zonvangst_vermogen` (zie de variabelen bovenaan) is wat de accu
+            # nu al opneemt min wat er van het net komt. De regie herrekent dat
+            # alleen bij een trigger: de tik van vijf minuten, of de
+            # overschot-vlag die twee minuten stil moet staan. Dit is dus geen
+            # regellus van seconden zoals anti-feed was.
+            #
+            # Wolk erover en hij laadt nog even door uit het net. Dat duurt tot
+            # de eerstvolgende van die twee triggers, dus hooguit vijf minuten
+            # en meestal twee; bij het volle vermogen van 2,5 kW is dat 0,08 tot
+            # 0,2 kWh. In de praktijk minder, want een setpoint dat op het
+            # overschot stond, stond zelden op 2,5 kW.
+            #
+            # Dit hoort te VERVALLEN zodra de P1-meter terug is. Dan doet de
+            # accu dit zelf, sneller en zonder deze omweg; zie de kop van dit
+            # bestand.
+            - alias: Zonvangst - laden van eigen overschot
+              conditions:
+                # Zelfde rem als op de trigger: pas als het overschot twee
+                # minuten staat. Anders zet één flikkering van een halve
+                # seconde de omvormer aan het werk.
+                - condition: state
+                  entity_id: switch.live_energieverbruik_totaal_negatief
+                  state: "on"
+                  for: "00:02:00"
+                # Zelfde bovengrens als de laadtak: een volle accu hoeft niet
+                # geforceerd geladen te worden.
+                - condition: numeric_state
+                  entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
+                  below: 95
+                # Onder de 200 W is het de omvormer niet waard: die verstookt
+                # zelf al tientallen watts aan omzetting en standby. Valt de
+                # tak hierdoor af, dan komt hij in `default` en staat hij stil.
+                - alias: En er is genoeg overschot om het de moeite waard te maken
+                  condition: template
+                  value_template: "{{ zonvangst_vermogen | float(0) >= 200 }}"
+              sequence:
+                - action: select.select_option
+                  data:
+                    option: enable
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
+                - action: select.select_option
+                  data:
+                    option: charge
+                  target:
+                    entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
+                - action: number.set_value
+                  data:
+                    value: "{{ zonvangst_vermogen }}"
+                  target:
+                    entity_id: number.lilygo_rs485_marstek_forcible_charge_power
+
           # Alles wat geen laad- of ontlaadblok is - inclusief een tak
           # hierboven die op zijn eigen rem stukliep - komt hier terecht. Geen
           # sluiproute dus, maar de enige veilige eindstand.
