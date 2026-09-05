@@ -9,7 +9,8 @@
 # De regel:
 #
 #   aan  = er is niemand thuis
-#          OF (alle lampen in de kamer zijn uit
+#          OF (alle lampen in de kamer zijn al een kwartier uit
+#              EN de avondrust is nog niet begonnen
 #              EN het is geen bedtijd
 #              EN er is geen ander teken van leven in die kamer)
 #   uit  = in alle andere gevallen
@@ -18,7 +19,7 @@
 #   packages/2 - Second Floor/Bedroom Mini/Aircleaner.yaml   (Emma)
 #   packages/1 - First Floor/Bedroom Maxi/Aircleaner.yaml    (Logan)
 #
-# Twee dingen die hier bewust zo staan:
+# Drie dingen die hier bewust zo staan:
 #
 #   1. EEN LAMP DIE `unavailable` MELDT TELT NIET ALS UIT. Valt de lampgroep
 #      weg, dan weten we niet of het donker is en blijft de reiniger uit. Die
@@ -30,11 +31,30 @@
 #      stand van de stekker voor. Deze stekkers staan op `power_on_behavior:
 #      previous` en kunnen na een stroomonderbreking verkeerd terugkomen -
 #      precies de storing waar een check op de state langs kijkt.
+#   3. HET KWARTIER LICHT-UIT STAAT TWEE KEER: als `for:` op de trigger en als
+#      conditie. Alleen op de trigger is niet genoeg - de halfuurronde en de
+#      herstart-trigger kijken daar langs en zetten hem alsnog aan zodra het
+#      donker is. De conditie is de echte regel; de `for:` zorgt er alleen voor
+#      dat er op het juiste moment gekeken wordt.
+#
+# WAT DIT OP 4 SEPTEMBER 2026 FOUT DEED (en waarom de avondrust erbij kwam)
+#
+#   21:11  reiniger handmatig uit, Emma gaat naar bed
+#   21:14  licht aan, 21:17 licht uit - ze ligt in bed
+#   21:18  deze automatisering zet hem AAN: licht een minuut uit, en de bedtijd
+#          van 21:30 was nog niet bereikt, dus `slaaptijd` stond nog op 'off'
+#
+# De slaaptijd-sensor slaat om OP de bedtijd, maar het naar bed brengen begint
+# een uur eerder - en juist in dat uur betekent een donkere kamer het
+# tegenovergestelde van een lege kamer. Vandaar `avondrust`: dezelfde
+# `bedtime_*_1h_off`-helpers waar de rest van het huis de avond ook mee
+# inluidt (Music.yaml, Kitchen/Covers.yaml, de deur-blueprint).
 blueprint:
   name: Luchtreiniger in een kamer
   description: >-
     Zet een luchtreiniger aan als er niemand thuis is, of als het licht in de
-    kamer uit is en het geen bedtijd is. In alle andere gevallen uit.
+    kamer al een kwartier uit is, de avondrust nog niet begonnen is en het geen
+    bedtijd is. In alle andere gevallen uit.
   author: Robin Bohnen
   domain: automation
   homeassistant:
@@ -59,6 +79,18 @@ blueprint:
           multiple: true
           filter:
             domain: light
+    avondrust:
+      name: Begin van de avondrust
+      description: >-
+        `input_datetime.bedtime_*_1h_off`: een uur voor de bedtijd van dit
+        kind. Vanaf dat tijdstip gaat de reiniger niet meer aan. Daar begint
+        het naar bed brengen, en dan is "licht uit" geen bewijs dat de kamer
+        leeg is maar juist het tegendeel. De ochtendkant wordt door de
+        slaaptijd-sensor hieronder afgedekt, niet hier.
+      selector:
+        entity:
+          filter:
+            domain: input_datetime
     slaaptijd:
       name: Slaaptijd-sensor
       description: >-
@@ -101,8 +133,10 @@ triggers:
   - trigger: state
     entity_id: zone.home
     id: aanwezigheid
-  # Licht aan = meteen uit (er is iemand). Licht uit krijgt een minuut: even
-  # het licht uit en weer aan hoort geen klik op de stekker op te leveren.
+  # Licht aan = meteen uit (er is iemand). Licht uit krijgt een kwartier: een
+  # kind dat het licht uitdoet en in bed kruipt hoort geen klik op de stekker
+  # op te leveren, en even het licht uit en weer aan ook niet. Dezelfde
+  # wachttijd staat hieronder nog een keer als conditie; zie punt 3 bovenaan.
   - trigger: state
     entity_id: !input lampen
     to: "on"
@@ -110,7 +144,7 @@ triggers:
   - trigger: state
     entity_id: !input lampen
     to: "off"
-    for: "00:01:00"
+    for: "00:15:00"
     id: licht_uit
   - trigger: state
     entity_id: !input slaaptijd
@@ -118,6 +152,11 @@ triggers:
       - "on"
       - "off"
     id: slaaptijd
+  # Zonder deze trigger blijft hij tussen de avondrust en de bedtijd draaien
+  # tot de halfuurronde langskomt.
+  - trigger: time
+    at: !input avondrust
+    id: avondrust
   - trigger: homeassistant
     event: start
     id: herstart
@@ -152,12 +191,23 @@ actions:
                   # De tweede helft vangt af dat een lijst met alleen
                   # niet-bestaande entiteiten (expand laat die weg) als "alles
                   # uit" zou lezen.
-                  - alias: "Alle lampen uit"
+                  - alias: "Alle lampen al een kwartier uit"
                     condition: template
                     value_template: >-
                       {{ expand(lampen) | rejectattr('state', 'eq', 'off')
                          | list | count == 0
-                         and expand(lampen) | list | count > 0 }}
+                         and expand(lampen) | list | count > 0
+                         and expand(lampen) | map(attribute='last_changed')
+                             | max < now() - timedelta(minutes=15) }}
+                  # Alleen `before:` betekent "vanaf middernacht tot dit
+                  # tijdstip". De uren tussen de avondrust en middernacht
+                  # vallen hier dus af, en de uren erna worden door de
+                  # slaaptijd-sensor geblokkeerd tot het huis wakker meldt.
+                  # Valt de helper weg, dan is deze conditie onwaar en blijft
+                  # de reiniger uit - de goede kant op.
+                  - alias: "De avondrust is nog niet begonnen"
+                    condition: time
+                    before: !input avondrust
                   - condition: state
                     entity_id: !input slaaptijd
                     state: "off"

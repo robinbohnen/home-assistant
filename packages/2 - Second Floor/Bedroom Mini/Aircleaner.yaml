@@ -2,9 +2,14 @@
 ## LUCHTREINIGER SLAAPKAMER MINI (4 september 2026)
 ##
 ## Hij draait alleen als er niemand last van heeft: er is niemand thuis, of het
-## licht in haar kamer is uit én het is geen bedtijd. De regel zelf staat in
+## licht in haar kamer is al een kwartier uit, de avondrust is nog niet begonnen
+## én het is geen bedtijd. De regel zelf staat in
 ## `blueprints/automation/robin/luchtreiniger_kamer.yaml`, want Maxi heeft
 ## sinds dezelfde middag precies dezelfde reiniger met precies dezelfde regel.
+##
+## De avondrust en het kwartier kwamen er op 5 september bij: de avond ervoor
+## sloeg hij om 21:18 aan omdat Emma net het licht uit had gedaan en de bedtijd
+## van 21:30 nog niet bereikt was. Het waarom staat bij de blueprint.
 ##
 ## `light.slaapkamer_mini_lampen` is de Z2M-groep met alle vijf lampen van de
 ## kamer (vier spots + de staande lamp), dus "uit" betekent hier echt donker.
@@ -60,11 +65,16 @@ bedroom_mini_aircleaner_package:
       alias: Bedroom Mini - Luchtreiniger
       description: >-
         Zet de luchtreiniger in Emma's kamer aan als er niemand thuis is, of
-        als het licht daar uit is en het geen bedtijd is.
+        als het licht daar een kwartier uit is, de avondrust nog niet begonnen
+        is en het geen bedtijd is.
       use_blueprint:
         path: robin/luchtreiniger_kamer.yaml
         input:
           reiniger: switch.slaapkamer_emma_slaapkamer_mini_stopcontact_luchtreiniger
           lampen:
             - light.slaapkamer_mini_lampen
+          # 20:30, een uur voor haar bedtijd. Dezelfde helper waarmee de rest
+          # van het huis de avond inluidt: Music.yaml, Kitchen/Covers.yaml en
+          # Door Opened During Bedtime Mini.yaml hangen er ook aan.
+          avondrust: input_datetime.bedtime_mini_1h_off
           slaaptijd: binary_sensor.slaapkamer_mini_slaaptijd
