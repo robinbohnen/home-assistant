@@ -3,9 +3,10 @@
 ##
 ## Zelfde regel en dezelfde blueprint als bij Emma
 ## (packages/2 - Second Floor/Bedroom Mini/Aircleaner.yaml): er brandt geen
-## licht in de kamer, en er is niemand thuis of dat licht is al een kwartier
-## uit, de avondrust is nog niet begonnen en het is geen bedtijd. De regel zelf
-## staat in `blueprints/automation/robin/luchtreiniger_kamer.yaml`.
+## licht in de kamer, het wakker-signaal is al een half uur oud, en er is
+## niemand thuis of dat licht is al een kwartier uit, de avondrust is nog niet
+## begonnen en het is geen bedtijd. De regel zelf staat in
+## `blueprints/automation/robin/luchtreiniger_kamer.yaml`.
 ##
 ## TWEE VERSCHILLEN MET EMMA'S KAMER, ALLEBEI OMDAT DEZE KAMER ANDERS IS
 ##
@@ -34,9 +35,10 @@ bedroom_maxi_aircleaner_package:
     - id: bedroom_maxi_aircleaner
       alias: Bedroom Maxi - Luchtreiniger
       description: >-
-        Zet de luchtreiniger in Logans kamer aan zolang daar geen licht brandt
-        en er niemand thuis is, of dat licht een kwartier uit is, zijn pc uit
-        staat, de avondrust nog niet begonnen is en het geen bedtijd is.
+        Zet de luchtreiniger in Logans kamer aan zolang daar geen licht brandt,
+        het huis niet net wakker gemeld is, en er niemand thuis is of dat licht
+        een kwartier uit is, zijn pc uit staat, de avondrust nog niet begonnen
+        is en het geen bedtijd is.
       use_blueprint:
         path: robin/luchtreiniger_kamer.yaml
         input:
@@ -48,6 +50,16 @@ bedroom_maxi_aircleaner_package:
           # deurmelding en de knop-uitzondering aanzet (Door Opened During
           # Bedtime Maxi.yaml, Button During Bedtime.yaml).
           avondrust: input_datetime.bedtime_maxi_1h_off
+          # De ochtendkant, sinds 6 september 2026: vanaf het moment dat een
+          # van deze twee aangaat blijft de reiniger nog een half uur uit.
+          # `kinderen_mogen_wakker_worden` (packages/9 - Other/Kinderen
+          # Wakker.yaml) is de vrije ochtend, `klimaat_wakker` (packages/9 -
+          # Other/Klimaat Zonwering.yaml) is de slaapkamerknop, met 10:00 als
+          # noodrem. Allebei zeggen ze "we staan op", en geen van beide zegt
+          # dat de kamer al leeg is.
+          wakker_vlaggen:
+            - input_boolean.kinderen_mogen_wakker_worden
+            - input_boolean.klimaat_wakker
           # Staat al in packages/1 - First Floor/Bedroom Maxi/Multisensor.yaml,
           # waar hij ook het schermpje van de multisensor uitzet.
           slaaptijd: binary_sensor.slaapkamer_maxi_slaaptijd

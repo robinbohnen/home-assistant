@@ -9,6 +9,7 @@
 # De regel:
 #
 #   aan  = er brandt geen enkele lamp in de kamer
+#          EN het wakker-signaal is al een half uur oud
 #          EN (er is niemand thuis
 #              OF (dat licht is al een kwartier uit
 #                  EN de avondrust is nog niet begonnen
@@ -20,7 +21,7 @@
 #   packages/2 - Second Floor/Bedroom Mini/Aircleaner.yaml   (Emma)
 #   packages/1 - First Floor/Bedroom Maxi/Aircleaner.yaml    (Logan)
 #
-# Vier dingen die hier bewust zo staan:
+# Vijf dingen die hier bewust zo staan:
 #
 #   1. BRANDEND LICHT WINT VAN ALLES, OOK VAN "NIEMAND THUIS". Die staat
 #      buiten de OR, als eerste voorwaarde. Een lamp die aangaat is het
@@ -46,6 +47,19 @@
 #      herstart-trigger kijken daar langs en zetten hem alsnog aan zodra het
 #      donker is. De conditie is de echte regel; de `for:` zorgt er alleen voor
 #      dat er op het juiste moment gekeken wordt.
+#   5. EEN HALF UUR STILTE NA HET WAKKER-SIGNAAL (Robin, 6 september 2026). De
+#      ochtend is de spiegel van de avondrust: `slaaptijd` valt om zodra het
+#      huis zich wakker meldt, maar dan ligt een kind vaak nog in bed. Zolang
+#      een van de meegegeven vlaggen korter dan een half uur `on` is, mag de
+#      reiniger niet aan. Twee dingen om te weten:
+#      - Gaat de vlag binnen dat half uur weer uit, dan telt hij niet meer mee.
+#        Uit betekent "de ochtendroutine gaat niet door", en dan is er geen
+#        reden meer om te wachten.
+#      - `last_changed` van een input_boolean springt bij een herstart van Home
+#        Assistant mee naar het moment van herstarten. Staat de vlag dan aan,
+#        dan wacht de reiniger daarna nog een half uur. Dat lost zichzelf op en
+#        de halfuurronde raapt hem op; het is het niet waard daar een
+#        aparte tijdstempel voor bij te houden.
 #
 # WAT DIT OP 4 SEPTEMBER 2026 FOUT DEED (en waarom de avondrust erbij kwam)
 #
@@ -62,10 +76,10 @@
 blueprint:
   name: Luchtreiniger in een kamer
   description: >-
-    Zet een luchtreiniger aan zolang er geen licht brandt in de kamer én er
-    niemand thuis is, of dat licht al een kwartier uit is, de avondrust nog
-    niet begonnen is en het geen bedtijd is. In alle andere gevallen uit -
-    brandend licht wint altijd.
+    Zet een luchtreiniger aan zolang er geen licht brandt in de kamer, het
+    wakker-signaal al een half uur oud is én er niemand thuis is, of dat licht
+    al een kwartier uit is, de avondrust nog niet begonnen is en het geen
+    bedtijd is. In alle andere gevallen uit - brandend licht wint altijd.
   author: Robin Bohnen
   domain: automation
   homeassistant:
@@ -111,6 +125,21 @@ blueprint:
         entity:
           filter:
             domain: binary_sensor
+    wakker_vlaggen:
+      name: Wakker-schakelaars
+      description: >-
+        De vlaggen die "we staan op" betekenen:
+        `input_boolean.kinderen_mogen_wakker_worden` en
+        `input_boolean.klimaat_wakker`. Vanaf het moment dat er een aangaat
+        blijft de reiniger nog een half uur uit - de spiegel van de avondrust
+        aan de ochtendkant, want de slaaptijd-sensor valt om terwijl er nog
+        iemand in bed ligt. Meerdere gelden als OF: de laatste die aangaat
+        bepaalt.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            domain: input_boolean
     aanwezig_extra:
       name: Andere tekenen van leven (optioneel)
       description: >-
@@ -137,6 +166,7 @@ mode: restart
 # via deze variabelen.
 variables:
   lampen: !input lampen
+  wakker_vlaggen: !input wakker_vlaggen
 
 triggers:
   # Iemand komt thuis of vertrekt. `zone.home` telt de personen in de
@@ -163,6 +193,18 @@ triggers:
       - "on"
       - "off"
     id: slaaptijd
+  # Twee keer dezelfde vlag: de eerste zet hem meteen uit als hij toevallig
+  # draait, de tweede is het moment waarop het half uur om is. Zonder die
+  # tweede blijft hij tot de halfuurronde uit staan.
+  - trigger: state
+    entity_id: !input wakker_vlaggen
+    to: "on"
+    id: wakker
+  - trigger: state
+    entity_id: !input wakker_vlaggen
+    to: "on"
+    for: "00:30:00"
+    id: wakker_voorbij
   # Zonder deze trigger blijft hij tussen de avondrust en de bedtijd draaien
   # tot de halfuurronde langskomt.
   - trigger: time
@@ -202,6 +244,20 @@ actions:
               {{ expand(lampen) | rejectattr('state', 'eq', 'off')
                  | list | count == 0
                  and expand(lampen) | list | count > 0 }}
+          # Bewust naast de lichtconditie en niet in de tak eronder: net als bij
+          # brandend licht is dit een uitspraak over de kamer zelf, niet over
+          # wie de telefoons thuis melden. Prijs hiervan: staat er niemand op
+          # om de slaapkamerknop in te drukken, dan zet de klimaatregie
+          # `klimaat_wakker` om 10:00 alsnog aan en pauzeert de reiniger daar
+          # een half uur, ook in een leeg huis.
+          - alias: "Het wakker-signaal is al een half uur oud"
+            condition: template
+            value_template: >-
+              {% set omgezet = expand(wakker_vlaggen)
+                               | selectattr('state', 'eq', 'on')
+                               | map(attribute='last_changed') | list %}
+              {{ omgezet | count == 0
+                 or omgezet | max < now() - timedelta(minutes=30) }}
           - condition: or
             conditions:
               - alias: "Er is niemand thuis"
