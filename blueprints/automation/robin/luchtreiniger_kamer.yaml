@@ -8,30 +8,40 @@
 #
 # De regel:
 #
-#   aan  = er is niemand thuis
-#          OF (alle lampen in de kamer zijn al een kwartier uit
-#              EN de avondrust is nog niet begonnen
-#              EN het is geen bedtijd
-#              EN er is geen ander teken van leven in die kamer)
+#   aan  = er brandt geen enkele lamp in de kamer
+#          EN (er is niemand thuis
+#              OF (dat licht is al een kwartier uit
+#                  EN de avondrust is nog niet begonnen
+#                  EN het is geen bedtijd
+#                  EN er is geen ander teken van leven in die kamer))
 #   uit  = in alle andere gevallen
 #
 # Gebruikt door:
 #   packages/2 - Second Floor/Bedroom Mini/Aircleaner.yaml   (Emma)
 #   packages/1 - First Floor/Bedroom Maxi/Aircleaner.yaml    (Logan)
 #
-# Drie dingen die hier bewust zo staan:
+# Vier dingen die hier bewust zo staan:
 #
-#   1. EEN LAMP DIE `unavailable` MELDT TELT NIET ALS UIT. Valt de lampgroep
+#   1. BRANDEND LICHT WINT VAN ALLES, OOK VAN "NIEMAND THUIS". Die staat
+#      buiten de OR, als eerste voorwaarde. Een lamp die aangaat is het
+#      hardste teken van leven dat deze kamer heeft, en `zone.home` is dat
+#      niet: telefoons melden een zone-enter met vertraging
+#      ([[person-tracker-vertraging]]), dus "0 personen thuis" kan gewoon
+#      onwaar zijn terwijl er iemand het licht aandoet. Prijs hiervan: laat
+#      iemand bij vertrek de lamp branden, dan draait de reiniger niet terwijl
+#      het huis leeg is. Dat is dezelfde afweging als punt 2 hieronder - liever
+#      een reiniger die stilstaat dan eentje die naast iemand staat te blazen.
+#   2. EEN LAMP DIE `unavailable` MELDT TELT NIET ALS UIT. Valt de lampgroep
 #      weg, dan weten we niet of het donker is en blijft de reiniger uit. Die
 #      kant op is de goede: een reiniger die niet draait merkt niemand, eentje
 #      die naast een slapend kind staat te blazen wel. (Bij het licht in de
 #      meterkast is precies de omgekeerde keuze gemaakt, en om dezelfde reden:
 #      daar is de tolerante kant de onschadelijke.)
-#   2. HET COMMANDO GAAT ONVOORWAARDELIJK, er staat geen check op de huidige
+#   3. HET COMMANDO GAAT ONVOORWAARDELIJK, er staat geen check op de huidige
 #      stand van de stekker voor. Deze stekkers staan op `power_on_behavior:
 #      previous` en kunnen na een stroomonderbreking verkeerd terugkomen -
 #      precies de storing waar een check op de state langs kijkt.
-#   3. HET KWARTIER LICHT-UIT STAAT TWEE KEER: als `for:` op de trigger en als
+#   4. HET KWARTIER LICHT-UIT STAAT TWEE KEER: als `for:` op de trigger en als
 #      conditie. Alleen op de trigger is niet genoeg - de halfuurronde en de
 #      herstart-trigger kijken daar langs en zetten hem alsnog aan zodra het
 #      donker is. De conditie is de echte regel; de `for:` zorgt er alleen voor
@@ -52,9 +62,10 @@
 blueprint:
   name: Luchtreiniger in een kamer
   description: >-
-    Zet een luchtreiniger aan als er niemand thuis is, of als het licht in de
-    kamer al een kwartier uit is, de avondrust nog niet begonnen is en het geen
-    bedtijd is. In alle andere gevallen uit.
+    Zet een luchtreiniger aan zolang er geen licht brandt in de kamer én er
+    niemand thuis is, of dat licht al een kwartier uit is, de avondrust nog
+    niet begonnen is en het geen bedtijd is. In alle andere gevallen uit -
+    brandend licht wint altijd.
   author: Robin Bohnen
   domain: automation
   homeassistant:
@@ -136,7 +147,7 @@ triggers:
   # Licht aan = meteen uit (er is iemand). Licht uit krijgt een kwartier: een
   # kind dat het licht uitdoet en in bed kruipt hoort geen klik op de stekker
   # op te leveren, en even het licht uit en weer aan ook niet. Dezelfde
-  # wachttijd staat hieronder nog een keer als conditie; zie punt 3 bovenaan.
+  # wachttijd staat hieronder nog een keer als conditie; zie punt 4 bovenaan.
   - trigger: state
     entity_id: !input lampen
     to: "on"
@@ -175,28 +186,38 @@ conditions: []
 
 actions:
   - choose:
-      - alias: Niemand thuis, of donker en rustig
+      - alias: Donker, en niemand thuis of niemand die er last van heeft
         conditions:
+          # Buiten de OR hieronder, want dit gaat er ook boven: brandt er
+          # licht, dan is er iemand, wat `zone.home` ook beweert. Zie punt 1
+          # bovenaan.
+          #
+          # Alle opgegeven lampen melden hard `off`. `rejectattr` in plaats van
+          # `selectattr`: zo telt `unavailable` niet als uit. De tweede helft
+          # vangt af dat een lijst met alleen niet-bestaande entiteiten (expand
+          # laat die weg) als "alles uit" zou lezen.
+          - alias: "Er brandt geen enkele lamp in de kamer"
+            condition: template
+            value_template: >-
+              {{ expand(lampen) | rejectattr('state', 'eq', 'off')
+                 | list | count == 0
+                 and expand(lampen) | list | count > 0 }}
           - condition: or
             conditions:
               - alias: "Er is niemand thuis"
                 condition: numeric_state
                 entity_id: zone.home
                 below: 1
-              - alias: "Donker, geen bedtijd, en geen teken van leven"
+              - alias: "Geen bedtijd, en geen teken van leven"
                 condition: and
                 conditions:
-                  # Alle opgegeven lampen melden hard `off`. `rejectattr` in
-                  # plaats van `selectattr`: zo telt `unavailable` niet als uit.
-                  # De tweede helft vangt af dat een lijst met alleen
-                  # niet-bestaande entiteiten (expand laat die weg) als "alles
-                  # uit" zou lezen.
-                  - alias: "Alle lampen al een kwartier uit"
+                  # Alleen nog de leeftijd van dat "uit"; dát het uit is staat
+                  # hierboven al. De count-check blijft staan zodat `max` nooit
+                  # op een lege lijst valt.
+                  - alias: "Het licht is al een kwartier uit"
                     condition: template
                     value_template: >-
-                      {{ expand(lampen) | rejectattr('state', 'eq', 'off')
-                         | list | count == 0
-                         and expand(lampen) | list | count > 0
+                      {{ expand(lampen) | list | count > 0
                          and expand(lampen) | map(attribute='last_changed')
                              | max < now() - timedelta(minutes=15) }}
                   # Alleen `before:` betekent "vanaf middernacht tot dit
