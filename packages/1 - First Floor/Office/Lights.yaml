@@ -1,4 +1,23 @@
 office_lights_package:
+
+  input_number:
+    lights_office_percentage:
+      name: "Lights Office - Percentage"
+      # min is hier 5 en niet 0 zoals in de andere kamers: een helper die nog
+      # nooit een waarde had, start op zijn minimum. Met 0 zou de eerste
+      # beweging na het aanmaken `brightness_pct: 0` sturen - en dat is in
+      # Home Assistant hetzelfde als uit. Vijf procent is donker maar zichtbaar,
+      # en daarmee valt het meteen op in plaats van dat het licht "niet werkt".
+      min: 5
+      max: 100
+      step: 1
+      icon: mdi:lightbulb-on-70
+
+  input_boolean:
+    enable_pir_office:
+      name: "PIR in Office"
+      icon: mdi:motion-sensor
+
   automation:
     - id: office_lights_onoff
       alias: Office - Lights
@@ -13,3 +32,60 @@ office_lights_package:
           aan_bij_thuiskomst: false
           # Bewust geen knop_triggers: de knop naast het bed dooft de begane
           # grond, niet de eerste verdieping.
+
+    # BEWEGINGSLICHT, MAAR ALLEEN ACHTER GESLOTEN ROLLUIKEN (Robin, 7 sep 2026)
+    # Het kantoor is de negende kamer op deze blueprint en de enige met een
+    # voorwaarde vooraf: staan de rolluiken open, dan is het er licht genoeg en
+    # hoeft er niets aan te floepen van elke beweging. Staan ze meer dan half
+    # naar beneden, dan is het er donker - overdag net zo goed - en gaat het
+    # licht aan bij beweging of bij de deur die opengaat.
+    #
+    # Deze automatisering staat naast office_lights_onoff hierboven en vervangt
+    # hem niet: die dooft het kantoor bij vertrek onvoorwaardelijk, terwijl
+    # alles hieronder onder de PIR-schakelaar hangt. Zet Robin die schakelaar
+    # uit, dan blijft het doven bij vertrek gewoon staan. De prijs is één extra
+    # uit-commando bij vertrek zolang de schakelaar aan staat, en dat is
+    # dezelfde onschadelijke dubbele uit die de blueprint zelf al stuurt.
+    - id: lights_movement_office
+      alias: Office - Lights Movement
+      description: "Turn on the lights of the office if there is movement detected and the covers are down"
+      use_blueprint:
+        path: robin/motion_light.yaml
+        input:
+          bewegingssensor: binary_sensor.kantoor_kantoor_beweging_bezetting
+          deur_contacten:
+            - binary_sensor.kantoor_deur_contact
+          lamp:
+            - light.kantoor_lampen
+          schakelaar: input_boolean.enable_pir_office
+          helderheid: input_number.lights_office_percentage
+          uit_na:
+            hours: 0
+            minutes: 5
+            seconds: 0
+          # DE ROLLUIKEN ALS DAGLICHTMETER
+          # `sensor.kantoor_kantoor_beweging_licht` (de lux van de PIR) zou de
+          # voor de hand liggende keuze zijn, maar die zit op de melder en niet
+          # op het bureau; hij meet bovendien mee wat de lamp zelf uitstraalt.
+          # De stand van de rolluiken is hier de betere maat: die is precies de
+          # reden dat het donker is.
+          #
+          # `cover.covers_office` is de groep uit Covers.yaml; zijn
+          # current_position is het gemiddelde van links en rechts. Onder de 50
+          # betekent meer dan half naar beneden (0 = dicht, 100 = open). Staat er
+          # eentje dicht en de ander open, dan komt het gemiddelde op 50 uit en
+          # gaat het licht dus niet aan - halve luiken is halve schemer, en dan
+          # is de vloerlamp van Robin de betere keuze dan vier spots.
+          #
+          # Een template-conditie en geen numeric_state: is de groep er even
+          # niet (Zigbee-uitval, herstart), dan levert `float(101)` "open" op en
+          # blijft het licht uit. Dat is hier de goede kant om fout te gaan -
+          # bij een onbekende stand weet niemand of het donker is, en een lamp
+          # die niet aangaat merk je meteen, terwijl een lamp die overdag
+          # aanfloept dagen ongemerkt blijft.
+          aan_blokkades:
+            - alias: "Rolluiken meer dan half naar beneden"
+              condition: template
+              value_template: >-
+                {{ state_attr('cover.covers_office', 'current_position')
+                   | float(101) < 50 }}

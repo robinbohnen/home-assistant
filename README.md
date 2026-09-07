@@ -34,7 +34,7 @@ UI editors happy. Everything is YAML, split per room.
 | ------------- | ------------- |
 | `configuration.yaml` | Core config only. All entities and automations come in via `packages/`. |
 | `packages/` | Grouped per floor and room, e.g. `0 - Ground Floor/Livingroom/Lights.yaml`. `9 - Other/` holds the house-wide packages: climate, energy, presence, alarm, ventilation, watchdog. |
-| `blueprints/automation/robin/` | Own blueprints. `motion_light.yaml` drives the motion lighting in eight rooms; a room package only supplies the sensor, the lamp and its exceptions. |
+| `blueprints/automation/robin/` | Own blueprints. `motion_light.yaml` drives the motion lighting in nine rooms; a room package only supplies the sensor, the lamp and its exceptions. |
 | `custom_templates/` | Jinja macro libraries. `klimaat.jinja` is the single decision table for all sun shading — the one place to change behaviour; `brandweer.jinja` is the single place where the quirks of the PreCom staffing webhook are handled. Note: edits here need a **full restart**, a YAML reload is not enough. |
 | `dashboards/` | Lovelace in YAML mode. `overzicht/` is the wall panel (split per column), plus separate views for Woning, Klimaat, Systeem, Camera's, Kalender and a Nest Hub cast target. |
 | `custom_sentences/nl/` | The sentences behind the house's own Assist intents. Matched literally — what isn't in there isn't understood. Needs a **full restart** as well. |
