@@ -362,7 +362,15 @@ cards:
               var price = p && !isNaN(Number(p.state)) ? '€ ' + Number(p.state).toFixed(3).replace('.',',') : '';
               return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-warn)"><ha-icon icon="mdi:trending-up" style="--mdc-icon-size:16px"></ha-icon>straks duurder${price ? ' · ' + price : ''}</span>`;
             ]]]
-      # Conditioneel: regen op komst
+      # Conditioneel: regen op komst.
+      #
+      # ALLEEN ALS HET NOG NIET REGENT
+      # Deze pil stond naast de weerpil, en die zegt bij `rainy` ook gewoon
+      # "regen". Op 8 september 2026 stond er zo "regen · 0,3 mm (30 min)"
+      # pal naast "regen · 18°" - twee pillen die op het oog hetzelfde
+      # melden. Regent het al, dan hangt de hoeveelheid nu áchter de weerpil
+      # (zie onderaan dit bestand) en blijft deze weg; hij gaat over wat er
+      # nog komt, niet over wat er valt.
       - type: custom:button-card
         template: ov_pill
         entity: sensor.neerslag_komende_30_minuten
@@ -372,12 +380,27 @@ cards:
           - condition: numeric_state
             entity: sensor.neerslag_komende_30_minuten
             above: 0.1
+          # state_not, zodat een weerstand die hier niet in staat de pil laat
+          # staan in plaats van hem stil te verbergen - dezelfde afweging als
+          # bij de tariefpil hierboven.
+          - condition: state
+            entity: weather.knmi_thuis
+            state_not:
+              - rainy
+              - pouring
+              - lightning-rainy
+              - snowy
+              - snowy-rainy
+              - hail
         custom_fields:
           c: |
             [[[
               var r = states['sensor.neerslag_komende_30_minuten'];
               var mm = r && !isNaN(Number(r.state)) ? Number(r.state).toFixed(1).replace('.',',') : '?';
-              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-info)"><ha-icon icon="mdi:weather-pouring" style="--mdc-icon-size:16px"></ha-icon>regen · ${mm} mm (30 min)</span>`;
+              // "straks regen" i.p.v. "regen": het is een voorspelling, en met
+              // dezelfde kop als de "straks duurder"-pil leest de rij als één
+              // geheel.
+              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-info)"><ha-icon icon="mdi:weather-pouring" style="--mdc-icon-size:16px"></ha-icon>straks regen · ${mm} mm (30 min)</span>`;
             ]]]
       # Conditioneel: iemand onderweg naar huis
       - type: custom:button-card
@@ -437,6 +460,11 @@ cards:
         tap_action:
           action: more-info
         entity: weather.knmi_thuis
+        # De hoeveelheid neerslag hangt er tijdens regen achter, en button-card
+        # hertekent alleen bij zijn eigen entity - anders bleef die mm staan op
+        # de waarde van het moment dat het weerbeeld voor het laatst omsloeg.
+        triggers_update:
+          - sensor.neerslag_komende_30_minuten
         custom_fields:
           c: |
             [[[
@@ -447,5 +475,12 @@ cards:
               var icon = {sunny:'mdi:weather-sunny', 'clear-night':'mdi:weather-night', cloudy:'mdi:weather-cloudy', partlycloudy:'mdi:weather-partly-cloudy', rainy:'mdi:weather-rainy', pouring:'mdi:weather-pouring', snowy:'mdi:weather-snowy', 'snowy-rainy':'mdi:weather-snowy-rainy', fog:'mdi:weather-fog', windy:'mdi:weather-windy', 'windy-variant':'mdi:weather-windy-variant', hail:'mdi:weather-hail', lightning:'mdi:weather-lightning', 'lightning-rainy':'mdi:weather-lightning-rainy', exceptional:'mdi:weather-cloudy-alert'};
               var s = map[w.state] || w.state;
               var ic = icon[w.state] || 'mdi:weather-cloudy';
-              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-ink-70)"><ha-icon icon="${ic}" style="--mdc-icon-size:16px;color:var(--ov-ink-65)"></ha-icon>${s} · ${t != null ? Math.round(t) : '—'}°</span>`;
+              // Regent het al, dan is de neerslagpil hierboven verborgen en
+              // komt de hoeveelheid hier achteraan - anders zou die informatie
+              // met de ontdubbeling verdwijnen.
+              var nat = ['rainy','pouring','lightning-rainy','snowy','snowy-rainy','hail'].indexOf(w.state) !== -1;
+              var r = states['sensor.neerslag_komende_30_minuten'];
+              var mmv = r && !isNaN(Number(r.state)) ? Number(r.state) : null;
+              var mm = (nat && mmv !== null && mmv > 0.1) ? ' · ' + mmv.toFixed(1).replace('.',',') + ' mm (30 min)' : '';
+              return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-ink-70)"><ha-icon icon="${ic}" style="--mdc-icon-size:16px;color:var(--ov-ink-65)"></ha-icon>${s} · ${t != null ? Math.round(t) : '—'}°${mm}</span>`;
             ]]]
