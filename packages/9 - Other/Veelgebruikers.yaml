@@ -28,7 +28,9 @@
 ##
 ## De state is het totaal van álle stekkers hieronder, niet alleen de top vijf:
 ## zo is het een bruikbare grafiek in more-info ("wat trekt het klein spul bij
-## elkaar") en verspringt hij niet als er eentje de lijst in- of uitvalt.
+## elkaar") en verspringt hij niet als er eentje de lijst in- of uitvalt. Sinds
+## de laadpaal erbij staat (8 september 2026) geldt dat "klein spul" alleen nog
+## als de auto niet laadt - zie de opmerking bij die regel onderaan.
 ##
 ## Nieuwe stekker erbij? Eén regel in `stekkers`. De naam links is wat er op
 ## het paneel komt te staan; hou hem kort, de kolom is 205px.
@@ -56,7 +58,7 @@ veelgebruikers_package:
         # een kleine kB) - grofweg 10 MB database per dag. Dat is de bovengrens:
         # levert een ronde exact dezelfde state én attributen op, dan werkt HA
         # alleen `last_reported` bij en slaat de recorder hem over. Omdat de
-        # state het totaal van 37 stekkers is, verandert er meestal wel iets.
+        # state het totaal van 40 stekkers is, verandert er meestal wel iets.
         # Wordt het een probleem, dan is deze sensor een kandidaat voor de
         # exclude-lijst in configuration.yaml, net als sensor.kamers - alleen
         # ben je dan ook de totaalgrafiek in more-info kwijt (zie de kop).
@@ -112,6 +114,26 @@ veelgebruikers_package:
               # Backyard/Outdoor Kitchen.yaml voor de warm-melding op datzelfde
               # inzakkende verbruik.
               sensor.achtertuin_achtertuin_buitenkeuken_frietpan_vermogen: Frietpan
+              # Sinds 8 september 2026, de dag dat de Keba P40 in HA kwam. Geen
+              # slimme stekker maar de meter in de laadpaal zelf (integratie
+              # `keba_p40`, apparaat staat in Carport). Hij is van een andere
+              # orde dan de rest: gemeten tijdens het laden 10.735 W, terwijl
+              # de 38 stekkers die zich op dat moment meldden samen 1.606 W
+              # deden (zwaarste: de koffiemachine, 1.283 W). Twee
+              # gevolgen, allebei bewust geaccepteerd:
+              #
+              # 1. Zolang de auto laadt schaalt hij in zijn eentje alle balkjes
+              #    plat, want de kaart schaalt op `top[0]`. Dat klopt ook - hij
+              #    ís op dat moment de veelgebruiker.
+              # 2. De state (het totaal) is dan grotendeels de auto en niet meer
+              #    het klein spul. Wil je die grafiek ooit weer over het klein
+              #    spul laten gaan, dan moet de laadpaal uit de som blijven en
+              #    alleen in `gemeten` meedoen - nu telt hij gewoon mee.
+              #
+              # Als er niets laadt meldt de paal 0 W (nagemeten, geen
+              # `unavailable`), dus hij zakt netjes naar de onderkant van de
+              # lijst en blijft in `meldend` meetellen.
+              sensor.keba_p40_36462996_vermogen: Laadpaal
         - variables:
             # LET OP DE AFSLUITENDE `from_json` - DIE HOORT HIER EN NIET IN DE
             # SENSOR. Hij stond eerst alleen op `to_json` en de sensor deed het
