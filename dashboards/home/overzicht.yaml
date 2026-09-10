@@ -763,6 +763,188 @@ cards:
             aspect_ratio: "16:9"
             entities:
               - device_tracker.hrh85f_locatie
+      # =================== LADER ===================
+      # De KEBA P40 Pro hangt via modbus in HA; de registers en hun valkuilen
+      # staan uitgelegd in packages/3 - Outside/Carport/KEBA P40 Pro.yaml.
+      #
+      # Deze popup toont bewust de WALLBOX en niet de auto. De auto heeft zijn
+      # eigen popup (#ov-auto) met accustand, bereik en het goedkoopste
+      # laadvenster; die twee horen niet door elkaar te lopen. Wat hier staat
+      # is wat de paal meet en wat je hem kunt opdragen.
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-lader"
+        name: Lader
+        icon: mdi:ev-station
+        width_desktop: *ov_popup_width
+        styles: *ov_popup
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.charging_station_charging_state
+                primary: Status
+                secondary: "{{ states('sensor.charging_station_charging_state') if has_value('sensor.charging_station_charging_state') else '—' }}"
+                icon: mdi:ev-station
+                icon_color: >-
+                  {% set s = states('sensor.charging_station_charging_state') %}
+                  {% if s == 'Aan het laden' %}green
+                  {% elif s == 'Storing' %}red
+                  {% elif s == 'Tijdelijk onderbroken' %}orange
+                  {% elif s == 'Gereed, wacht op auto' %}blue
+                  {% else %}grey{% endif %}
+              - type: custom:mushroom-template-card
+                entity: sensor.charging_station_cable_state
+                primary: Kabel
+                secondary: "{{ states('sensor.charging_station_cable_state') if has_value('sensor.charging_station_cable_state') else '—' }}"
+                icon: mdi:ev-plug-type2
+                icon_color: "{{ 'blue' if 'auto' in states('sensor.charging_station_cable_state') else 'grey' }}"
+              - type: custom:mushroom-template-card
+                entity: sensor.charging_station_active_power
+                primary: Vermogen
+                secondary: >-
+                  {% if has_value('sensor.charging_station_active_power') %}
+                    {{ '{:,}'.format(states('sensor.charging_station_active_power') | int(0)) | replace(',', '.') }} W
+                  {% else %}—{% endif %}
+                icon: mdi:flash
+                icon_color: "{{ 'green' if states('sensor.charging_station_active_power') | float(0) > 10 else 'grey' }}"
+              - type: custom:mushroom-template-card
+                entity: sensor.charging_station_session_energy
+                primary: Deze sessie
+                secondary: >-
+                  {% if has_value('sensor.charging_station_session_energy') %}
+                    {{ (states('sensor.charging_station_session_energy') | float(0) | round(2)) | string | replace('.', ',') }} kWh
+                  {% else %}—{% endif %}
+                icon: mdi:battery-charging-medium
+                icon_color: blue
+          # ----- Sturing -----
+          # De schakelaar is de hele beslissing: uit betekent dat HA niets naar
+          # de wallbox schrijft en die op zijn eigen maximum laadt. Aan betekent
+          # dat de automatisering het setpoint elke vijftien seconden herhaalt,
+          # want de failsafe van de wallbox draait een stil setpoint na dertig
+          # seconden terug. Zet de schuif op 0 om te pauzeren; alles onder de
+          # 6 A leest de wallbox óók als pauze, want lager kan hij niet.
+          - type: custom:mushroom-title-card
+            title: Sturing
+            subtitle: uit = de laadpaal gaat zijn eigen gang op vol vermogen
+          - type: custom:mushroom-template-card
+            entity: input_boolean.charging_station_modbus_control
+            primary: "{{ 'Home Assistant stuurt' if is_state('input_boolean.charging_station_modbus_control','on') else 'Laadpaal stuurt zichzelf' }}"
+            secondary: >-
+              {% if is_state('input_boolean.charging_station_modbus_control','on') %}
+                setpoint {{ states('input_number.charging_station_charging_current') | int(0) }} A · wordt elke 15 s herhaald
+              {% else %}
+                tik om de laadstroom over te nemen
+              {% endif %}
+            icon: mdi:transmission-tower-import
+            icon_color: "{{ 'blue' if is_state('input_boolean.charging_station_modbus_control','on') else 'grey' }}"
+            tap_action:
+              action: toggle
+          - type: custom:mushroom-number-card
+            entity: input_number.charging_station_charging_current
+            name: Laadstroom
+            icon: mdi:current-ac
+            icon_color: blue
+            display_mode: slider
+          # 5 minuten per punt en `func: max`: een laadsessie begint en eindigt
+          # abrupt, en met een gemiddelde over een langer blok verdwijnt precies
+          # dat randje. Zelfde keuze als bij de accugrafiek op #ov-energie.
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            header:
+              show: true
+              title: Laadvermogen (W)
+              show_states: false
+            apex_config:
+              chart:
+                height: 170
+              tooltip:
+                x:
+                  format: "ddd HH:mm"
+            yaxis:
+              - id: w
+                min: 0
+                decimals: 0
+            series:
+              - entity: sensor.charging_station_active_power
+                name: Vermogen
+                type: area
+                color: "var(--ov-ok)"
+                yaxis_id: w
+                float_precision: 0
+                group_by:
+                  duration: 5min
+                  func: max
+          # ----- Techniek -----
+          # Alles hieronder is diagnose en hoort niet boven de vouw. De
+          # failsafe staat er expliciet bij omdat hij de uitvalstand bepaalt:
+          # valt HA weg tijdens het laden, dan gaat de paal na de timeout terug
+          # naar deze stroom in plaats van te blijven hangen op het laatste
+          # setpoint. Dat is precies waarom hij aan blijft staan.
+          - type: custom:mushroom-title-card
+            title: Techniek
+            subtitle: meting en instellingen van de wallbox zelf
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.charging_station_total_energy
+                primary: Totaal geladen
+                secondary: >-
+                  {% if has_value('sensor.charging_station_total_energy') %}
+                    {{ (states('sensor.charging_station_total_energy') | float(0) | round(1)) | string | replace('.', ',') }} kWh
+                  {% else %}—{% endif %}
+                icon: mdi:counter
+                icon_color: grey
+              - type: custom:mushroom-template-card
+                entity: sensor.charging_station_phases
+                primary: Fasen
+                secondary: >-
+                  {% set f = states('sensor.charging_station_phases') | int(0) %}
+                  {{ '3 fasen' if f == 3 else ('1 fase' if f == 1 else '—') }}
+                icon: mdi:sine-wave
+                icon_color: grey
+              - type: custom:mushroom-template-card
+                entity: sensor.charging_station_current_p1
+                primary: Stroom per fase
+                secondary: >-
+                  {% set p = ['p1','p2','p3'] | map('regex_replace', '^', 'sensor.charging_station_current_') | list %}
+                  {% if p | select('has_value') | list | count == 3 %}
+                    {{ p | map('states') | map('float', 0) | map('round', 1) | join(' · ') | replace('.', ',') }} A
+                  {% else %}—{% endif %}
+                icon: mdi:current-ac
+                icon_color: grey
+              - type: custom:mushroom-template-card
+                entity: sensor.charging_station_max_charging_current
+                primary: Ingestelde grens
+                secondary: >-
+                  {% if has_value('sensor.charging_station_max_charging_current') %}
+                    {{ states('sensor.charging_station_max_charging_current') | float(0) | round(0) | int }} A
+                    van maximaal {{ states('sensor.charging_station_max_supported_current') | float(0) | round(0) | int }} A
+                  {% else %}—{% endif %}
+                icon: mdi:speedometer
+                icon_color: grey
+              - type: custom:mushroom-template-card
+                entity: sensor.charging_station_failsafe_current
+                primary: Failsafe
+                secondary: >-
+                  {% if has_value('sensor.charging_station_failsafe_current') %}
+                    terug naar {{ states('sensor.charging_station_failsafe_current') | float(0) | round(0) | int }} A
+                    na {{ states('sensor.charging_station_failsafe_timeout') | int(0) }} s stilte
+                  {% else %}—{% endif %}
+                icon: mdi:shield-check
+                icon_color: green
+              - type: custom:mushroom-template-card
+                entity: sensor.charging_station_error_code
+                primary: Foutcode
+                secondary: >-
+                  {% set e = states('sensor.charging_station_error_code') %}
+                  {{ 'geen' if e == '0' else (e if has_value('sensor.charging_station_error_code') else '—') }}
+                icon: mdi:alert-circle-outline
+                icon_color: "{{ 'grey' if states('sensor.charging_station_error_code') == '0' else 'red' }}"
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-vandaag"

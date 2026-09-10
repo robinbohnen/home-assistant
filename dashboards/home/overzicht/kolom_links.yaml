@@ -619,6 +619,99 @@ cards:
                 if(v.winst !== null && v.winst > 0.001) deel += ` <span style="color:var(--ov-ink-25)">·</span> <span style="color:var(--ov-ok)">${eur(v.winst)}/kWh goedkoper</span>`;
                 return `<span style="font-size:12.5px;color:var(--ov-ink-55)">${deel}</span>`;
               ]]]
+        # ----- LADER -----
+        # Bewust een tweede laadregel naast de accupil bovenin, want die twee
+        # weten niet hetzelfde. `sensor.hrh85f_charge_state` komt uit de
+        # Renault-cloud en zegt "niet aan lader" zodra die cloud zwijgt of de
+        # auto ergens anders hangt. Deze regel leest de wallbox zelf, via
+        # modbus (packages/3 - Outside/Carport/KEBA P40 Pro.yaml), en die weet
+        # altijd wat er aan zijn eigen kabel gebeurt.
+        - type: custom:button-card
+          entity: sensor.charging_station_charging_state
+          show_icon: false
+          show_name: false
+          show_state: false
+          tap_action:
+            action: navigate
+            navigation_path: "#ov-lader"
+          styles:
+            card:
+              - background: var(--ov-ink-4)
+              - border: 1px solid var(--ov-ink-7)
+              - border-radius: 12px
+              - box-shadow: none
+              - padding: 8px 12px
+              - margin-top: 6px
+            grid:
+              - grid-template-areas: '"ic t" "ic s"'
+              - grid-template-columns: 20px 1fr
+              - align-items: center
+              - column-gap: 10px
+            custom_fields:
+              ic:
+                - grid-area: ic
+              t:
+                - grid-area: t
+                - justify-self: start
+              s:
+                - grid-area: s
+                - justify-self: start
+          custom_fields:
+            ic: |
+              [[[
+                var st = states['sensor.charging_station_charging_state'];
+                var s = st ? st.state : null;
+                var m = {'Aan het laden':        ['mdi:flash','var(--ov-ok)'],
+                         'Gereed, wacht op auto':['mdi:ev-plug-type2','var(--ov-info)'],
+                         'Tijdelijk onderbroken':['mdi:pause-circle-outline','var(--ov-warn)'],
+                         'Storing':              ['mdi:alert-circle','var(--ov-bad)'],
+                         'Opstarten':            ['mdi:progress-clock','var(--ov-ink-50)'],
+                         'Niet gereed':          ['mdi:ev-station','var(--ov-ink-35)']};
+                var c = m[s] || ['mdi:ev-station','var(--ov-ink-35)'];
+                return `<ha-icon icon="${c[0]}" style="--mdc-icon-size:19px;color:${c[1]}"></ha-icon>`;
+              ]]]
+            t: |
+              [[[
+                var st = states['sensor.charging_station_charging_state'];
+                var s = st && ['unavailable','unknown',''].indexOf(st.state) === -1 ? st.state : null;
+                if(s === null) return `<span style="font-size:14px;font-weight:600;color:var(--ov-ink-50)">Lader onbereikbaar</span>`;
+                var kleur = {'Aan het laden':'var(--ov-ok)',
+                             'Storing':'var(--ov-bad)',
+                             'Tijdelijk onderbroken':'var(--ov-warn)',
+                             'Gereed, wacht op auto':'var(--ov-info)'}[s] || 'var(--ov-ink-55)';
+                return `<span style="display:flex;align-items:baseline;gap:7px"><span style="font-size:14px;font-weight:600;color:var(--primary-text-color)">Lader</span><span style="font-size:13px;font-weight:600;color:${kleur}">${s.toLowerCase()}</span></span>`;
+              ]]]
+            s: |
+              [[[
+                var num = function(id){
+                  var e = states[id];
+                  return e && !isNaN(Number(e.state)) ? Number(e.state) : null;
+                };
+                var txt = function(id){
+                  var e = states[id];
+                  return e && ['unavailable','unknown',''].indexOf(e.state) === -1 ? e.state : null;
+                };
+                var W = num('sensor.charging_station_active_power');
+                var F = num('sensor.charging_station_phases');
+                var S = num('sensor.charging_station_session_energy');
+                var MX = num('sensor.charging_station_max_charging_current');
+                var kabel = txt('sensor.charging_station_cable_state');
+                var ctl = states['input_boolean.charging_station_modbus_control'];
+                var delen = [];
+                // Boven de 10 W laadt hij echt. De wallbox meet in rust een
+                // paar milliampère ruis, dus "vermogen > 0" is geen bewijs.
+                if(W !== null && W > 10){
+                  delen.push(`${Math.round(W).toLocaleString('nl-NL')} W`);
+                  if(F !== null) delen.push(`${F} ${F === 1 ? 'fase' : 'fasen'}`);
+                  if(S !== null && S > 0.01) delen.push(`${S.toFixed(1).replace('.',',')} kWh deze sessie`);
+                } else {
+                  delen.push(kabel === null ? 'kabelstatus onbekend' : kabel.toLowerCase());
+                  if(MX !== null) delen.push(`max ${Math.round(MX)} A`);
+                }
+                var out = delen.join(' · ');
+                if(ctl && ctl.state === 'on') out += ` <span style="color:var(--ov-ink-25)">·</span> <span style="color:var(--ov-info)">HA stuurt</span>`;
+                return `<span style="font-size:12.5px;color:var(--ov-ink-55)">${out}</span>`;
+              ]]]
   # MEDIA
   - type: custom:mod-card
     card_mod:
