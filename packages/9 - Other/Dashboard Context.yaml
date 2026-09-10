@@ -33,17 +33,41 @@ dashboard_context_package:
           state: "{{ now().isoformat() }}"
 
     - binary_sensor:
+        # LOGAN HEEFT TWEE THUIZEN
+        # Hij woont om beurten hier en bij Stefan en Rowan. Is hij daar, dan is
+        # hij niet afwezig en al helemaal niet onderweg - hij is thuis, alleen in
+        # het andere huis. Zonder deze uitzondering stond er de hele
+        # co-ouderschapsweek "Logan thuis - 9 min" in de kopbalk: een aankomst
+        # die pas dagen later komt, en precies het soort pil dat je leert
+        # negeren.
+        #
+        # WAAROM HET ZONE-ATTRIBUUT EN NIET DE ZONENAAM
+        # `person.logan_veen` staat in een bekende zone op de friendly_name van
+        # die zone ("Stefan en Rowan"), en die naam is in de UI met een enkele
+        # klik anders. Het `persons`-attribuut van de zone zelf is HA's eigen
+        # antwoord op "wie is hier". Verdwijnt of verhuist de zone, dan is deze
+        # sensor 'off' en komt de pil gewoon terug - een storing die je ziet, in
+        # plaats van een pil die stil wegblijft.
+        - name: Logan bij ander gezin
+          unique_id: logan_bij_ander_gezin
+          icon: mdi:home-switch
+          state: >
+            {{ 'person.logan_veen' in (state_attr('zone.stefan_en_rowan', 'persons') or []) }}
+
+        # Derde kolom = een sensor die zegt "deze persoon is al thuis, maar niet
+        # hier". Leeg voor wie maar een huis heeft.
         - name: Iemand onderweg naar huis
           unique_id: iemand_onderweg_naar_huis
           icon: mdi:car-arrow-right
           state: >
             {% set ns = namespace(any=false) %}
-            {% for p, r in [
-              ('person.robin_bohnen','sensor.robin_reistijd_naar_huis'),
-              ('person.samantha_henkelman','sensor.samantha_reistijd_naar_huis'),
-              ('person.emma_bohnen','sensor.emma_reistijd_naar_huis'),
-              ('person.logan_veen','sensor.logan_reistijd_naar_huis') ] %}
+            {% for p, r, elders in [
+              ('person.robin_bohnen','sensor.robin_reistijd_naar_huis',''),
+              ('person.samantha_henkelman','sensor.samantha_reistijd_naar_huis',''),
+              ('person.emma_bohnen','sensor.emma_reistijd_naar_huis',''),
+              ('person.logan_veen','sensor.logan_reistijd_naar_huis','binary_sensor.logan_bij_ander_gezin') ] %}
               {% if states(p) not in ['home','unknown','unavailable']
+                    and not (elders and is_state(elders, 'on'))
                     and states(r) | float(-1) > 0 %}
                 {% set ns.any = true %}
               {% endif %}

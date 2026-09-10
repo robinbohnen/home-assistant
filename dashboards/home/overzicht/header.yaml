@@ -415,15 +415,25 @@ cards:
         custom_fields:
           c: |
             [[[
+              // Vierde kolom = een sensor die zegt "deze persoon is al thuis,
+              // maar niet hier". Logan woont om beurten hier en bij Stefan en
+              // Rowan; staat hij daar, dan hoort er geen reistijd bij, want hij
+              // is niet onderweg. Dezelfde uitzondering zit in
+              // binary_sensor.iemand_onderweg_naar_huis (zie packages/9 -
+              // Other/Dashboard Context.yaml), die de pil verbergt - deze regel
+              // zorgt dat de tekst niet alsnog op hem uitkomt als er verderop
+              // wél iemand onderweg is.
               var ppl = [
-                ['Robin','person.robin_bohnen','sensor.robin_reistijd_naar_huis'],
-                ['Samantha','person.samantha_henkelman','sensor.samantha_reistijd_naar_huis'],
-                ['Emma','person.emma_bohnen','sensor.emma_reistijd_naar_huis'],
-                ['Logan','person.logan_veen','sensor.logan_reistijd_naar_huis']
+                ['Robin','person.robin_bohnen','sensor.robin_reistijd_naar_huis',null],
+                ['Samantha','person.samantha_henkelman','sensor.samantha_reistijd_naar_huis',null],
+                ['Emma','person.emma_bohnen','sensor.emma_reistijd_naar_huis',null],
+                ['Logan','person.logan_veen','sensor.logan_reistijd_naar_huis','binary_sensor.logan_bij_ander_gezin']
               ];
               var best = null;
               ppl.forEach(function(x){
                 var ps = states[x[1]]; var rs = states[x[2]];
+                var elders = x[3] ? states[x[3]] : null;
+                if(elders && elders.state === 'on') return;
                 if(ps && ['home','unknown','unavailable'].indexOf(ps.state) === -1 && rs && !isNaN(Number(rs.state)) && Number(rs.state) > 0){
                   var t = Number(rs.state);
                   if(best === null || t < best.t) best = {name:x[0], t:t};

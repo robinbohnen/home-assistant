@@ -12,8 +12,29 @@ reminders_package:
       conditions:
         - condition: and
           conditions:
+            # ALLEEN ALS HIJ HIER IS
+            # Het doosje staat hier, dus een herinnering is alleen ergens goed
+            # voor als hij hier ook is. Hij woont om beurten hier en bij Stefan
+            # en Rowan, en op woensdag zit hij om 13:00 nog op school; in beide
+            # gevallen kan niemand er iets mee - niet de volwassenen hier, en
+            # ook hij zelf niet, want zijn pillen liggen thuis.
+            #
+            # HIER STOND EEN AGENDACHECK, EN DIE DEED NIETS
+            # De oude conditie vergeleek het agenda-item van calendar.maxi met
+            # `naam ~ ' bij Stefan'`, dus met "Logan bij Stefan". Het terugkerende
+            # item heet "Naar Stefan en Rowan", waardoor die vergelijking altijd
+            # waar was en de herinnering ook op zijn co-ouderschapsdagen afging.
+            # Een agenda-item is hier trouwens de verkeerde bron: het zegt wat de
+            # bedoeling was, niet waar hij is.
+            #
+            # `unknown` en `unavailable` MOGEN DOOR
+            # Dat is de veilige kant op: een telefoon met een lege accu of een
+            # tracker die even niets weet levert dan een herinnering te veel op,
+            # in plaats van een gemiste pil. Een bekende zone (dus ook "Stefan en
+            # Rowan" en "Udens College") en `not_home` blokkeren wel.
             - condition: template
-              value_template: "{{ state_attr('calendar.maxi', 'message') != states('input_text.naam_maxi') ~ ' bij Stefan' }}"
+              value_template: >
+                {{ states('person.logan_veen') in ['home', 'unknown', 'unavailable'] }}
             - condition: or
               conditions:
                 - condition: time
