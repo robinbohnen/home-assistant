@@ -848,6 +848,49 @@ cards:
             icon: mdi:current-ac
             icon_color: blue
             display_mode: slider
+          # ----- Fasen -----
+          # Sinds de fasewisselbron in de wallbox op modbus staat doet dit echt
+          # iets; daarvoor werd het commando geslikt zonder foutmelding. De
+          # weergave leest de werkelijke stand uit de wallbox en niet wat er als
+          # laatste gevraagd is, want een omschakeling duurt een halve minuut.
+          # Zonder dat verschil lijkt de knop te liegen in de tel dat de paal
+          # nog aan het schakelen is.
+          #
+          # Confirmation staat erop omdat dit een relais schakelt en KEBA
+          # begrenst hoe vaak dat mag. Op een wandpaneel is een misklik zo
+          # gebeurd, en dan hangt de auto ineens op een derde van het vermogen.
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.charging_station_phases
+                primary: 1 fase
+                secondary: >-
+                  {% if states('sensor.charging_station_phases') == '1' %}nu actief
+                  {%- else %}{{ (states('sensor.charging_station_max_charging_current') | float(16) * 0.23) | round(1) | string | replace('.', ',') }} kW{% endif %}
+                icon: mdi:numeric-1-circle-outline
+                icon_color: "{{ 'blue' if states('sensor.charging_station_phases') == '1' else 'grey' }}"
+                tap_action:
+                  action: perform-action
+                  perform_action: script.charging_station_set_phases
+                  data:
+                    phases: 1
+                  confirmation:
+                    text: De laadpaal terugzetten naar 1 fase?
+              - type: custom:mushroom-template-card
+                entity: sensor.charging_station_phases
+                primary: 3 fasen
+                secondary: >-
+                  {% if states('sensor.charging_station_phases') == '3' %}nu actief
+                  {%- else %}{{ (states('sensor.charging_station_max_charging_current') | float(16) * 0.69) | round(1) | string | replace('.', ',') }} kW{% endif %}
+                icon: mdi:numeric-3-circle-outline
+                icon_color: "{{ 'blue' if states('sensor.charging_station_phases') == '3' else 'grey' }}"
+                tap_action:
+                  action: perform-action
+                  perform_action: script.charging_station_set_phases
+                  data:
+                    phases: 3
+                  confirmation:
+                    text: De laadpaal naar 3 fasen zetten?
           # 5 minuten per punt en `func: max`: een laadsessie begint en eindigt
           # abrupt, en met een gemiddelde over een langer blok verdwijnt precies
           # dat randje. Zelfde keuze als bij de accugrafiek op #ov-energie.
@@ -899,14 +942,19 @@ cards:
                   {% else %}—{% endif %}
                 icon: mdi:counter
                 icon_color: grey
+              # De stand zelf staat al bij de knoppen hierboven. Wat hier hoort
+              # is de bron die mág schakelen: staat die niet op modbus, dan
+              # doen die knoppen niets en krijg je geen enkele foutmelding.
               - type: custom:mushroom-template-card
-                entity: sensor.charging_station_phases
-                primary: Fasen
+                entity: sensor.charging_station_phase_switching_source_raw
+                primary: Fasewisseling
                 secondary: >-
-                  {% set f = states('sensor.charging_station_phases') | int(0) %}
-                  {{ '3 fasen' if f == 3 else ('1 fase' if f == 1 else '—') }}
+                  {% set b = states('sensor.charging_station_phase_switching_source_raw') %}
+                  {% if not has_value('sensor.charging_station_phase_switching_source_raw') %}—
+                  {% elif b == '3' %}modbus mag schakelen
+                  {% else %}bron {{ b }} · modbus mag niet schakelen{% endif %}
                 icon: mdi:sine-wave
-                icon_color: grey
+                icon_color: "{{ 'green' if states('sensor.charging_station_phase_switching_source_raw') == '3' else 'orange' }}"
               - type: custom:mushroom-template-card
                 entity: sensor.charging_station_current_p1
                 primary: Stroom per fase

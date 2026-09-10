@@ -241,6 +241,17 @@ carport_keba_p40_package:
           device_class: energy
           scan_interval: 30
 
+        # 1550 is de bron die fasen mag wisselen, 1552 de stand die er nu
+        # staat. De eerste is een instelling van de wallbox en verandert bijna
+        # nooit, maar hij hoort er wel bij: staat hij niet op modbus, dan doet
+        # het schakelscript niets en zoek je je scheel naar de fout.
+        - name: "Charging Station - Phase switching source (raw)"
+          unique_id: wallbox_phase_switching_source
+          slave: 255
+          address: 1550
+          data_type: uint32
+          scan_interval: 300
+
         - name: "Charging Station - Phase switching state (raw)"
           unique_id: wallbox_phase_switching_state
           slave: 255
@@ -335,8 +346,9 @@ carport_keba_p40_package:
               '7': 'In laadpaal en auto, vergrendeld' } %}
             {{ m.get(states('sensor.charging_station_cable_state_raw'), 'Onbekend') }}
 
-        # 1 of 3. De REST-integratie heeft hier een select van, maar die toont
-        # de laatst GEVRAAGDE stand; dit register is wat er werkelijk staat.
+        # 1 of 3, en dit is de stand die er ECHT staat. De REST-integratie
+        # heeft hier ook een select van, maar die onthoudt alleen wat er als
+        # laatste gevraagd is; de API geeft de werkelijke stand niet terug.
         - name: "Charging Station - Phases"
           unique_id: charging_station_phases
           icon: mdi:sine-wave
@@ -365,12 +377,17 @@ carport_keba_p40_package:
   # niet meer, maar dan blijft een geschreven 0 óók staan als HA wegvalt en
   # laadt de auto nooit meer. Niet doen.
   #
-  # Fasen omschakelen kan via 5052 (0 = 1 fase, 1 = 3 fasen), maar alleen als de
-  # wallbox modbus als bron voor fasewisseling accepteert. Register 1550 zegt
-  # welke bron dat is en staat hier op 2, niet op 3; evcc biedt fasewisseling
-  # daarom bij deze stand helemaal niet aan. Het script hieronder staat er dus
-  # klaar maar doet pas iets nadat je de fasewisselbron in de webinterface van
-  # de wallbox op modbus zet.
+  # Fasen omschakelen gaat via 5052: 0 is 1 fase, 1 is 3 fasen. Dat werkt pas
+  # als de wallbox modbus als bron voor fasewisseling accepteert; register 1550
+  # zegt welke bron dat is. Stond hier eerst op 2, en toen slikte de wallbox het
+  # commando zonder iets te doen - geen foutmelding, gewoon stilte. Sinds Robin
+  # het op 2026-09-10 in de paal omzette schakelt hij wel. Nagemeten: 1552 ging
+  # van 3 naar 1 en weer terug.
+  #
+  # Reken op een halve minuut voordat je het ziet. Een deel daarvan is de
+  # wallbox die zijn relais schakelt, een deel is de `scan_interval` van 30 s op
+  # de sensor hieronder. Lees dus 1552 voor de werkelijke stand en niet wat je
+  # als laatste gevraagd hebt.
   input_boolean:
     # Uit = de wallbox doet zijn eigen ding op vol vermogen en HA schrijft
     # niets. Aan = HA houdt het setpoint hieronder vast met de hartslag.
