@@ -10,59 +10,62 @@ reminders_package:
         - at: "13:00:00"
           trigger: time
       conditions:
-        - condition: and
+        # HIER STAAT GEEN LOCATIECHECK MEER
+        # Waar hij is bepaalt alleen wie er iets aan heeft, niet of de
+        # herinnering afgaat. Hij moet zijn pil op tijd nemen of hij hier is,
+        # bij Stefan en Rowan, of op school - dus stuurt de melding naar hem
+        # onvoorwaardelijk, en zit de locatie pas bij de actie voor de
+        # volwassenen hier. Zie de toelichting daar.
+        - condition: or
           conditions:
-            # ALLEEN ALS HIJ HIER IS
-            # Het doosje staat hier, dus een herinnering is alleen ergens goed
-            # voor als hij hier ook is. Hij woont om beurten hier en bij Stefan
-            # en Rowan, en op woensdag zit hij om 13:00 nog op school; in beide
-            # gevallen kan niemand er iets mee - niet de volwassenen hier, en
-            # ook hij zelf niet, want zijn pillen liggen thuis.
-            #
-            # HIER STOND EEN AGENDACHECK, EN DIE DEED NIETS
-            # De oude conditie vergeleek het agenda-item van calendar.maxi met
-            # `naam ~ ' bij Stefan'`, dus met "Logan bij Stefan". Het terugkerende
-            # item heet "Naar Stefan en Rowan", waardoor die vergelijking altijd
-            # waar was en de herinnering ook op zijn co-ouderschapsdagen afging.
-            # Een agenda-item is hier trouwens de verkeerde bron: het zegt wat de
-            # bedoeling was, niet waar hij is.
-            #
-            # `unknown` en `unavailable` MOGEN DOOR
-            # Dat is de veilige kant op: een telefoon met een lege accu of een
-            # tracker die even niets weet levert dan een herinnering te veel op,
-            # in plaats van een gemiste pil. Een bekende zone (dus ook "Stefan en
-            # Rowan" en "Udens College") en `not_home` blokkeren wel.
-            - condition: template
-              value_template: >
-                {{ states('person.logan_veen') in ['home', 'unknown', 'unavailable'] }}
-            - condition: or
-              conditions:
-                - condition: time
-                  after: "07:00:00"
-                  before: "09:00:00"
-                  weekday:
-                    - mon
-                    - tue
-                    - wed
-                    - thu
-                    - fri
-                    - sat
-                    - sun
-                - condition: time
-                  after: "11:30:00"
-                  before: "13:30:00"
-                  weekday:
-                    - wed
-                    - sat
-                    - sun
+            - condition: time
+              after: "07:00:00"
+              before: "09:00:00"
+              weekday:
+                - mon
+                - tue
+                - wed
+                - thu
+                - fri
+                - sat
+                - sun
+            - condition: time
+              after: "11:30:00"
+              before: "13:30:00"
+              weekday:
+                - wed
+                - sat
+                - sun
       actions:
-        - metadata: {}
-          data:
-            title: "{{ states['input_text.naam_maxi'].state }} medicatie"
-            message: "Het is tijd voor {{ states['input_text.naam_maxi'].state }}'s pilletje, vergeet die niet. "
-          action: notify.mobile_devices_adults
+        # LOGAN ZELF: ALTIJD
         - action: notify.mobile_app_iphone_van_logan
           metadata: {}
           data:
             message: Medicijnen innemen
             title: Je moet weer medicijnen innemen, dit is een herinnering
+        # DE VOLWASSENEN HIER: ALLEEN ALS HIJ HIER IS
+        # Wij kunnen hem er niet aan helpen herinneren als hij bij Stefan en
+        # Rowan of op school zit, dus dan is die melding hier ruis.
+        #
+        # HIER STOND EEN AGENDACHECK, EN DIE DEED NIETS
+        # De oude conditie vergeleek het agenda-item van calendar.maxi met
+        # `naam ~ ' bij Stefan'`, dus met "Logan bij Stefan". Het terugkerende
+        # item heet "Naar Stefan en Rowan", waardoor die vergelijking altijd
+        # waar was. Een agenda-item is hier trouwens de verkeerde bron: het
+        # zegt wat de bedoeling was, niet waar hij is.
+        #
+        # `unknown` en `unavailable` MOGEN DOOR
+        # Dat is de veilige kant op: een telefoon met een lege accu of een
+        # tracker die even niets weet levert dan een melding te veel op, in
+        # plaats van een pil die niemand controleert. Een bekende zone (dus
+        # ook "Stefan en Rowan" en "Udens College") en `not_home` blokkeren.
+        - if:
+            - condition: template
+              value_template: >
+                {{ states('person.logan_veen') in ['home', 'unknown', 'unavailable'] }}
+          then:
+            - action: notify.mobile_devices_adults
+              metadata: {}
+              data:
+                title: "{{ states['input_text.naam_maxi'].state }} medicatie"
+                message: "Het is tijd voor {{ states['input_text.naam_maxi'].state }}'s pilletje, vergeet die niet. "
