@@ -1,0 +1,344 @@
+carport_keba_p40_package:
+  # De KEBA P40 Pro (KC-P40-32EU0, serienummer 36462996) hangt op 192.168.2.136.
+  # Hij praat twee talen tegelijk en die bijten elkaar niet:
+  #
+  #  * De HACS-integratie `keba_p40` (Ich-h4lt) gebruikt de lokale REST v2-API
+  #    met JWT. Die levert de bedienbare kant: number/select/button voor stroom,
+  #    fases en start/stop, plus temperatuur en firmware (5.0.1). Alleen heten
+  #    al zijn entiteiten `sensor.keba_p40_36462996_2`, `_3`, `_stroom_4` - niet
+  #    te lezen op een dashboard.
+  #  * Dit bestand leest modbus TCP op poort 502. Dat geeft nette namen en een
+  #    paar dingen die de REST-API niet heeft: kabelstatus, sessie-energie,
+  #    power factor, failsafe-instellingen en het fast-charging-veld.
+  #
+  # LET OP - de wallbox accepteert maar EEN modbus-sessie tegelijk. De TCP-
+  # handshake van een tweede client lukt nog wel, maar daarna komt er nooit een
+  # antwoord terug terwijl de eerste verbinding gewoon doorloopt (nagemeten op
+  # 2026-09-10). Home Assistant houdt zijn verbinding open, dus zolang dit
+  # draait kan er geen tweede modbus-client bij: geen evcc, geen los testscript.
+  # Moet je debuggen, zet dan eerst deze integratie stil.
+  #
+  # Alles hieronder is op 2026-09-10 tegen het apparaat zelf gemeten, niet uit
+  # documentatie overgeschreven (de KEBA-PDF is een scan zonder tekstlaag).
+  # Drie dingen kwamen daaruit die je in de meeste voorbeeldconfigs fout ziet:
+  #
+  #  1. ELK register in het 1000-blok is een uint32 op een even adres, met de
+  #     waarde in het TWEEDE register. Lees je er uint16 van, dan lees je het
+  #     hoge woord en krijg je altijd 0. Alleen het 5000-blok is echt 16-bits.
+  #  2. Laadstatus is 1000, kabelstatus is 1004. Twee sensoren op 1004 zetten
+  #     levert twee keer dezelfde kabelstatus op, niet de laadstatus.
+  #  3. Het zijn allemaal HOLDING registers (functiecode 3). Functiecode 4
+  #     geeft op elk adres modbus-exception 2, dus `input_type: input` werkt
+  #     nergens. De HA-default is holding, daarom staat het er niet bij.
+  #
+  # De schalen zijn gecontroleerd tegen de REST-sensoren van de HACS-integratie,
+  # die onafhankelijk dezelfde meting doen: register 1036 = 55280 naast
+  # `sensor.keba_p40_36462996_energie` = 5,528 kWh, register 1008 = 4 naast
+  # 0,004 A, 1100 = 16000 naast 16 A. mA, mW en 0,1 Wh dus.
+  #
+  # Niet opgenomen omdat ze niets toevoegen: 1014 (serienummer) en 1016
+  # (producttype) staan al in de entity-id's van de REST-integratie, en 1700 /
+  # 1702 antwoorden wel (12 en 7) maar staan in geen enkele registerlijst.
+  modbus:
+    - name: KebaP40Pro
+      type: tcp
+      host: 192.168.2.136
+      port: 502
+      # Geen message_wait_milliseconds: 57 reads achter elkaar zonder pauze
+      # gingen in 0,84 s foutloos door. Deze wallbox heeft geen ademruimte nodig.
+      sensors:
+        # ------------------------------------------------------------------
+        # Status. De ruwe getallen krijgen verderop in dit bestand een
+        # leesbare vertaling; deze twee blijven bestaan omdat een automatisering
+        # liever op een getal dan op een vertaalde zin triggert.
+        - name: "Charging Station - Charging state (raw)"
+          unique_id: wallbox_charging_state_raw
+          slave: 255
+          address: 1000
+          data_type: uint32
+          scan_interval: 30
+
+        - name: "Charging Station - Cable state (raw)"
+          unique_id: wallbox_cable_state_raw
+          slave: 255
+          address: 1004
+          data_type: uint32
+          scan_interval: 30
+
+        - name: "Charging Station - Error code"
+          unique_id: wallbox_error_code
+          slave: 255
+          address: 1006
+          data_type: uint32
+          scan_interval: 60
+
+        # ------------------------------------------------------------------
+        # Meting. Stroom in mA, vermogen in mW, energie in 0,1 Wh.
+        - name: "Charging Station - Current P1"
+          unique_id: wallbox_current_l1
+          slave: 255
+          address: 1008
+          data_type: uint32
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 30
+
+        - name: "Charging Station - Current P2"
+          unique_id: wallbox_current_l2
+          slave: 255
+          address: 1010
+          data_type: uint32
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 30
+
+        - name: "Charging Station - Current P3"
+          unique_id: wallbox_current_l3
+          slave: 255
+          address: 1012
+          data_type: uint32
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 30
+
+        # Levert 10500 op, en dat is NIET de firmwareversie zoals de REST-API
+        # die noemt (5.0.1). Wat het wel is heb ik niet kunnen herleiden, dus
+        # het blijft een ruw getal - handig om te zien of er iets wijzigt na een
+        # update, niet om aan iemand te tonen.
+        - name: "Charging Station - Firmware version (raw)"
+          unique_id: wallbox_firmware_version
+          slave: 255
+          address: 1018
+          data_type: uint32
+          scan_interval: 300
+
+        - name: "Charging Station - Active power"
+          unique_id: wallbox_active_power
+          slave: 255
+          address: 1020
+          data_type: uint32
+          scale: 0.001
+          precision: 0
+          unit_of_measurement: "W"
+          state_class: measurement
+          device_class: power
+          scan_interval: 30
+
+        # total_increasing en niet total: de teller loopt alleen op en begint na
+        # een vervanging of reset weer bij nul. Met `total` telt Home Assistant
+        # zo'n terugval als negatief verbruik mee in het energiedashboard.
+        - name: "Charging Station - Total energy"
+          unique_id: wallbox_total_energy
+          slave: 255
+          address: 1036
+          data_type: uint32
+          scale: 0.0001
+          precision: 4
+          unit_of_measurement: "kWh"
+          state_class: total_increasing
+          device_class: energy
+          scan_interval: 60
+
+        - name: "Charging Station - Voltage P1"
+          unique_id: wallbox_voltage_l1
+          slave: 255
+          address: 1040
+          data_type: uint32
+          precision: 0
+          unit_of_measurement: "V"
+          state_class: measurement
+          device_class: voltage
+          scan_interval: 30
+
+        - name: "Charging Station - Voltage P2"
+          unique_id: wallbox_voltage_l2
+          slave: 255
+          address: 1042
+          data_type: uint32
+          precision: 0
+          unit_of_measurement: "V"
+          state_class: measurement
+          device_class: voltage
+          scan_interval: 30
+
+        - name: "Charging Station - Voltage P3"
+          unique_id: wallbox_voltage_l3
+          slave: 255
+          address: 1044
+          data_type: uint32
+          precision: 0
+          unit_of_measurement: "V"
+          state_class: measurement
+          device_class: voltage
+          scan_interval: 30
+
+        # 1000 = 100,0%. Staat op 0 zolang er geen auto laadt.
+        - name: "Charging Station - Power factor"
+          unique_id: wallbox_power_factor
+          slave: 255
+          address: 1046
+          data_type: uint32
+          scale: 0.1
+          precision: 1
+          unit_of_measurement: "%"
+          state_class: measurement
+          device_class: power_factor
+          scan_interval: 30
+
+        # ------------------------------------------------------------------
+        # Grenzen. 1100 is wat er nu is ingesteld, 1110 wat de installatie
+        # maximaal toestaat. Beide 16 A hier, ondanks de 32 in het typenummer.
+        - name: "Charging Station - Max charging current"
+          unique_id: wallbox_max_charging_current
+          slave: 255
+          address: 1100
+          data_type: uint32
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 30
+
+        - name: "Charging Station - Max supported current"
+          unique_id: wallbox_max_supported_current
+          slave: 255
+          address: 1110
+          data_type: uint32
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 300
+
+        # uint32, niet uint16 - zie punt 1 in de kop van dit bestand.
+        - name: "Charging Station - Fast charging state (raw)"
+          unique_id: wallbox_fast_charging_state_raw
+          slave: 255
+          address: 1200
+          data_type: uint32
+          scan_interval: 60
+
+        - name: "Charging Station - Session energy"
+          unique_id: wallbox_session_energy
+          slave: 255
+          address: 1502
+          data_type: uint32
+          scale: 0.0001
+          precision: 4
+          unit_of_measurement: "kWh"
+          state_class: total_increasing
+          device_class: energy
+          scan_interval: 30
+
+        - name: "Charging Station - Phase switching state (raw)"
+          unique_id: wallbox_phase_switching_state
+          slave: 255
+          address: 1552
+          data_type: uint32
+          scan_interval: 30
+
+        # ------------------------------------------------------------------
+        # Failsafe. Zodra er ooit naar het 5000-blok geschreven wordt, moet dat
+        # binnen `Failsafe timeout` seconden herhaald blijven worden; blijft dat
+        # uit, dan valt de wallbox terug op `Failsafe current`. Die twee horen
+        # daarom bij elkaar - de stroom alleen zegt niets zonder de tijd.
+        - name: "Charging Station - Failsafe current"
+          unique_id: wallbox_failsafe_current
+          slave: 255
+          address: 1600
+          data_type: uint32
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 300
+
+        - name: "Charging Station - Failsafe timeout"
+          unique_id: wallbox_failsafe_timeout
+          slave: 255
+          address: 1602
+          data_type: uint32
+          precision: 0
+          unit_of_measurement: "s"
+          device_class: duration
+          scan_interval: 300
+
+        # ------------------------------------------------------------------
+        # Het 5000-blok zijn de schrijfregisters, en die zijn hier echt 16-bits:
+        # alleen het even adres antwoordt, het adres erna bestaat niet. Ze
+        # spiegelen wat er via modbus is GESCHREVEN, niet wat de wallbox doet.
+        # Zolang Home Assistant er niets heen stuurt staan ze allebei op 0, en
+        # die 0 betekent dus niet "laden geblokkeerd".
+        - name: "Charging Station - Modbus current setpoint"
+          unique_id: wallbox_charging_current
+          slave: 255
+          address: 5004
+          data_type: uint16
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 30
+
+        - name: "Charging Station - Modbus charging enabled (raw)"
+          unique_id: wallbox_charging_register
+          slave: 255
+          address: 5014
+          data_type: uint16
+          scan_interval: 15
+
+  # --------------------------------------------------------------------------
+  # De vertaling van de ruwe statusgetallen. Bewust geen binary_sensor voor
+  # "stekker erin" of "laadt": die staan al in de REST-integratie
+  # (binary_sensor.keba_p40_36462996_stekker en _actief) en twee bronnen voor
+  # dezelfde ja/nee-vraag is precies hoe je later een tegenstrijdig dashboard
+  # krijgt.
+  template:
+    - sensor:
+        - name: "Charging Station - Charging state"
+          unique_id: charging_station_charging_state
+          icon: mdi:ev-station
+          availability: "{{ has_value('sensor.charging_station_charging_state_raw') }}"
+          state: >-
+            {% set m = {
+              '0': 'Opstarten',
+              '1': 'Niet gereed',
+              '2': 'Gereed, wacht op auto',
+              '3': 'Aan het laden',
+              '4': 'Storing',
+              '5': 'Tijdelijk onderbroken' } %}
+            {{ m.get(states('sensor.charging_station_charging_state_raw'), 'Onbekend') }}
+
+        - name: "Charging Station - Cable state"
+          unique_id: charging_station_cable_state
+          icon: mdi:ev-plug-type2
+          availability: "{{ has_value('sensor.charging_station_cable_state_raw') }}"
+          state: >-
+            {% set m = {
+              '0': 'Geen kabel',
+              '1': 'Alleen in de laadpaal',
+              '3': 'In de laadpaal, vergrendeld',
+              '5': 'In laadpaal en auto, niet vergrendeld',
+              '7': 'In laadpaal en auto, vergrendeld' } %}
+            {{ m.get(states('sensor.charging_station_cable_state_raw'), 'Onbekend') }}
+
+        # 1 of 3. De REST-integratie heeft hier een select van, maar die toont
+        # de laatst GEVRAAGDE stand; dit register is wat er werkelijk staat.
+        - name: "Charging Station - Phases"
+          unique_id: charging_station_phases
+          icon: mdi:sine-wave
+          availability: "{{ has_value('sensor.charging_station_phase_switching_state_raw') }}"
+          state: "{{ states('sensor.charging_station_phase_switching_state_raw') }}"

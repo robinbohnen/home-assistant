@@ -183,6 +183,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Ikea Myggspray motion sensor | 3 | Matter | [Matter](https://www.home-assistant.io/integrations/matter/) | Occupancy and illuminance in Maxi's bedroom, the office and the meter cupboard. The meter cupboard one keeps the led strip on together with the door contact, see `packages/0 - Ground Floor/Meterkast/Lights.yaml` |
 | Ikea Timmerflotte temp/humidity sensor | 8 | Matter | [Matter](https://www.home-assistant.io/integrations/matter/) | Temperature and humidity per room |
 | [Marstek Venus E 5kWh](https://amzn.to/44bh5OF) | 1 | ESPHome | [ESPHome](https://www.home-assistant.io/integrations/esphome) | The Marstek Venus EnergyCube is a compact plug-in battery with modular capacity, perfect for sustainable energy storage and easy to install |
+| [KEBA KeContact P40 Pro](https://www.keba.com/en/emobility/products/ac-charging-stations/p40/kecontact-p40-overview) | 1 | Ethernet | [Modbus](https://www.home-assistant.io/integrations/modbus/) + [KEBA P40](https://github.com/Ich-h4lt/keba-p40-home-assistant) | Wallbox at the carport, 16 A over three phases. Modbus TCP on port 502 gives the readings with readable names (`packages/3 - Outside/Carport/KEBA P40 Pro.yaml`), the HACS integration adds the controls over the local REST API. The wallbox answers only one Modbus session at a time, so nothing else may poll port 502 |
 
 ## <a name="vms">Virtual Machines</a>
 | [Menu](#menu) |
@@ -244,6 +245,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Microsoft TTS | [Link](https://www.home-assistant.io/integrations/microsoft) | Microsoft Text-To-Speech integration for local HA Voice |
 | Miele | [Link](https://github.com/astrandb/miele) | Our oven and dishwasher are smart and can be monitored and controlled with this plugin |
 | Mobiele app | [Link](https://www.home-assistant.io/integrations/mobile_app) | Check all sensors of your mobile device |
+| Modbus | [Link](https://www.home-assistant.io/integrations/modbus) | Read the KEBA P40 Pro wallbox over TCP |
 | Motionblinds | [Link](https://www.home-assistant.io/integrations/motion_blinds) | Smart blinds to stop sun |
 | MQTT | [Link](https://www.home-assistant.io/integrations/mqtt) | Integrate Zigbee2MQTT with Home Assistant |
 | Neerslag App (Buienalarm / Buienradar) | [Link](hhttps://github.com/aex351/home-assistant-neerslag-app) | Display rain forecast using Buienalarm and/or Buienradar sensor data |
