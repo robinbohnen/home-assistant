@@ -898,6 +898,67 @@ cards:
             icon_color: grey
             tap_action:
               action: more-info
+          # Dezelfde drie keuzes als in de melding op je telefoon, voor wie voor
+          # het wandpaneel staat. Ze roepen het script aan in plaats van de
+          # helper rechtstreeks te zetten: een tap_action rendert geen Jinja, dus
+          # "de eerstvolgende 07:00" kan hier niet uitgerekend worden.
+          #
+          # Welke knop oplicht wordt afgeleid uit de stand zelf, niet uit een
+          # aparte keuze-helper. Twee bronnen voor dezelfde waarheid lopen altijd
+          # een keer uiteen, en dan licht de verkeerde knop op terwijl het plan
+          # iets anders doet.
+          - type: horizontal-stack
+            cards:
+              - type: custom:mushroom-template-card
+                entity: input_datetime.charging_station_klaar_om
+                primary: Ochtend
+                secondary: "07:00"
+                icon: mdi:weather-sunset-up
+                icon_color: >-
+                  {% set t = state_attr('input_datetime.charging_station_klaar_om', 'timestamp') | float(none) %}
+                  {% if t is none %}grey
+                  {% else %}
+                    {% set d = t | as_datetime(none) | as_local %}
+                    {{ 'blue' if d.hour == 7 and (d.date() - now().date()).days <= 1 else 'grey' }}
+                  {% endif %}
+                tap_action:
+                  action: perform-action
+                  perform_action: script.charging_station_deadline_zetten
+                  data:
+                    wanneer: ochtend
+              - type: custom:mushroom-template-card
+                entity: input_datetime.charging_station_klaar_om
+                primary: Middag
+                secondary: "17:00"
+                icon: mdi:weather-sunny
+                icon_color: >-
+                  {% set t = state_attr('input_datetime.charging_station_klaar_om', 'timestamp') | float(none) %}
+                  {% if t is none %}grey
+                  {% else %}
+                    {{ 'blue' if (t | as_datetime(none) | as_local).hour == 17 else 'grey' }}
+                  {% endif %}
+                tap_action:
+                  action: perform-action
+                  perform_action: script.charging_station_deadline_zetten
+                  data:
+                    wanneer: middag
+              - type: custom:mushroom-template-card
+                entity: input_datetime.charging_station_klaar_om
+                primary: Later
+                secondary: dag erna
+                icon: mdi:calendar-arrow-right
+                icon_color: >-
+                  {% set t = state_attr('input_datetime.charging_station_klaar_om', 'timestamp') | float(none) %}
+                  {% if t is none %}grey
+                  {% else %}
+                    {% set d = t | as_datetime(none) | as_local %}
+                    {{ 'blue' if d.hour == 7 and (d.date() - now().date()).days >= 2 else 'grey' }}
+                  {% endif %}
+                tap_action:
+                  action: perform-action
+                  perform_action: script.charging_station_deadline_zetten
+                  data:
+                    wanneer: later
           - type: custom:mushroom-template-card
             entity: input_boolean.charging_station_modbus_control
             primary: "{{ 'Home Assistant stuurt' if is_state('input_boolean.charging_station_modbus_control','on') else 'Laadpaal stuurt zichzelf' }}"

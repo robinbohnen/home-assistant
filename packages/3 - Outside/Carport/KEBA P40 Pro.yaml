@@ -662,6 +662,44 @@ carport_keba_p40_package:
             value: >-
               {{ (states('sensor.charging_station_max_supported_current') | float(16) * 1000) | round(0) | int }}
 
+    # Eén plek waar "ochtend", "middag" en "later" een concreet moment worden.
+    # Staat bewust in een script en niet in de knoppen zelf: een tap_action op
+    # een dashboard rendert GEEN Jinja, dus daar kun je niet uitrekenen wat de
+    # eerstvolgende 07:00 is. Een script doet dat wel, en nu delen de melding op
+    # je telefoon en de knoppen in de popup dezelfde regel.
+    #
+    # Die regel: neem het eerstvolgende moment met die kloktijd dat minstens
+    # drie uur weg is. Zonder ondergrens zou "middag" om kwart voor vijf 's
+    # middags een deadline van een kwartier later opleveren, en dan is er niets
+    # meer te plannen.
+    charging_station_deadline_zetten:
+      alias: "Charging Station - Deadline zetten"
+      icon: mdi:clock-check-outline
+      mode: single
+      fields:
+        wanneer:
+          name: Wanneer
+          description: ochtend, middag of later
+          required: true
+          example: middag
+          selector:
+            select:
+              options:
+                - ochtend
+                - middag
+                - later
+      sequence:
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.charging_station_klaar_om
+          data:
+            datetime: >-
+              {% set klok = '17:00' if wanneer == 'middag' else '07:00' %}
+              {% set t = today_at(klok) %}
+              {% set t = t if (t - now()).total_seconds() > 10800 else t + timedelta(days=1) %}
+              {% set t = t + timedelta(days=1) if wanneer == 'later' else t %}
+              {{ t.strftime('%Y-%m-%d %H:%M:%S') }}
+
     charging_station_set_phases:
       alias: "Charging Station - Set phases"
       icon: mdi:sine-wave
@@ -876,13 +914,9 @@ carport_keba_p40_package:
       actions:
         # Terugvallen op de veilige aanname. Doet niemand iets, dan is de auto
         # 's ochtends vol.
-        - action: input_datetime.set_datetime
-          target:
-            entity_id: input_datetime.charging_station_klaar_om
+        - action: script.charging_station_deadline_zetten
           data:
-            datetime: >-
-              {% set t = today_at('07:00') %}
-              {{ (t if (t - now()).total_seconds() > 10800 else t + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S') }}
+            wanneer: ochtend
         # Even wachten tot het laadplan opnieuw gerekend heeft; de deadline
         # staat in zijn triggerlijst, dus dat gaat vanzelf. Zelfde truc als bij
         # de knopmelding in packages/1 - First Floor/Bedroom Maxi.
@@ -934,16 +968,10 @@ carport_keba_p40_package:
           id: later
       conditions: []
       actions:
-        - action: input_datetime.set_datetime
-          target:
-            entity_id: input_datetime.charging_station_klaar_om
+        - action: script.charging_station_deadline_zetten
           data:
-            datetime: >-
-              {% set klok = '17:00' if trigger.id == 'middag' else '07:00' %}
-              {% set t = today_at(klok) %}
-              {% set t = t if (t - now()).total_seconds() > 10800 else t + timedelta(days=1) %}
-              {% set t = t + timedelta(days=1) if trigger.id == 'later' else t %}
-              {{ t.strftime('%Y-%m-%d %H:%M:%S') }}
+            wanneer: "{{ trigger.id }}"
+
         # De melding staat ook op de andere telefoon; zonder dit blijft daar een
         # vraag staan die al beantwoord is.
         - action: notify.mobile_devices_adults
