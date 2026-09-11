@@ -457,9 +457,14 @@ carport_keba_p40_package:
              venster dat te lang is dan een auto die 's ochtends leeg staat. #}
           {% set tekort = (cap * doel / 100) if soc is none else ([0, doel - soc] | max * cap / 100) %}
           {% set uren = (tekort / rendement / vermogen * marge) | round(3) if vermogen > 0 else 0 %}
-          {% set eind = today_at(states('input_datetime.charging_station_klaar_om')
-                                if has_value('input_datetime.charging_station_klaar_om') else '07:00:00') %}
-          {% set eind = eind if eind > now() else eind + timedelta(days=1) %}
+          {# Het `timestamp`-attribuut en niet de state: die state heeft geen
+             tijdzone en vergelijken met now() geeft dan een TypeError. Staat de
+             deadline in het verleden (nog nooit gezet, of de vorige laadbeurt),
+             dan vallen we terug op de eerstvolgende 07:00. #}
+          {% set ts = state_attr('input_datetime.charging_station_klaar_om', 'timestamp') | float(none) %}
+          {% set standaard = today_at('07:00') %}
+          {% set standaard = standaard if standaard > now() else standaard + timedelta(days=1) %}
+          {% set eind = (ts | as_datetime(none) | as_local) if ts is not none and ts > as_timestamp(now()) else standaard %}
           {% set kw = state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier', 'raw_today') %}
           {% set vandaag = kw if kw else (state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today') or []) %}
           {% set morgen = state_attr('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow') or [] %}
@@ -593,14 +598,19 @@ carport_keba_p40_package:
       icon: mdi:current-ac
 
   input_datetime:
-    # Uiterlijk klaar. Alles wat het plan kiest moet vóór dit tijdstip afgelopen
+    # Uiterlijk klaar. Alles wat het plan kiest moet vóór dit MOMENT afgelopen
     # zijn; past de benodigde laadtijd er niet meer in, dan begint hij meteen.
-    # 07:00 als startwaarde omdat dat vóór de vroegste schoolrit ligt.
+    #
+    # Met datum én tijd, en dat is het verschil tussen zeven euro en drie. Een
+    # deadline van alleen "07:00" betekent altijd de eerstvolgende ochtend, en
+    # dan moet hij wel 's nachts laden. Op 2026-09-11 kostte dat € 7,47 terwijl
+    # dezelfde 21 kWh de volgende middag € 2,75 kostte: zonovergoten zaterdag,
+    # € 0,13 per kWh tegen € 0,36 's nachts. Wie de auto pas 's middags nodig
+    # heeft, moet dat dus kunnen zeggen - vandaar de vraag bij het insteken.
     charging_station_klaar_om:
       name: "Charging Station - Klaar om"
-      has_date: false
+      has_date: true
       has_time: true
-      initial: "07:00:00"
       icon: mdi:clock-check-outline
 
     # De deadline van de LOPENDE sessie, vastgelegd op het moment dat hij opent.
@@ -823,3 +833,143 @@ carport_keba_p40_package:
         - action: input_boolean.turn_off
           target:
             entity_id: input_boolean.charging_station_laadsessie
+
+    # ------------------------------------------------------------------------
+    # "WANNEER MOET HIJ KLAAR ZIJN?"
+    #
+    # De deadline bepaalt bijna alles aan de prijs. Moet de auto 's ochtends om
+    # zeven uur klaar zijn, dan kan er alleen 's nachts geladen worden en betaal
+    # je het nachttarief. Mag hij een halve dag later klaar zijn, dan valt de
+    # zonnepiek van de middag binnen bereik. Op 2026-09-11 scheelde dat op één
+    # laadbeurt € 7,47 tegen € 2,75 voor dezelfde 21 kWh.
+    #
+    # Dat is te veel om standaard goed te gokken, dus vraagt hij het bij het
+    # insteken. Tot er een antwoord komt geldt de veilige aanname: klaar om
+    # 07:00. Wie niets doet heeft dus gewoon een volle auto 's ochtends.
+    #
+    # De knoppen heten naar het tijdstip en niet naar de dag ("Ochtend 07:00",
+    # niet "morgenochtend"), want steek je om twee uur 's nachts in, dan is de
+    # eerstvolgende ochtend vandaag. De regel die dat uitrekent staat drie keer
+    # hieronder: neem het eerstvolgende moment met die kloktijd dat minstens
+    # drie uur weg is. Zonder die ondergrens zou "Middag 17:00" om kwart voor
+    # vijf 's middags een deadline van een kwartier later opleveren.
+    - id: charging_station_vraag_deadline
+      alias: "Carport - Charging Station Vraag deadline"
+      description: "Vraagt bij het insteken hoe laat de auto klaar moet zijn"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: sensor.charging_station_cable_state_raw
+          to:
+            - "5"
+            - "7"
+      conditions:
+        - condition: state
+          entity_id: input_boolean.charging_station_smart_charging
+          state: "on"
+        # Niet vragen als de kabel alleen even los zat: van 5 naar 7 is
+        # vergrendelen, niet opnieuw insteken.
+        - condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.from_state.state not in ['5', '7'] }}
+      actions:
+        # Terugvallen op de veilige aanname. Doet niemand iets, dan is de auto
+        # 's ochtends vol.
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.charging_station_klaar_om
+          data:
+            datetime: >-
+              {% set t = today_at('07:00') %}
+              {{ (t if (t - now()).total_seconds() > 10800 else t + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S') }}
+        # Even wachten tot het laadplan opnieuw gerekend heeft; de deadline
+        # staat in zijn triggerlijst, dus dat gaat vanzelf. Zelfde truc als bij
+        # de knopmelding in packages/1 - First Floor/Bedroom Maxi.
+        - delay: "00:00:05"
+        - action: notify.mobile_devices_adults
+          data:
+            title: Auto hangt aan de lader
+            message: >-
+              {% set van = state_attr('sensor.charging_station_laadplan', 'van') | as_datetime(none) %}
+              {% set tot = state_attr('sensor.charging_station_laadplan', 'tot') | as_datetime(none) %}
+              {% set kwh = state_attr('sensor.charging_station_laadplan', 'kwh') | float(0) %}
+              {% set gem = state_attr('sensor.charging_station_laadplan', 'gemiddelde') | float(none) %}
+              {% if van is not none %}
+              Klaar om 07:00 betekent laden van {{ van.strftime('%H:%M') }} tot {{ tot.strftime('%H:%M') }}:
+              {{ kwh | round(0) | int }} kWh{{ ' voor € ' ~ ('%.2f' | format(gem * kwh)) | replace('.', ',') if gem is not none else '' }}.
+              Mag hij later klaar zijn? Dan is het meestal een stuk goedkoper.
+              {% else %}
+              Hoe laat moet hij klaar zijn?
+              {% endif %}
+            data:
+              tag: laadpaal_deadline
+              actions:
+                - action: LAADPAAL_KLAAR_OCHTEND
+                  title: Ochtend 07:00
+                - action: LAADPAAL_KLAAR_MIDDAG
+                  title: Middag 17:00
+                - action: LAADPAAL_KLAAR_LATER
+                  title: Pas een dag later
+
+    - id: charging_station_deadline_antwoord
+      alias: "Carport - Charging Station Deadline antwoord"
+      description: "Verwerkt de keuze uit de melding en bevestigt het nieuwe plan"
+      mode: single
+      triggers:
+        - trigger: event
+          event_type: mobile_app_notification_action
+          event_data:
+            action: LAADPAAL_KLAAR_OCHTEND
+          id: ochtend
+        - trigger: event
+          event_type: mobile_app_notification_action
+          event_data:
+            action: LAADPAAL_KLAAR_MIDDAG
+          id: middag
+        - trigger: event
+          event_type: mobile_app_notification_action
+          event_data:
+            action: LAADPAAL_KLAAR_LATER
+          id: later
+      conditions: []
+      actions:
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.charging_station_klaar_om
+          data:
+            datetime: >-
+              {% set klok = '17:00' if trigger.id == 'middag' else '07:00' %}
+              {% set t = today_at(klok) %}
+              {% set t = t if (t - now()).total_seconds() > 10800 else t + timedelta(days=1) %}
+              {% set t = t + timedelta(days=1) if trigger.id == 'later' else t %}
+              {{ t.strftime('%Y-%m-%d %H:%M:%S') }}
+        # De melding staat ook op de andere telefoon; zonder dit blijft daar een
+        # vraag staan die al beantwoord is.
+        - action: notify.mobile_devices_adults
+          data:
+            message: clear_notification
+            data:
+              tag: laadpaal_deadline
+        - delay: "00:00:05"
+        - action: notify.mobile_devices_adults
+          data:
+            title: Laadplan aangepast
+            message: >-
+              {% set reden = states('sensor.charging_station_laadplan') %}
+              {% set van = state_attr('sensor.charging_station_laadplan', 'van') | as_datetime(none) %}
+              {% set tot = state_attr('sensor.charging_station_laadplan', 'tot') | as_datetime(none) %}
+              {% set kwh = state_attr('sensor.charging_station_laadplan', 'kwh') | float(0) %}
+              {% set gem = state_attr('sensor.charging_station_laadplan', 'gemiddelde') | float(none) %}
+              {% set dl = state_attr('input_datetime.charging_station_klaar_om', 'timestamp') | as_datetime(none) %}
+              {% if reden == 'plan' and van is not none %}
+              Klaar om {{ (dl | as_local).strftime('%H:%M') }}. Laden van
+              {{ van.strftime('%H:%M') }} tot {{ tot.strftime('%H:%M') }}, {{ kwh | round(0) | int }} kWh
+              {{- ' voor € ' ~ ('%.2f' | format(gem * kwh)) | replace('.', ',') if gem is not none else '' }}.
+              {% elif reden == 'vol' %}
+              De auto is al vol, er valt niets te plannen.
+              {% else %}
+              Het past niet meer voor die tijd, hij begint meteen.
+              {% endif %}
+            data:
+              tag: laadpaal_deadline_bevestiging

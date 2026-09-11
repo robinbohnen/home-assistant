@@ -876,14 +876,24 @@ cards:
               action: toggle
             hold_action:
               action: more-info
-          # Tik erop om het tijdstip te veranderen. Alles wat het plan kiest moet
+          # Tik erop om het moment te veranderen. Alles wat het plan kiest moet
           # hiervoor afgelopen zijn; past het niet, dan begint hij meteen.
+          #
+          # De DAG staat er bewust bij en niet alleen de tijd. Juist het verschil
+          # tussen "morgenochtend" en "morgenmiddag" bepaalt de prijs, en met
+          # alleen "07:00" op het scherm zie je niet welke van de twee er staat.
           - type: custom:mushroom-template-card
             entity: input_datetime.charging_station_klaar_om
             primary: Klaar om
             secondary: >-
               {% set t = state_attr('input_datetime.charging_station_klaar_om', 'timestamp') | float(none) %}
-              {{ (t | timestamp_custom('%H:%M', true)) if t is not none else '—' }}
+              {% if t is none %}—
+              {% else %}
+                {% set d = (t | as_datetime(none) | as_local) %}
+                {% set n = (d.date() - now().date()).days %}
+                {{ 'vandaag' if n == 0 else ('morgen' if n == 1 else ('overmorgen' if n == 2 else d.strftime('%d-%m'))) }}
+                {{ d.strftime('%H:%M') }}
+              {% endif %}
             icon: mdi:clock-check-outline
             icon_color: grey
             tap_action:
