@@ -45,10 +45,11 @@
       `werk()` op het veld `type` (Huiswerk / Proefwerk / Tentamen /
       Schriftelijke Overhoring / Mondelinge Overhoring) en niet op die vlag.
 
-  Wat een "les" is, is hier hetzelfde gedefinieerd als in de integratie
-  (`_get_school_lessen` + `_non_midnight_lessons`): geen huiswerkregel, niet
-  vervallen, en niet om 00:00 beginnend - dat laatste zijn dagvullende
-  mededelingen, die zouden de schooldag anders om middernacht laten beginnen.
+  Wat een "les" is: een afspraak die niet vervallen is en niet om 00:00 begint
+  - dat laatste zijn dagvullende mededelingen en losse huiswerkregels, die
+  zouden de schooldag anders om middernacht laten beginnen. Bewust NIET op
+  `is_huiswerk` gefilterd, anders dan de integratie zelf doet: die vlag zit
+  ook op een gewone les waarin huiswerk is opgegeven.
 
   ---------------------------------------------------------------------------
   MARKDOWN, GEEN LOSSE REGELS
@@ -121,17 +122,27 @@
 
 {%- macro lessen_json(kind, d) -%}
   {#- Alle échte lessen op dag `d`, op tijd gesorteerd. -#}
+  {#- NIET op `is_huiswerk` filteren. Magister hangt het huiswerk aan de LES
+      waarin het is opgegeven, dus een gewoon lesuur met huiswerk draagt die
+      vlag ook. Dat filter liet precies de uren verdwijnen waar iets voor moet
+      gebeuren (11-09-2026: wiskunde 3e en Nederlands 6e uur weg uit het
+      rooster, wél in de kalender). Huiswerk zonder les is altijd een
+      dagitem van 00:00 en valt al af op de regex hieronder. -#}
   {{- afspraken_json(kind) | from_json
-        | rejectattr('is_huiswerk') | rejectattr('is_uitval')
+        | rejectattr('is_uitval')
         | selectattr('start', 'match', d ~ ' (?!00:00)')
         | sort(attribute='start') | list | to_json -}}
 {%- endmacro -%}
 
 
 {%- macro uitval_json(kind, d) -%}
+  {#- Zelfde reden als bij `lessen_json`: op `is_huiswerk` filteren zou een
+      vervallen les met huiswerk stil weglaten. De 00:00-uitsluiting moet wél,
+      anders telt een geschrapt dagitem (vervallen huiswerk) mee als een
+      vervallen lesuur. -#}
   {{- afspraken_json(kind) | from_json
-        | selectattr('is_uitval') | rejectattr('is_huiswerk')
-        | selectattr('start', 'match', d)
+        | selectattr('is_uitval')
+        | selectattr('start', 'match', d ~ ' (?!00:00)')
         | sort(attribute='start') | list | to_json -}}
 {%- endmacro -%}
 
@@ -143,7 +154,7 @@
       'list' object is unsafe"), dus de datum wordt er met een regex afgeknipt
       in plaats van in een lus verzameld. -#}
   {{- afspraken_json(kind) | from_json
-        | rejectattr('is_huiswerk') | rejectattr('is_uitval')
+        | rejectattr('is_uitval')
         | rejectattr('start', 'search', ' 00:00')
         | map(attribute='start') | map('regex_replace', ' .*$', '')
         | unique | sort | list | to_json -}}
@@ -471,12 +482,16 @@ _Nog geen kinderen opgehaald uit Magister._
 {%- set vandaag = now().strftime('%Y-%m-%d') -%}
 {%- set nu_str = now().strftime('%Y-%m-%d %H:%M:%S') -%}
 {% for naam, k in kinderen.items() -%}
+{#- Dezelfde filterregels als `lessen_json` / `uitval_json`, met de hand
+    overgeschreven omdat de afspraken hier uit `sensor.magister_data` komen en
+    niet uit een sensor per kind. Wijzigt daar de definitie van "een les", dan
+    ook hier. -#}
 {%- set les = k.afspraken | default([], true)
-              | rejectattr('is_huiswerk') | rejectattr('is_uitval')
+              | rejectattr('is_uitval')
               | selectattr('start', 'match', vandaag ~ ' (?!00:00)')
               | sort(attribute='start') | list -%}
 {%- set weg = k.afspraken | default([], true) | selectattr('is_uitval')
-              | rejectattr('is_huiswerk') | selectattr('start', 'match', vandaag) | list -%}
+              | selectattr('start', 'match', vandaag ~ ' (?!00:00)') | list -%}
 {%- set bezig = les | selectattr('start', 'le', nu_str) | selectattr('einde', 'gt', nu_str) | list -%}
 - **{{ naam.split(' ') | first }}** — {% if les | count == 0 %}vrij vandaag
 {%- elif nu_str < (les | first).start %}school {{ (les | first).start[11:16] }} tot {{ (les | last).einde[11:16] }}
