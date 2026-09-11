@@ -828,7 +828,66 @@ cards:
           # 6 A leest de wallbox óók als pauze, want lager kan hij niet.
           - type: custom:mushroom-title-card
             title: Sturing
-            subtitle: uit = de laadpaal gaat zijn eigen gang op vol vermogen
+            subtitle: slim laden op prijs, of zelf de stroom bepalen
+          # ----- Slim laden -----
+          # De hele afspraak in één kaart: aan betekent dat de wallbox
+          # permanent op 0 A staat en alleen opengaat in het geplande venster.
+          # Insteken start dus NIET het laden; dat is precies de bedoeling.
+          #
+          # De ondertitel vertelt in welke toestand hij zit en waaróm, want dat
+          # is de vraag die je je bij een laadpaal die niets doet als eerste
+          # stelt. Acht mogelijke antwoorden, van "wacht op de stekker" tot
+          # "past niet meer voor de deadline".
+          - type: custom:mushroom-template-card
+            entity: input_boolean.charging_station_smart_charging
+            primary: >-
+              {{ 'Slim laden' if is_state('input_boolean.charging_station_smart_charging', 'on') else 'Slim laden uit' }}
+            secondary: >-
+              {% set r = states('sensor.charging_station_laadplan') %}
+              {% set van = state_attr('sensor.charging_station_laadplan', 'van') | as_datetime(none) %}
+              {% set tot = state_attr('sensor.charging_station_laadplan', 'tot') | as_datetime(none) %}
+              {% set kwh = state_attr('sensor.charging_station_laadplan', 'kwh') | float(none) %}
+              {% set gem = state_attr('sensor.charging_station_laadplan', 'gemiddelde') | float(none) %}
+              {% set kabel = states('sensor.charging_station_cable_state_raw') in ['5', '7'] %}
+              {% set dag = '' if van is none or van.date() == now().date() else ('morgen ' if (van.date() - now().date()).days == 1 else van.strftime('%a ')) %}
+              {% if is_state('input_boolean.charging_station_smart_charging', 'off') %}
+              uit · de paal laadt meteen bij insteken
+              {%- elif is_state('input_boolean.charging_station_laadsessie', 'on') %}
+              laadt nu{{ ' · nog ' ~ (kwh | round(0) | int) ~ ' kWh te gaan' if kwh is not none and kwh > 0 else '' }}
+              {%- elif r == 'vol' %}
+              de auto is vol
+              {%- elif r == 'plan' and van is not none %}
+              {{ '' if kabel else 'zodra de stekker erin zit: ' }}{{ dag }}{{ van.strftime('%H:%M') }}–{{ tot.strftime('%H:%M') }} · {{ kwh | round(0) | int }} kWh{{ ' · € ' ~ ('%.3f' | format(gem)) | replace('.', ',') ~ '/kWh' if gem is not none else '' }}
+              {%- elif r == 'past niet' %}
+              past niet meer voor de deadline · begint meteen
+              {%- elif r == 'geen prijzen' %}
+              geen prijsvoorspelling · begint meteen
+              {%- else %}
+              plan nog niet berekend
+              {%- endif %}
+            icon: mdi:cash-clock
+            icon_color: >-
+              {% if is_state('input_boolean.charging_station_smart_charging', 'off') %}grey
+              {%- elif is_state('input_boolean.charging_station_laadsessie', 'on') %}green
+              {%- elif states('sensor.charging_station_laadplan') == 'vol' %}blue
+              {%- elif states('sensor.charging_station_laadplan') in ['past niet', 'geen prijzen'] %}orange
+              {%- else %}blue{% endif %}
+            tap_action:
+              action: toggle
+            hold_action:
+              action: more-info
+          # Tik erop om het tijdstip te veranderen. Alles wat het plan kiest moet
+          # hiervoor afgelopen zijn; past het niet, dan begint hij meteen.
+          - type: custom:mushroom-template-card
+            entity: input_datetime.charging_station_klaar_om
+            primary: Klaar om
+            secondary: >-
+              {% set t = state_attr('input_datetime.charging_station_klaar_om', 'timestamp') | float(none) %}
+              {{ (t | timestamp_custom('%H:%M', true)) if t is not none else '—' }}
+            icon: mdi:clock-check-outline
+            icon_color: grey
+            tap_action:
+              action: more-info
           - type: custom:mushroom-template-card
             entity: input_boolean.charging_station_modbus_control
             primary: "{{ 'Home Assistant stuurt' if is_state('input_boolean.charging_station_modbus_control','on') else 'Laadpaal stuurt zichzelf' }}"

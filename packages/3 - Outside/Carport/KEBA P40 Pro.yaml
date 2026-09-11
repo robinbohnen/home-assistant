@@ -399,12 +399,186 @@ carport_keba_p40_package:
   # wallbox die zijn relais schakelt, een deel is de `scan_interval` van 30 s op
   # de sensor hieronder. Lees dus 1552 voor de werkelijke stand en niet wat je
   # als laatste gevraagd hebt.
+    # ------------------------------------------------------------------------
+    # HET LAADPLAN
+    #
+    # Rekent uit hoeveel er in de accu moet, hoe lang dat duurt, en welk
+    # aaneengesloten venster in de kwartierprijzen dat het goedkoopst doet vóór
+    # `klaar_om`. Zelfde zoekmethode als `sensor.goedkoopste_laadvenster` in
+    # packages/9 - Other/Stroomprijs.yaml, met twee verschillen: de lengte volgt
+    # uit de auto in plaats van een vaste drie uur, en het venster moet vóór de
+    # deadline afgelopen zijn.
+    #
+    # Trigger-based met een minuut-tik, net als die andere: een gewone template
+    # met `now()` zou ook werken, maar zo staat de berekening één keer in
+    # `variables` en rekenen state en attributen gegarandeerd over hetzelfde
+    # plan.
+    #
+    # Waar de getallen vandaan komen:
+    #  * 60 kWh bruikbare capaciteit. Dat de Megane de EV60 is en niet de EV40
+    #    is onderbouwd in packages/9 - Other/Car.yaml; dezelfde constante.
+    #  * 90% rendement. Wat er uit de muur gaat is meer dan wat er in de accu
+    #    komt; laadverlies en accuconditionering zitten daarin.
+    #  * 15% marge bovenop de rekentijd. Een auto trekt de laatste procenten
+    #    langzamer, en een venster dat net te kort is kost je de deadline.
+    #  * Het vermogen komt uit de WALLBOX (max stroom maal fasen maal 230 V) en
+    #    niet uit de auto: `sensor.hrh85f_admissible_charging_power` staat hier
+    #    standaard op `unknown`. Dat is een bovengrens, dus als de auto minder
+    #    aankan duurt het langer dan gepland. Daarom stopt het laden ook niet
+    #    aan het eind van het venster maar pas als de auto vol is of de deadline
+    #    verstrijkt: dan kost een te optimistische schatting je wat geld, geen
+    #    lege accu.
+    #
+    # Let op bij het lezen van `gemiddelde`: dat is het gemiddelde over het hele
+    # venster. Dat kan hóger zijn dan de prijs van dit moment terwijl het plan
+    # toch klopt - het lopende kwartier kan goedkoop zijn met een dure staart
+    # erachter. Vergelijk dus vensters met vensters, niet met de spotprijs.
+    - triggers:
+        - trigger: time_pattern
+          minutes: "/1"
+        - trigger: state
+          entity_id:
+            - sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
+            - sensor.slimhuys_zonneplan_prijzen_morgen
+            - sensor.hrh85f_batterij
+            - number.megane_e_tech_target_charge_level
+            - input_datetime.charging_station_klaar_om
+      variables:
+        plan: >-
+          {% set cap = 60 %}
+          {% set rendement = 0.90 %}
+          {% set marge = 1.15 %}
+          {% set soc = states('sensor.hrh85f_batterij') | float(none) %}
+          {% set doel = states('number.megane_e_tech_target_charge_level') | float(100) %}
+          {% set amp = states('sensor.charging_station_max_supported_current') | float(16) %}
+          {% set fasen = states('sensor.charging_station_phases') | float(3) %}
+          {% set vermogen = (amp * 230 * fasen / 1000) | round(2) %}
+          {# Geen accustand? Dan rekenen we op een volle lading. Liever een
+             venster dat te lang is dan een auto die 's ochtends leeg staat. #}
+          {% set tekort = (cap * doel / 100) if soc is none else ([0, doel - soc] | max * cap / 100) %}
+          {% set uren = (tekort / rendement / vermogen * marge) | round(3) if vermogen > 0 else 0 %}
+          {% set eind = today_at(states('input_datetime.charging_station_klaar_om')
+                                if has_value('input_datetime.charging_station_klaar_om') else '07:00:00') %}
+          {% set eind = eind if eind > now() else eind + timedelta(days=1) %}
+          {% set kw = state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier', 'raw_today') %}
+          {% set vandaag = kw if kw else (state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today') or []) %}
+          {% set morgen = state_attr('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow') or [] %}
+          {% set ns = namespace(punten=[]) %}
+          {% for b in vandaag + morgen %}
+            {% set s = b.start | as_datetime(none) %}
+            {% set p = b.value | float(none) %}
+            {% if s is not none and p is not none %}{% set ns.punten = ns.punten + [{'t': as_timestamp(s), 'p': p}] %}{% endif %}
+          {% endfor %}
+          {% set punten = ns.punten | sort(attribute='t') %}
+          {% set nu = as_timestamp(now()) %}
+          {% set eind_ts = as_timestamp(eind) %}
+          {% if uren <= 0.01 %}
+            {{ {'reden': 'vol', 'uren': 0, 'kwh': 0, 'vermogen': vermogen, 'deadline': eind.isoformat()} }}
+          {% elif (punten | count) < 2 %}
+            {{ {'reden': 'geen prijzen', 'uren': uren, 'kwh': tekort | round(2), 'vermogen': vermogen, 'deadline': eind.isoformat()} }}
+          {% else %}
+            {% set stap = punten[1].t - punten[0].t %}
+            {% set nodig = [1, ((uren * 3600) / stap) | round(0, 'ceil') | int] | max %}
+            {% set best = namespace(gem=none, van=none, tot=none) %}
+            {% for i in range(0, (punten | count) - nodig + 1) %}
+              {% set start = punten[i].t %}
+              {% set stop = punten[i + nodig - 1].t + stap %}
+              {# Het lopende blok telt mee, maar een venster dat al voorbij is niet.
+                 En het moet in zijn geheel vóór de deadline passen. #}
+              {% if start + stap > nu and stop <= eind_ts %}
+                {% set w = namespace(som=0.0, ok=true) %}
+                {% for j in range(nodig) %}
+                  {% if j > 0 and (punten[i + j].t - punten[i + j - 1].t) != stap %}{% set w.ok = false %}{% endif %}
+                  {% set w.som = w.som + punten[i + j].p %}
+                {% endfor %}
+                {% if w.ok %}
+                  {% set gem = w.som / nodig %}
+                  {% if best.gem is none or gem < best.gem %}
+                    {% set best.gem = gem %}{% set best.van = start %}{% set best.tot = stop %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if best.gem is none %}
+              {{ {'reden': 'past niet', 'uren': uren, 'kwh': tekort | round(2),
+                  'vermogen': vermogen, 'deadline': eind.isoformat(),
+                  'van': (nu | as_datetime | as_local).isoformat(), 'tot': eind.isoformat()} }}
+            {% else %}
+              {{ {'reden': 'plan', 'uren': uren, 'kwh': tekort | round(2), 'vermogen': vermogen,
+                  'deadline': eind.isoformat(),
+                  'van': (best.van | as_datetime | as_local).isoformat(),
+                  'tot': (best.tot | as_datetime | as_local).isoformat(),
+                  'gemiddelde': best.gem | round(4)} }}
+            {% endif %}
+          {% endif %}
+      sensor:
+        # De state is de RÉDEN en niet de starttijd. Een timestamp-sensor zou
+        # `unavailable` moeten worden zodra er niets te plannen valt, en dan zijn
+        # de attributen in een automatisering ook niet meer te vertrouwen.
+        # "vol" / "plan" / "past niet" / "geen prijzen" is altijd leesbaar.
+        - name: "Charging Station - Laadplan"
+          unique_id: charging_station_laadplan
+          icon: mdi:calendar-clock
+          state: "{{ plan.reden if plan is mapping else 'onbekend' }}"
+          attributes:
+            van: "{{ plan.van if plan is mapping and 'van' in plan else none }}"
+            tot: "{{ plan.tot if plan is mapping and 'tot' in plan else none }}"
+            uren: "{{ plan.uren if plan is mapping else none }}"
+            kwh: "{{ plan.kwh if plan is mapping else none }}"
+            vermogen: "{{ plan.vermogen if plan is mapping else none }}"
+            gemiddelde: "{{ plan.gemiddelde if plan is mapping and 'gemiddelde' in plan else none }}"
+            deadline: "{{ plan.deadline if plan is mapping else none }}"
+
+    - sensor:
+        # DE ENIGE BRON VOOR WAT ER NAAR REGISTER 5004 GAAT. Eén schrijver, zodat
+        # handbediening en slim laden niet om de beurt een ander getal in de
+        # wallbox duwen. `unavailable` betekent hier "Home Assistant stuurt
+        # niet"; dan schrijft het script hieronder niets en laat het de wallbox
+        # via zijn eigen failsafe terugvallen op vol vermogen.
+        - name: "Charging Station - Gewenste stroom"
+          unique_id: charging_station_gewenste_stroom
+          unit_of_measurement: "A"
+          device_class: current
+          icon: mdi:current-ac
+          availability: >-
+            {{ is_state('input_boolean.charging_station_smart_charging', 'on')
+               or is_state('input_boolean.charging_station_modbus_control', 'on') }}
+          state: >-
+            {% if is_state('input_boolean.charging_station_smart_charging', 'on') %}
+              {{ (states('sensor.charging_station_max_supported_current') | float(16)) | round(0) | int
+                 if is_state('input_boolean.charging_station_laadsessie', 'on') else 0 }}
+            {% else %}
+              {{ states('input_number.charging_station_charging_current') | float(0) | round(0) | int }}
+            {% endif %}
+
   input_boolean:
     # Uit = de wallbox doet zijn eigen ding op vol vermogen en HA schrijft
     # niets. Aan = HA houdt het setpoint hieronder vast met de hartslag.
     charging_station_modbus_control:
       name: "Charging Station - Modbus control"
       icon: mdi:transmission-tower-import
+
+    # Slim laden op de kwartierprijzen. Aan betekent: de wallbox staat
+    # permanent op 0 A, ook als er geen auto hangt, en gaat alleen open in het
+    # geplande venster. Dat "permanent" is geen slordigheid maar de kern: de
+    # KEBA begint binnen een paar seconden na het insteken te laden, dus als je
+    # pas op de stekker reageert ben je te laat en heb je al op het duurste
+    # moment geladen. Keerzijde: zolang dit aan staat kan een bezoeker hier ook
+    # niet laden zonder de schakelaar om te zetten.
+    charging_station_smart_charging:
+      name: "Charging Station - Smart charging"
+      icon: mdi:cash-clock
+
+    # De grendel. Zonder deze vlag zou het plan zichzelf in de staart bijten:
+    # het plan wordt elke minuut opnieuw uitgerekend, en zodra er stroom in de
+    # accu zit is er minder tijd nodig, dus verschuift het goedkoopste venster
+    # naar later. Dan valt "nu" buiten het venster, stopt het laden, blijft de
+    # accustand staan, schuift het venster terug, en begint het laden weer.
+    # Daarom: eenmaal begonnen blijft de sessie open tot de auto vol is, de
+    # deadline verstrijkt of de stekker eruit gaat.
+    charging_station_laadsessie:
+      name: "Charging Station - Laadsessie actief"
+      icon: mdi:ev-station
 
   input_number:
     # 0 is pauze, 6 tot 16 is laden. De KEBA kent niets tussen 0 en 6 A, dus
@@ -417,6 +591,27 @@ carport_keba_p40_package:
       step: 1
       unit_of_measurement: "A"
       icon: mdi:current-ac
+
+  input_datetime:
+    # Uiterlijk klaar. Alles wat het plan kiest moet vóór dit tijdstip afgelopen
+    # zijn; past de benodigde laadtijd er niet meer in, dan begint hij meteen.
+    # 07:00 als startwaarde omdat dat vóór de vroegste schoolrit ligt.
+    charging_station_klaar_om:
+      name: "Charging Station - Klaar om"
+      has_date: false
+      has_time: true
+      initial: "07:00:00"
+      icon: mdi:clock-check-outline
+
+    # De deadline van de LOPENDE sessie, vastgelegd op het moment dat hij opent.
+    # Kan niet uit het laadplan gelezen worden: die deadline rolt om zodra de
+    # klok er voorbij is, dus "now() >= deadline" wordt daar nooit waar en zou
+    # het laden nooit afkappen.
+    charging_station_sessie_deadline:
+      name: "Charging Station - Sessie deadline"
+      has_date: true
+      has_time: true
+      icon: mdi:clock-alert-outline
 
   script:
     charging_station_push_setpoint:
@@ -439,7 +634,7 @@ carport_keba_p40_package:
             slave: 255
             address: 5004
             value: >-
-              {% set a = states('input_number.charging_station_charging_current') | float(0) %}
+              {% set a = states('sensor.charging_station_gewenste_stroom') | float(0) %}
               {{ 0 if a < 6 else (a * 1000) | round(0) | int }}
 
     charging_station_release:
@@ -488,18 +683,16 @@ carport_keba_p40_package:
       max_exceeded: silent
       triggers:
         - trigger: state
-          entity_id: input_boolean.charging_station_modbus_control
-          to: "on"
-        - trigger: state
-          entity_id: input_number.charging_station_charging_current
+          entity_id: sensor.charging_station_gewenste_stroom
         # De hartslag. Vuurt altijd, maar de conditie hieronder laat hem er
         # alleen door als HA ook echt stuurt.
         - trigger: time_pattern
           seconds: "/15"
       conditions:
-        - condition: state
-          entity_id: input_boolean.charging_station_modbus_control
-          state: "on"
+        # `unavailable` op deze sensor betekent: noch handbediening noch slim
+        # laden staat aan, dus niets schrijven.
+        - condition: template
+          value_template: "{{ has_value('sensor.charging_station_gewenste_stroom') }}"
         # Schrijven terwijl de hub weg is levert alleen een logregel op. Deze
         # sensor komt uit dezelfde modbus-verbinding, dus als hij een waarde
         # heeft staat de verbinding.
@@ -514,8 +707,119 @@ carport_keba_p40_package:
       mode: single
       triggers:
         - trigger: state
-          entity_id: input_boolean.charging_station_modbus_control
-          from: "on"
-          to: "off"
+          entity_id: sensor.charging_station_gewenste_stroom
+          to:
+            - unavailable
+            - unknown
+      conditions:
+        # Zonder deze guard vuurt hij ook bij het opstarten van Home Assistant,
+        # als de sensor van `unknown` naar een waarde gaat en er dus nooit iets
+        # losgelaten hoefde te worden.
+        - condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.from_state.state not in ['unavailable', 'unknown'] }}
       actions:
         - action: script.charging_station_release
+
+    # ------------------------------------------------------------------------
+    # SLIM LADEN
+    #
+    # De grendel uit `charging_station_laadsessie` wordt hier gezet en gehaald.
+    # Zolang hij dicht is staat de gewenste stroom op 0 en laadt de auto niet,
+    # ook al zit de stekker erin. Dat is het gedrag dat gevraagd is: insteken
+    # betekent niet meteen laden.
+    #
+    # Waarom de sessie niet gewoon "nu in het venster?" leest: het plan wordt
+    # elke minuut opnieuw gemaakt en schuift op zodra er stroom in de accu zit.
+    # Zonder grendel zou hij zichzelf na een paar minuten weer uitzetten. Zie de
+    # toelichting bij de helper.
+    #
+    # Kabelstatus 5 of 7 betekent "kabel zit in de auto"; 0, 1 en 3 zijn alle
+    # varianten van "hangt alleen aan de paal". Die komt uit de wallbox en niet
+    # uit `binary_sensor.hrh85f_stekker`, want dat is de Renault-cloud en die
+    # zwijgt regelmatig - zie de opmerking bij de laadregel op het dashboard.
+    - id: charging_station_smart_charge_start
+      alias: "Carport - Charging Station Smart charge start"
+      description: "Opent de laadsessie zodra het geplande goedkope venster begint"
+      mode: single
+      max_exceeded: silent
+      triggers:
+        # Vijf minuten is ruim genoeg op kwartierblokken: je verliest hooguit
+        # een paar minuten aan de voorkant van een venster van uren.
+        - trigger: time_pattern
+          minutes: "/5"
+        - trigger: state
+          entity_id: sensor.charging_station_cable_state_raw
+      conditions:
+        - condition: state
+          entity_id: input_boolean.charging_station_smart_charging
+          state: "on"
+        - condition: state
+          entity_id: input_boolean.charging_station_laadsessie
+          state: "off"
+        - condition: template
+          value_template: "{{ states('sensor.charging_station_cable_state_raw') in ['5', '7'] }}"
+        # "vol" valt hier af, want dan is er niets te laden. "geen prijzen"
+        # start meteen: zonder prijsvoorspelling is een lege auto 's ochtends
+        # erger dan een paar euro te veel betalen.
+        - condition: template
+          value_template: >-
+            {% set reden = states('sensor.charging_station_laadplan') %}
+            {% set van = state_attr('sensor.charging_station_laadplan', 'van') | as_datetime(none) %}
+            {{ reden in ['plan', 'past niet', 'geen prijzen']
+               and (van is none or now() >= van) }}
+      actions:
+        # Eerst de deadline vastleggen, dan pas de grendel open. Andersom kan de
+        # stop-automatisering een sessie zien met een deadline van de vorige keer.
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.charging_station_sessie_deadline
+          data:
+            datetime: >-
+              {% set dl = state_attr('sensor.charging_station_laadplan', 'deadline') | as_datetime(none) %}
+              {{ (dl | as_local).strftime('%Y-%m-%d %H:%M:%S')
+                 if dl is not none else (now() + timedelta(hours=12)).strftime('%Y-%m-%d %H:%M:%S') }}
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.charging_station_laadsessie
+
+    # Vier manieren om te stoppen, en geen daarvan is "het venster is voorbij".
+    # Het geplande vermogen is een BOVENGRENS uit de wallbox; kan de auto minder
+    # aan, dan duurt het langer dan gepland. Afkappen op de vensterrand zou dan
+    # een halfvolle accu opleveren. Doorladen tot vol of tot de deadline kost in
+    # het slechtste geval wat geld, en dat is de goede kant om fout te zitten.
+    - id: charging_station_smart_charge_stop
+      alias: "Carport - Charging Station Smart charge stop"
+      description: "Sluit de laadsessie bij vol, deadline, stekker eruit of slim laden uit"
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: time_pattern
+          minutes: "/5"
+        - trigger: state
+          entity_id:
+            - sensor.hrh85f_batterij
+            - sensor.charging_station_cable_state_raw
+            - input_boolean.charging_station_smart_charging
+      conditions:
+        - condition: state
+          entity_id: input_boolean.charging_station_laadsessie
+          state: "on"
+        - condition: template
+          value_template: >-
+            {% set soc = states('sensor.hrh85f_batterij') | float(none) %}
+            {% set doel = states('number.megane_e_tech_target_charge_level') | float(100) %}
+            {# Het `timestamp`-attribuut en niet de state: die state is een tijd
+               ZONDER tijdzone, en `now()` heeft er wel een. Vergelijken geeft dan
+               "can't compare offset-naive and offset-aware datetimes" en dan
+               stopt deze automatisering nooit meer. #}
+            {% set dl = state_attr('input_datetime.charging_station_sessie_deadline', 'timestamp') | float(none) %}
+            {{ states('sensor.charging_station_cable_state_raw') not in ['5', '7']
+               or is_state('input_boolean.charging_station_smart_charging', 'off')
+               or (soc is not none and soc >= doel)
+               or (dl is not none and as_timestamp(now()) >= dl) }}
+      actions:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.charging_station_laadsessie
