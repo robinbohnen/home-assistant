@@ -993,6 +993,104 @@ cards:
                   {{ 'geen' if e == '0' else (e if has_value('sensor.charging_station_error_code') else '—') }}
                 icon: mdi:alert-circle-outline
                 icon_color: "{{ 'grey' if states('sensor.charging_station_error_code') == '0' else 'red' }}"
+          # ----- Joulo -----
+          # Joulo boekt de sessies van deze paal in bij de NEa en verkoopt de
+          # ERE-certificaten door; packages/3 - Outside/Carport/Joulo.yaml haalt
+          # die administratie op. Het staat onderaan deze popup en niet bovenin,
+          # want het zegt niets over wat de auto nú doet.
+          #
+          # Bewust geen kilowatturen van Joulo naast die van de wallbox in het
+          # blok hierboven: Joulo telt de oude EVHUB mee en zou dan een ander
+          # totaal laten zien dan de paal zelf. Dat leest als een storing
+          # terwijl beide getallen kloppen.
+          - type: custom:mushroom-title-card
+            title: Joulo
+            subtitle: ERE-certificaten voor de laadsessies
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.joulo_verwachte_jaaropbrengst
+                primary: Verwacht dit jaar
+                secondary: >-
+                  {% set v = states('sensor.joulo_verwachte_jaaropbrengst') | float(none) %}
+                  {{ '—' if v is none else '€ ' ~ ('%.2f' | format(v)) | replace('.', ',') }}
+                icon: mdi:cash-multiple
+                icon_color: green
+              - type: custom:mushroom-template-card
+                entity: sensor.joulo_onverkochte_ere
+                primary: Onverkochte ERE
+                secondary: >-
+                  {% set v = states('sensor.joulo_onverkochte_ere') | float(none) %}
+                  {{ '—' if v is none else (v | round(1)) | string | replace('.', ',') ~ ' credits' }}
+                icon: mdi:certificate-outline
+                icon_color: blue
+              - type: custom:mushroom-template-card
+                entity: sensor.joulo_uitbetaald_netto
+                primary: Uitbetaald
+                secondary: >-
+                  {% set p = states('sensor.joulo_uitbetaald_netto') | float(none) %}
+                  {% set r = states('sensor.joulo_gereserveerd_netto') | float(none) %}
+                  {% if p is none %}—
+                  {% else %}€ {{ ('%.2f' | format(p)) | replace('.', ',') }}
+                    {%- if r is not none and r > 0 %} · € {{ ('%.2f' | format(r)) | replace('.', ',') }} gereserveerd{% endif %}
+                  {% endif %}
+                icon: mdi:bank-transfer-in
+                icon_color: grey
+              # De vraag die er echt toe doet: krijgt Joulo de meterstanden nog
+              # binnen? Zo niet, dan lopen er stilletjes geen ERE-credits meer
+              # op terwijl alles er verder normaal uitziet.
+              #
+              # NIET op `meter_updated_at` alleen afgaan. Die tijdstempel bleef
+              # op 2026-09-11 gewoon elke minuut opschuiven terwijl de wallbox
+              # volledig van het netwerk af was - hij zegt wanneer Joulo zijn
+              # eigen record ververste, niet wanneer het laadstation nog iets
+              # gemeld heeft. Hetzelfde geldt voor het veld `status`, dat bleef
+              # op "active" staan. Het enige harde signaal is de METERSTAND:
+              # loopt die van Joulo gelijk met wat de wallbox zelf via modbus
+              # meldt, dan komt de data door. Kan die vergelijking niet gemaakt
+              # worden, dan blijft de tegel grijs in plaats van groen - liever
+              # "ik weet het niet" dan een vinkje dat nergens op slaat.
+              - type: custom:mushroom-template-card
+                entity: sensor.joulo_meterstand
+                primary: Meterkoppeling
+                secondary: >-
+                  {% set j = states('sensor.joulo_meterstand') | float(none) %}
+                  {% set m = states('sensor.charging_station_total_energy') | float(none) %}
+                  {% set t = states('sensor.joulo_meterstand_bijgewerkt') | as_datetime %}
+                  {% if j is none or m is none %}
+                    niet te vergelijken
+                  {% elif (m - j) | abs <= 0.1 %}
+                    gelijk met de wallbox{{ ' · ' ~ as_local(t).strftime('%H:%M') if t is not none else '' }}
+                  {% else %}
+                    {{ ((m - j) | abs | round(1)) | string | replace('.', ',') }} kWh achter op de wallbox
+                  {% endif %}
+                icon: mdi:cloud-check-outline
+                icon_color: >-
+                  {% set j = states('sensor.joulo_meterstand') | float(none) %}
+                  {% set m = states('sensor.charging_station_total_energy') | float(none) %}
+                  {% if j is none or m is none %}grey
+                  {% elif (m - j) | abs <= 0.1 %}green
+                  {% else %}orange{% endif %}
+          # De modbus-server van deze paal is op 2026-09-10 een keer vastgelopen
+          # terwijl REST en het laden zelf gewoon doorliepen. Een soft reset via
+          # Joulo is dan het minst ingrijpende herstel dat je van afstand hebt.
+          # Cooldown van ongeveer vijf minuten per station, dus nog een keer
+          # drukken helpt niet. Confirmation staat erop omdat dit een lopende
+          # sessie afbreekt.
+          - type: custom:mushroom-template-card
+            primary: Laadstation herstarten
+            secondary: >-
+              {% if is_state('binary_sensor.joulo_is_charging','on') %}let op: de lopende sessie stopt
+              {%- else %}soft reset via Joulo{% endif %}
+            icon: mdi:restart
+            icon_color: orange
+            tap_action:
+              action: perform-action
+              perform_action: rest_command.joulo_reboot_charger
+              confirmation:
+                text: Het laadstation herstarten via Joulo?
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#ov-vandaag"

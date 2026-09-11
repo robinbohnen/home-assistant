@@ -1,0 +1,184 @@
+carport_joulo_package:
+  # Joulo boekt de laadsessies van de KEBA in bij de NEa en zet ze om in
+  # ERE-certificaten; dit pakket haalt die administratie op via hun REST API.
+  # Het is puur LEZEN, op de herstartknop onderaan na. Er gaat geen enkele
+  # meting van dit huis naar Joulo toe: de wallbox praat zelf OCPP met hun
+  # backend, Home Assistant staat daar buiten.
+  #
+  # DE TOKEN HOORT NIET IN DIT BESTAND. Deze repo is openbaar, en een Bearer
+  # token die hier één keer in staat, staat voorgoed in de git-historie. Zie de
+  # opmerking bij de rest_commands in Charging Station.yaml hiernaast: dat is
+  # precies zo misgegaan. Zet in secrets.yaml op de HA-machine:
+  #
+  #     joulo_api_auth: "Bearer <token uit het API-tabblad van Joulo>"
+  #
+  # Twee dingen die het voorbeeld op joulo.nl/home-assistant anders doet, en
+  # waarom dit bestand afwijkt:
+  #
+  #  1. Het voorbeeld leest `chargers[0]`. In dit account staan er TWEE: de
+  #     KEBA op OCPP en de oude EVHUB als handmatige invoer. Vandaag is de KEBA
+  #     toevallig de eerste, maar een JSON-array geeft geen volgorde-garantie en
+  #     dan hangen alle sensoren ineens aan de oude paal. Daarom filtert alles
+  #     hieronder op `connection_type == 'ocpp'`, oftewel: de paal die echt
+  #     aangesloten is. Komt er ooit een tweede OCPP-station bij, dan moet dat
+  #     filter scherper (op `nickname` of `id`).
+  #  2. `current_session` bestaat ALLEEN tijdens het laden. `| default(0)` op
+  #     `current_session.kwh_so_far` vangt dat niet altijd op, want het valt al
+  #     eerder om op het ontbrekende tussenniveau. Vandaar de expliciete
+  #     `is defined`-guards.
+  #
+  # Pollen heeft geen zin sneller dan dit: Joulo synct zelf elk kwartier vanaf
+  # de upstream-provider, en hun eigen richtlijn is 300 s of meer voor
+  # /chargers en 600 s of meer voor de rest.
+  rest:
+    - resource: https://api.joulo.nl/functions/v1/api/chargers
+      scan_interval: 300
+      headers:
+        Authorization: !secret joulo_api_auth
+      sensor:
+        - name: "Joulo Charger Status"
+          unique_id: joulo_charger_status
+          value_template: >-
+            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {{ l[0].status if l else 'onbekend' }}
+
+        # Alleen hier om de herstart-service hieronder te voeden. Zo staat het
+        # id van het laadstation nergens in deze openbare repo en blijft het
+        # werken als Joulo het station ooit opnieuw aanmaakt.
+        - name: "Joulo Charger ID"
+          unique_id: joulo_charger_id
+          icon: mdi:identifier
+          value_template: >-
+            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {{ l[0].id if l else '' }}
+
+        - name: "Joulo Session kWh"
+          unique_id: joulo_session_kwh
+          unit_of_measurement: "kWh"
+          device_class: energy
+          value_template: >-
+            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {% set c = l[0] if l else none %}
+            {% set s = c.current_session if c is not none and c.current_session is defined else none %}
+            {{ (s.kwh_so_far | float(0)) if s else 0 }}
+
+        # Leeg laten zou een lege state opleveren en die is op een dashboard
+        # niet van "sensor kapot" te onderscheiden.
+        - name: "Joulo Active TAG ID"
+          unique_id: joulo_active_tag_id
+          icon: mdi:card-account-details-outline
+          value_template: >-
+            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {% set c = l[0] if l else none %}
+            {% set s = c.current_session if c is not none and c.current_session is defined else none %}
+            {{ s.id_tag if s and s.id_tag else 'geen' }}
+
+        # ----- Staat Joulo nog in verbinding met de paal? -----
+        # Niet in het voorbeeld, maar wel de vraag die er echt toe doet: krijgt
+        # Joulo de meterstanden nog binnen? Zo niet, dan lopen er stilletjes
+        # geen ERE-credits meer op terwijl alles er verder normaal uitziet.
+        # De meterstand hieronder is dezelfde teller die modbus uit register
+        # 1036 leest, dus die twee horen gelijk te lopen; lopen ze uit elkaar,
+        # dan mist Joulo sessies.
+        - name: "Joulo Meterstand"
+          unique_id: joulo_meter
+          unit_of_measurement: "kWh"
+          device_class: energy
+          state_class: total_increasing
+          value_template: >-
+            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {{ (l[0].latest_meter_wh | float(0) / 1000) | round(3) if l else 0 }}
+
+        - name: "Joulo Meterstand bijgewerkt"
+          unique_id: joulo_meter_updated
+          device_class: timestamp
+          value_template: >-
+            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {% set c = l[0] if l else none %}
+            {{ c.meter_updated_at if c is not none and c.meter_updated_at is defined else none }}
+
+      binary_sensor:
+        # Het voorbeeld maakt hier een gewone sensor van, en die krijgt dan de
+        # tekst "True" of "False" als state. Als binary_sensor is het een echte
+        # aan/uit waar een automatisering en een grafiek iets mee kunnen.
+        - name: "Joulo Is Charging"
+          unique_id: joulo_is_charging
+          device_class: battery_charging
+          value_template: >-
+            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {{ l[0].is_charging | default(false) if l else false }}
+
+    - resource: https://api.joulo.nl/functions/v1/api/energy
+      scan_interval: 3600
+      headers:
+        Authorization: !secret joulo_api_auth
+      sensor:
+        # total_kwh_all = alle laadenergie, ook van niet-MID stations. Dat is
+        # hier het bruikbare getal, want de oude EVHUB zit er nog in.
+        # `total_kwh` telt alleen MID-eligible stations en is gelijk aan de
+        # toplijn op het Joulo-dashboard.
+        #
+        # NIET in het energiedashboard zetten. Dit zijn dezelfde kilowatturen
+        # die de wallbox zelf al meet, plus de historie van de oude paal; je
+        # zou ze dubbel tellen. Gebruik daar sensor.charging_station_total_energy.
+        - name: "Joulo Total kWh"
+          unique_id: joulo_total_kwh
+          unit_of_measurement: "kWh"
+          device_class: energy
+          value_template: "{{ value_json.total_kwh_all }}"
+
+        - name: "Joulo Total ERE"
+          unique_id: joulo_total_ere
+          icon: mdi:certificate-outline
+          value_template: "{{ value_json.total_ere_credits }}"
+
+    - resource: https://api.joulo.nl/functions/v1/api/ere-position
+      scan_interval: 3600
+      headers:
+        Authorization: !secret joulo_api_auth
+      sensor:
+        # Bewust geen state_class op deze vier. Het zijn standen in een lopend
+        # compliance-jaar die bij de jaarwissel terugvallen en tussendoor beide
+        # kanten op bewegen (de verwachting is een prognose). Met `total` zou
+        # de statistiekmotor die terugval als een correctie boeken en krijg je
+        # grafieken die niemand kan uitleggen.
+        - name: "Joulo Verwachte Jaaropbrengst"
+          unique_id: joulo_verwachte_jaaropbrengst
+          unit_of_measurement: "EUR"
+          device_class: monetary
+          value_template: "{{ value_json.total_expected_eur }}"
+
+        - name: "Joulo Gereserveerd Netto"
+          unique_id: joulo_gereserveerd_netto
+          unit_of_measurement: "EUR"
+          device_class: monetary
+          value_template: "{{ value_json.reserved.net_eur }}"
+
+        - name: "Joulo Uitbetaald Netto"
+          unique_id: joulo_uitbetaald_netto
+          unit_of_measurement: "EUR"
+          device_class: monetary
+          value_template: "{{ value_json.paid.net_eur }}"
+
+        - name: "Joulo Onverkochte ERE"
+          unique_id: joulo_onverkochte_ere
+          icon: mdi:certificate-outline
+          value_template: "{{ value_json.unsold.ere }}"
+
+  # Herstart het laadstation op afstand via een OCPP Reset door de
+  # Joulo-backend. "Soft" rondt een lopende sessie netjes af, "Hard" trekt de
+  # stekker eruit. Het commando komt alleen aan als het station online is en er
+  # geldt een cooldown van ongeveer vijf minuten per station.
+  #
+  # Het charger_id komt uit de sensor hierboven en staat dus niet hardgecodeerd
+  # in deze repo. Staat die sensor op leeg, dan stuurt dit een verzoek dat
+  # Joulo netjes weigert - dat is beter dan een verkeerd station herstarten.
+  rest_command:
+    joulo_reboot_charger:
+      url: https://api.joulo.nl/functions/v1/api/chargers/reboot
+      method: POST
+      headers:
+        Authorization: !secret joulo_api_auth
+      content_type: "application/json"
+      payload: >-
+        {"charger_id": "{{ states('sensor.joulo_charger_id') }}", "type": "Soft"}

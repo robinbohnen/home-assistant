@@ -263,6 +263,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Pushover | [Link](https://www.home-assistant.io/integrations/pushover) | Send messages outside of HomeAssistant (to be able to mure sometimes) |
 | Radio Browser | [Link](https://www.home-assistant.io/integrations/radio_browser) | Play music on Sonos or other devices |
 | Renault | [Link](https://www.home-assistant.io/integrations/renault/) | Integrate the car (Renault Megane E-Tech Espirit Alpine) to Home Assistant |
+| Joulo | [Link](https://joulo.nl/home-assistant) | Charging sessions, ERE certificates and the expected yearly payout for the KEBA wallbox, over their REST API (`packages/3 - Outside/Carport/Joulo.yaml`) |
 | RESTful | [Link](https://www.home-assistant.io/integrations/rest) | The rest sensor platform is consuming a given endpoint which is exposed by a RESTful API of a device, an application, or a web service |
 | RESTful command | [Link](https://www.home-assistant.io/integrations/rest_command) | Send commands to non-local stuff |
 | Samsung Smart TV | [Link](https://www.home-assistant.io/integrations/samsungtv) | Check and interact with TVs |
