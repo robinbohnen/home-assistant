@@ -1,5 +1,14 @@
 carport_keba_p40_package:
-  # De KEBA P40 Pro (KC-P40-32EU0, serienummer 36462996) hangt op 192.168.2.136.
+  # De KEBA P40 Pro (KC-P40-32EU0, serienummer 36462996) hangt op
+  # 192.168.30.135, een in de router vastgezet adres in een eigen VLAN.
+  #
+  # Stond tot 2026-09-11 op 192.168.2.136 en verhuisde toen hij zichzelf
+  # herstartte. Zo ziet dat eruit: ALLE sensoren hieronder staan op
+  # `unknown` (niet op `unavailable`), Home Assistant logt niets, en de
+  # paal antwoordt niet eens op een ping. Herken je dat, kijk dan eerst
+  # naar het adres voordat je aan modbus gaat sleutelen - Joulo blijft in
+  # zo'n geval vrolijk melden dat het laadstation actief is, zie de
+  # opmerking bij de meterkoppeling in de Lader-popup.
   # Hij praat twee talen tegelijk en die bijten elkaar niet:
   #
   #  * De HACS-integratie `keba_p40` (Ich-h4lt) gebruikt de lokale REST v2-API
@@ -42,7 +51,7 @@ carport_keba_p40_package:
   modbus:
     - name: KebaP40Pro
       type: tcp
-      host: 192.168.2.136
+      host: 192.168.30.135
       port: 502
       # Geen message_wait_milliseconds: 57 reads achter elkaar zonder pauze
       # gingen in 0,84 s foutloos door. Deze wallbox heeft geen ademruimte nodig.
@@ -291,7 +300,9 @@ carport_keba_p40_package:
         # alleen het even adres antwoordt, het adres erna bestaat niet. Ze
         # spiegelen wat er via modbus is GESCHREVEN, niet wat de wallbox doet.
         # Zolang Home Assistant er niets heen stuurt staan ze allebei op 0, en
-        # die 0 betekent dus niet "laden geblokkeerd".
+        # die 0 betekent dus niet "laden geblokkeerd". Na een herstart van de
+        # wallbox staan ze ook weer op 0: nagemeten op 2026-09-11, toen hij
+        # uit zichzelf herstartte terwijl het setpoint nog op 16000 stond.
         - name: "Charging Station - Modbus current setpoint"
           unique_id: wallbox_charging_current
           slave: 255
