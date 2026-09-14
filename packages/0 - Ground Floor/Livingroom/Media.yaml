@@ -114,16 +114,28 @@ livingroom_media_package:
       # variabele dan stilletjes leeg worden, en een leeg `entity_id` in
       # `light.turn_on` is geen fout maar gewoon een commando dat niets doet.
       variables:
+        # De Signe staat apart omdat hij twee keer een uitzondering is: hij zit
+        # in de bias, maar hij mag géén kleurtemperatuur krijgen. Zie
+        # `livingroom_signe_candle` in Lights.yaml - een kleurcommando zet het
+        # kaarseffect uit.
+        signe: light.woonkamer_hue_signe_gradient
         bias: >-
           {{ (state_attr('light.tv_kast_lampen', 'entity_id') or []) | list
-             + ['light.woonkamer_hue_signe_gradient'] }}
-        plafond: >-
-          {{ ((state_attr('light.woonkamer_lampen', 'group_entities')
-               or state_attr('light.woonkamer_lampen', 'entity_id') or [])
-              | reject('in', bias) | list)
-             + ((state_attr('light.woonkamer_spots', 'entity_id')
-                 or state_attr('light.woonkamer_spots', 'group_entities')
-                 or []) | list) }}
+             + [signe] }}
+        # De vier plafondspots apart, want ze dimmen dieper dan de rest van de
+        # kamer: 20% tegenover `tv_playing_percentage` voor de tafellamp, de
+        # keuken en de eettafel.
+        spots: >-
+          {{ (state_attr('light.woonkamer_spots', 'entity_id')
+              or state_attr('light.woonkamer_spots', 'group_entities')
+              or []) | list }}
+        # Wat er van de Z2M-groep overblijft als de bias eruit is: de
+        # Hue-tafellamp.
+        plafond_hue: >-
+          {{ (state_attr('light.woonkamer_lampen', 'group_entities')
+              or state_attr('light.woonkamer_lampen', 'entity_id') or [])
+             | reject('in', bias) | list }}
+        plafond: "{{ plafond_hue + spots }}"
         # Alles wat de momentopname moet vasthouden, als losse lampen. Een
         # groep in de momentopname zetten werkt ook, maar dan komt iedereen
         # terug op dezelfde helderheid en is het verschil tussen de tafellamp
@@ -180,21 +192,33 @@ livingroom_media_package:
             - action: input_boolean.turn_on
               target:
                 entity_id: input_boolean.woonkamer_kijksessie
-            # Plafondspots, tafellamp, keuken en eettafel omlaag. De Play bars
-            # en de Signe zitten hier bewust niet bij; die staan in `bias`.
+            # Tafellamp, keuken en eettafel omlaag. De Play bars en de Signe
+            # zitten hier bewust niet bij; die staan in `bias`. De spots ook
+            # niet, die gaan hieronder dieper.
             - action: light.turn_on
               target:
                 entity_id: >-
-                  {{ plafond + ['light.keuken_lampen', 'light.eettafel_lampen'] }}
+                  {{ plafond_hue + ['light.keuken_lampen', 'light.eettafel_lampen'] }}
               data:
                 transition: "{{ states('input_number.lights_transition_seconds') | int(1) }}"
                 brightness_pct: "{{ states('input_number.tv_playing_percentage') | int(35) }}"
+            # De plafondspots zijn het felste licht in de kamer en schijnen
+            # recht op de bank. Vandaar hun eigen, lagere dimstand: 20%, tegen
+            # 80% overdag en 40% als het buiten donker is. Vast getal en geen
+            # helper - het is de enige dimstand die ze kennen. Zie de kop van
+            # Lights.yaml.
+            - action: light.turn_on
+              target:
+                entity_id: light.woonkamer_spots
+              data:
+                transition: "{{ states('input_number.lights_transition_seconds') | int(1) }}"
+                brightness_pct: 20
             # 2200 K is bewust warm en ligt net boven de ondergrens van deze
             # lampen (2000 K). Het gaat om licht achter het scherm, niet om
             # licht in de kamer.
             - action: light.turn_on
               target:
-                entity_id: "{{ bias }}"
+                entity_id: "{{ bias | reject('eq', signe) | list }}"
               data:
                 transition: "{{ states('input_number.lights_transition_seconds') | int(1) }}"
                 # Een net aangemaakte input_number begint op zijn minimum, dus
@@ -204,6 +228,18 @@ livingroom_media_package:
                 # als "nog niet ingesteld".
                 brightness_pct: "{{ states('input_number.tv_bias_percentage') | int(0) or 60 }}"
                 color_temp_kelvin: 2200
+            # De Signe krijgt dezelfde helderheid maar GEEN kleurtemperatuur:
+            # die zou zijn kaarseffect uitzetten, en dat hoort altijd te
+            # blijven staan (`livingroom_signe_candle` in Lights.yaml). Alleen
+            # helderheid sturen laat een Hue-effect gewoon doorlopen. Zonder
+            # deze splitsing ging hij elke film twintig seconden op 2200 K
+            # staan voordat de bewaker hem terugzette.
+            - action: light.turn_on
+              target:
+                entity_id: "{{ signe }}"
+              data:
+                transition: "{{ states('input_number.lights_transition_seconds') | int(1) }}"
+                brightness_pct: "{{ states('input_number.tv_bias_percentage') | int(0) or 60 }}"
             # Licht dat het beeld in schijnt. Speelkamer, garage en trapkast
             # hangen aan de motion_light-blueprint en gaan vanzelf weer aan
             # zodra er iemand loopt; daarom staan ze niet in de terugzet-tak.
@@ -254,7 +290,6 @@ livingroom_media_package:
                 - variables:
                     branden: >-
                       {{ ['light.woonkamer_lampen',
-                          'light.woonkamer_spots',
                           'light.keuken_lampen',
                           'light.eettafel_lampen'] | select('is_state', 'on') | list }}
                 - if:
@@ -267,6 +302,23 @@ livingroom_media_package:
                       data:
                         transition: "{{ states('input_number.lights_transition_seconds') | int(1) }}"
                         brightness_pct: "{{ states('input_number.lights_livingroom_percentage') | int(80) }}"
+                # De spots staan niet in de lijst hierboven: die hebben hun
+                # eigen niveau, 80% overdag en 40% als het buiten donker is.
+                # Een pauze om tien uur 's avonds hoort ze op 40 te zetten en
+                # niet op de 80 van de rest van de kamer.
+                - if:
+                    - condition: state
+                      entity_id: light.woonkamer_spots
+                      state: "on"
+                  then:
+                    - action: light.turn_on
+                      target:
+                        entity_id: light.woonkamer_spots
+                      data:
+                        transition: "{{ states('input_number.lights_transition_seconds') | int(1) }}"
+                        brightness_pct: >-
+                          {{ states('input_number.lights_livingroom_spots_percentage')
+                             | int(80) }}
 
             # De humble ging bij het kijken uit en zit in geen enkele groep
             # hierboven, dus ook niet in de momentopname.

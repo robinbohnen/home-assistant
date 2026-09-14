@@ -58,8 +58,8 @@ Zo'n paar hoort overal samen genoemd te worden. De plekken die dat sinds
 
 | Bestand | Wat |
 | --- | --- |
-| `packages/0 - Ground Floor/Livingroom/Lights.yaml` | thuiskomst/vertrek (blueprint), aanvullicht humble + ledstrip, kleur terug naar 2600 K |
-| `packages/0 - Ground Floor/Livingroom/Media.yaml` | `plafond` in `script.woonkamer_media_licht`, de terugzet-tak, de humble-check |
+| `packages/0 - Ground Floor/Livingroom/Lights.yaml` | thuiskomst/vertrek (twee blueprint-instanties, zie hieronder), aanvullicht humble + ledstrip, kleur terug naar 2600 K, dag-/avondniveau van de spots |
+| `packages/0 - Ground Floor/Livingroom/Media.yaml` | `plafond` in `script.woonkamer_media_licht` (spots dimmen apart naar 20%), de terugzet-tak, de humble-check |
 | `packages/0 - Ground Floor/Livingroom/Cast.yaml` | opnieuw casten zodra er licht aangaat |
 | `packages/0 - Ground Floor/Hallway/Alarm.yaml` | de vertrekronde |
 | `packages/0 - Ground Floor/Hallway/Lights.yaml` | het bewegingslicht van de entree (blueprint) |
@@ -76,6 +76,21 @@ Zo'n paar hoort overal samen genoemd te worden. De plekken die dat sinds
 `dashboards/home/dashboard.yaml` is bewust overgeslagen: die view staat sinds
 14 augustus 2026 uit in `ui-lovelace.yaml`. Zet je hem ooit terug, dan moeten
 de spots en de entree-kastlamp daar alsnog bij.
+
+### Twee groepen kunnen ook twee niveaus willen (14 september 2026)
+
+De woonkamer was de eerste plek waar "allebei noemen" niet meer genoeg was. De
+plafondspots horen sinds 14 september op 80% overdag en 40% zodra het buiten
+donker is, terwijl de Hue-lampen op hun eigen `lights_livingroom_percentage`
+blijven staan. `lights_onoff.yaml` kent één `helderheid`-helper per instantie,
+dus staan er nu **twee instanties** van die blueprint in `Lights.yaml`:
+`livingroom_lights_onoff` (Z2M-groep) en `livingroom_spots_onoff` (spots). De
+regel zelf is nog steeds één bestand; alleen de bedrading is dubbel.
+
+Loopt een volgende ruimte hier tegenaan: eerst kijken of één niveau voor de
+hele kamer niet gewoon voldoet. Twee instanties betekent twee automatiseringen
+die iemand allebei moet aanpassen, en dat is precies wat de blueprint kwam
+oplossen.
 
 ## De blueprints accepteren sindsdien meerdere lampen
 

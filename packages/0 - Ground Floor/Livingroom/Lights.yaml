@@ -26,6 +26,21 @@
 ## `flash: long` in Alarm.yaml zetten de spots gewoon aan zonder te ademen of
 ## te knipperen. De kleuraanroepen van Brandweer blijven wel bewust bij de
 ## Hue-lampen: die staan in de eigen Z2M-groepen brw_groep_1 en brw_groep_2.
+##
+## DE SPOTS HEBBEN SINDS 14 SEPTEMBER 2026 HUN EIGEN NIVEAU
+## `input_number.lights_livingroom_spots_percentage` staat overdag op 80 en
+## zakt naar 40 zodra het buiten donker wordt, op precies dezelfde momenten als
+## de buitenverlichting - zie `livingroom_spots_daylight_level` hieronder. De
+## Hue-lampen houden hun eigen `lights_livingroom_percentage` en veranderen
+## niet mee. Daarom hangen de twee groepen ook aan twee instanties van de
+## thuiskomst-blueprint: één instantie kent maar één helderheidshelper.
+##
+## Wordt er ergens gedimd - vandaag alleen door een film, zie
+## `script.woonkamer_media_licht` in Media.yaml - dan gaan de spots naar 20%,
+## lager dan de rest van de kamer.
+##
+## En de Hue Signe gradient hoort altijd op het effect `candle` te staan; die
+## bewaakt `livingroom_signe_candle` onderaan dit bestand.
 ##############################################################################
 
 livingsroom_lights_package:
@@ -36,6 +51,29 @@ livingsroom_lights_package:
       max: 100
       step: 1
       icon: mdi:lightbulb-on-70
+
+    # Het normale niveau van de vier plafondspots. Niet bedoeld om met de hand
+    # te zetten: `livingroom_spots_daylight_level` hieronder schrijft er 80 of
+    # 40 in. Het is een helper en geen vaste waarde in de automatisering omdat
+    # de thuiskomst-blueprint een input_number wil - net als bij de zeven
+    # kamers die aan `light_intensity_changes` hangen
+    # (packages/9 - Other/Light Intensity.yaml).
+    #
+    # `initial` staat er wél en bij de andere percentagehelpers niet, en dat is
+    # met opzet. Een verse input_number begint op zijn MINIMUM, dus op 0, en
+    # `brightness_pct: 0` is voor de blueprint geen fout maar gewoon een lamp
+    # die niet aangaat. De start-trigger van `livingroom_spots_daylight_level`
+    # rekent bij elke herstart meteen het juiste getal uit; deze 80 is alleen
+    # het vangnet voor de seconden ervoor - en voor de dag dat die
+    # automatisering uit staat.
+    lights_livingroom_spots_percentage:
+      name: "Lights Livingroom Spots - Percentage"
+      min: 1
+      max: 100
+      step: 1
+      initial: 80
+      icon: mdi:lightbulb-on-70
+
   binary_sensor:
     - platform: group
       unique_id: pir_sensors_livingroom
@@ -44,7 +82,68 @@ livingsroom_lights_package:
         - binary_sensor.woonkamer_beweging_achter_occupancy
         - binary_sensor.woonkamer_beweging_voor_occupancy
 
+  script:
+    # Het niveau van de spots vastleggen én meteen laten zien. Staat als script
+    # en niet twee keer uitgeschreven in de automatisering hieronder, omdat de
+    # dag- en de avondtak allebei precies dit doen met een ander getal.
+    woonkamer_spots_niveau:
+      alias: Woonkamer - Spots niveau
+      description: >-
+        Zet `input_number.lights_livingroom_spots_percentage` en past het
+        nieuwe niveau meteen toe op de spots als die branden.
+      icon: mdi:ceiling-light
+      mode: restart
+      fields:
+        percentage:
+          name: Percentage
+          description: Het nieuwe normale niveau van de plafondspots.
+          required: true
+          example: 40
+          selector:
+            number:
+              min: 1
+              max: 100
+              step: 1
+              unit_of_measurement: "%"
+      sequence:
+        - action: input_number.set_value
+          target:
+            entity_id: input_number.lights_livingroom_spots_percentage
+          data:
+            value: "{{ percentage | int }}"
+        # Alleen bijsturen wat al brandt: dit is een niveau, geen aan-commando.
+        # De buitenlampen gáán aan als het donker wordt, de spots niet - dat is
+        # het enige verschil met de logica waar ze verder op meelopen.
+        - if:
+            - condition: state
+              entity_id: light.woonkamer_spots
+              state: "on"
+            # Tijdens een film staan de spots op hun dimstand van 20%. Het
+            # donker worden mag ze dan niet naar 40% duwen; `script.woonkamer_
+            # media_licht` in Media.yaml zet ze aan het eind van de sessie zelf
+            # weer op dit niveau.
+            - condition: state
+              entity_id: input_boolean.woonkamer_kijksessie
+              state: "off"
+          then:
+            - action: light.turn_on
+              target:
+                entity_id: light.woonkamer_spots
+              data:
+                transition: >-
+                  {{ states('input_number.lights_transition_seconds') | int(1) }}
+                brightness_pct: "{{ percentage | int }}"
+
   automation:
+    # TWEE INSTANTIES VAN DEZELFDE BLUEPRINT, ÉÉN PER GROEP
+    # Ze stonden tot 14 september 2026 als één instantie met allebei de lampen
+    # in de `lamp`-lijst. Dat kan niet meer sinds de spots hun eigen niveau
+    # hebben: de blueprint kent één `helderheid`-helper en zet die op alles wat
+    # in de lijst staat. De rest (thuiskomen, vertrekken, de knop, de dubbele
+    # uit) is identiek en blijft dus in één bestand staan - het is dezelfde
+    # blueprint, alleen andere bedrading.
+    #
+    # Wie hier iets aan de bedrading verandert, verandert het bij ALLEBEI.
     - id: livingroom_lights_onoff
       alias: Livingroom - Lights
       description: Automate lights when certain conditions are met
@@ -53,7 +152,6 @@ livingsroom_lights_package:
         input:
           lamp:
             - light.woonkamer_lampen
-            - light.woonkamer_spots
           helderheid: input_number.lights_livingroom_percentage
           # Groep van losse lampen: één uit-commando met transition laat er
           # geregeld eentje branden.
@@ -68,6 +166,144 @@ livingsroom_lights_package:
               event_data:
                 routine: avond
               id: knop
+
+    - id: livingroom_spots_onoff
+      alias: Livingroom - Spots
+      description: >-
+        Zelfde regel als `livingroom_lights_onoff`, maar met het eigen
+        dag-/avondniveau van de plafondspots.
+      use_blueprint:
+        path: robin/lights_onoff.yaml
+        input:
+          lamp:
+            - light.woonkamer_spots
+          helderheid: input_number.lights_livingroom_spots_percentage
+          # Vier losse Matter-lampen in een HA-groep: hier is de dubbele uit
+          # nog harder nodig dan bij de Z2M-groep hierboven, want elk commando
+          # gaat apart de deur uit.
+          dubbel_uit: true
+          knop_triggers:
+            - trigger: event
+              event_type: huis_routine
+              event_data:
+                routine: avond
+              id: knop
+
+    ###########################################################################
+    ## Het dag- en avondniveau van de plafondspots
+    ###########################################################################
+    # 80% overdag, 40% zodra het buiten donker is. De momenten zijn met opzet
+    # LETTERLIJK dezelfde als die van de buitenverlichting in
+    # blueprints/automation/robin/buitenlicht.yaml: zonsondergang -1u en
+    # zonsopkomst +1u, met de luxmeter (`sensor.buiten_zon_luminance_max`) die
+    # daar bovenop mag ingrijpen onder 1000 en boven 2500 lux, allebei vijf
+    # minuten aaneengesloten. Gaan de carport, de voordeur en de achtertuin
+    # aan, dan zakken de spots op datzelfde moment naar 40.
+    #
+    # DE DREMPELS STAAN NU OP TWEE PLEKKEN. Verander je ze in de blueprint,
+    # verander ze dan hier ook - anders loopt de woonkamer uit de pas met
+    # buiten, en dat is precies wat de kop van die blueprint beschrijft over de
+    # grauwe ochtend van 17 augustus 2026. Ze zijn hier niet uit de blueprint te
+    # hergebruiken: die schakelt lampen aan en uit, en dat is precies wat de
+    # spots juist NIET moeten doen.
+    #
+    # De uit-tak op lux heeft dezelfde zonconditie als in de blueprint en de
+    # aan-tak niet, om dezelfde reden: koplampen of de buitenlamp zelf mogen
+    # 's nachts niet beweren dat het dag is, terwijl "te donker" op elk moment
+    # mag gelden.
+    #
+    # WAAROM ER EEN START-TRIGGER BIJ ZIT
+    # Een `numeric_state`-trigger vuurt op het KRUISEN van een drempel. Na een
+    # herstart weet niemand aan welke kant we staan, en anders dan bij de
+    # buitenlampen is een inhaalslag hier ongevaarlijk: dit zet alleen een
+    # niveau, het doet geen lamp aan die net bewust uit is gezet.
+    - id: livingroom_spots_daylight_level
+      alias: Livingroom - Spots dag- en avondniveau
+      description: >-
+        Zet de plafondspots op 80% overdag en 40% zodra het buiten donker
+        wordt, op dezelfde momenten als de buitenverlichting.
+      # Queued en niet single: een luxtrigger kan vlak achter een zonmoment
+      # aankomen en die mag niet in een "already running" verdwijnen. Zelfde
+      # keuze als in de buitenlicht-blueprint.
+      mode: queued
+      max: 5
+      triggers:
+        - trigger: sun
+          event: sunset
+          offset: "-01:00:00"
+          id: donker
+        - trigger: numeric_state
+          entity_id: sensor.buiten_zon_luminance_max
+          below: 1000
+          for: "00:05:00"
+          id: donker
+        - trigger: sun
+          event: sunrise
+          offset: "+01:00:00"
+          id: licht
+        - trigger: numeric_state
+          entity_id: sensor.buiten_zon_luminance_max
+          above: 2500
+          for: "00:05:00"
+          id: licht_lux
+        - trigger: homeassistant
+          event: start
+          id: inhaalslag
+      conditions: []
+      actions:
+        - choose:
+            - alias: "Het is donker buiten"
+              conditions:
+                - condition: or
+                  conditions:
+                    - condition: trigger
+                      id: donker
+                    - alias: "Inhaalslag: staan we nu in het donker?"
+                      condition: and
+                      conditions:
+                        - condition: trigger
+                          id: inhaalslag
+                        - condition: or
+                          conditions:
+                            - condition: sun
+                              after: sunset
+                              after_offset: "-01:00:00"
+                              before: sunrise
+                              before_offset: "+01:00:00"
+                            - condition: numeric_state
+                              entity_id: sensor.buiten_zon_luminance_max
+                              below: 1000
+              sequence:
+                - action: script.woonkamer_spots_niveau
+                  data:
+                    percentage: 40
+
+            # Geen aparte inhaalslag-tak: die valt hier vanzelf in als de tak
+            # hierboven hem niet pakte. Een choose loopt van boven naar beneden.
+            - alias: "Het is licht buiten"
+              conditions:
+                - condition: or
+                  conditions:
+                    - condition: trigger
+                      id:
+                        - licht
+                        - inhaalslag
+                    - alias: "Lux boven de drempel, maar alleen binnen de dag"
+                      condition: and
+                      conditions:
+                        - condition: trigger
+                          id: licht_lux
+                        - condition: sun
+                          after: sunrise
+                          after_offset: "+01:00:00"
+                          before: sunset
+                          before_offset: "-01:00:00"
+              sequence:
+                - action: script.woonkamer_spots_niveau
+                  data:
+                    percentage: 80
+        # Bewust geen default: een trigger zonder afgedekte id hoort niets te
+        # doen. Zelfde reden als in de buitenlicht-blueprint.
 
     - id: livingroom_lights_ambient_fill
       alias: Livingroom - Ambient fill lights (low luminance)
@@ -181,3 +417,84 @@ livingsroom_lights_package:
               - light.woonkamer_lampen
               - light.woonkamer_spots
               - light.achtertuin_lampen
+
+    ###########################################################################
+    ## De Signe staat altijd op het kaarseffect
+    ###########################################################################
+    # `light.woonkamer_hue_signe_gradient` hoort permanent op `candle` te
+    # staan. Dat is geen kwestie van hem één keer goed zetten: elk commando met
+    # een KLEUR of een KLEURTEMPERATUUR zet een Hue-effect uit, en de Signe
+    # krijgt die van alle kanten. Hij zit in de Z2M-groep
+    # `light.woonkamer_lampen`, dus `livingroom_lights_backtonormal` hierboven
+    # (2600 K), het alarm en Brandweer raken hem allemaal. Zoiets is niet bij
+    # elke aanroeper apart te repareren - een scene die terugzet of de Hue-app
+    # zelf staan niet eens in deze config. Vandaar één bewaker achteraf in
+    # plaats van tien uitzonderingen vooraf.
+    #
+    # Alleen `script.woonkamer_media_licht` in Media.yaml is wél aangepast:
+    # daar krijgt de Signe zijn biashelderheid zonder de 2200 K die de Play
+    # bars krijgen. Dat is het enige moment dat elke avond langskomt, en twintig
+    # seconden lang geen kaars is daar het meest zichtbaar.
+    #
+    # WAAROM TWINTIG SECONDEN
+    # Brandweer zet zijn groepen vijftien seconden op rood/blauw met `breathe`
+    # en zet ze daarna terug. Zou deze bewaker binnen die vijftien seconden
+    # ingrijpen, dan vecht hij met een melding die juist de aandacht moet
+    # trekken. Na twintig seconden is die burst voorbij.
+    #
+    # HET ALARM IS EEN HARDE UITZONDERING
+    # De afschrikking in packages/9 - Other/Alarm.yaml knippert minutenlang
+    # door met `flash: long`. Zolang Alarmo staat te gaan hoort er geen kaarsje
+    # aan; zodra hij ontwapend is pakt deze automatisering het vanzelf weer op.
+    #
+    # Geen lus te vrezen: het zetten van `candle` verandert het attribuut naar
+    # `candle`, waarna de conditie hieronder de tweede run meteen afkapt.
+    - id: livingroom_signe_candle
+      alias: Livingroom - Signe houdt het kaarseffect
+      description: >-
+        Zet het effect van de Hue Signe gradient terug op `candle` zodra iets
+        anders het eraf heeft gehaald.
+      mode: restart
+      triggers:
+        # Alleen het effect-attribuut. Onder `candle` verandert de lamp continu
+        # van kleur en helderheid; zonder `attribute` zou deze automatisering
+        # de hele avond staan te vuren.
+        - trigger: state
+          entity_id: light.woonkamer_hue_signe_gradient
+          attribute: effect
+          for: "00:00:20"
+        # En bij het aangaan, ook vanuit `unavailable`: een lamp die na een
+        # stroomonderbreking of een z2m-herstart terugkomt, komt terug op de
+        # stand in zijn eigen geheugen en niet op de onze.
+        - trigger: state
+          entity_id: light.woonkamer_hue_signe_gradient
+          to: "on"
+          for: "00:00:20"
+      conditions:
+        - condition: state
+          entity_id: light.woonkamer_hue_signe_gradient
+          state: "on"
+        - alias: "Staat hij niet allang op candle"
+          condition: not
+          conditions:
+            - condition: state
+              entity_id: light.woonkamer_hue_signe_gradient
+              attribute: effect
+              state: candle
+        - alias: "Het alarm zwaait niet met de lampen"
+          condition: not
+          conditions:
+            - condition: state
+              entity_id: alarm_control_panel.alarmo
+              state:
+                - triggered
+                - pending
+                - arming
+      actions:
+        # Alleen `effect`, geen helderheid en geen kleur: de stand waarin de
+        # lamp staat blijft zoals hij is, er komt alleen weer beweging in.
+        - action: light.turn_on
+          target:
+            entity_id: light.woonkamer_hue_signe_gradient
+          data:
+            effect: candle
