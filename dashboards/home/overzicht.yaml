@@ -512,10 +512,24 @@ cards:
                 secondary: "{{ (states('sensor.zonneplan_electricity_consumption_today') ~ ' kWh') if has_value('sensor.zonneplan_electricity_consumption_today') else '—' }}"
                 icon: mdi:flash
                 icon_color: blue
+              # GAS UIT SLIMHUYS EN NIET UIT ZONNEPLAN (14 september 2026)
+              # `sensor.zonneplan_gas_consumption_today` komt uit de cloud van
+              # Zonneplan en die loopt achter: op 14 september stond hij de
+              # halve ochtend nog op 0 m³ terwijl de meter er al 0,095 had
+              # doorgelaten. Dezelfde bron die `total_costs_today_calculated`
+              # elke nacht twee uur onderuit haalde - zie de toelichting in
+              # packages/9 - Other/Electricity.yaml. SlimHuys leest de P1 zelf
+              # en reset om 00:04 netjes naar 0.
+              #
+              # Drie decimalen en een komma: de meter telt in stappen van
+              # 0,001 m³ en met twee decimalen wordt een ochtendstand van 0,095
+              # afgerond naar 0,10.
               - type: custom:mushroom-template-card
-                entity: sensor.zonneplan_gas_consumption_today
+                entity: sensor.meterkast_slimhuys_zonneplan_gasverbruik_vandaag
                 primary: Gas vandaag
-                secondary: "{{ (states('sensor.zonneplan_gas_consumption_today') ~ ' m³') if has_value('sensor.zonneplan_gas_consumption_today') else '—' }}"
+                secondary: >-
+                  {{ ('{:.3f}'.format(states('sensor.meterkast_slimhuys_zonneplan_gasverbruik_vandaag') | float(0)) | replace('.', ',') ~ ' m³')
+                     if has_value('sensor.meterkast_slimhuys_zonneplan_gasverbruik_vandaag') else '—' }}
                 icon: mdi:fire
                 icon_color: orange
               - type: custom:mushroom-template-card
