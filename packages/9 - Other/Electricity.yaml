@@ -79,17 +79,47 @@ electricity_package:
           unit_of_measurement: "kW"
           device_class: "power"
           state_class: "measurement"
+    # WAT VANDAAG GEKOST HEEFT: AFNAME - TERUGLEVERING + GAS
+    #
+    # VAN DRIE ZONNEPLAN-SENSOREN NAAR ÉÉN SLIMHUYS-SENSOR (14 september 2026)
+    # De som stond hier zelf uitgeschreven uit
+    # `zonneplan_electricity_delivery_costs_today`,
+    # `..._production_costs_today` en `zonneplan_gas_delivery_costs_today`, met
+    # een availability die eiste dat alle drie een waarde hadden. Dat was de
+    # zwakke schakel: één `unknown` en de hele tegel stond op "Niet
+    # beschikbaar", ook als de stroomkant prima was.
+    #
+    # En dat gebeurde elke nacht. Om 00:04 rolt Zonneplan de dag om en gaan
+    # alle `*_today`-sensoren even op `unknown`. Stroom komt na vijf minuten
+    # terug, GAS DUURT RUIM TWEE UUR - gemeten op drie opeenvolgende nachten:
+    # 00:00 -> 02:10, 00:04 -> 02:09, en op 14 september kwam hij pas na meer
+    # dan acht uur terug (Zonneplan stond toen nog op 0 m³ terwijl de meter via
+    # SlimHuys al 0,095 m³ had geteld). De tegel was dus standaard elke ochtend
+    # twee uur dood.
+    #
+    # SlimHuys maakt exact dezelfde som al: 2,06 - 0,30 + 0,17 = 1,93, dezelfde
+    # drie posten uit dezelfde P1-meter. Over drie dagen historie (841
+    # meetpunten) stond die sensor drie keer kort op unavailable, alle drie
+    # tijdens huisbrede hikjes waarop Zonneplan óók weg was - een terugval op
+    # Zonneplan zou daar dus niets aan helpen en is bewust weggelaten. Hij
+    # reset om 00:04 netjes naar 0,01 en telt gewoon door.
+    #
+    # De entity-id blijft `sensor.total_costs_today_calculated`, want er hangen
+    # zes plekken aan: de klokdisplay (packages/0 - Ground Floor/Kitchen/Clock
+    # Display.yaml), de nest hub, het Overzicht en kolom_midden. Ook `EUR` als
+    # eenheid blijft staan en wordt niet het `€` van de bron: een sensor met
+    # langetermijnstatistieken die van eenheid wisselt, geeft een waarschuwing
+    # en een gat in de grafiek.
+    #
+    # Wat je erop inlevert: twee decimalen in plaats van zeven. Voor een
+    # kostentegel is dat geen verlies.
     - sensor:
         - name: "Total costs today calculated"
           unique_id: daily_total_costs_today_calculated
           state: >-
-            {{ (states('sensor.zonneplan_electricity_delivery_costs_today') | float(0)
-                - states('sensor.zonneplan_electricity_production_costs_today') | float(0)
-                + states('sensor.zonneplan_gas_delivery_costs_today') | float(0)) }}
+            {{ states('sensor.meterkast_slimhuys_zonneplan_netto_kosten_vandaag') | float(0) }}
           availability: >-
-            {{ states('sensor.zonneplan_electricity_delivery_costs_today') not in ['unavailable', 'unknown']
-               and states('sensor.zonneplan_electricity_production_costs_today') not in ['unavailable', 'unknown']
-               and states('sensor.zonneplan_gas_delivery_costs_today') not in ['unavailable', 'unknown'] }}
+            {{ has_value('sensor.meterkast_slimhuys_zonneplan_netto_kosten_vandaag') }}
           unit_of_measurement: "EUR"
           device_class: "monetary"
           state_class: "total"

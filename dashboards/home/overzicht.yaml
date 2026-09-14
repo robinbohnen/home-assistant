@@ -521,7 +521,15 @@ cards:
               - type: custom:mushroom-template-card
                 entity: sensor.total_costs_today_calculated
                 primary: Kosten vandaag
-                secondary: "{{ ('€ ' ~ states('sensor.total_costs_today_calculated')) if has_value('sensor.total_costs_today_calculated') else '—' }}"
+                # Op twee decimalen met een komma, net als de andere drie
+                # plekken die deze sensor tonen (nest hub, kolom_midden, de
+                # klokdisplay). Stond hier als kale `states()` en dat viel niet
+                # op zolang de bron zeven decimalen gaf: sinds 14 september
+                # komt hij uit SlimHuys en dan las er "€ 1.9" in plaats van
+                # "€ 1,90".
+                secondary: >-
+                  {{ ('€ ' ~ '{:.2f}'.format(states('sensor.total_costs_today_calculated') | float(0)) | replace('.', ','))
+                     if has_value('sensor.total_costs_today_calculated') else '—' }}
                 icon: mdi:currency-eur
                 icon_color: "{{ 'green' if states('sensor.total_costs_today_calculated')|float(0) < 0 else 'grey' }}"
               - type: custom:mushroom-template-card
