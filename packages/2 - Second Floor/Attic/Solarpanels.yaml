@@ -40,13 +40,49 @@ solar_panels_package:
   ######################################################################
   template:
     # ---------- vermogen per array (W) ----------
+    #
+    # ZW LEEST DE OMVORMER LOKAAL, NIET MEER VIA DE CLOUD (16 september 2026)
+    # `sensor.inverter_kroon_18_overkapping` komt uit SEMS, de GoodWe-cloud, en
+    # die ververst voor deze GW5000N-EH maar eens per ~4 minuten (mediaan op
+    # de ochtend van 16 september; langste gat 16 minuten). De zolder-omvormer
+    # doet dat via dezelfde cloud wel elke minuut.
+    #
+    # Dat "de zon springt niet" hierboven klopt op een strakblauwe dag, maar
+    # niet onder stapelwolken. Op 16 september stond ZW negen minuten lang op
+    # 878 W terwijl de omvormer zelf 2.434 W gaf. Het net (SlimHuys, ~2x per
+    # seconde) en de accu (ESPHome, elke 15 s) reageren wél meteen, dus
+    # `sensor.huis_verbruik` rekende net + te weinig zon - accu, kwam onder
+    # nul uit en werd op 0,00 kW afgekapt: dertig keer tussen 09:42 en 11:45.
+    # Robin zag het huis op 0,00 staan terwijl de zon 2,85 kW, het net 0,95 kW
+    # teruglevering en de accu 2.350 W laden aangaf - samen 0,45 kW meer eruit
+    # dan erin.
+    #
+    # Hetzelfde apparaat hangt ook in de lokale `goodwe`-integratie, en daar
+    # komt `sensor.pv_power` elke 10 seconden (langste gat 60 s). Waar SEMS en
+    # lokaal tegelijk verversten, verschillen ze een paar watt: het is dezelfde
+    # meting, alleen vers. Over 13-16 september viel de lokale koppeling negen
+    # keer weg, 10 tot 76 seconden en bijna allemaal 's nachts. Het dagtotaal
+    # hieronder (`today_s_pv_generation`) kwam al lokaal binnen.
+    #
+    # SEMS blijft staan als terugval, niet als tweede bron: zolang
+    # `pv_power` een getal heeft wint die altijd. Pas als de lokale koppeling
+    # zelf weg is telt de cloudwaarde - een oude meting is dan beter dan geen.
+    # De tienminutenrem hangt aan de lokale bron; is die zo lang weg en heeft
+    # SEMS ook niets, dan wordt ZW eerlijk unavailable, precies als voorheen.
     - triggers:
+        - trigger: state
+          entity_id: sensor.pv_power
+          not_to: ["unavailable", "unknown"]
+          id: waarde
+        # Een SEMS-update vuurt ook, maar de state hieronder kiest dan nog
+        # steeds `pv_power` zolang die leeft. Hij doet pas iets als de lokale
+        # koppeling weg is.
         - trigger: state
           entity_id: sensor.inverter_kroon_18_overkapping
           not_to: ["unavailable", "unknown"]
-          id: waarde
+          id: cloud
         - trigger: state
-          entity_id: sensor.inverter_kroon_18_overkapping
+          entity_id: sensor.pv_power
           to: ["unavailable", "unknown"]
           for: "00:10:00"
           id: dood
@@ -61,9 +97,12 @@ solar_panels_package:
           device_class: power
           state_class: measurement
           availability: >-
-            {{ trigger.id == 'waarde' or is_number(states('sensor.inverter_kroon_18_overkapping')) }}
+            {{ trigger.id == 'waarde'
+               or is_number(states('sensor.pv_power'))
+               or is_number(states('sensor.inverter_kroon_18_overkapping')) }}
           state: >-
             {% if trigger.id == 'waarde' %}{{ trigger.to_state.state | float(0) | round(1) }}
+            {% elif is_number(states('sensor.pv_power')) %}{{ states('sensor.pv_power') | float(0) | round(1) }}
             {% else %}{{ states('sensor.inverter_kroon_18_overkapping') | float(0) | round(1) }}{% endif %}
 
     - triggers:
