@@ -32,7 +32,14 @@ cards:
              schermvullend en mogen op ware grootte blijven. */
           --ov-zoom: 1;
           gap: 14px !important;
-          min-height: calc(100vh - 8px) !important;
+          /* NIET MEER `100vh - 8px` (17 september 2026). Het dashboard
+             begint onder de HA-kopbalk, dus met zichtbare kopbalk was hij
+             56px te hoog en scrolde de pagina ALTIJD 48px - ook als alles
+             paste. HA zet de kopbalkhoogte in `--header-height` (56px);
+             kiosk-mode laat die staan maar zet `--kiosk-header-height` op 0
+             als hij de balk verbergt. Gemeten in beide standen: geen
+             scroll-overschot meer. */
+          min-height: calc(100vh - var(--kiosk-header-height, var(--header-height, 0px)) - 8px) !important;
           margin: 0 !important;
           padding: 20px 24px 24px 24px !important;
           background: var(--primary-background-color) !important;
@@ -69,10 +76,59 @@ cards:
            Boven 1650px is er ruimte genoeg en staat de schaal op 1.
            Onder 1001px valt alles al in een kolom (zie de body-stack) en is
            schalen niet nodig - dan is er breedte zat voor een kolom. */
+
+        /* ==================== EN OOK SCHALEN OP HOOGTE ====================
+           (17 september 2026) Op ware grootte is het dashboard ~1.250px hoog:
+           kop 39 + kolommen ~970 + tijdlijn 130, in zoom-pixels, plus 80px
+           vaste marges en tussenruimte die niet mee schalen. Een laptop heeft
+           daar met de HA-kopbalk ~900px voor, en dan scrolde het altijd -
+           "niet handig voor een dashboard". De breedtetrap hierboven kijkt
+           alleen naar breedte, dus een breed maar laag scherm bleef op 1.
+
+           HOOGTE ALS CONTAINER QUERY, NIET ALS MEDIA QUERY. Een media query
+           ziet de viewport, en die is 56px hoger dan de ruimte als de
+           HA-kopbalk zichtbaar is en precies goed als kiosk-mode hem
+           verbergt. `:host` is de card zelf en is zo hoog als wat er
+           werkelijk over is, dus `@container` rekent in beide standen goed.
+           Alleen vanaf 1001px: daaronder is het één lange kolom die hoort te
+           scrollen. `container-type: size` legt geen layout-containment op,
+           dus de bubble-pop-ups (position: fixed) openen nog schermvullend -
+           nagemeten, pop-up exact even groot met en zonder.
+
+           DE KLEINSTE SCHAAL WINT, EN DAT DOET DE VOLGORDE. Breedte- en
+           hoogteregels zetten allebei `--ov-zoom`; bij gelijke specificiteit
+           wint de laatste die matcht. Daarom staan ALLE regels hieronder op
+           aflopende schaal, door elkaar, en overlappen de breedtebanden
+           (allemaal vanaf 1001px, elk met een eigen bovengrens). Zo is de
+           laatste match altijd de kleinste schaal van de twee. Geen `min()`
+           in `zoom`, want of Safari op de iPad dat slikt is niet zeker. Voeg
+           je een trede toe: op zijn plek in de volgorde, niet onderaan.
+
+           DE DREMPELS. Nodig bij schaal z: 80 + 1170 * z pixels hoogte. Die
+           1170 is de gemeten 1225 van 17 september min ~75px voor de
+           compactere linkerkolom van diezelfde dag, plus 20px speling. Een
+           drempel is "net te laag voor de trede erboven". Nagemeten in
+           headless Chrome op 1806x961 met kopbalk (905px ruimte): 0,70, geen
+           scroll. Onder 805px ruimte stopt het op 0,58 en scrollt het weer:
+           nog kleiner wordt onleesbaar, en scrollen blijft dan gewoon werken.
+
+           Een klein randgeval: iets met 14,5px tekst staat op 0,70 als ~10px
+           op het scherm. Dat is de prijs van alles-in-één-scherm op een
+           laptop; op het wandpaneel en in kioskstand is er meer ruimte. */
+        @media (min-width: 1001px) { :host { container-type: size; } }
+
+        @media (min-width: 1001px) and (max-width: 1650px) { #root { --ov-zoom: 0.92; } }
+        @container (max-height: 1249px) { #root { --ov-zoom: 0.92; } }
+        @container (max-height: 1155px) { #root { --ov-zoom: 0.86; } }
+        @media (min-width: 1001px) and (max-width: 1450px) { #root { --ov-zoom: 0.82; } }
+        @container (max-height: 1086px) { #root { --ov-zoom: 0.80; } }
+        @container (max-height: 1015px) { #root { --ov-zoom: 0.75; } }
+        @media (min-width: 1001px) and (max-width: 1300px) { #root { --ov-zoom: 0.72; } }
+        @container (max-height: 957px)  { #root { --ov-zoom: 0.70; } }
+        @container (max-height: 898px)  { #root { --ov-zoom: 0.66; } }
         @media (min-width: 1001px) and (max-width: 1150px) { #root { --ov-zoom: 0.62; } }
-        @media (min-width: 1151px) and (max-width: 1300px) { #root { --ov-zoom: 0.72; } }
-        @media (min-width: 1301px) and (max-width: 1450px) { #root { --ov-zoom: 0.82; } }
-        @media (min-width: 1451px) and (max-width: 1650px) { #root { --ov-zoom: 0.92; } }
+        @container (max-height: 852px)  { #root { --ov-zoom: 0.62; } }
+        @container (max-height: 805px)  { #root { --ov-zoom: 0.58; } }
     cards:
       # =================== HEADER ===================
       - !include overzicht/header.yaml

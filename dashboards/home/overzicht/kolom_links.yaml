@@ -249,7 +249,9 @@ cards:
               - background: none
               - border: none
               - box-shadow: none
-              - padding: 11px 2px 2px 2px
+              # 8px boven de scheidingslijn (was 11): in de pas met de 6px
+              # van `ov_room`, plus wat lucht onder de lijn.
+              - padding: 8px 2px 2px 2px
               - border-top: 1px solid var(--ov-ink-6)
             grid:
               - grid-template-areas: '"n sum dot"'
@@ -405,7 +407,7 @@ cards:
             style: |
               #root {
                 display: grid !important;
-                grid-template-columns: 112px minmax(0, 1fr) !important;
+                grid-template-columns: 96px minmax(0, 1fr) !important;
                 align-items: center !important;
                 gap: 14px !important;
               }
@@ -422,7 +424,7 @@ cards:
                   - background: none
                   - border: none
                   - box-shadow: none
-                  - padding: 4px 0
+                  - padding: 0
                 grid:
                   - grid-template-areas: '"car"'
               custom_fields:
@@ -432,7 +434,7 @@ cards:
                     var laadt = cs && cs.state === 'charge_in_progress';
                     var kop = laadt ? 'var(--ov-ok)' : 'var(--ov-ink-85)';
                     var bout = laadt ? '<path d="M104,44 l-9,15 h7 l-4,12 12,-16 h-7 z" fill="var(--ov-ok)"/>' : '';
-                    return `<svg viewBox="0 0 200 96" width="112" height="54" xmlns="http://www.w3.org/2000/svg" style="display:block">
+                    return `<svg viewBox="0 0 200 96" width="96" height="46" xmlns="http://www.w3.org/2000/svg" style="display:block">
                       <path d="M6,62 C6,52 10,47 20,45 L40,42 C46,41 50,39 54,35 L66,24 C71,19 78,16 86,16 L126,16 C136,16 145,19 151,25 L166,39 C172,44 180,46 187,49 C193,51 196,55 196,61 L196,70 C196,74 193,76 189,76 L12,76 C8,76 6,74 6,70 Z" fill="var(--ov-ink-55)"/>
                       <path d="M70,27 C74,22 79,20 86,20 L103,20 L103,41 L61,41 Z" fill="var(--ov-surface-2)"/>
                       <path d="M109,20 L124,20 C132,20 138,22 143,27 L155,41 L109,41 Z" fill="var(--ov-surface-2)"/>
@@ -451,7 +453,7 @@ cards:
             - type: vertical-stack
               card_mod:
                 style: |
-                  #root { gap: 8px !important; }
+                  #root { gap: 6px !important; }
               cards:
                 - type: custom:button-card
                   entity: sensor.hrh85f_kilometerstand
@@ -498,7 +500,7 @@ cards:
                           [[[ var h = states['binary_sensor.hrh85f_hvac']; return (h && h.state === 'on') ? '1px solid var(--ov-ok-wash-28)' : '1px solid var(--ov-ink-8)'; ]]]
                       - border-radius: 12px
                       - box-shadow: none
-                      - padding: 8px 12px
+                      - padding: 6px 12px
                     grid:
                       - grid-template-areas: '"ic t"'
                       - grid-template-columns: 20px 1fr
@@ -563,11 +565,20 @@ cards:
               ]]]
           styles:
             card:
+              # EÉN BLOK MET DE LADER ERONDER (17 september 2026)
+              # Laadvenster en lader waren twee losse kaders met 6px ertussen.
+              # Nu één kader in twee helften: deze houdt de bovenrand en de
+              # bovenste hoeken, de lader eronder de rest, en de bovenrand van
+              # de lader is de scheidingslijn. Beide houden hun eigen tik-
+              # actie. Samen met 6px in plaats van 8px padding scheelt dat
+              # ~14px zonder dat er een regel af gaat. Pas je hier de rand of
+              # de achtergrond aan, doe het dan ook bij de lader.
               - background: var(--ov-ink-4)
               - border: 1px solid var(--ov-ink-7)
-              - border-radius: 12px
+              - border-bottom: none
+              - border-radius: 12px 12px 0 0
               - box-shadow: none
-              - padding: 8px 12px
+              - padding: 6px 12px
               - margin-top: 6px
             grid:
               - grid-template-areas: '"ic t" "ic s"'
@@ -636,12 +647,14 @@ cards:
             navigation_path: "#ov-lader"
           styles:
             card:
+              # Onderste helft van het blok met het laadvenster erboven; zie
+              # de toelichting daar.
               - background: var(--ov-ink-4)
               - border: 1px solid var(--ov-ink-7)
-              - border-radius: 12px
+              - border-radius: 0 0 12px 12px
               - box-shadow: none
-              - padding: 8px 12px
-              - margin-top: 6px
+              - padding: 6px 12px
+              - margin-top: 0
             grid:
               - grid-template-areas: '"ic t" "ic s"'
               - grid-template-columns: 20px 1fr
