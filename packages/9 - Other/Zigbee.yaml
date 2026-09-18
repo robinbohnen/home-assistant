@@ -517,13 +517,23 @@ zigbee_package:
               {% set venster = reset_interlock | default('00:30:00', true) | as_timedelta %}
               {{ laatst is not none and (now() - laatst) < venster }}
             zachte_reset_zinvol: "{{ slzb_reageert and not recent_gereset }}"
+            # DE POORT WAAR DE SLZB OP ZIT - OP ÉÉN PLEK (18 september 2026)
+            # Stond drie keer letterlijk in dit script als poort 1. Robin
+            # prikte de SLZB-MR3 op 18 september om naar poort 12, en dan
+            # had trede 2 hieronder de stroom van poort 1 gehaald: van wat
+            # daar nu ook in zit, terwijl de SLZB gewoon bleef hangen. Geen
+            # fout in de trace, alleen een herstel dat niets herstelt.
+            #
+            # Verhuist hij weer: alleen deze regel. Welke poort het is zie je
+            # in UniFi bij de switch `USW Pro Max 16 PoE Meterkast`, niet in
+            # HA - de integratie heeft per poort alleen deze knop.
+            poe_knop: button.usw_pro_max_16_poe_meterkast_port_12_power_cycle
             # Zelfde trucje als hierboven, nu voor de PoE-poort. Valt het hele
             # kastje uit, dan zien Zigbee en Thread dat allebei en willen ze
             # allebei deze poort power-cyclen; zonder deze check reboot de
             # tweede het apparaat midden in het herstel van de eerste.
             poe_recent_gecycled: >-
-              {% set laatst = states('button.usw_pro_max_16_poe_meterkast_port_1_power_cycle')
-                              | as_datetime %}
+              {% set laatst = states(poe_knop) | as_datetime %}
               {{ laatst is not none and (now() - laatst) < timedelta(minutes=15) }}
 
         - action: notify.mobile_devices_adults
@@ -609,10 +619,11 @@ zigbee_package:
         #####################################################################
         ## Poging 2 - stroom eraf
         #####################################################################
-        # PoE-poort 1 van de switch in de meterkast voedt de SLZB (nagekeken op
-        # 2026-08-05). Dit is het enige dat een gehangen kastje terugbrengt
-        # zonder dat er iemand naar de meterkast loopt - en dat was op 5 augustus
-        # precies wat er nodig was.
+        # Een PoE-poort van de switch in de meterkast voedt de SLZB: poort 1
+        # tot 18 september 2026, sindsdien poort 12 - zie `poe_knop` hierboven.
+        # Dit is het enige dat een gehangen kastje terugbrengt zonder dat er
+        # iemand naar de meterkast loopt - en dat was op 5 augustus precies wat
+        # er nodig was.
         #
         # Waarom pas hier: spanning wegnemen is grover dan nodig zolang het
         # apparaat nog praat, en een koude start kost meer tijd. Reageert de SLZB
@@ -624,10 +635,11 @@ zigbee_package:
         # deze knop is nog nooit ingedrukt - dus hij staat gewoon op `unknown` en
         # trede 2 stopte er altijd. Geverifieerd tegen de draaiende HA op
         # 2026-08-06.
+        # Template in plaats van `condition: state`, want die laatste neemt
+        # geen variabele als entity_id.
         - if:
-            - condition: state
-              entity_id: button.usw_pro_max_16_poe_meterkast_port_1_power_cycle
-              state: unavailable
+            - condition: template
+              value_template: "{{ is_state(poe_knop, 'unavailable') }}"
           then:
             - action: script.notify_critical
               data:
@@ -661,7 +673,7 @@ zigbee_package:
 
         - action: button.press
           target:
-            entity_id: button.usw_pro_max_16_poe_meterkast_port_1_power_cycle
+            entity_id: "{{ poe_knop }}"
 
         # Een koude start duurt langer dan een core-restart, vandaar een eigen
         # (langere) wachttijd voordat de add-on het opnieuw mag proberen.
