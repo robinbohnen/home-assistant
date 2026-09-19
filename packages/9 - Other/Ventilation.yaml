@@ -1,7 +1,7 @@
 ventilation_cooling_package:
 
   #############################################################################
-  ## Ventilatoren schuur & meterkast
+  ## Ventilatoren schuur, meterkast & serverrack
   ##
   ## Doel: ventilator AAN als het warm is én ventileren écht koelt
   ## (aangevoerde lucht is kouder dan de ruimte), en UIT zodra afkoelen
@@ -13,15 +13,24 @@ ventilation_cooling_package:
   ## niets meer op -> uit, met een lockout zodat hij niet meteen weer
   ## aanslaat op de gewone AAN-voorwaarden.
   ##
-  ## Schuur en meterkast hebben elk hun eigen drempel-helpers.
+  ## Schuur, meterkast en serverrack hebben elk hun eigen drempel-helpers.
+  ##
+  ## Het serverrack krijgt daarbovenop een kritieke drempel: daarboven altijd
+  ## aan, ook als de garage niet koeler is, tijdens een lockout, en zonder
+  ## stagnatie-uit. Plus aan als de rack-sensor een half uur geen meting
+  ## geeft. De stagnatie-uit zelf doet hij wel (Robin, 19 september 2026):
+  ## er staat weinig warmmakends in en de ventilatoren maken herrie.
   ##
   ## Gebruikte entiteiten:
   ##   sensor.achtertuin_schuur_temperatuur_temperature             (temp schuur)
   ##   switch.achtertuin_achtertuin_schuur_stopcontact_ventilatoren (ventilatoren schuur)
   ##   sensor.meterkast_temperatuur_temperature                     (temp meterkast)
   ##   switch.meterkast_meterkast_stopcontact_ventilatoren          (ventilator meterkast)
+  ##   sensor.garage_serverrack_temperatuur_temperature             (temp serverrack)
+  ##   switch.garage_garage_stopcontact_serverrack_ventilatoren     (ventilatoren serverrack)
   ## Referentie schuur (blaast naar buiten): sensor.knmi_temperatuur
   ## Referentie meterkast (blaast de hal in): sensor.woonkamer_kamertemperatuur
+  ## Referentie serverrack (zuigt garagelucht aan): sensor.garage_garage_temperatuur_temperatuur
   #############################################################################
 
   input_number:
@@ -109,7 +118,50 @@ ventilation_cooling_package:
       unit_of_measurement: "°C"
       mode: box
 
-    ## --- Stagnatie (beide ruimtes) ---
+    ## --- Serverrack ---
+    ventilation_serverrack_warm_threshold:
+      name: "Ventilatie Serverrack - Warm drempel (aan boven)"
+      icon: mdi:thermometer-high
+      min: 20
+      max: 45
+      step: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+    ventilation_serverrack_cool_threshold:
+      name: "Ventilatie Serverrack - Koel drempel (uit onder)"
+      icon: mdi:thermometer-low
+      min: 15
+      max: 40
+      step: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+    ventilation_serverrack_delta_on:
+      name: "Ventilatie Serverrack - Min. verschil om aan te zetten"
+      icon: mdi:thermometer-plus
+      min: 0.5
+      max: 6
+      step: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+    ventilation_serverrack_delta_off:
+      name: "Ventilatie Serverrack - Min. verschil om aan te houden"
+      icon: mdi:thermometer-minus
+      min: 0
+      max: 4
+      step: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+    # Boven deze racktemperatuur altijd aan, ongeacht de garagelucht
+    ventilation_serverrack_critical_threshold:
+      name: "Ventilatie Serverrack - Kritiek (altijd aan boven)"
+      icon: mdi:thermometer-alert
+      min: 25
+      max: 50
+      step: 0.5
+      unit_of_measurement: "°C"
+      mode: box
+
+    ## --- Stagnatie ---
     # Minimale daling per uur die de ventilator moet realiseren. Zakt de
     # temperatuur in een uur minder dan dit, dan gaat hij uit.
     ventilation_schuur_stagnation_delta:
@@ -128,6 +180,14 @@ ventilation_cooling_package:
       step: 0.1
       unit_of_measurement: "°C"
       mode: box
+    ventilation_serverrack_stagnation_delta:
+      name: "Ventilatie Serverrack - Min. daling per uur"
+      icon: mdi:trending-down
+      min: 0.1
+      max: 2
+      step: 0.1
+      unit_of_measurement: "°C"
+      mode: box
 
   input_datetime:
     # Tot wanneer de ventilator niet opnieuw mag aanslaan na een stagnatie-uit.
@@ -138,6 +198,11 @@ ventilation_cooling_package:
       has_time: true
     ventilation_meterkast_lockout_until:
       name: "Ventilatie Meterkast - Geblokkeerd tot"
+      icon: mdi:timer-lock-outline
+      has_date: true
+      has_time: true
+    ventilation_serverrack_lockout_until:
+      name: "Ventilatie Serverrack - Geblokkeerd tot"
       icon: mdi:timer-lock-outline
       has_date: true
       has_time: true
@@ -161,6 +226,14 @@ ventilation_cooling_package:
       sampling_size: 500
       max_age:
         hours: 1
+    - platform: statistics
+      name: "Ventilatie Serverrack Temp Verandering 1u"
+      unique_id: ventilation_serverrack_temp_change_1h
+      entity_id: sensor.garage_serverrack_temperatuur_temperature
+      state_characteristic: change
+      sampling_size: 500
+      max_age:
+        hours: 1
 
   automation:
     ###########################################################################
@@ -176,7 +249,8 @@ ventilation_cooling_package:
       variables:
         # 1 = eerste set (de waardes die eerder als initial: in dit bestand
         # stonden)
-        config_versie: 1
+        # 2 = serverrack erbij (19 september 2026)
+        config_versie: 2
       triggers:
         - trigger: homeassistant
           event: start
@@ -197,6 +271,12 @@ ventilation_cooling_package:
               input_number.ventilation_meterkast_delta_off: 0.5
               input_number.ventilation_schuur_stagnation_delta: 0.2
               input_number.ventilation_meterkast_stagnation_delta: 0.2
+              input_number.ventilation_serverrack_warm_threshold: 28
+              input_number.ventilation_serverrack_cool_threshold: 25
+              input_number.ventilation_serverrack_delta_on: 2
+              input_number.ventilation_serverrack_delta_off: 0.5
+              input_number.ventilation_serverrack_critical_threshold: 35
+              input_number.ventilation_serverrack_stagnation_delta: 0.2
         - repeat:
             for_each: "{{ standaard.keys() | list }}"
             sequence:
@@ -390,5 +470,130 @@ ventilation_cooling_package:
                 - action: input_datetime.set_datetime
                   target:
                     entity_id: input_datetime.ventilation_meterkast_lockout_until
+                  data:
+                    datetime: "{{ (now() + timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S') }}"
+
+    - id: ventilation_cooling_server_rack
+      alias: Ventilation - Serverrack ventilatoren koelen
+      description: >-
+        Zet de rackventilatoren aan als het rack warm is en de garagelucht
+        koeler, of altijd boven de kritieke drempel; uit zodra het rack is
+        afgekoeld, ventileren niet meer koelt of een uur draaien niets oplevert.
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id:
+            - sensor.garage_serverrack_temperatuur_temperature
+          id: eval
+        - trigger: state
+          entity_id:
+            - sensor.garage_garage_temperatuur_temperatuur
+          id: eval
+        - trigger: time_pattern
+          minutes: "/15"
+          id: eval
+        # Geen meting meer uit het rack: liever onnodig blazen dan blind
+        # warm laten lopen.
+        - trigger: state
+          entity_id:
+            - sensor.garage_serverrack_temperatuur_temperature
+          to:
+            - unavailable
+            - unknown
+          for:
+            minutes: 30
+          id: sensor_weg
+      conditions: []
+      actions:
+        - choose:
+            # AAN: rack-sensor al een half uur zonder meting
+            - conditions:
+                - condition: trigger
+                  id: sensor_weg
+                - condition: state
+                  entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
+                  state: "off"
+              sequence:
+                - action: switch.turn_on
+                  target:
+                    entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
+            # AAN: boven de kritieke drempel - ook tijdens een lockout
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set binnen = states('sensor.garage_serverrack_temperatuur_temperature') | float(none) %}
+                    {% set kritiek = states('input_number.ventilation_serverrack_critical_threshold') | float %}
+                    {{ binnen is not none and binnen >= kritiek }}
+                - condition: state
+                  entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
+                  state: "off"
+              sequence:
+                - action: switch.turn_on
+                  target:
+                    entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
+            # AAN: warm én garage voldoende koeler
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set binnen = states('sensor.garage_serverrack_temperatuur_temperature') | float(none) %}
+                    {% set buiten = states('sensor.garage_garage_temperatuur_temperatuur') | float(none) %}
+                    {% set warm = states('input_number.ventilation_serverrack_warm_threshold') | float %}
+                    {% set delta_on = states('input_number.ventilation_serverrack_delta_on') | float %}
+                    {{ binnen is not none and buiten is not none
+                       and binnen >= warm and (binnen - buiten) >= delta_on }}
+                - condition: template
+                  value_template: >-
+                    {{ now().timestamp() >=
+                       (state_attr('input_datetime.ventilation_serverrack_lockout_until', 'timestamp') | float(0)) }}
+                - condition: state
+                  entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
+                  state: "off"
+              sequence:
+                - action: switch.turn_on
+                  target:
+                    entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
+            # UIT: afgekoeld genoeg of ventileren heeft geen effect meer -
+            # maar nooit boven de kritieke drempel
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set binnen = states('sensor.garage_serverrack_temperatuur_temperature') | float(none) %}
+                    {% set buiten = states('sensor.garage_garage_temperatuur_temperatuur') | float(none) %}
+                    {% set koel = states('input_number.ventilation_serverrack_cool_threshold') | float %}
+                    {% set kritiek = states('input_number.ventilation_serverrack_critical_threshold') | float %}
+                    {% set delta_off = states('input_number.ventilation_serverrack_delta_off') | float %}
+                    {{ binnen is not none and buiten is not none
+                       and binnen < kritiek
+                       and (binnen <= koel or (binnen - buiten) <= delta_off) }}
+                - condition: state
+                  entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
+                  state: "on"
+              sequence:
+                - action: switch.turn_off
+                  target:
+                    entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
+            # UIT: draait al een uur maar koelt niet meer merkbaar - niet
+            # boven de kritieke drempel
+            - conditions:
+                - condition: state
+                  entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
+                  state: "on"
+                  for:
+                    hours: 1
+                - condition: template
+                  value_template: >-
+                    {% set binnen = states('sensor.garage_serverrack_temperatuur_temperature') | float(none) %}
+                    {% set kritiek = states('input_number.ventilation_serverrack_critical_threshold') | float %}
+                    {% set verandering = states('sensor.ventilatie_serverrack_temp_verandering_1u') | float(none) %}
+                    {% set stagnatie = states('input_number.ventilation_serverrack_stagnation_delta') | float %}
+                    {{ binnen is not none and binnen < kritiek
+                       and verandering is not none and verandering > (0 - stagnatie) }}
+              sequence:
+                - action: switch.turn_off
+                  target:
+                    entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
+                - action: input_datetime.set_datetime
+                  target:
+                    entity_id: input_datetime.ventilation_serverrack_lockout_until
                   data:
                     datetime: "{{ (now() + timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S') }}"

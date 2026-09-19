@@ -3135,10 +3135,16 @@ cards:
 
           # ----- 4. Klimaat -----
           # Plafond-verwarmingsplaat speelkamer; verbruik alleen tonen als hij aan staat.
+          # Daarnaast het serverrack: racktemperatuur plus de ventilatoren, die
+          # packages/9 - Other/Ventilation.yaml schakelt. Tikken geeft de
+          # temperatuurgrafiek en geen toggle - met de hand omzetten draait de
+          # automatisering binnen een kwartier toch weer terug. De kleuren
+          # volgen de drempels van die automatisering en niet de kamerschaal
+          # hierboven: 25 °C is voor een rack geen reden voor oranje.
           - type: custom:mushroom-title-card
             subtitle: Klimaat
           - type: grid
-            columns: 1
+            columns: 2
             square: false
             cards:
               - type: custom:mushroom-template-card
@@ -3153,6 +3159,23 @@ cards:
                 icon_color: "{{ 'orange' if is_state('switch.speelkamer_stopcontact_verwarming','on') else 'grey' }}"
                 tap_action:
                   action: toggle
+              - type: custom:mushroom-template-card
+                entity: sensor.garage_serverrack_temperatuur_temperature
+                primary: Serverrack
+                secondary: >-
+                  {% set t = states('sensor.garage_serverrack_temperatuur_temperature') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }} · {%
+                  if is_state('switch.garage_garage_stopcontact_serverrack_ventilatoren','on') %}ventilatoren aan{%
+                  else %}ventilatoren uit{% endif %}
+                icon: >-
+                  {{ 'mdi:fan' if is_state('switch.garage_garage_stopcontact_serverrack_ventilatoren','on') else 'mdi:server' }}
+                icon_color: >-
+                  {% set t = states('sensor.garage_serverrack_temperatuur_temperature') | float(none) %}
+                  {% set warm = states('input_number.ventilation_serverrack_warm_threshold') | float(28) %}
+                  {% set kritiek = states('input_number.ventilation_serverrack_critical_threshold') | float(35) %}
+                  {{ 'grey' if t is none else 'green' if t < warm else 'orange' if t < kritiek else 'red' }}
+                tap_action:
+                  action: more-info
       # De losse knoppen die vroeger op de oude dashboard-view stonden. Ze
       # zaten eerst als twee panelen in de rechterkolom, maar dat waren tien
       # rijen op de belangrijkste kolom van het paneel - hier staan ze net zo
