@@ -302,6 +302,37 @@ cards:
             - condition: state
               entity: binary_sensor.backyard_spa_aanwezig
               state: "on"
+        # Serverrack in de garage: geen climate-entiteit maar een thermometer
+        # plus een stekker met ventilatoren, die packages/9 - Other/
+        # Ventilation.yaml schakelt. Zelfde regel-opmaak als de airco's; de
+        # subregel en de badge zijn hier overschreven. `entity` is de
+        # ventilatorstekker (die bepaalt de badge), tikken geeft de
+        # temperatuurgrafiek van het rack.
+        - type: custom:button-card
+          template: ov_climate
+          entity: switch.garage_garage_stopcontact_serverrack_ventilatoren
+          name: Serverrack
+          tap_action:
+            action: more-info
+            entity: sensor.garage_serverrack_temperatuur_temperature
+          triggers_update:
+            - switch.garage_garage_stopcontact_serverrack_ventilatoren
+            - sensor.garage_serverrack_temperatuur_temperature
+          custom_fields:
+            sub: |
+              [[[
+                var t = states['sensor.garage_serverrack_temperatuur_temperature'];
+                if(!t || isNaN(Number(t.state)) || t.state === '') return 'geen meting';
+                return Number(t.state).toFixed(1).replace('.',',') + '°';
+              ]]]
+            badge: |
+              [[[
+                if(!entity || entity.state === 'unavailable' || entity.state === 'unknown') return '';
+                var m = entity.state === 'on'
+                      ? ['ventileert','var(--ov-ink-60)','var(--ov-ink-8)']
+                      : ['uit','var(--ov-ink-50)','var(--ov-ink-6)'];
+                return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:${m[1]};background:${m[2]}">${m[0]}</span>`;
+              ]]]
         # Lucht per kamer: CO2, fijnstof en vocht op één regel, met de
         # luchtkwaliteitsklasse als badge. De opmaak en de drempels staan in
         # `ov_lucht` in overzicht_templates.yaml, want sinds 4 september 2026
