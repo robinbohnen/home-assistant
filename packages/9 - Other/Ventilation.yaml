@@ -21,6 +21,15 @@ ventilation_cooling_package:
   ## geeft. De stagnatie-uit zelf doet hij wel (Robin, 19 september 2026):
   ## er staat weinig warmmakends in en de ventilatoren maken herrie.
   ##
+  ## HANDBEDIENING SERVERRACK
+  ## script.ventilation_serverrack_handbediening klapt de stekker om én zet
+  ## input_datetime.ventilation_serverrack_handbediening_tot twee uur vooruit.
+  ## Zolang die loopt doet de automatisering niets - alleen de kritieke
+  ## drempel wint er nog van. Zonder die pauze zet de automatisering een
+  ## handmatig aangezette ventilator binnen een kwartier weer uit, en dan lijkt
+  ## de knop stuk. Dezelfde reden waarom de knop een script is en geen kale
+  ## toggle op de stekker.
+  ##
   ## Gebruikte entiteiten:
   ##   sensor.achtertuin_schuur_temperatuur_temperature             (temp schuur)
   ##   switch.achtertuin_achtertuin_schuur_stopcontact_ventilatoren (ventilatoren schuur)
@@ -204,6 +213,13 @@ ventilation_cooling_package:
     ventilation_serverrack_lockout_until:
       name: "Ventilatie Serverrack - Geblokkeerd tot"
       icon: mdi:timer-lock-outline
+      has_date: true
+      has_time: true
+    # Tot wanneer de automatisering met haar handen van de rackventilatoren
+    # afblijft, omdat jij ze zelf hebt omgezet.
+    ventilation_serverrack_handbediening_tot:
+      name: "Ventilatie Serverrack - Handbediening tot"
+      icon: mdi:hand-back-right-outline
       has_date: true
       has_time: true
 
@@ -510,6 +526,11 @@ ventilation_cooling_package:
             - conditions:
                 - condition: trigger
                   id: sensor_weg
+                # Niets doen zolang de handbediening loopt
+                - condition: template
+                  value_template: >-
+                    {{ now().timestamp() >=
+                       (state_attr('input_datetime.ventilation_serverrack_handbediening_tot', 'timestamp') | float(0)) }}
                 - condition: state
                   entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
                   state: "off"
@@ -545,6 +566,11 @@ ventilation_cooling_package:
                   value_template: >-
                     {{ now().timestamp() >=
                        (state_attr('input_datetime.ventilation_serverrack_lockout_until', 'timestamp') | float(0)) }}
+                # Niets doen zolang de handbediening loopt
+                - condition: template
+                  value_template: >-
+                    {{ now().timestamp() >=
+                       (state_attr('input_datetime.ventilation_serverrack_handbediening_tot', 'timestamp') | float(0)) }}
                 - condition: state
                   entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
                   state: "off"
@@ -565,6 +591,11 @@ ventilation_cooling_package:
                     {{ binnen is not none and buiten is not none
                        and binnen < kritiek
                        and (binnen <= koel or (binnen - buiten) <= delta_off) }}
+                # Niets doen zolang de handbediening loopt
+                - condition: template
+                  value_template: >-
+                    {{ now().timestamp() >=
+                       (state_attr('input_datetime.ventilation_serverrack_handbediening_tot', 'timestamp') | float(0)) }}
                 - condition: state
                   entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
                   state: "on"
@@ -588,6 +619,11 @@ ventilation_cooling_package:
                     {% set stagnatie = states('input_number.ventilation_serverrack_stagnation_delta') | float %}
                     {{ binnen is not none and binnen < kritiek
                        and verandering is not none and verandering > (0 - stagnatie) }}
+                # Niets doen zolang de handbediening loopt
+                - condition: template
+                  value_template: >-
+                    {{ now().timestamp() >=
+                       (state_attr('input_datetime.ventilation_serverrack_handbediening_tot', 'timestamp') | float(0)) }}
               sequence:
                 - action: switch.turn_off
                   target:
@@ -597,3 +633,74 @@ ventilation_cooling_package:
                     entity_id: input_datetime.ventilation_serverrack_lockout_until
                   data:
                     datetime: "{{ (now() + timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S') }}"
+
+  script:
+    ###########################################################################
+    ## HANDBEDIENING RACKVENTILATOREN
+    ## De knoppen op het dashboard roepen dit script aan; de stekker zelf
+    ## omzetten werkt ook, maar dan zet de automatisering hem bij de volgende
+    ## evaluatie gewoon weer terug.
+    ###########################################################################
+    ventilation_serverrack_handbediening:
+      alias: Ventilatie Serverrack - Handbediening
+      description: >-
+        Klapt de rackventilatoren om en laat de automatisering er twee uur van
+        af. Daarna neemt ze het vanzelf weer over.
+      icon: mdi:fan
+      mode: single
+      fields:
+        uren:
+          name: Uren
+          description: Hoe lang de automatisering er vanaf blijft
+          required: false
+          example: 2
+          default: 2
+          selector:
+            number:
+              min: 0.5
+              max: 12
+              step: 0.5
+      sequence:
+        - action: switch.toggle
+          target:
+            entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.ventilation_serverrack_handbediening_tot
+          data:
+            datetime: >-
+              {{ (now() + timedelta(hours=(uren | default(2)) | float(2))).strftime('%Y-%m-%d %H:%M:%S') }}
+        # Een stagnatie-lockout van eerder hoort hier te vervallen: je hebt nu
+        # zelf gezegd wat er moet gebeuren. Bleef hij staan, dan zou de
+        # automatisering na de handbediening alsnog uren niet mogen aanzetten.
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.ventilation_serverrack_lockout_until
+          data:
+            datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+        - action: logbook.log
+          data:
+            name: Ventilatie serverrack
+            message: >-
+              Handbediening: ventilatoren
+              {{ 'aan' if is_state('switch.garage_garage_stopcontact_serverrack_ventilatoren', 'on') else 'uit' }}
+              gezet, automatisering pauzeert {{ (uren | default(2)) | float(2) }} uur.
+
+    # Terug naar automatisch zonder te wachten: handbediening meteen aflopen
+    # laten. De eerstvolgende evaluatie (elk kwartier, of eerder bij een nieuwe
+    # meting) beslist dan weer zelf.
+    ventilation_serverrack_automatisch:
+      alias: Ventilatie Serverrack - Weer automatisch
+      icon: mdi:autorenew
+      mode: single
+      sequence:
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.ventilation_serverrack_handbediening_tot
+          data:
+            datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+        - action: automation.trigger
+          target:
+            entity_id: automation.ventilation_serverrack_ventilatoren_koelen
+          data:
+            skip_condition: true

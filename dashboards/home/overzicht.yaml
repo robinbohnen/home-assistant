@@ -3151,14 +3151,16 @@ cards:
           # Plafond-verwarmingsplaat speelkamer; verbruik alleen tonen als hij aan staat.
           # Daarnaast het serverrack: racktemperatuur plus de ventilatoren, die
           # packages/9 - Other/Ventilation.yaml schakelt. Tikken geeft de
-          # temperatuurgrafiek en geen toggle - met de hand omzetten draait de
-          # automatisering binnen een kwartier toch weer terug. De kleuren
+          # temperatuurgrafiek en geen toggle; de knop ernaast is de
+          # handbediening. Die loopt via script.ventilation_serverrack_handbediening
+          # en niet via een kale toggle op de stekker, want anders zet de
+          # automatisering hem binnen een kwartier weer terug. De kleuren
           # volgen de drempels van die automatisering en niet de kamerschaal
           # hierboven: 25 °C is voor een rack geen reden voor oranje.
           - type: custom:mushroom-title-card
             subtitle: Klimaat
           - type: grid
-            columns: 2
+            columns: 3
             square: false
             cards:
               - type: custom:mushroom-template-card
@@ -3190,6 +3192,36 @@ cards:
                   {{ 'grey' if t is none else 'green' if t < warm else 'orange' if t < kritiek else 'red' }}
                 tap_action:
                   action: more-info
+              # Handbediening: klapt de ventilatoren om en zet de
+              # automatisering twee uur op pauze. De subregel telt die pauze
+              # af, zodat zichtbaar is wanneer het huis het weer overneemt -
+              # zonder dat is een knop die "niets lijkt te doen" niet van een
+              # afgelopen pauze te onderscheiden. Vasthouden zet hem meteen
+              # terug op automatisch.
+              - type: custom:mushroom-template-card
+                entity: switch.garage_garage_stopcontact_serverrack_ventilatoren
+                primary: >-
+                  {{ 'Ventilatoren uit' if is_state('switch.garage_garage_stopcontact_serverrack_ventilatoren','on')
+                     else 'Ventilatoren aan' }}
+                secondary: >-
+                  {% set tot = state_attr('input_datetime.ventilation_serverrack_handbediening_tot', 'timestamp') | float(0) %}
+                  {% set over = ((tot - now().timestamp()) / 60) | round(0) %}
+                  {% if over > 0 %}
+                    Met de hand, nog {{ (over ~ ' min') if over < 60 else ((over / 60) | round(1) | string | replace('.', ',') ~ ' uur') }}
+                  {% else %}
+                    Automatisch
+                  {% endif %}
+                icon: >-
+                  {{ 'mdi:fan-off' if is_state('switch.garage_garage_stopcontact_serverrack_ventilatoren','on') else 'mdi:fan' }}
+                icon_color: >-
+                  {% set tot = state_attr('input_datetime.ventilation_serverrack_handbediening_tot', 'timestamp') | float(0) %}
+                  {{ 'blue' if tot > now().timestamp() else 'grey' }}
+                tap_action:
+                  action: perform-action
+                  perform_action: script.ventilation_serverrack_handbediening
+                hold_action:
+                  action: perform-action
+                  perform_action: script.ventilation_serverrack_automatisch
       # De losse knoppen die vroeger op de oude dashboard-view stonden. Ze
       # zaten eerst als twee panelen in de rechterkolom, maar dat waren tien
       # rijen op de belangrijkste kolom van het paneel - hier staan ze net zo
