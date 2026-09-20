@@ -1,52 +1,97 @@
-# Thuisaccu: wat de kwartierregie van plan is en waarom.
+# Thuisaccu: wat hij doet, of hij gezond is, en of het goede momenten waren.
 #
-# De regie zelf staat in packages/9 - Other/Battery.yaml. Twee regimes die
-# elkaar uitsluiten: `input_boolean.batterij_kwartierregie` uit = sturen op het
-# grove tariefniveau van de dag, aan = laden in de N goedkoopste kwartieren van
-# de komende 24 uur en ontladen in de M duurste. Deze pagina laat vooral het
-# tweede zien, want dat is het regime dat je wil kunnen controleren.
+# VAN PLAN NAAR VERANTWOORDING (20 september 2026)
+# Deze pagina liet tot vandaag zien wat de kwartierregie van plan was: welke
+# blokken laden, welke ontladen, en waarom hij nu niets deed. Die regie stuurde
+# de Marstek. Die accu gaat eruit; de Deye wordt gestuurd door de MarkeDroid-
+# appliance van ModuSun, niet door Home Assistant.
 #
-# WAAROM DE GRAFIEK DE GRENZEN TOONT EN NIET DE BLOKKEN ZELF
-# De sensor rekent per ronde uit welke kwartieren in de laad- en ontlaadset
-# zitten, maar geeft alleen de grenswaarden terug (`laad_grens` /
-# `ontlaad_grens`), niet de hele lijst - dat zou een attribuut van kilobytes
-# worden dat elke vijf minuten in de recorder belandt. Met die twee lijnen over
-# de prijsbalken heen zie je hetzelfde: elke balk onder de onderste lijn is een
-# laadblok, elke balk boven de bovenste een ontlaadblok.
+# Daarom staat er geen enkele knop meer op. Een schuifje dat naar een register
+# schrijft waar MarkeDroid ook aan draait, geeft een accu met twee bazen - en
+# die ruzie zie je pas terug in een rekening. Alles wat je hier ziet is
+# gelezen. De vraag die de pagina beantwoordt is niet "wat gaat hij doen" maar
+# "heeft hij het goed gedaan", en dat lees je af aan de grafiek onderaan: de
+# lading van vandaag over de kwartierprijzen heen.
+#
+# ALLE ACCUGETALLEN KOMEN UIT sensor.accu_* EN NIET UIT sensor.deye_*.
+# Die laag staat in packages/9 - Other/Battery.yaml en draait onder meer het
+# teken van het vermogen om (de Deye telt ontladen positief). Zet hier een
+# `sensor.deye_battery_power` neer en de kaart wijst de verkeerde kant op.
 title: Accu
 path: accu
 icon: mdi:home-battery
 
 cards:
-  # ---------------------------------------------------------------- regie
+  # ---------------------------------------------------------------- de accu
   - type: vertical-stack
     cards:
       - type: custom:button-card
         template: ov_title
         variables:
-          title: KWARTIERREGIE
+          title: DE ACCU
 
-      - type: custom:button-card
-        template: ov_toggle
-        entity: input_boolean.batterij_kwartierregie
-        name: Sturen op kwartierprijzen
-        variables:
-          mdi: mdi:chart-timeline-variant
-          sub: |
-            [[[
-              // Uit betekent niet "niets doet iets": dan stuurt de oude
-              // automatisering op het tariefniveau van de dag. Dat verschil
-              // hoort hier te staan, anders lijkt uit gelijk aan stuurloos.
-              return states['input_boolean.batterij_kwartierregie'] &&
-                     states['input_boolean.batterij_kwartierregie'].state === 'on'
-                ? 'de goedkoopste en duurste kwartieren'
-                : 'uit — de accu volgt het tariefniveau van de dag';
-            ]]]
+      # DE WAARSCHUWING STAAT BOVENAAN EN NIET ONDERIN
+      # Op 20 september stond de Deye wel in HA maar nog niet in de meterkast:
+      # alle drie de netfases op 0 V. Elk getal op deze pagina was toen echt,
+      # maar sloeg nergens op - de accu liep leeg op zijn eigen elektronica.
+      # Zolang die situatie kan bestaan hoort dat als eerste in beeld, anders
+      # sta je naar een kloppende kaart te kijken met een verkeerd verhaal.
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.deye_grid
+            state_not: "on"
+        card:
+          type: custom:button-card
+          entity: binary_sensor.deye_grid
+          show_icon: false
+          show_name: false
+          show_state: false
+          tap_action:
+            action: more-info
+          styles:
+            card:
+              - background: var(--ov-warn-15)
+              - border: none
+              - box-shadow: none
+              - border-radius: 14px
+              - padding: 11px 14px
+            grid:
+              - grid-template-areas: '"ic t"'
+              - grid-template-columns: 26px 1fr
+              - align-items: center
+              - column-gap: 11px
+            custom_fields:
+              ic:
+                - grid-area: ic
+              t:
+                - grid-area: t
+                - justify-self: start
+                - font-size: 13px
+                - color: var(--primary-text-color)
+          custom_fields:
+            ic: '<ha-icon icon="mdi:transmission-tower-off" style="--mdc-icon-size:20px;color:var(--ov-warn)"></ha-icon>'
+            t: |
+              [[[
+                var v = states['sensor.deye_grid_l1_voltage'];
+                var volt = (v && !isNaN(Number(v.state))) ? Number(v.state) : null;
+                return '<b>Geen netspanning op de omvormer</b> — '
+                  + (volt === 0 ? 'alle fases op 0 V. '
+                               : (volt === null ? '' : volt + ' V op L1. '))
+                  + 'Alles hieronder klopt wel, maar gaat over een accu die op '
+                  + 'een eiland draait: laden uit het net kan niet en de zon '
+                  + 'komt er niet in.';
+              ]]]
 
-      # Wat het plan nu zegt. Losse kaart en geen badge op de schakelaar:
-      # dit is de regel die je leest als je je afvraagt waarom hij niets doet.
+      # Lading, richting en inhoud in één regel. Zelfde opzet als de
+      # accukaart die hier stond, maar zonder de ondergrens-badge (die was een
+      # instelling van de regie) - er staat nu wat er in zit.
       - type: custom:button-card
-        entity: sensor.batterij_kwartierplan
+        entity: sensor.accu_lading
+        triggers_update:
+          - sensor.accu_vermogen
+          - sensor.accu_status
+          - sensor.accu_inhoud
         show_icon: false
         show_name: false
         show_state: false
@@ -84,151 +129,13 @@ cards:
         custom_fields:
           ic: |
             [[[
-              var s = entity ? entity.state : 'unknown';
-              var m = {laden:  ['mdi:battery-arrow-up','var(--ov-ok)'],
+              var st = states['sensor.accu_status'];
+              var m = {laden:   ['mdi:battery-arrow-up','var(--ov-ok)'],
                        ontladen:['mdi:battery-arrow-down','var(--ov-warn)'],
-                       rust:   ['mdi:battery-clock','var(--ov-ink-35)']};
-              var v = m[s] || ['mdi:help-circle-outline','var(--ov-ink-25)'];
+                       rust:    ['mdi:battery-clock','var(--ov-ink-35)']};
+              var v = m[st ? st.state : ''] || ['mdi:help-circle-outline','var(--ov-ink-25)'];
               return `<ha-icon icon="${v[0]}" style="--mdc-icon-size:22px;color:${v[1]}"></ha-icon>`;
             ]]]
-          t: |
-            [[[
-              var m = {laden:'Laden uit het net', ontladen:'Ontladen naar het huis', rust:'Nu even niets'};
-              return m[entity ? entity.state : ''] || 'Plan onbekend';
-            ]]]
-          sub: |
-            [[[
-              if(!entity || !entity.attributes) return '';
-              var r = entity.attributes.reden || '';
-              var p = entity.attributes.prijs_nu;
-              var pr = (p === null || p === undefined || p === 'None')
-                ? '' : ' · nu ' + Number(p).toFixed(3).replace('.',',') + ' €/kWh';
-              // HET PLAN IS DE PRIJS, DE REGIE KIJKT VERDER
-              // De sensor rekent alleen met tarieven. Twee remmen zitten in de
-              // automatisering en niet in de sensor, en zonder deze regel zou
-              // de kaart "laden" zeggen terwijl er niets gebeurt - precies het
-              // soort verschil waar je een half uur naar staat te kijken.
-              if(entity.state === 'laden'){
-                var exp = states['switch.live_energieverbruik_totaal_negatief'];
-                if(exp && exp.state === 'on')
-                  return 'overgeslagen: de zon levert nu al overschot' + pr;
-                var soc = states['sensor.lilygo_rs485_marstek_battery_state_of_charge'];
-                soc = soc ? Number(soc.state) : 0;
-                // Dezelfde twee sensoren als de conditie in Battery.yaml, en
-                // dat moet zo blijven: stond hier de losse overkapping-array
-                // terwijl de regie beide optelt, dan meldt de kaart een ander
-                // getal dan waar de beslissing op viel.
-                var zon = states[
-                  (states['sun.sun'] && states['sun.sun'].state === 'below_horizon'
-                   && new Date().getHours() >= 12)
-                    ? 'sensor.forecast_solar_production_tomorrow'
-                    : 'sensor.forecast_solar_production_today_remaining'];
-                var drempel = states['input_number.batterij_zon_drempel'];
-                // Bijvullen voor de piek gaat vóór de zonverwachting; zie de
-                // toelichting bij die conditie in Battery.yaml. Zonder deze
-                // uitzondering zou de kaart hier "overgeslagen" melden terwijl
-                // hij juist wél laadt.
-                var bijvul = (entity.attributes.reden || '').indexOf('bijvullen') !== -1;
-                if(!bijvul && zon && drempel && soc >= 30
-                   && Number(zon.state) >= Number(drempel.state))
-                  return 'overgeslagen: ' + Number(zon.state).toFixed(1).replace('.',',')
-                       + ' kWh zon verwacht' + pr;
-                if(soc >= 95) return 'accu is vol' + pr;
-              }
-              return r + pr;
-            ]]]
-          badge: |
-            [[[
-              // Het aantal blokken waar het plan mee rekent. Staat dit op 0,
-              // dan zijn de prijzen weg en is `rust` een gebrek aan gegevens
-              // en niet een keuze - dat verschil moet zichtbaar zijn.
-              if(!entity || !entity.attributes) return '';
-              var n = Number(entity.attributes.blokken_bekend || 0);
-              var kleur = n > 0 ? 'var(--ov-ink-60)' : 'var(--ov-warn)';
-              var vlak = n > 0 ? 'var(--ov-ink-8)' : 'var(--ov-warn-15)';
-              return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:${kleur};background:${vlak}">${n} blokken</span>`;
-            ]]]
-
-      # De eerstvolgende momenten, zodat je weet wanneer er iets gebeurt.
-      - type: custom:button-card
-        template: ov_listrow
-        entity: sensor.batterij_kwartierplan
-        variables:
-          mdi: mdi:battery-arrow-up
-          kleur: "var(--ov-ok)"
-          title: Volgend laadblok
-        custom_fields:
-          s: |
-            [[[
-              var a = entity && entity.attributes ? entity.attributes : {};
-              var t = a.volgend_laadblok;
-              var g = a.laad_grens;
-              if(!t || t === '-') return 'geen laadblok meer in het venster';
-              var grens = (g === null || g === undefined || g === 'None')
-                ? '' : ' · tot ' + Number(g).toFixed(3).replace('.',',') + ' €/kWh';
-              return t + grens;
-            ]]]
-      - type: custom:button-card
-        template: ov_listrow
-        entity: sensor.batterij_kwartierplan
-        variables:
-          mdi: mdi:battery-arrow-down
-          kleur: "var(--ov-warn)"
-          title: Volgend ontlaadblok
-        custom_fields:
-          s: |
-            [[[
-              var a = entity && entity.attributes ? entity.attributes : {};
-              var t = a.volgend_ontlaadblok;
-              var g = a.ontlaad_grens;
-              if(!t || t === '-') return 'geen ontlaadblok meer in het venster';
-              var grens = (g === null || g === undefined || g === 'None')
-                ? '' : ' · vanaf ' + Number(g).toFixed(3).replace('.',',') + ' €/kWh';
-              return t + grens;
-            ]]]
-
-  # ------------------------------------------------------------- de accu zelf
-  - type: vertical-stack
-    cards:
-      - type: custom:button-card
-        template: ov_title
-        variables:
-          title: DE ACCU
-      - type: custom:button-card
-        entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
-        show_icon: false
-        show_name: false
-        show_state: false
-        tap_action:
-          action: more-info
-        styles:
-          grid:
-            - grid-template-areas: '"t badge" "sub badge"'
-            - grid-template-columns: 1fr auto
-            - align-items: center
-            - column-gap: 10px
-          card:
-            - background: none
-            - border: none
-            - box-shadow: none
-            - padding: 11px 2px
-          custom_fields:
-            t:
-              - grid-area: t
-              - justify-self: start
-              - font-size: 14.5px
-              - font-weight: "600"
-              - color: var(--primary-text-color)
-            sub:
-              - grid-area: sub
-              - justify-self: start
-              - font-size: 12.5px
-              - color: var(--ov-ink-58)
-              - padding-top: 2px
-            badge:
-              - grid-area: badge
-              - justify-self: end
-        custom_fields:
           t: |
             [[[
               if(!entity || ['unavailable','unknown'].indexOf(entity.state) !== -1)
@@ -237,95 +144,157 @@ cards:
             ]]]
           sub: |
             [[[
-              // Zelfde afleiding als de accu-app op de klokken en het
-              // ThuisAccu-intent: de inverter-state is leidend, het vermogen
-              // is de terugval met een dode zone van 20 W.
-              var pwE = states['sensor.lilygo_rs485_marstek_battery_power'];
-              var invE = states['sensor.lilygo_rs485_marstek_inverter_state'];
-              if(!pwE) return '';
+              // Eén bron voor de richting: sensor.accu_status. Deze kaart had
+              // vroeger een eigen dode zone van 20 W, de nest hub 15, de klok
+              // ook 20 - drie waarheden over dezelfde accu.
+              var st = states['sensor.accu_status'];
+              var pwE = states['sensor.accu_vermogen'];
+              if(!st || !pwE) return '';
               var pw = Number(pwE.state);
-              var inv = invE ? invE.state : '';
               if(isNaN(pw)) return '';
-              var laadt = inv === 'Charge' || (['Charge','Discharge'].indexOf(inv) === -1 && pw > 20);
-              var ontlaadt = inv === 'Discharge' || (['Charge','Discharge'].indexOf(inv) === -1 && pw < -20);
-              if(laadt) return 'laadt met ' + Math.abs(Math.round(pw)) + ' W';
-              if(ontlaadt) return 'levert ' + Math.abs(Math.round(pw)) + ' W aan het huis';
+              // Boven de kilowatt leest een kaal wattgetal slecht; dit is een
+              // accu die duizenden watts kan.
+              var fmt = Math.abs(pw) >= 1000
+                ? (Math.abs(pw)/1000).toFixed(1).replace('.',',') + ' kW'
+                : Math.round(Math.abs(pw)) + ' W';
+              if(st.state === 'laden')    return 'laadt met ' + fmt;
+              if(st.state === 'ontladen') return 'levert ' + fmt + ' aan het huis';
               return 'staat stil';
             ]]]
           badge: |
             [[[
-              // De ondergrens erbij: een accu die op 11% "niets doet" terwijl
-              // de ondergrens 10 is, is niet stuk maar leeg.
-              var g = states['input_number.batterij_min_soc'];
-              if(!g) return '';
-              return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:var(--ov-ink-60);background:var(--ov-ink-8)">grens ${Math.round(Number(g.state))}%</span>`;
+              // Kilowatturen en niet procenten: bij het afwegen of je de droger
+              // nog aanzet zegt "13 kWh" iets en "44%" niet, zeker niet bij een
+              // accu van deze omvang.
+              var i = states['sensor.accu_inhoud'], c = states['sensor.accu_capaciteit'];
+              if(!i || isNaN(Number(i.state))) return '';
+              var t = Number(i.state).toFixed(1).replace('.',',');
+              if(c && !isNaN(Number(c.state)))
+                t += ' / ' + Number(c.state).toFixed(1).replace('.',',');
+              return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:var(--ov-ink-60);background:var(--ov-ink-8)">${t} kWh</span>`;
             ]]]
-      - type: entities
-        card_mod:
-          style: |
-            ha-card { background: none !important; border: none !important; box-shadow: none !important; }
-        entities:
-          - entity: input_number.batterij_laad_kwartieren
-            name: Laden in de X goedkoopste kwartieren
-          - entity: input_number.batterij_ontlaad_kwartieren
-            name: Ontladen in de X duurste kwartieren
-          - entity: input_number.batterij_min_soc
-            name: Niet verder ontladen dan
-          - entity: input_number.batterij_zon_drempel
-            name: Niet netladen bij meer zon dan
-          - type: attribute
-            entity: sensor.batterij_kwartierplan
-            attribute: blokken_bekend
-            name: Prijsblokken in het venster
-          - type: divider
-          # Wat de accu op dit moment ècht doet. Deze twee worden door de
-          # regie gezet; staan ze anders dan je verwacht, dan is dit de plek
-          # waar je dat ziet. Let op: de Marstek-selects lopen ~15 seconden
-          # achter op een commando (RS485-poll), dus even wachten voor je
-          # concludeert dat er iets misgaat.
-          - entity: select.lilygo_rs485_marstek_rs485_control_mode
-            name: Regelmodus (enable = geforceerd)
-          - entity: select.lilygo_rs485_marstek_forcible_charge_discharge
-            name: Geforceerd laden/ontladen
-          # Het vermogen waarmee geforceerd wordt. De regie zet deze twee zelf
-          # op 2500 W bij elk laad- of ontlaadblok, dus een handmatige
-          # aanpassing houdt het maar tot het volgende blok vol. Ze stonden
-          # alleen op de oude dashboard-view; hier horen ze thuis.
-          - entity: number.lilygo_rs485_marstek_forcible_charge_power
-            name: Laadvermogen (geforceerd)
-          - entity: number.lilygo_rs485_marstek_forcible_discharge_power
-            name: Ontlaadvermogen (geforceerd)
 
-  # ------------------------------------------------------------- de prijzen
+      # HOE LANG NOG - de enige vraag die telt tijdens een stroomstoring.
+      # De meter telde er 127, waarvan 35 lange
+      # (sensor.meterkast_slimhuys_zonneplan_stroomuitvallen), dus dit is geen
+      # theoretische kaart. Gerekend tot het AFSLAGPUNT VAN DE OMVORMER en niet
+      # tot 0%: onder `number.deye_battery_shutdown_soc` komt er niets meer uit,
+      # dus die kilowatturen meetellen zou een uur beloven dat er niet is.
+      - type: custom:button-card
+        template: ov_listrow
+        entity: sensor.accu_inhoud
+        triggers_update:
+          - sensor.deye_load_power
+          - sensor.accu_lading
+        variables:
+          mdi: mdi:home-lightning-bolt-outline
+          kleur: "var(--ov-info-strong)"
+          title: Hiermee draait het huis door
+        custom_fields:
+          s: |
+            [[[
+              var num = function(id){ var s = states[id];
+                return (s && !isNaN(Number(s.state))) ? Number(s.state) : null; };
+              var soc = num('sensor.accu_lading');
+              var cap = num('sensor.accu_capaciteit');
+              var vloer = num('number.deye_battery_shutdown_soc');
+              var last = num('sensor.deye_load_power');
+              if(soc === null || cap === null) return 'accu niet leesbaar';
+              if(vloer === null) vloer = 10;
+              var bruikbaar = Math.max(0, (soc - vloer) / 100 * cap);
+              var tekst = bruikbaar.toFixed(1).replace('.',',') + ' kWh bruikbaar';
+              if(last === null || last < 50)
+                return tekst + ' · geen noemenswaardige last om mee te rekenen';
+              var uren = bruikbaar / (last / 1000);
+              var duur = uren >= 1
+                ? Math.floor(uren) + ' uur ' + Math.round((uren % 1) * 60) + ' min'
+                : Math.round(uren * 60) + ' minuten';
+              return tekst + ' · ' + duur + ' bij ' + Math.round(last) + ' W';
+            ]]]
+
+  # ------------------------------------------------------------- vandaag
+  - type: vertical-stack
+    cards:
+      - type: custom:button-card
+        template: ov_title
+        variables:
+          title: VANDAAG
+      - type: custom:button-card
+        template: ov_listrow
+        entity: sensor.deye_today_battery_charge
+        variables:
+          mdi: mdi:battery-arrow-up
+          kleur: "var(--ov-ok)"
+          title: Geladen
+        custom_fields:
+          s: |
+            [[[
+              var v = entity && !isNaN(Number(entity.state)) ? Number(entity.state) : null;
+              return v === null ? '—' : v.toFixed(1).replace('.',',') + ' kWh erin';
+            ]]]
+      - type: custom:button-card
+        template: ov_listrow
+        entity: sensor.deye_today_battery_discharge
+        variables:
+          mdi: mdi:battery-arrow-down
+          kleur: "var(--ov-warn)"
+          title: Ontladen
+        custom_fields:
+          s: |
+            [[[
+              var v = entity && !isNaN(Number(entity.state)) ? Number(entity.state) : null;
+              return v === null ? '—' : v.toFixed(1).replace('.',',') + ' kWh eruit';
+            ]]]
+      # HET RENDEMENT IS EEN DAGCIJFER EN GEEN MOMENTOPNAME. Halverwege de
+      # ochtend staat er 4 kWh in en 0,2 kWh uit, en dan is "5%" onzin. Daarom
+      # pas een percentage zodra er aan beide kanten genoeg staat; daaronder
+      # gewoon de kale verliezen.
+      - type: custom:button-card
+        template: ov_listrow
+        entity: sensor.deye_today_losses
+        triggers_update:
+          - sensor.deye_today_battery_charge
+          - sensor.deye_today_battery_discharge
+        variables:
+          mdi: mdi:transfer
+          kleur: "var(--ov-ink-45)"
+          title: Omzettingsverlies
+        custom_fields:
+          s: |
+            [[[
+              var num = function(id){ var s = states[id];
+                return (s && !isNaN(Number(s.state))) ? Number(s.state) : null; };
+              var verl = num('sensor.deye_today_losses');
+              var inn = num('sensor.deye_today_battery_charge');
+              var uit = num('sensor.deye_today_battery_discharge');
+              var t = verl === null ? '—' : verl.toFixed(1).replace('.',',') + ' kWh';
+              if(inn !== null && uit !== null && inn >= 2 && uit >= 2)
+                t += ' · retourrendement ' + Math.round(uit / inn * 100) + '%';
+              return t;
+            ]]]
+
+  # ------------------------------------------------------- lading vs. prijs
+  # DE KERNVRAAG VAN DEZE PAGINA
+  # MarkeDroid bepaalt wanneer er geladen en ontladen wordt, en er is geen
+  # kaart die vertelt wat het opleverde. Dit is de goedkoopste benadering: de
+  # lading van vandaag over de kwartierprijzen heen. Loopt de lijn omhoog onder
+  # de lage balken en omlaag onder de hoge, dan doet de appliance zijn werk.
+  #
+  # VENSTER = DE DAG en niet "de laatste 24 uur": de prijzen komen uit
+  # `raw_today`, dat precies 00:00-24:00 dekt. Met een schuivend venster van 24
+  # uur zou de linkerhelft van de balken van gisteren moeten komen, en die
+  # bewaart de integratie niet - dan hangt de ladingslijn boven een lege helft.
   - type: custom:apexcharts-card
-    # 1 minuut en niet 5: de twee grenslijnen komen uit de ATTRIBUTEN van
-    # sensor.batterij_kwartierplan, en die verandert bij een nieuwe berekening
-    # meestal niet van state ('rust' blijft 'rust'). Apexcharts hertekent op
-    # een statuswissel van zijn series-entiteit, dus zonder eigen tik bleef de
-    # legenda de vorige grenzen tonen - precies op het moment dat je de
-    # instelling net verzet had en wilde zien wat dat deed. De reeksen worden
-    # allemaal uit attributen opgebouwd, dus een tik is goedkoop.
-    update_interval: 1m
-    experimental:
-      color_threshold: true
-    # HETZELFDE VENSTER ALS HET PLAN, EN DAAROM NIET "VANDAAG"
-    # De regie kijkt 24 uur vooruit, dus de grenzen worden over nu..+24u
-    # berekend. Stond hier `start: day`, dan zag je vandaag 00:00-24:00: de
-    # halve grafiek was verleden tijd, en op 14 augustus om 16:00 lag de
-    # laadgrens onder álle zichtbare balken omdat de zes goedkoopste blokken
-    # de volgende middag lagen. Met `start: hour` loopt de grafiek van het
-    # lopende uur tot 24 uur later en hoort elke balk onder de groene lijn
-    # echt bij een laadblok.
     graph_span: 24h
     span:
-      start: hour
+      start: day
     now:
       show: true
       label: nu
       color: var(--primary-text-color)
     header:
       show: true
-      title: Kwartierprijzen komende 24 uur met de laad- en ontlaadgrens
+      title: Lading van vandaag over de kwartierprijzen
     yaxis:
       - id: kwh_prijs
         min: ~0
@@ -334,6 +303,14 @@ cards:
         apex_config:
           title:
             text: Prijs €/kWh
+      - id: procent
+        opposite: true
+        min: 0
+        max: 100
+        decimals: 0
+        apex_config:
+          title:
+            text: Lading %
     apex_config:
       tooltip:
         x:
@@ -341,7 +318,7 @@ cards:
       plotOptions:
         bar:
           # 96 balken op een dag; met de standaardbreedte streept dat. Zelfde
-          # keuze als de stroomprijskaart op de oude view en het Overzicht.
+          # keuze als de stroomprijskaart op het Overzicht.
           columnWidth: 96%
     series:
       - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
@@ -352,17 +329,14 @@ cards:
         color: "#3f5a70"
         show:
           legend_value: false
+        yaxis_id: kwh_prijs
         data_generator: |
           const blokken = (ent, key) => (ent && ent.attributes && ent.attributes[key]) || [];
           const st = (typeof hass !== 'undefined' && hass.states) ? hass.states : {};
           const vandaag = blokken(entity, 'raw_today').length
             ? blokken(entity, 'raw_today')
             : blokken(st['sensor.slimhuys_zonneplan_prijzen_vandaag'], 'raw_today');
-          // Morgen erbij, anders houdt de grafiek om middernacht op terwijl het
-          // venster van het plan doorloopt. Die blokken komen 's middags binnen;
-          // tot die tijd is de rechterhelft gewoon leeg.
-          const morgen = blokken(st['sensor.slimhuys_zonneplan_prijzen_morgen'], 'raw_tomorrow');
-          return vandaag.concat(morgen)
+          return vandaag
             .map((e) => {
               const s = new Date(e.start).getTime();
               const t = new Date(e.end).getTime();
@@ -374,83 +348,97 @@ cards:
             })
             .filter((d) => isFinite(d[0]))
             .sort((a, b) => a[0] - b[0]);
-        yaxis_id: kwh_prijs
-      # De twee grenzen als vlakke lijnen. Ze komen uit het plan en niet uit
-      # een eigen berekening, zodat de grafiek per definitie hetzelfde zegt
-      # als de regie doet. Ze gelden voor het venster van 24 uur vooruit, dus
-      # ze schuiven in de loop van de dag mee - dat is geen fout maar precies
-      # wat de accu op dat moment als goedkoop en duur beschouwt.
-      - entity: sensor.batterij_kwartierplan
-        name: Laadgrens
+      - entity: sensor.accu_lading
+        name: Lading
+        type: line
+        curve: smooth
         stroke_width: 2
         color: "var(--ov-ok)"
-        type: line
-        float_precision: 3
+        float_precision: 0
+        yaxis_id: procent
+        # Vijf minuten en niet ruw: de laadtoestand komt per procent binnen en
+        # springt dus toch al trapsgewijs. Ruw uitlezen kost alleen punten.
+        group_by:
+          duration: 5min
+          func: avg
         show:
           legend_value: true
-          in_header: false
-        data_generator: |
-          const st = (typeof hass !== 'undefined' && hass.states) ? hass.states : {};
-          const a = (entity && entity.attributes) || {};
-          const g = a.laad_grens;
-          if (g === null || g === undefined || g === 'None' || g === '') return [];
-          const w = Number(g);
-          if (isNaN(w)) return [];
-          // DE LIJN VOLGT DE BALKEN, NIET DE KLOK
-          // Eerst stonden hier twee punten op zelfbedachte tijdstippen, en die
-          // vielen net buiten het zichtbare venster: de lijn verdween en de
-          // legenda zei N/A terwijl het attribuut gewoon 0,14 was. Door
-          // dezelfde blokken te gebruiken als de prijsreeks ligt er per balk
-          // een punt, valt de lijn per definitie binnen het venster en heeft
-          // de legenda altijd een waarde bij `nu`.
-          const bron = st['sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier']
-                    || st['sensor.slimhuys_zonneplan_prijzen_vandaag'];
-          const vandaag = (bron && bron.attributes && bron.attributes.raw_today) || [];
-          const mor = st['sensor.slimhuys_zonneplan_prijzen_morgen'];
-          const morgen = (mor && mor.attributes && mor.attributes.raw_tomorrow) || [];
-          return vandaag.concat(morgen)
-            .map((e) => {
-              const a = new Date(e.start).getTime();
-              const b = new Date(e.end).getTime();
-              return [isFinite(b) ? (a + b) / 2 : a, w];
-            })
-            .filter((d) => isFinite(d[0]))
-            .sort((x, y) => x[0] - y[0]);
-        yaxis_id: kwh_prijs
-      - entity: sensor.batterij_kwartierplan
-        name: Ontlaadgrens
-        stroke_width: 2
-        color: "var(--ov-warn)"
-        type: line
-        float_precision: 3
-        show:
-          legend_value: true
-          in_header: false
-        data_generator: |
-          const st = (typeof hass !== 'undefined' && hass.states) ? hass.states : {};
-          const a = (entity && entity.attributes) || {};
-          const g = a.ontlaad_grens;
-          if (g === null || g === undefined || g === 'None' || g === '') return [];
-          const w = Number(g);
-          if (isNaN(w)) return [];
-          // DE LIJN VOLGT DE BALKEN, NIET DE KLOK
-          // Eerst stonden hier twee punten op zelfbedachte tijdstippen, en die
-          // vielen net buiten het zichtbare venster: de lijn verdween en de
-          // legenda zei N/A terwijl het attribuut gewoon 0,14 was. Door
-          // dezelfde blokken te gebruiken als de prijsreeks ligt er per balk
-          // een punt, valt de lijn per definitie binnen het venster en heeft
-          // de legenda altijd een waarde bij `nu`.
-          const bron = st['sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier']
-                    || st['sensor.slimhuys_zonneplan_prijzen_vandaag'];
-          const vandaag = (bron && bron.attributes && bron.attributes.raw_today) || [];
-          const mor = st['sensor.slimhuys_zonneplan_prijzen_morgen'];
-          const morgen = (mor && mor.attributes && mor.attributes.raw_tomorrow) || [];
-          return vandaag.concat(morgen)
-            .map((e) => {
-              const a = new Date(e.start).getTime();
-              const b = new Date(e.end).getTime();
-              return [isFinite(b) ? (a + b) / 2 : a, w];
-            })
-            .filter((d) => isFinite(d[0]))
-            .sort((x, y) => x[0] - y[0]);
-        yaxis_id: kwh_prijs
+
+  # -------------------------------------------------------------- gezondheid
+  - type: vertical-stack
+    cards:
+      - type: custom:button-card
+        template: ov_title
+        variables:
+          title: STAAT VAN DE OMVORMER
+      # De drie meldsensoren van de Deye op één regel. Ze staan bijna altijd op
+      # OK, en dan hoort er één rustige regel te staan en geen lijstje groene
+      # vinkjes - dat leest niemand na een week nog.
+      - type: custom:button-card
+        template: ov_listrow
+        entity: sensor.deye_device_state
+        triggers_update:
+          - sensor.deye_device_fault
+          - sensor.deye_device_alarm
+          - binary_sensor.deye_battery_alarm
+          - binary_sensor.deye_battery_fault
+        variables:
+          mdi: mdi:state-machine
+          title: Meldingen
+        custom_fields:
+          s: |
+            [[[
+              var mel = [];
+              var tekst = function(id){ var s = states[id];
+                return (s && ['OK','unknown','unavailable'].indexOf(s.state) === -1) ? s.state : null; };
+              var aan = function(id, label){ var s = states[id];
+                return (s && s.state === 'on') ? label : null; };
+              [tekst('sensor.deye_device_fault'),
+               tekst('sensor.deye_device_alarm'),
+               aan('binary_sensor.deye_battery_fault', 'accustoring'),
+               aan('binary_sensor.deye_battery_alarm', 'accualarm')]
+                .forEach(function(m){ if(m) mel.push(m); });
+              var st = states['sensor.deye_device_state'];
+              var stand = st ? st.state : '—';
+              return mel.length
+                ? '<span style="color:var(--ov-bad)">' + mel.join(' · ') + '</span> · staat op ' + stand
+                : 'geen meldingen · staat op ' + stand;
+            ]]]
+      - type: custom:button-card
+        template: ov_listrow
+        entity: sensor.deye_battery_temperature
+        triggers_update:
+          - sensor.deye_temperature
+        variables:
+          mdi: mdi:thermometer
+          title: Temperatuur
+        custom_fields:
+          s: |
+            [[[
+              var f = function(id){ var s = states[id];
+                return (s && !isNaN(Number(s.state)))
+                  ? Number(s.state).toFixed(1).replace('.',',') + ' °C' : '—'; };
+              return 'accu ' + f('sensor.deye_battery_temperature')
+                   + ' · omvormer ' + f('sensor.deye_temperature');
+            ]]]
+      # DE VERBINDING VALT KORT WEG EN DAT IS GEEN STORING
+      # Op 20 september tussen 05:00 en 07:00 twee keer, allebei ongeveer tien
+      # seconden. Daarom hier geen rood vlak maar het tijdstip van de laatste
+      # onderbreking: eens per uur tien seconden is normaal, elke minuut niet.
+      - type: custom:button-card
+        template: ov_listrow
+        entity: binary_sensor.deye_connection
+        variables:
+          mdi: mdi:lan-connect
+          title: Verbinding
+        custom_fields:
+          s: |
+            [[[
+              if(!entity) return '—';
+              if(entity.state !== 'on') return '<span style="color:var(--ov-bad)">geen verbinding met de omvormer</span>';
+              var d = new Date(entity.last_changed);
+              var min = Math.round((Date.now() - d.getTime()) / 60000);
+              var duur = min < 60 ? min + ' min'
+                       : (min < 1440 ? Math.round(min/60) + ' uur' : Math.round(min/1440) + ' dagen');
+              return 'in orde · laatste onderbreking ' + duur + ' geleden';
+            ]]]

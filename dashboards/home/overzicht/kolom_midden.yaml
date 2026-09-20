@@ -92,10 +92,14 @@ cards:
         # achtertuin (sensor heet `overkapping`), O = zolder; plafonds uit de
         # capaciteitssensoren, terugval 5/3 kW.
         #
-        # ACCU: ONDER 15 W GEBEURT ER NIETS - dat is de Marstek zelf (rust-
-        # verbruik van de elektronica; band gemeten 15-16 aug 2026: 65% van
-        # alle metingen zat op 0-15 W). Dan dus "standby" en geen animatie,
-        # anders leek de accu twee derde van de dag leeg te lopen.
+        # ACCU: "STANDBY" KOMT NIET MEER UIT DEZE KAART (20 september 2026)
+        # Hier stond een eigen grens van 15 W, gemeten aan de ruststroom van de
+        # Marstek (band 15-16 aug 2026: 65% van alle metingen zat op 0-15 W).
+        # Zonder die grens leek de accu twee derde van de dag leeg te lopen.
+        # Die grens staat nu één keer, in `sensor.accu_status`
+        # (packages/9 - Other/Battery.yaml), zodat deze kaart, de nest hub en
+        # de klokdisplay hetzelfde woord gebruiken. Ze liepen uit elkaar zodra
+        # er één werd bijgesteld.
         #
         # button-card rendert alleen opnieuw als zijn entity verandert; de
         # triggers_update-lijst dekt de andere bronnen.
@@ -103,8 +107,9 @@ cards:
           entity: sensor.live_energieverbruik_totaal
           triggers_update:
             - sensor.zon_vermogen_nu
-            - sensor.lilygo_rs485_marstek_battery_power
-            - sensor.lilygo_rs485_marstek_battery_state_of_charge
+            - sensor.accu_vermogen
+            - sensor.accu_lading
+            - sensor.accu_status
           show_icon: false
           show_name: false
           show_state: false
@@ -138,7 +143,7 @@ cards:
                 // netto: negatief = teruglevering; ruis rond nul plat slaan
                 var netto = num('sensor.live_energieverbruik_totaal');
                 if(netto !== null && Math.abs(netto) < 0.005) netto = 0;
-                var accuW = num('sensor.lilygo_rs485_marstek_battery_power');
+                var accuW = num('sensor.accu_vermogen');
                 // VERBRUIK VAN HET HUIS ZELF - NIET DE METERSTAND
                 // Hier stond `sensor.electricity_meter_energieverbruik` (DSMR,
                 // weg sinds 04-09-2026), en dat is de netafname: exact dezelfde
@@ -152,10 +157,12 @@ cards:
                 var verbruik = (netto === null || zonKw === null) ? null
                              : Math.max(0, netto + zonKw - (accuW === null ? 0 : accuW / 1000));
                 var accuPv = accuW === null ? null : Math.round(accuW);
-                var soc = num('sensor.lilygo_rs485_marstek_battery_state_of_charge');
-                var accuMode = accuPv === null ? ''
-                             : (Math.abs(accuPv) <= 15 ? 'standby'
-                             : (accuPv < 0 ? 'ontlaadt' : 'laadt'));
+                var soc = num('sensor.accu_lading');
+                // Het woord komt uit de sensor en wordt hier alleen vertaald
+                // naar de werkwoordsvorm die op deze kaart staat.
+                var accuSt = states['sensor.accu_status'];
+                var accuMode = (!accuSt || accuPv === null) ? ''
+                             : ({laden: 'laadt', ontladen: 'ontlaadt', rust: 'standby'}[accuSt.state] || '');
                 // De percentages lazen tot 27-08-2026 de ruwe omvormersensoren en
                 // verdwenen daardoor bij elke hik van de integratie (elf keer op
                 // die dag). Ze komen nu uit de attributen `zw`/`o` van

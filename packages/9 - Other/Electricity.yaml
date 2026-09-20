@@ -44,6 +44,13 @@ electricity_package:
     # met 0, net als de flow-kaart. Onder nul komt in de praktijk alleen
     # meetruis voor, dus dat wordt op 0 afgekapt.
     #
+    # `sensor.accu_vermogen` EN NIET DE OMVORMER ZELF (20 september 2026). Hier
+    # stond de Marstek-sensor; die accu gaat eruit en de Deye komt ervoor in de
+    # plaats. Belangrijker dan de naam is het TEKEN: de Deye telt ontladen
+    # positief, precies omgekeerd. Die omkering staat één keer in
+    # packages/9 - Other/Battery.yaml en nergens anders - vandaar dat deze som
+    # onveranderd kan blijven aftrekken.
+    #
     # BEWUST GESAMPLED EN NIET STATE-GEDREVEN: de slimme meter meldt zich
     # meerdere keren per seconde (via DSMR nagemeten 24-08-2026: ~8.300 punten
     # in 20 minuten; via SlimHuys op 04-09-2026 ~2.800, dus dezelfde orde en
@@ -64,7 +71,7 @@ electricity_package:
             {% set netto = states('sensor.live_energieverbruik_totaal') | float(0) %}
             {% set zon_ruw = states('sensor.zon_vermogen_nu') | float(0) %}
             {% set zon = zon_ruw if state_attr('sensor.zon_vermogen_nu', 'unit_of_measurement') == 'kW' else zon_ruw / 1000 %}
-            {% set accu = states('sensor.lilygo_rs485_marstek_battery_power') | float(0) / 1000 %}
+            {% set accu = states('sensor.accu_vermogen') | float(0) / 1000 %}
             {{ [netto + zon - accu, 0] | max | round(3) }}
           # De guard op de zonsensor blijft staan - zonder zon is het huis-
           # verbruik niet te berekenen en zou de kaart een te laag getal tonen.

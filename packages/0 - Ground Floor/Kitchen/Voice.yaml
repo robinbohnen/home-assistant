@@ -410,27 +410,38 @@ keuken_voice_package:
     ## Energie
     #########################################################################
     ThuisAccu:
-      description: Hoe vol de Marstek-thuisaccu is en of hij laadt of levert.
+      description: Hoe vol de thuisaccu is en of hij laadt of levert.
       speech:
         text: >-
-          {%- set soc = states('sensor.lilygo_rs485_marstek_battery_state_of_charge') | float(none) -%}
+          {%- set soc = states('sensor.accu_lading') | float(none) -%}
           {%- if soc is none -%}
             Ik kan de thuisaccu even niet lezen.
           {%- else -%}
-            {#- Zelfde logica als de accu-app op de klokken (Klokken.yaml): de
-                inverter-state is leidend, het vermogen is de terugval met een
-                dode zone van 20 W. Positief vermogen = laden.
+            {#- Laden of ontladen komt uit `sensor.accu_status`, dezelfde bron
+                als de accu-app op de klokken en de kaarten op het Overzicht;
+                de dode zone staat één keer in
+                packages/9 - Other/Battery.yaml en niet hier.
                 float(none) en niet float(0): een weggevallen vermogenssensor
                 is "weet ik niet", geen 0 W - anders zegt de stem "laadt met
-                0 watt" zodra de inverter-state Charge meldt. Het wattage
-                wordt dan gewoon weggelaten. -#}
-            {%- set pw = states('sensor.lilygo_rs485_marstek_battery_power') | float(none) -%}
-            {%- set inv = states('sensor.lilygo_rs485_marstek_inverter_state') -%}
-            {%- set laadt = inv == 'Charge' or (inv not in ['Charge', 'Discharge'] and pw is not none and pw > 20) -%}
-            {%- set ontlaadt = inv == 'Discharge' or (inv not in ['Charge', 'Discharge'] and pw is not none and pw < -20) -%}
+                0 watt" terwijl de status wel laden meldt. Het wattage wordt
+                dan gewoon weggelaten. -#}
+            {%- set pw = states('sensor.accu_vermogen') | float(none) -%}
+            {%- set st = states('sensor.accu_status') -%}
+            {#- Boven de kilowatt klinkt "drieduizend tweehonderd watt" gek;
+                dan afronden op één decimaal in kilowatt. De KOMMA is geen
+                opmaak maar spraak: met een punt leest de Microsoft-stem
+                "3.2" voor als "drie punt twee". -#}
+            {%- macro verm(w) -%}
+              {%- if w | abs >= 1000 -%}
+                {%- set kw = (w | abs / 1000) | round(1) -%}
+                {#- Ronde kilowatts zonder decimaal: "twaalf komma nul kilowatt"
+                    is geen zin die iemand uitspreekt. -#}
+                {{ (kw | int) if kw == kw | int else (kw | string | replace('.', ',')) }} kilowatt
+              {%- else -%}{{ w | abs | round(0) | int }} watt{%- endif -%}
+            {%- endmacro -%}
             De thuisaccu zit op {{ soc | round(0) | int }} procent
-            {%- if laadt %} en laadt{% if pw is not none %} met {{ pw | abs | round(0) | int }} watt{% endif %}
-            {%- elif ontlaadt %} en levert{% if pw is not none %} {{ pw | abs | round(0) | int }} watt{% endif %} aan het huis
+            {%- if st == 'laden' %} en laadt{% if pw is not none %} met {{ verm(pw) | trim }}{% endif %}
+            {%- elif st == 'ontladen' %} en levert{% if pw is not none %} {{ verm(pw) | trim }}{% endif %} aan het huis
             {%- endif %}.
           {%- endif -%}
 

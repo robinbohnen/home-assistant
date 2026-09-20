@@ -1,1008 +1,180 @@
 ##############################################################################
-## TWEE REGIMES, NOOIT TEGELIJK
+## DE THUISACCU - ÉÉN LAAG TUSSEN HET APPARAAT EN DE REST VAN HET HUIS
 ##
-## Standaard stuurt `battery_disable_charging` hieronder op het GROVE
-## tariefniveau van de dag (very_low..very_high). Sinds 2026-08-14 kan het ook
-## op de KWARTIERBLOKKEN van SlimHuys: dan laadt de accu in de N goedkoopste
-## kwartieren van de komende 24 uur en ontlaadt hij in de M duurste, in plaats
-## van in een hele "dure periode".
+## Dit bestand stuurde tot 20 september 2026 de Marstek aan: twee regimes
+## (tariefniveau van de dag en de kwartierregie) met ruim 900 regels aan
+## automatiseringen, helpers en een `sensor.batterij_kwartierplan`. Dat is
+## allemaal weg. De Marstek gaat het huis uit en de Deye wordt niet door Home
+## Assistant gestuurd maar door de MarkeDroid-appliance van ModuSun. Eén accu
+## met twee bazen is precies het soort storing waar je later een avond naar
+## zoekt, dus HA leest hier alleen nog.
 ##
-## `input_boolean.batterij_kwartierregie` bepaalt wie de baas is. Staat hij
-## aan, dan slaan alle prijs-takken van de oude automatisering over (zie de
-## conditie die daar bij elke tak staat) en stuurt `battery_kwartierregie`.
-## Het vangnet onderaan de oude automatisering blijft in BEIDE regimes lopen -
-## dat is de rem die geforceerd ontladen stopt bij een lege accu, een negatieve
-## prijs of een weggevallen tariefsensor, en die hoort nooit uit te staan.
+## WAT ER VOOR IN DE PLAATS KOMT
+## Vijf sensoren die de rest van het huis leest. Nergens anders staat nog een
+## `sensor.deye_*` in een dashboard of automatisering - net zoals niemand de
+## ruwe omvormersensoren leest maar iedereen `sensor.zon_vermogen_nu`
+## (packages/2 - Second Floor/Attic/Solarpanels.yaml). Die wissel kostte deze
+## keer elf bestanden; de volgende keer is het dit ene.
 ##
-## De schakelaar staat na aanmaken UIT. Dit stuurt echte hardware op prijzen
-## die per dag verschillen; eerst een dag meekijken op de kaart is verstandiger
-## dan hem blind aanzetten.
+##   sensor.accu_lading       %     hoe vol
+##   sensor.accu_vermogen     W     POSITIEF = LADEN (zie hieronder)
+##   sensor.accu_status             laden | ontladen | rust
+##   sensor.accu_capaciteit   kWh   wat er in zou passen
+##   sensor.accu_inhoud       kWh   wat er nu in zit
 ##
-## LET OP bij het oude regime: sensor.slimhuys_zonneplan_tariefniveau_nu kent
-## VIJF niveaus (very_low | low | medium | high | very_high). De automatisering
-## luisterde ooit alleen op low/medium/high, waardoor een sprong van medium
-## naar very_low geen enkele trigger raakte: de accu begon dan juist op het
-## allergoedkoopste moment niet te laden. very_low telt daarom als low en
-## very_high als high.
-##############################################################################
-
-##############################################################################
-## DE ACCU IS ZIJN EIGEN METER KWIJT (4 september 2026)
+## ================== HET TEKEN IS OMGEKEERD ==================
+## DE DEYE TELT ONTLADEN POSITIEF, DE MARSTEK TELDE LADEN POSITIEF.
 ##
-## `user_work_mode` staat op `anti-feed`: zelfverbruik / nul-teruglevering.
-## Dat werkt alleen als de accu zelf ziet wat er op het net gebeurt, en dat
-## deed zijn EIGEN P1-METER. Sinds de meterkast is omgebouwd is die er niet
-## meer, en dus is "de accu doet het zelf" geen veilige stand meer maar een
-## gok.
+## Vastgesteld op 20 september 2026 uit de eerste veertien uur historie:
+## `sensor.deye_battery_power` stond onafgebroken op +75..83 W terwijl de
+## laadtoestand van 51% naar 44% zakte, `today_battery_charge` op 0 stond en
+## `today_battery_discharge` op 0,7 kWh. Twee onafhankelijke bevestigingen uit
+## de integratie zelf: `sensor.deye_battery_state` (die ha-solarman uit
+## datzelfde vermogen afleidt met een band van ±50 W) meldde `discharging`, en
+## de sensor draagt een attribuut `−x` met de waarde −80.
 ##
-## Wat daarop is aangepast:
+## LET OP - DE LAADKANT IS NOG NIET GEZIEN. De Deye hing tijdens die meting
+## niet aan het net (alle drie de fases op 0 V) en heeft nog geen kilowattuur
+## geladen. Zodra hij voor het eerst écht laadt, is dit de eerste sensor om te
+## controleren: staat `accu_vermogen` dan NEGATIEF terwijl de lading oploopt,
+## dan moet de min hieronder eruit. Alles wat met de accu rekent hangt aan dit
+## teken - de huis-verbruiksom in Electricity.yaml, de energieflow op het
+## Overzicht, de klokdisplay - dus één keer verkeerd is overal verkeerd.
 ##
-##   1. De rust-tak en het vangnet van de kwartierregie houden de accu nu STIL
-##      (`control_mode: enable` + `forcible: stop`) in plaats van hem terug te
-##      geven. Zie de toelichting op beide plekken.
-##   2. Er is een ZONVANGST-tak bij (5 september 2026). Die doet de laadhelft
-##      van wat anti-feed deed: bij aanhoudend overschot laadt hij geforceerd
-##      op een setpoint dat het overschot volgt. Aanleiding: op 5 september om
-##      08:51 was er 1,29 kWh teruggeleverd vóór negenen terwijl de accu op 35%
-##      stond met 3,33 kWh ruimte. De ontlaadhelft (huisverbruik dekken) doet
-##      de kwartierregie 's avonds al met zijn dure blokken.
+## DE RICHTING IS DIE VAN DE MARSTEK GEBLEVEN (laden positief) en niet die van
+## de Deye. Niet uit gewoonte: `sensor.huis_verbruik` trekt het accuvermogen
+## van de som af, en in alle kaarten staat `> 0 = laadt`. Het teken hier
+## omdraaien betekent vijftien plekken omdraaien, en één vergeten plek geeft
+## een huisverbruik dat er structureel een paar kilowatt naast zit zonder dat
+## iets op storing springt.
 ##
-## Allebei zijn OVERBRUGGING. Komt die meter terug, dan doet de accu dit zelf,
-## sneller en zonder deze omweg - dan mag de zonvangst-tak eruit en de rust-tak
-## terug op `disable`.
-##
-## Wat er BEWUST niet is aangepast, en waar je dus op moet letten zolang die
-## meter weg is:
-##   * `battery_kwartierregie_uit` - zet je de regie uit, dan gaat de accu
-##     alsnog naar zijn eigen (blinde) programma. Dat is de vluchtroute: als
-##     HA de weg kwijt is wil je niet dat hij de accu bevroren achterlaat.
-##   * de drie `disable`-takken in "Disable charging when no low pricing" -
-##     dat oude regime draait alleen als de kwartierregie UIT staat.
-##
-## Zodra de P1-meter terug is (of er een CT-klem hangt) mogen de rust-tak en
-## het vangnet weer op `disable` en kan de zonvangst eruit; dan doet de accu
-## tussen de blokken door weer zelfverbruik, en dat is scherper dan wat HA er
-## via een RS485-brug van kan maken.
+## ================== DE DODE ZONE ==================
+## `accu_status` gebruikt ±50 W, dezelfde band als ha-solarman zelf hanteert.
+## Bij de Marstek stond die op 15 W, gemeten aan zijn eigen ruststroom. Voor de
+## Deye is die band NIET geijkt: op 20 september trok hij 80 W uit de accu,
+## maar dat was eilandbedrijf zonder net - met het net erop komt dat verbruik
+## uit de meterkast en niet uit de accu. Kijk hier opnieuw naar zodra hij een
+## week normaal gedraaid heeft; staat de kaart dan de halve dag op "ontladen"
+## terwijl er niets gebeurt, dan is deze 50 te laag.
 ##############################################################################
 
 battery_package:
 
-  input_boolean:
-    batterij_kwartierregie:
-      name: "Batterij - Sturen op kwartierprijzen"
-      icon: mdi:chart-timeline-variant
-
-  input_number:
-    # Geen `initial:`: dat zet je eigen instelling bij elke herstart terug.
-    # Een input_number zonder opgeslagen waarde start op zijn minimum, dus het
-    # minimum is hier bewust een waarde waarmee je veilig zit.
-    batterij_min_soc:
-      name: "Batterij - Niet verder ontladen dan"
-      icon: mdi:battery-low
-      min: 10
-      max: 90
-      step: 5
-      unit_of_measurement: "%"
-      mode: box
-
-    # Aantal kwartierblokken uit de komende 24 uur. Vier blokken = één uur.
-    # Ook hier geen `initial:`, dus ze starten op hun minimum: één uur laden en
-    # één uur ontladen per etmaal is de voorzichtige kant.
-    batterij_laad_kwartieren:
-      name: "Batterij - Laden in de X goedkoopste kwartieren"
-      icon: mdi:battery-arrow-up
-      min: 4
-      max: 40
-      step: 4
-      unit_of_measurement: "blokken"
-      mode: box
-
-    batterij_ontlaad_kwartieren:
-      name: "Batterij - Ontladen in de X duurste kwartieren"
-      icon: mdi:battery-arrow-down
-      min: 4
-      max: 40
-      step: 4
-      unit_of_measurement: "blokken"
-      mode: box
-
-    # Boven deze verwachte opbrengst slaat de regie het netladen over: de zon
-    # vult de accu die dag toch wel.
-    #
-    # DIT IS GEEN "OPWEK MIN VERBRUIK"-SOM. Dat is geprobeerd en het klopt
-    # niet: het huis gebruikt 40 kWh op een dag (mediaan over de laatste 30
-    # dagen, auto er al af) en de auto komt daar op ruim een derde van de
-    # dagen nog eens 23 kWh bovenop, 71% daarvan tussen 09:00 en 17:00 - dus
-    # precies in het zonvenster. Reserveer je zon voor die twee, dan wordt de
-    # drempel nooit gehaald en laadt een accu van 5 kWh permanent uit het net.
-    #
-    # Wat telt is niet de dagbalans maar het OVERSCHOT op het moment, en dat
-    # is er ook op dagen dat het verbruik boven de opwek ligt. Gemeten over
-    # 182 dagen, teruglevering NADAT de auto en de accu hun deel al hadden:
-    #   opwek 20-30 kWh -> 7 van de 22 dagen hielden 5 kWh over
-    #   opwek 30-40 kWh -> 28 van de 34
-    #   opwek 40-50 kWh -> 36 van de 38
-    # Het kantelpunt ligt dus rond 30 kWh ECHTE opbrengst. De forecast loopt
-    # daar zo'n 25% onder (38,7 voorspeld tegen 46,7 gemeten op 13 augustus,
-    # vijf dagen op rij hetzelfde beeld), dus 30 kWh VOORSPELD komt neer op
-    # ~37 kWh echt: ruim in de bak waar het overschot er vrijwel altijd is.
-    # Dat is bewust de voorzichtige kant - liever een keer te veel goedkoop
-    # inkopen dan op een misgelopen voorspelling de avondpiek verliezen.
-    #
-    # Hoger zetten = vaker netladen (veiliger, duurder), lager = vaker op de
-    # zon gokken. In de winter doet de drempel vanzelf zijn werk: 22 van de
-    # 182 dagen hadden minder dan 1 kWh teruglevering.
-    #
-    # LET OP: het oude regime hieronder gebruikt nog `> 20` op
-    # sensor.forecast_solar_production_today voor zijn ochtendtak. Dat is de
-    # hele dag in plaats van wat er nog komt, en het staat los van deze knop.
-    # Zolang de kwartierregie aan staat is die tak toch dood.
-    batterij_zon_drempel:
-      name: "Batterij - Niet netladen bij meer zon dan"
-      icon: mdi:weather-sunny
-      min: 5
-      max: 50
-      step: 5
-      unit_of_measurement: "kWh"
-      mode: box
-
   template:
-    - trigger:
-        # Kwartieren wisselen op :00, :15, :30 en :45 - allemaal veelvouden van
-        # vijf, dus dit loopt nooit achter. Vaker dan nodig is hier gratis: het
-        # rekenwerk is één keer door ~96 blokken.
-        - trigger: time_pattern
-          minutes: "/5"
-        # Zonder deze staat het plan na een herstart tot het volgende
-        # vijfminutenpunt op unknown, en dan zou de regie even stuurloos zijn.
-        - trigger: homeassistant
-          event: start
-        # Nieuwe prijzen (rond 13:00 komt morgen binnen) mogen meteen mee.
-        - trigger: state
-          entity_id:
-            - sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
-            - sensor.slimhuys_zonneplan_prijzen_morgen
-        # En de instellingen zelf: zonder deze stond het plan tot vijf minuten
-        # lang nog op het oude aantal blokken, terwijl je net iets verschoven
-        # had en op het dashboard naar de uitkomst zat te kijken.
-        - trigger: state
-          entity_id:
-            - input_number.batterij_laad_kwartieren
-            - input_number.batterij_ontlaad_kwartieren
-      # Het rekenwerk staat in een `action`-variabele en niet in de sensor
-      # zelf: zo wordt het één keer gedaan en lezen alle attributen dezelfde
-      # uitkomst. Zelfde opzet als de advies-sensoren in Klimaat Zonwering.yaml.
-      action:
-        - variables:
-            plan: >-
-              {#- Een blok mag tot 24 uur vooruit liggen, dus alleen "12:45"
-                  tonen is misleidend: op 14 augustus om 15:58 lagen de zes
-                  goedkoopste blokken allemaal de volgende middag, en dan lijkt
-                  het net alsof het laadmoment al voorbij is. Verder dan morgen
-                  kan het venster niet reiken, dus één woord volstaat. -#}
-              {%- macro tijdstip(blok) -%}
-                {%- if blok is none -%}-
-                {%- elif blok.start.date() == now().date() -%}{{ blok.start.strftime('%H:%M') }}
-                {%- else -%}morgen {{ blok.start.strftime('%H:%M') }}
-                {%- endif -%}
-              {%- endmacro -%}
-              {#- De kwartierblokken, met de uurblokken als terugval en de
-                  blokken van morgen erbij zodat het rond middernacht klopt.
-                  Zelfde bronvolgorde als sensor.stroomprijs_volgend_uur in
-                  Stroomprijs.yaml. -#}
-              {%- set kw = state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier', 'raw_today') -%}
-              {%- set vandaag = kw if kw else (state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today') or []) -%}
-              {%- set morgen = state_attr('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow') or [] -%}
-              {%- set ns = namespace(v=[]) -%}
-              {%- for b in (vandaag + morgen) -%}
-                {%- set s = b.start | as_datetime -%}
-                {%- set e = b.end | as_datetime -%}
-                {#- Alleen wat nog komt (of nu loopt), en niet verder dan een
-                    etmaal vooruit: anders zou "de goedkoopste vier blokken"
-                    op een dag met morgen erbij ineens over 48 uur gaan. -#}
-                {%- if s is not none and e is not none
-                       and e > now() and s < now() + timedelta(hours=24) -%}
-                  {%- set ns.v = ns.v + [{'start': s, 'end': e, 'value': b.value | float(0)}] -%}
-                {%- endif -%}
-              {%- endfor -%}
-              {%- set prijzen = ns.v | map(attribute='value') | list -%}
-              {%- set spreiding = (prijzen | max - prijzen | min) if prijzen else 0 -%}
-              {#- DE SETS MOGEN ELKAAR NOOIT RAKEN. Vraag je 40 laad- en 40
-                  ontlaadblokken terwijl er nog maar 55 blokken over zijn, dan
-                  zit hetzelfde kwartier in allebei: de laadgrens komt dan
-                  BOVEN de ontlaadgrens te liggen en de accu zou duur laden en
-                  goedkoop ontladen. Elke kant krijgt daarom hoogstens de helft
-                  van wat er ligt, waarmee "de goedkoopste k" en "de duurste m"
-                  per definitie los van elkaar staan. Aan het eind van de dag
-                  slinken beide sets dus vanzelf mee. -#}
-              {%- set helft = (ns.v | count) // 2 -%}
-              {%- set n_laad = [states('input_number.batterij_laad_kwartieren') | int(4), helft] | min -%}
-              {%- set n_ontlaad = [states('input_number.batterij_ontlaad_kwartieren') | int(4), helft] | min -%}
-              {%- set oplopend = ns.v | sort(attribute='value') -%}
-              {%- set laadset = oplopend[:n_laad] -%}
-              {%- set ontlaadset = (oplopend | reverse | list)[:n_ontlaad] -%}
-              {%- set laad_starts = laadset | map(attribute='start') | list -%}
-              {%- set ontlaad_starts = ontlaadset | map(attribute='start') | list -%}
-              {#- Overal `lijst[0] if lijst else none` en NIET `| first`: die
-                  filter gooit "No first item, sequence was empty" zodra de
-                  lijst leeg is, en dat gebeurt gewoon in de praktijk - later
-                  op de avond zijn alle goedkope blokken van het venster al
-                  voorbij en is er geen volgend laadblok meer. Dan zou het hele
-                  plan op unavailable vallen precies als de accu nog moet
-                  ontladen. -#}
-              {%- set nu_lijst = ns.v | selectattr('start', 'le', now())
-                                      | selectattr('end', 'gt', now()) | list -%}
-              {%- set nu_blok = nu_lijst[0] if nu_lijst else none -%}
-              {%- set laad_komt = laadset | sort(attribute='start')
-                                  | selectattr('start', 'gt', now()) | list -%}
-              {%- set komende_laad = laad_komt[0] if laad_komt else none -%}
-              {%- set ontlaad_komt = ontlaadset | sort(attribute='start')
-                                     | selectattr('start', 'gt', now()) | list -%}
-              {%- set komende_ontlaad = ontlaad_komt[0] if ontlaad_komt else none -%}
+    - sensor:
+        ######################################################################
+        ## Hoe vol
+        ######################################################################
+        - name: "Accu lading"
+          unique_id: accu_lading
+          default_entity_id: sensor.accu_lading
+          unit_of_measurement: "%"
+          device_class: battery
+          state_class: measurement
+          icon: mdi:home-battery
+          # De verbinding valt kort weg - op 20 september twee keer in een uur,
+          # ongeveer tien seconden per keer. Zonder deze guard leest `float(0)`
+          # dat als een lege accu en springt de klokdisplay op rood.
+          availability: "{{ has_value('sensor.deye_battery') }}"
+          # Afkappen op 0..100: de BMS geeft af en toe 101 terug en dan tekent
+          # het batterijsymbool op de klokken buiten zijn eigen vakje.
+          state: >-
+            {{ [[states('sensor.deye_battery') | float(0) | round(0) | int, 0] | max, 100] | min }}
 
-              {#- ================= VULLEN VÓÓR DE PIEK =================
-                  De zes goedkoopste blokken van het venster zeggen niets over
-                  de VOLGORDE. Op 14 augustus lagen ze allemaal de volgende
-                  middag, terwijl de dure blokken diezelfde avond kwamen: het
-                  plan was dus "vanavond leegtrekken en morgenmiddag weer
-                  vullen", zonder ooit te vragen of er genoeg in zat om die
-                  avond te halen. Dat was het niet - 3,08 kWh bruikbaar tegen
-                  3,60 kWh aan ontlaadblokken.
-                  Hieronder wordt dat tekort uitgerekend en aangevuld met de
-                  goedkoopste blokken die VOOR de piek liggen. Alles hier komt
-                  uit het apparaat zelf (vermogens, vloer, capaciteit), zodat
-                  een andere accu of een gewijzigde instelling meeverandert. -#}
-              {%- set p_laad = states('number.lilygo_rs485_marstek_max_charge_power') | float(2500) -%}
-              {%- set p_ontlaad = states('number.lilygo_rs485_marstek_max_discharge_power') | float(800) -%}
-              {%- set soc = states('sensor.lilygo_rs485_marstek_battery_state_of_charge') | float(0) -%}
-              {%- set rest_kwh = states('sensor.lilygo_rs485_marstek_battery_remaining_capacity') | float(0) -%}
-              {#- Capaciteit uit de accu zelf afleiden; onder de 5% is die deling
-                  te grof, dan de nominale 5,12 kWh van dit apparaat. -#}
-              {%- set cap = (rest_kwh / (soc / 100)) if soc > 5 and rest_kwh > 0 else 5.12 -%}
-              {#- De vloer is de hoogste van twee: onze eigen ondergrens en die
-                  van het apparaat. Het apparaat stopt sowieso, dus daaronder
-                  rekenen zou een tekort verzinnen dat niet bestaat. -#}
-              {%- set vloer = [states('input_number.batterij_min_soc') | float(10),
-                               states('number.lilygo_rs485_marstek_discharging_cutoff_capacity') | float(12)] | max -%}
-              {%- set beschikbaar = [((soc - vloer) / 100) * cap, 0] | max -%}
-              {#- De piek die als eerste aan de beurt is: alle ontlaadblokken
-                  tot aan het eerstvolgende gewone laadblok. Wat daarna komt
-                  wordt door dát laadblok bediend en telt hier niet mee. -#}
-              {%- set grens = komende_laad.start if komende_laad is not none
-                              else (ns.v | map(attribute='start') | max) -%}
-              {%- set piek = ontlaadset | sort(attribute='start')
-                             | selectattr('start', 'lt', grens) | list -%}
-              {%- set nodig = (piek | count) * (p_ontlaad / 1000) * 0.25 -%}
-              {%- set tekort = nodig - beschikbaar -%}
-              {#- Kopen om te verkopen loont alleen met marge: een retourtje
-                  door de accu kost rendement, dus 5 cent onder de ontlaadgrens
-                  is de ondergrens van de moeite. -#}
-              {%- set plafond = (ontlaadset | map(attribute='value') | min | default(0, true)) - 0.05 -%}
-              {%- set eerste_piek = piek[0].start if piek else grens -%}
-              {%- set kandidaten = ns.v | sort(attribute='value')
-                                   | selectattr('start', 'lt', eerste_piek)
-                                   | rejectattr('start', 'in', laad_starts)
-                                   | selectattr('value', 'lt', plafond) | list -%}
-              {%- set aantal = ((tekort / ((p_laad / 1000) * 0.25)) | round(0, 'ceil') | int)
-                               if tekort > 0 else 0 -%}
-              {%- set bijvul = kandidaten[:aantal] if aantal > 0 else [] -%}
-              {%- set bijvul_starts = bijvul | map(attribute='start') | list -%}
-              {%- if not ns.v or nu_blok is none -%}
-                {%- set stand = 'rust' -%}
-                {%- set reden = 'geen prijsblokken beschikbaar' -%}
-              {#- Een vlakke dag is de slijtage niet waard: onder 2 cent
-                  verschil valt er niets te verdienen en laadt de accu heen en
-                  weer voor niets. Zelfde ondergrens als de driedeling in
-                  Stroomprijs.yaml. -#}
-              {%- elif spreiding < 0.02 -%}
-                {%- set stand = 'rust' -%}
-                {%- set reden = 'vlakke prijs, minder dan 2 cent verschil' -%}
-              {%- elif nu_blok.start in laad_starts -%}
-                {%- set stand = 'laden' -%}
-                {%- set reden = 'een van de ' ~ n_laad ~ ' goedkoopste kwartieren' -%}
-              {#- Vóór de ontlaadset kijken: een bijvulblok is per definitie
-                  goedkoper dan de piek die hij bedient, dus deze twee kunnen
-                  elkaar niet overlappen. -#}
-              {%- elif nu_blok.start in bijvul_starts -%}
-                {%- set stand = 'laden' -%}
-                {%- set reden = 'bijvullen voor de piek, ' ~ (tekort | round(1)) ~ ' kWh tekort' -%}
-              {%- elif nu_blok.start in ontlaad_starts -%}
-                {%- set stand = 'ontladen' -%}
-                {%- set reden = 'een van de ' ~ n_ontlaad ~ ' duurste kwartieren' -%}
-              {%- else -%}
-                {%- set stand = 'rust' -%}
-                {%- set reden = 'gewoon tarief' -%}
-              {%- endif -%}
-              {{ {'stand': stand,
-                  'reden': reden,
-                  'blokken': ns.v | count,
-                  'prijs_nu': (nu_blok.value | round(4)) if nu_blok is not none else none,
-                  'laad_grens': (laadset | map(attribute='value') | max | round(4)) if laadset else none,
-                  'ontlaad_grens': (ontlaadset | map(attribute='value') | min | round(4)) if ontlaadset else none,
-                  'volgend_laadblok': tijdstip(komende_laad) | trim,
-                  'volgend_ontlaadblok': tijdstip(komende_ontlaad) | trim,
-                  'piek_blokken': piek | count,
-                  'piek_nodig': nodig | round(2),
-                  'accu_beschikbaar': beschikbaar | round(2),
-                  'bijvul_blokken': bijvul | count,
-                  'bijvul_vanaf': tijdstip(bijvul | sort(attribute='start') | first
-                                           if bijvul else none) | trim} }}
+        ######################################################################
+        ## Vermogen - POSITIEF IS LADEN, zie de kop van dit bestand
+        ######################################################################
+        - name: "Accu vermogen"
+          unique_id: accu_vermogen
+          default_entity_id: sensor.accu_vermogen
+          unit_of_measurement: "W"
+          device_class: power
+          state_class: measurement
+          icon: mdi:battery-sync
+          availability: "{{ has_value('sensor.deye_battery_power') }}"
+          # De enige plek in het hele huis waar dit teken wordt omgedraaid.
+          # Niet via het attribuut `−x` van de bron: dat is een min-teken uit
+          # de Unicode (U+2212) en geen gewone koppelstreepje, en zo'n
+          # attribuutnaam is een voetangel in elk template dat er later bij
+          # komt.
+          state: "{{ (0 - (states('sensor.deye_battery_power') | float(0))) | round(0) }}"
 
-      sensor:
-        - name: "Batterij kwartierplan"
-          unique_id: batterij_kwartierplan
-          icon: mdi:chart-timeline-variant
-          # `laden` | `ontladen` | `rust` voor het kwartier waar we NU in
-          # zitten. De automatisering eronder doet er iets mee; deze sensor
-          # weet niets van de accu zelf en is dus ook los te lezen op het
-          # dashboard voordat je de regie aanzet.
-          state: "{{ plan.stand }}"
+        ######################################################################
+        ## Wat hij doet
+        ######################################################################
+        - name: "Accu status"
+          unique_id: accu_status
+          default_entity_id: sensor.accu_status
+          # Uit het vermogen en niet uit de eigen state: een sensor die in
+          # zijn icoon naar zichzelf verwijst is een template-lus.
+          icon: >-
+            {% set pw = states('sensor.accu_vermogen') | float(0) %}
+            {{ 'mdi:battery-arrow-up' if pw > 50
+               else ('mdi:battery-arrow-down' if pw < -50 else 'mdi:battery-clock') }}
+          availability: "{{ has_value('sensor.accu_vermogen') }}"
+          # Zelf afgeleid en niet `sensor.deye_battery_state` overgenomen: die
+          # geeft Engelse woorden en een band die de integratie zonder
+          # aankondiging kan veranderen. Eén plek waar de dode zone staat is
+          # meer waard dan een sensor minder.
+          state: >-
+            {% set pw = states('sensor.accu_vermogen') | float(0) %}
+            {{ 'laden' if pw > 50 else ('ontladen' if pw < -50 else 'rust') }}
           attributes:
-            reden: "{{ plan.reden }}"
-            prijs_nu: "{{ plan.prijs_nu }}"
-            laad_grens: "{{ plan.laad_grens }}"
-            ontlaad_grens: "{{ plan.ontlaad_grens }}"
-            volgend_laadblok: "{{ plan.volgend_laadblok }}"
-            volgend_ontlaadblok: "{{ plan.volgend_ontlaadblok }}"
-            blokken_bekend: "{{ plan.blokken }}"
+            # Zodat een kaart de band kan noemen zonder hem te hoeven kennen.
+            dode_zone: "50"
 
-  automation:
-    ###########################################################################
-    ## Kwartierregie: laden in de goedkoopste blokken, ontladen in de duurste
-    ###########################################################################
-    # Stuurt op sensor.batterij_kwartierplan. Dezelfde drie service-calls als
-    # de oude automatisering hieronder gebruikt, zodat er maar één manier is
-    # waarop deze accu bediend wordt:
-    #   eigen programma  = control_mode disable
-    #   geforceerd       = control_mode enable + forcible charge/discharge
-    - id: battery_kwartierregie
-      alias: Battery - Sturen op kwartierprijzen
-      description: >-
-        Laadt de thuisaccu in de goedkoopste kwartieren van de komende 24 uur
-        en ontlaadt hem in de duurste. Alleen actief als
-        input_boolean.batterij_kwartierregie aan staat; de prijs-takken van
-        "Disable charging when no low pricing" slaan dan over.
-      mode: single
-      max_exceeded: silent
-      triggers:
-        - trigger: state
-          entity_id: sensor.batterij_kwartierplan
-          # Een herstart brengt de sensor via unknown binnen; dat is geen
-          # nieuwe stand maar dezelfde ronde opnieuw.
-          not_from:
-            - unknown
-            - unavailable
-          not_to:
-            - unknown
-            - unavailable
-        # Aanzetten van de regie moet meteen effect hebben, anders staat de
-        # accu tot het volgende kwartier nog op zijn eigen programma.
-        - trigger: state
-          entity_id: input_boolean.batterij_kwartierregie
-          to: "on"
-        # Overschot komt en gaat sneller dan een kwartier. Zonder deze trigger
-        # zou een laadblok dat begon terwijl de zon leverde nooit alsnog uit
-        # het net gaan laden als er een wolk voorbij komt - de tak hieronder
-        # wordt alleen bij een trigger opnieuw gewogen.
-        #
-        # DE TWEE MINUTEN ZIJN GEEN SMAAK MAAR EEN REM (4 september 2026)
-        # Deze vlag volgt het teken van het netvermogen op de seconde, en de
-        # slimme meter meldt ~2 keer per seconde. Gemeten op 4 september:
-        # 2130 wisselingen op één dag, 603 in het uur van 13:00 tot 14:00 -
-        # soms twee per seconde. Elke wisseling triggerde deze automatisering,
-        # en elke run die er doorheen kwam schreef twee registers naar de accu
-        # over RS485. In datzelfde uur ging `rs485_control_mode` daardoor 24
-        # keer heen en weer, met tussenpozen van dertien seconden: geforceerd
-        # laden, loslaten, geforceerd laden.
-        #
-        # `mode: single` verborg dat alleen maar - de meeste runs vielen stil
-        # weg met `max_exceeded: silent`, dus in het logboek zag je er 24 van
-        # de tweeduizend. Met de rust-tak die de accu nu VASTHOUDT (enable +
-        # stop) zou datzelfde geklapper geforceerd laden en geforceerd stoppen
-        # gaan afwisselen, en dat is werk voor de omvormer.
-        #
-        # Twee minuten stabiel is nog steeds ruim binnen het kwartier waar de
-        # regie op stuurt, en een wolk die langer dan twee minuten voor de zon
-        # blijft hangen is precies het geval waarvoor deze trigger bestaat.
-        - trigger: state
-          entity_id: switch.live_energieverbruik_totaal_negatief
-          for: "00:02:00"
-          not_from:
-            - unknown
-            - unavailable
-        # DE TIK VAN VIJF MINUTEN IS VOOR DE ZONVANGST (5 september 2026)
-        # De overschot-vlag hierboven staat op een zonnige ochtend gewoon een
-        # uur lang `on`, dus die triggert dan niet meer - en het kwartierplan
-        # verandert alleen op de kwartiergrens. Zonder deze tik zou het
-        # laadsetpoint van de zonvangst een kwartier op zijn oude waarde
-        # blijven staan terwijl de zon doorstijgt of juist wegvalt. Bij wegvallen
-        # is dat geen gemiste opbrengst maar inkoop uit het net.
-        #
-        # Vijf minuten en niet één: elke ronde stuurt twee selects en een getal
-        # naar de omvormer. De laad- en ontlaadtakken sturen daarmee ook elke
-        # vijf minuten hun stand opnieuw, en dat is hier geen bijwerking maar
-        # precies goed - dezelfde redenering als de dubbele uit bij het
-        # bewegingslicht: een stand die HA denkt te kennen, kan gedreven zijn.
-        - trigger: time_pattern
-          minutes: "/5"
-        # De zonverwachting wordt door de dag heen bijgesteld. Zonder deze
-        # triggers zou een laadblok dat begon toen de voorspelling nog mager
-        # was, blijven laden nadat hij is opgeschroefd (en omgekeerd).
-        - trigger: state
-          entity_id:
-            - sensor.forecast_solar_production_today_remaining
-            - sensor.forecast_solar_production_tomorrow
-          not_from:
-            - unknown
-            - unavailable
-      conditions:
-        - condition: state
-          entity_id: input_boolean.batterij_kwartierregie
-          state: "on"
-      # Op automatiseringsniveau, want de zonvangst-tak hieronder heeft ze
-      # nodig in zijn CONDITIE (is er genoeg overschot?) én in zijn ACTIE (op
-      # welk vermogen zetten we hem dan?). Ze worden één keer per run gerend,
-      # dus condities en actie rekenen gegarandeerd met hetzelfde getal.
-      variables:
-        # Het netto netvermogen: POSITIEF bij afname, NEGATIEF bij
-        # teruglevering. `netto_vermogen` rekent actief min teruglevering al
-        # voor ons uit - zelf aftrekken combineert bij ~2 metingen per seconde
-        # geregeld een oude met een nieuwe waarde. Zie [[slimhuys-p1-bron]] en
-        # de kop van packages/9 - Other/Electricity.yaml.
-        netto: >-
-          {{ states('sensor.meterkast_slimhuys_zonneplan_netto_vermogen')
-             | float(0) }}
-        # Wat de accu op dit moment zélf al opneemt. `ac_power` is negatief
-        # tijdens laden, dus dit is positief zodra hij laadt en 0 als hij stil
-        # staat of ontlaadt.
-        accu_laadt: >-
-          {{ [0, 0 - (states('sensor.lilygo_rs485_marstek_ac_power')
-                      | float(0))] | max }}
-        # HET NIEUWE SETPOINT = WAT HIJ NU AL PAKT, MIN WAT ER VAN HET NET KOMT
-        #
-        # Die eerste term is de terugkoppeling en die moet er staan: zonder
-        # `accu_laadt` regelt hij zichzelf weg. Zodra hij begint te laden zakt
-        # de teruglevering immers naar nul, en dan zou "hoeveel gaat er het net
-        # op" 0 zeggen en het setpoint terug naar 0 gaan - en zo aan het
-        # klapperen slaan.
-        #
-        # En `- netto` en niet `+ overschot`: het moet twee kanten op kunnen.
-        # Laadt hij 2000 W terwijl er 200 W uit het NET bij komt, dan hoort het
-        # setpoint naar 1800 te zakken. Een variant die alleen naar de
-        # teruglevering keek (afgekapt op nul) hield in dat geval 2000 aan en
-        # kon dus alleen omhoog regelen - nagerekend op 5 september 2026 en
-        # daarop aangepast.
-        #
-        # Afgerond op stappen van 50 W: anders verschuift dit getal bij elke
-        # ronde een paar watt en schrijf je de omvormer vol met verschillen die
-        # hij toch niet haalt.
-        zonvangst_vermogen: >-
-          {{ ([ [0, (accu_laadt | float(0)) - (netto | float(0))] | max,
-                states('number.lilygo_rs485_marstek_max_charge_power')
-                | float(2500) ] | min / 50) | round(0) * 50 }}
-      actions:
-        - choose:
-            - alias: Laden in een goedkoop kwartier
-              conditions:
-                - condition: state
-                  entity_id: sensor.batterij_kwartierplan
-                  state: laden
-                # Een volle accu hoeft niet geforceerd geladen te worden; de
-                # 95% laat ruimte zodat hij niet om de kilowattuur aan- en
-                # uitklapt rond de bovengrens.
-                - condition: numeric_state
-                  entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
-                  below: 95
-                # NIET UIT HET NET LADEN TERWIJL DE ZON AL OVERSCHOT LEVERT.
-                # De goedkope blokken liggen midden op de dag, precies wanneer
-                # de panelen leveren. Geforceerd laden koopt dan stroom die we
-                # net gratis het net op sturen. Zelfde bron als de
-                # gratis-stoken-regel van de jacuzzi (packages/3 - Outside/
-                # Backyard/Spa.yaml).
-                #
-                # LET OP, DIT KLOPTE NIET MEER (4 september 2026)
-                # Hier stond: "dan valt de tak door naar `default` en doet de
-                # accu zijn eigen programma - en dat is anti-feed, dus die vult
-                # zich vanzelf met het overschot." Precies dat is weggevallen
-                # toen de accu zijn eigen P1-meter kwijtraakte; `default` houdt
-                # hem nu stil. Bij overschot laadt de accu dus NIET meer
-                # vanzelf mee - dat komt pas terug als die meter er weer is.
-                # Deze tak blijft wél kloppen: uit het net kopen wat je net
-                # gratis wegstuurt, is in beide gevallen fout.
-                #
-                # De `for` is dezelfde rem als op de trigger hierboven: zonder
-                # dat kan een run alsnog precies op een flikkering van een halve
-                # seconde landen en dan alsnog het verkeerde besluit nemen.
-                - condition: state
-                  entity_id: switch.live_energieverbruik_totaal_negatief
-                  state: "off"
-                  for: "00:02:00"
-                # EN NIET LADEN ALS DE ZON HET MORGEN TOCH DOET.
-                # Welke voorspelling telt, hangt van de klok af:
-                #   overdag en 's nachts vóór twaalven -> wat er vandaag nog
-                #     moet komen (`today_remaining` is dan de hele dag)
-                #   na zonsondergang -> de opbrengst van morgen
-                # Zonder die splitsing zou je om 02:00 naar de verkeerde dag
-                # kijken: `tomorrow` slaat dan op overmorgen-in-de-praktijk,
-                # terwijl de zon die deze accu vult over een paar uur opkomt.
-                # Dezelfde uur>=12-truc als in Kitchen/Covers.yaml.
-                #
-                # De SoC-ondergrens is het vangnet onder de voorspelling: is de
-                # accu bijna leeg, dan laden we sowieso bij. Een misgelopen
-                # weersverwachting kost je anders de hele avondpiek, en dat is
-                # precies het uur waarvoor deze accu bedoeld is.
-                - alias: Niet genoeg zon op komst, te leeg om te gokken, of bijvullen voor de piek
-                  condition: template
-                  value_template: >-
-                    {#- WIE WINT ER VAN WIE
-                        De overschot-rem hierboven blijft altijd staan: die
-                        meet dat de zon op dit moment ECHT levert, en dan koop
-                        je niets. Deze rem is een VOORSPELLING, en die legt het
-                        af tegen een uitgerekend tekort: zegt het plan
-                        "bijvullen voor de piek", dan is er een concreet aantal
-                        kWh nodig voor een piek die vanavond komt, en dat weegt
-                        zwaarder dan de kans dat de zon het nog doet. Het gaat
-                        bovendien nooit om meer dan het tekort zelf - de
-                        plansensor kiest precies genoeg blokken. -#}
-                    {% if 'bijvullen' in (state_attr('sensor.batterij_kwartierplan', 'reden') | default('', true)) %}
-                      {{ true }}
-                    {% else %}
-                    {#- BEIDE ARRAYS, niet alleen de overkapping.
-                        `sensor.energy_production_*` stond hier tot 2026-08-15,
-                        en dat is ondanks de generieke naam maar één van de
-                        twee velden: de zolder voorzijde ontbrak, zo'n 35% van
-                        de verwachting. De regie zag daardoor structureel te
-                        weinig zon aankomen en kocht stroom in op dagen dat de
-                        panelen het zelf deden. De optellingen staan in
-                        packages/3 - Outside/Backyard/Solarpanels.yaml, naast
-                        de bestaande dagtotaal-sensor.
-                        Valt een van de twee bronnen weg, dan is de som
-                        unavailable en levert `| float(0)` een 0 op - dat leest
-                        als "geen zon op komst" en laat netladen dus toe. Dat
-                        is de veilige kant: goedkoop inkopen kost geld, een
-                        lege accu in de avondpiek kost meer. -#}
-                    {% set na_zonsondergang = is_state('sun.sun', 'below_horizon')
-                                              and now().hour >= 12 %}
-                    {% set zon = states('sensor.forecast_solar_production_tomorrow') | float(0)
-                                 if na_zonsondergang
-                                 else states('sensor.forecast_solar_production_today_remaining') | float(0) %}
-                    {% set soc = states('sensor.lilygo_rs485_marstek_battery_state_of_charge') | float(0) %}
-                    {{ zon < (states('input_number.batterij_zon_drempel') | float(30))
-                       or soc < 30 }}
-                    {% endif %}
-              sequence:
-                - action: select.select_option
-                  data:
-                    option: enable
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-                - action: select.select_option
-                  data:
-                    option: charge
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
-                # Het vermogen komt van de omvormer zelf en staat hier niet
-                # hardgecodeerd: `max_charge_power` is wat dit apparaat aankan.
-                # Zelfde reden als de SoC-drempel van de auto in Voice.yaml -
-                # een eigen getal loopt vroeg of laat uit de pas met de
-                # hardware.
-                - action: number.set_value
-                  data:
-                    value: >-
-                      {{ states('number.lilygo_rs485_marstek_max_charge_power') | float(2500) }}
-                  target:
-                    entity_id: number.lilygo_rs485_marstek_forcible_charge_power
-            - alias: Ontladen in een duur kwartier
-              conditions:
-                - condition: state
-                  entity_id: sensor.batterij_kwartierplan
-                  state: ontladen
-                # Dezelfde twee remmen als de high_price-tak hieronder: niet
-                # onder de eigen ondergrens leegtrekken, en niet terugleveren
-                # als het totaaltarief negatief is (dan kost dat geld). Een
-                # unavailable sensor is niet 'off' en houdt dus tegen.
-                - condition: numeric_state
-                  entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
-                  above: input_number.batterij_min_soc
-                - condition: state
-                  entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu
-                  state: "off"
-              sequence:
-                - action: select.select_option
-                  data:
-                    option: enable
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-                - action: select.select_option
-                  data:
-                    option: discharge
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
-                # ONTLADEN KAN MAAR 800 W OP DIT APPARAAT, LADEN 2500.
-                # Hier stond `2500` hardgecodeerd; die waarde valt binnen het
-                # bereik van de entiteit (0-2500) en wordt dus geaccepteerd,
-                # maar de omvormer haalt hem nooit - en het overschreef de 800
-                # die er met de hand in gezet was. `max_discharge_power` is de
-                # echte grens en die leest de regie nu uit.
-                - action: number.set_value
-                  data:
-                    value: >-
-                      {{ states('number.lilygo_rs485_marstek_max_discharge_power') | float(800) }}
-                  target:
-                    entity_id: number.lilygo_rs485_marstek_forcible_discharge_power
-            ###################################################################
-            ## ZONVANGST - overschot in de accu in plaats van het net op
-            ###################################################################
-            # Dit is de laadhelft van wat de accu vroeger zelf deed. Anti-feed
-            # ving het overschot op zonder dat HA eraan te pas kwam; zonder
-            # zijn eigen P1-meter kan hij dat niet meer, en dan gaat het het
-            # net op. Gemeten op 5 september om 08:51: 1,29 kWh teruggeleverd
-            # vóór negenen, terwijl de accu op 35% stond met 3,33 kWh ruimte.
-            #
-            # STAAT BEWUST ONDER DE TWEE PRIJSTAKKEN
-            # Een laad- of ontlaadblok wint dus altijd. Twee gevallen komen
-            # hier terecht en allebei horen ze hier:
-            #   * plan `rust` met zon op het dak - precies waar deze tak voor is
-            #   * plan `laden` dat op zijn eigen overschot-rem stukliep. Die tak
-            #     weigert uit het NET te kopen wat we net gratis wegsturen; dan
-            #     is dit hetzelfde laden, maar dan van de zon.
-            #
-            # HET SETPOINT VOLGT HET OVERSCHOT, MAAR MET EEN STAP VAN MINUTEN
-            # `zonvangst_vermogen` (zie de variabelen bovenaan) is wat de accu
-            # nu al opneemt min wat er van het net komt. De regie herrekent dat
-            # alleen bij een trigger: de tik van vijf minuten, of de
-            # overschot-vlag die twee minuten stil moet staan. Dit is dus geen
-            # regellus van seconden zoals anti-feed was.
-            #
-            # Wolk erover en hij laadt nog even door uit het net. Dat duurt tot
-            # de eerstvolgende van die twee triggers, dus hooguit vijf minuten
-            # en meestal twee; bij het volle vermogen van 2,5 kW is dat 0,08 tot
-            # 0,2 kWh. In de praktijk minder, want een setpoint dat op het
-            # overschot stond, stond zelden op 2,5 kW.
-            #
-            # Dit hoort te VERVALLEN zodra de P1-meter terug is. Dan doet de
-            # accu dit zelf, sneller en zonder deze omweg; zie de kop van dit
-            # bestand.
-            - alias: Zonvangst - laden van eigen overschot
-              conditions:
-                # Zelfde rem als op de trigger: pas als het overschot twee
-                # minuten staat. Anders zet één flikkering van een halve
-                # seconde de omvormer aan het werk.
-                - condition: state
-                  entity_id: switch.live_energieverbruik_totaal_negatief
-                  state: "on"
-                  for: "00:02:00"
-                # Zelfde bovengrens als de laadtak: een volle accu hoeft niet
-                # geforceerd geladen te worden.
-                - condition: numeric_state
-                  entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
-                  below: 95
-                # Onder de 200 W is het de omvormer niet waard: die verstookt
-                # zelf al tientallen watts aan omzetting en standby. Valt de
-                # tak hierdoor af, dan komt hij in `default` en staat hij stil.
-                - alias: En er is genoeg overschot om het de moeite waard te maken
-                  condition: template
-                  value_template: "{{ zonvangst_vermogen | float(0) >= 200 }}"
-              sequence:
-                - action: select.select_option
-                  data:
-                    option: enable
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-                - action: select.select_option
-                  data:
-                    option: charge
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
-                - action: number.set_value
-                  data:
-                    value: "{{ zonvangst_vermogen }}"
-                  target:
-                    entity_id: number.lilygo_rs485_marstek_forcible_charge_power
+        ######################################################################
+        ## Capaciteit en inhoud
+        ######################################################################
+        - name: "Accu capaciteit"
+          unique_id: accu_capaciteit
+          default_entity_id: sensor.accu_capaciteit
+          unit_of_measurement: "kWh"
+          device_class: energy_storage
+          state_class: measurement
+          icon: mdi:battery-heart-variant
+          # `sensor.deye_battery_capacity` (kWh) en `sensor.deye_battery_soh`
+          # komen bij deze omvormer niet door - ze staan sinds de koppeling op
+          # `unknown`. Het getal staat wél in de attributen van
+          # sensor.deye_battery, die de BMS uitleest: 600 Ah bij 48 V nominaal
+          # = 28,8 kWh. Dus rekenen we het zelf uit, uit die attributen en niet
+          # uit een hier ingetypt getal - dan klopt het vanzelf nog als er een
+          # rek bij komt.
+          availability: >-
+            {{ (state_attr('sensor.deye_battery', 'Corrected Capacity') | float(0)) > 0
+               or (states('number.deye_battery_capacity') | float(0)) > 0 }}
+          state: >-
+            {% set ah = state_attr('sensor.deye_battery', 'Corrected Capacity') | float(0) %}
+            {% set ah = ah if ah > 0 else states('number.deye_battery_capacity') | float(0) %}
+            {% set v = state_attr('sensor.deye_battery', 'Nominal Voltage') | float(0) %}
+            {# 48 V is de nominale spanning van dit 16s-pakket; de gemeten
+               klemspanning (52 V) zou de capaciteit ~9% te hoog maken. #}
+            {% set v = v if v > 0 else 48 %}
+            {{ (ah * v / 1000) | round(1) }}
+          attributes:
+            # Wat je er echt uit kunt halen: de omvormer stopt bij zijn eigen
+            # afslagpunt en niet bij nul. Zonder dit getal lees je 28,8 kWh en
+            # reken je met 3 kWh die er nooit uitkomt.
+            bruikbaar: >-
+              {# Zelfde som als de state hierboven, en bewust niet
+                 `states('sensor.accu_capaciteit')`: een attribuut dat de eigen
+                 state leest loopt een ronde achter en is een lus. #}
+              {% set ah = state_attr('sensor.deye_battery', 'Corrected Capacity') | float(0) %}
+              {% set ah = ah if ah > 0 else states('number.deye_battery_capacity') | float(0) %}
+              {% set v = state_attr('sensor.deye_battery', 'Nominal Voltage') | float(0) %}
+              {% set cap = ah * (v if v > 0 else 48) / 1000 %}
+              {% set vloer = states('number.deye_battery_shutdown_soc') | float(10) %}
+              {{ (cap * (100 - vloer) / 100) | round(1) }}
 
-          # Alles wat geen laad- of ontlaadblok is - inclusief een tak
-          # hierboven die op zijn eigen rem stukliep - komt hier terecht. Geen
-          # sluiproute dus, maar de enige veilige eindstand.
-          #
-          # SINDS 4 SEPTEMBER 2026 IS "STIL" DE VEILIGE EINDSTAND, NIET "ZELF"
-          # Hier stond `control_mode: disable`, oftewel: geef de accu terug aan
-          # zijn eigen programma. Dat programma is `user_work_mode: anti-feed`
-          # (zelfverbruik / nul-teruglevering), en dat kan alleen als de accu
-          # zelf ziet wat er op het net gebeurt. Dat deed zijn EIGEN P1-METER,
-          # en die is er niet meer sinds de meterkast is omgebouwd.
-          #
-          # Blind teruggeven betekende: de accu doet maar wat. Gemeten op
-          # 4 september om 16:48 - hij begon op 2,5 kW uit het net te laden
-          # terwijl het kwartierplan op `rust` stond, de prijs op 0,19 (de
-          # laadgrens lag op 0,115) en het huis al 14 kW van het net trok.
-          #
-          # `enable` + `stop` houdt hem stil: hij doet niets in plaats van iets
-          # verkeerds. De prijs daarvan is dat er tussen de blokken door geen
-          # zelfverbruik meer is - overschot gaat dus het net op in plaats van
-          # de accu in. Zodra die P1-meter terug is (of er een CT-klem hangt)
-          # is `disable` hier weer de betere stand; dan is dit de enige regel
-          # die terug moet.
-          default:
-            - action: select.select_option
-              data:
-                option: stop
-              target:
-                entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
-            - action: select.select_option
-              data:
-                option: enable
-              target:
-                entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-
-    # Zet je de regie uit terwijl hij net staat te laden of te ontladen, dan
-    # blijft die geforceerde stand staan: de oude automatisering wacht op een
-    # tariefwissel en die kan uren wegblijven. Terug naar het eigen programma
-    # is de enige nette overdracht. Aparte automatisering en geen extra tak
-    # hierboven, omdat die juist alleen mag lopen als de regie AAN staat.
-    - id: battery_kwartierregie_uit
-      alias: Battery - Kwartierregie uitgezet
-      description: >-
-        Zet de accu terug op zijn eigen programma zodra de kwartierregie uit
-        gaat, zodat er geen geforceerde stand blijft hangen.
-      mode: single
-      triggers:
-        - trigger: state
-          entity_id: input_boolean.batterij_kwartierregie
-          to: "off"
-          not_from:
-            - unknown
-            - unavailable
-      conditions:
-        - condition: not
-          conditions:
-            - condition: state
-              entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
-              state: stop
-      actions:
-        - action: select.select_option
-          data:
-            option: stop
-          target:
-            entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
-        - action: select.select_option
-          data:
-            option: disable
-          target:
-            entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-        - action: logbook.log
-          data:
-            name: Batterij
-            message: >-
-              Kwartierregie uit; accu terug op zijn eigen programma.
-
-    - id: battery_disable_charging
-      alias: Battery - Disable charging when no low pricing
-      description: Change modes on battery when needed; to create low charing points
-      mode: single
-      triggers:
-        - trigger: state
-          entity_id:
-            - sensor.slimhuys_zonneplan_tariefniveau_nu
-          to:
-            - very_low
-            - low
-          id: low_price
-        - trigger: time
-          at: "06:00:00"
-          id: morning
-        - trigger: time
-          at: "12:00:00"
-          id: afternoon
-        - trigger: state
-          entity_id:
-            - sensor.slimhuys_zonneplan_tariefniveau_nu
-          # `peak` staat erbij sinds SlimHuys dat niveau op 2026-08-23
-          # introduceerde; zonder deze regel vuurt de tak niet als het tarief
-          # rechtstreeks van medium naar peak springt. Tot nu toe kwam elke
-          # peak uit high, dus de accu stond al goed - dit is het gat dichten,
-          # geen storing repareren.
-          to:
-            - high
-            - very_high
-            - peak
-          id: high_price
-        - trigger: state
-          entity_id:
-            - sensor.slimhuys_zonneplan_tariefniveau_nu
-          to: medium
-          id: medium_price
-        # Vangnetten voor het geforceerd ontladen, zie de laatste tak.
-        - trigger: numeric_state
-          entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
-          below: input_number.batterij_min_soc
-          id: soc_leeg
-        # Let op de sensornaam: ..._negatieve_ALL_IN_prijs_nu, niet
-        # ..._negatieve_prijs_nu. Die laatste kijkt naar de kale marktprijs,
-        # terwijl teruglevering het hele tarief oplevert (markt + inkoop +
-        # energiebelasting + btw). Bij een licht negatieve marktprijs krijgen we
-        # nog gewoon geld terug; pas onder nul totaal kost ontladen ons geld.
-        # SlimHuys rekent dat sinds 2026-08-06 zelf uit, dus die vergelijking
-        # staat hier niet meer met de hand.
-        - trigger: state
-          entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu
-          to: "on"
-          # Na een herstart komt een binary sensor via `unknown`
-          # binnen; zonder deze guard telt dat als een echte
-          # prijswissel en gaat de tak eronder onnodig lopen.
-          not_from:
-            - unknown
-            - unavailable
-          id: prijs_negatief
-        - trigger: state
-          entity_id: sensor.slimhuys_zonneplan_tariefniveau_nu
-          to:
-            - unknown
-            - unavailable
-          for: "00:15:00"
-          id: tarief_weg
-      conditions: []
-      actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - low_price
-                - condition: state
-                  entity_id: input_boolean.batterij_kwartierregie
-                  state: "off"
-              sequence:
-                - action: select.select_option
-                  metadata: {}
-                  data:
-                    option: disable
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-              alias: Low price; start charging
-            - conditions:
-                - condition: trigger
-                  id:
-                    - morning
-                - condition: state
-                  entity_id: input_boolean.batterij_kwartierregie
-                  state: "off"
-                - condition: numeric_state
-                  entity_id: sensor.forecast_solar_production_today
-                  above: 20
-                - condition: state
-                  entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-                  state: disable
-              sequence:
-                - action: select.select_option
-                  metadata: {}
-                  data:
-                    option: enable
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-                - action: select.select_option
-                  metadata: {}
-                  data:
-                    option: stop
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
-              alias: Morning and forecast is positive; charge later on
-            - conditions:
-                - condition: trigger
-                  id:
-                    - afternoon
-                - condition: state
-                  entity_id: input_boolean.batterij_kwartierregie
-                  state: "off"
-              sequence:
-                - action: select.select_option
-                  metadata: {}
-                  data:
-                    option: disable
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-              alias: Afternoon; start own program
-            - conditions:
-                - condition: trigger
-                  id:
-                    - medium_price
-                - condition: state
-                  entity_id: input_boolean.batterij_kwartierregie
-                  state: "off"
-                - condition: state
-                  entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-                  state: enable
-              sequence:
-                - action: select.select_option
-                  metadata: {}
-                  data:
-                    option: disable
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-              alias: Medium price; start own program
-            - conditions:
-                - condition: trigger
-                  id:
-                    - high_price
-                - condition: state
-                  entity_id: input_boolean.batterij_kwartierregie
-                  state: "off"
-                # Niet onder de ondergrens leegtrekken: geforceerd ontladen
-                # stopt hier niet uit zichzelf, dus zonder deze conditie loopt
-                # de batterij bij een lange dure periode helemaal leeg en staat
-                # er 's avonds niets meer om mee te overbruggen.
-                - condition: numeric_state
-                  entity_id: sensor.lilygo_rs485_marstek_battery_state_of_charge
-                  above: input_number.batterij_min_soc
-                # Bij een negatief totaaltarief kost teruglevering geld. "Hoog
-                # tarief" en "negatieve prijs" kunnen tegelijk voorkomen doordat
-                # het niveau over de dag wordt bepaald en de prijs per kwartier.
-                # Staat de sensor op `unavailable`, dan is dit niet 'off' en
-                # ontladen we dus niet - dezelfde veilige kant als voorheen.
-                - condition: state
-                  entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu
-                  state: "off"
-              sequence:
-                - action: select.select_option
-                  metadata: {}
-                  data:
-                    option: enable
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-                - action: select.select_option
-                  metadata: {}
-                  data:
-                    option: discharge
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
-                # Zelfde correctie als in de kwartierregie hierboven: 2500 is
-                # geen haalbaar ontlaadvermogen op dit apparaat (de omvormer
-                # doet er 800) en overschreef een handmatig gezette waarde.
-                - action: number.set_value
-                  metadata: {}
-                  data:
-                    value: >-
-                      {{ states('number.lilygo_rs485_marstek_max_discharge_power') | float(800) }}
-                  target:
-                    entity_id: number.lilygo_rs485_marstek_forcible_discharge_power
-              alias: High price; discharge
-            # Vangnet. Geforceerd ontladen blijft staan tot een volgende
-            # trigger het omzet, en die komt niet meer als de tariefsensor
-            # wegvalt: dan blijft de batterij leegtrekken zonder dat er nog
-            # iets meekijkt. Hetzelfde geldt zodra de ondergrens bereikt is of
-            # de prijs negatief wordt.
-            #
-            # Ook hier `enable` + `stop` en niet meer `disable` (4 september
-            # 2026, zelfde reden als bij de rust-tak hierboven): een rem hoort
-            # te remmen. Teruggeven aan een programma dat zonder zijn P1-meter
-            # niet weet wat het net doet, is precies wat deze tak moet
-            # voorkomen.
-            - conditions:
-                - condition: trigger
-                  id:
-                    - soc_leeg
-                    - prijs_negatief
-                    - tarief_weg
-                - condition: state
-                  entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
-                  state: discharge
-              sequence:
-                - action: select.select_option
-                  metadata: {}
-                  data:
-                    option: stop
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_forcible_charge_discharge
-                - action: select.select_option
-                  metadata: {}
-                  data:
-                    option: enable
-                  target:
-                    entity_id: select.lilygo_rs485_marstek_rs485_control_mode
-                - action: logbook.log
-                  data:
-                    name: Batterij
-                    message: >-
-                      Geforceerd ontladen gestopt:
-                      {{ 'ondergrens bereikt' if trigger.id == 'soc_leeg'
-                         else ('negatieve prijs' if trigger.id == 'prijs_negatief'
-                         else 'tariefniveau niet beschikbaar') }}.
-              alias: Stop discharging; guard tripped
+        - name: "Accu inhoud"
+          unique_id: accu_inhoud
+          default_entity_id: sensor.accu_inhoud
+          unit_of_measurement: "kWh"
+          device_class: energy_storage
+          state_class: measurement
+          icon: mdi:battery-high
+          availability: >-
+            {{ has_value('sensor.accu_lading') and has_value('sensor.accu_capaciteit') }}
+          state: >-
+            {{ (states('sensor.accu_capaciteit') | float(0)
+                * states('sensor.accu_lading') | float(0) / 100) | round(2) }}

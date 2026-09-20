@@ -614,15 +614,29 @@ cards:
                   {% set n = states('sensor.slimhuys_zonneplan_tariefniveau_nu') %}
                   {{ 'green' if 'low' in n else ('red' if ('high' in n or n == 'peak') else 'grey') }}
               - type: custom:mushroom-template-card
-                entity: sensor.lilygo_rs485_marstek_battery_state_of_charge
+                entity: sensor.accu_lading
                 primary: Thuisbatterij
+                # Het wattage zonder richting las verkeerd: "1200 W" zei niet
+                # of dat eruit of erin ging. `accu_status` zet er een woord
+                # bij; staat hij op rust, dan is het getal ruis en laten we het
+                # weg. Zie packages/9 - Other/Battery.yaml voor de dode zone.
                 secondary: >-
-                  {{ (states('sensor.lilygo_rs485_marstek_battery_state_of_charge') ~ '%')
-                     if has_value('sensor.lilygo_rs485_marstek_battery_state_of_charge') else '—' }} ·
-                  {{ (states('sensor.lilygo_rs485_marstek_battery_power') ~ ' W')
-                     if has_value('sensor.lilygo_rs485_marstek_battery_power') else '—' }}
+                  {{ (states('sensor.accu_lading') ~ '%')
+                     if has_value('sensor.accu_lading') else '—' }}
+                  {%- set st = states('sensor.accu_status') -%}
+                  {%- if st in ['laden', 'ontladen'] and has_value('sensor.accu_vermogen') %}
+                    · {{ st }} met {{ states('sensor.accu_vermogen') | float(0) | abs | round(0) | int }} W
+                  {%- elif st == 'rust' %} · standby
+                  {%- endif -%}
                 icon: mdi:home-battery
-                icon_color: green
+                # Groen stond hier vast, ook als de accu leeg was. Dezelfde
+                # driedeling als de vulkleur op de klokken (Klokken.yaml).
+                icon_color: >-
+                  {% set soc = states('sensor.accu_lading') | float(-1) %}
+                  {% set st = states('sensor.accu_status') %}
+                  {{ 'grey' if soc < 0 else ('red' if soc <= 10
+                     else ('green' if st == 'laden'
+                     else ('orange' if st == 'ontladen' else 'blue'))) }}
               - type: custom:mushroom-template-card
                 entity: sensor.zon_vermogen_nu
                 primary: Productie nu

@@ -452,8 +452,8 @@ cards:
                   var netto = lees('sensor.live_energieverbruik_totaal');
                   if(netto !== null && Math.abs(netto) < 0.005) netto = 0;
                   var prod = lees('sensor.zon_vermogen_nu', true);
-                  var soc = states['sensor.lilygo_rs485_marstek_battery_state_of_charge'];
-                  var bp = states['sensor.lilygo_rs485_marstek_battery_power'];
+                  var soc = states['sensor.accu_lading'];
+                  var bp = states['sensor.accu_vermogen'];
                   var socv = soc && !isNaN(Number(soc.state)) ? Math.round(Number(soc.state)) : null;
                   var bpv = bp && !isNaN(Number(bp.state)) ? Math.round(Number(bp.state)) : null;
                   // HUIS, NIET DE METERSTAND
@@ -465,15 +465,15 @@ cards:
                   // toelichting bij `verbruik` in overzicht/kolom_midden.yaml.
                   var verbr = (netto === null || prod === null) ? null
                             : Math.max(0, netto + prod - (bpv === null ? 0 : bpv / 1000));
-                  // Zelfde standby-grens als op het overzicht (zie de
-                  // toelichting bij `batt` in overzicht/kolom_midden.yaml): de
-                  // omvormer trekt in rust tot 15 W uit de accu, en dat is
-                  // geen ontladen. Hier stond dezelfde `> 0 / < 0 / idle`-reeks
-                  // en dus dezelfde fout, op het scherm waar je er het hele
-                  // ontbijt tegenaan kijkt.
-                  var bmode = bpv === null ? ''
-                            : (Math.abs(bpv) <= 15 ? ' · standby'
-                            : (bpv < 0 ? ' · ontlaadt' : ' · laadt'));
+                  // De standby-grens stond hier als eigen getal (15 W, de
+                  // ruststroom van de Marstek) en op het overzicht nog een
+                  // keer. Twee kopieën van dezelfde drempel lopen uit elkaar
+                  // zodra er één wordt bijgesteld, en dit is het scherm waar je
+                  // er het hele ontbijt tegenaan kijkt. Hij staat nu in
+                  // `sensor.accu_status` (packages/9 - Other/Battery.yaml).
+                  var bst = states['sensor.accu_status'];
+                  var bmode = (!bst || bpv === null) ? ''
+                            : ({laden: ' · laadt', ontladen: ' · ontlaadt', rust: ' · standby'}[bst.state] || '');
                   var fmt = function(v){ return v === null ? '—' : v.toFixed(2).replace('.',','); };
                   var klein = function(waarde, label, kleur){
                     return `<div style="display:flex;flex-direction:column;gap:0.3vh">

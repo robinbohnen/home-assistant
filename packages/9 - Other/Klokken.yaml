@@ -308,19 +308,33 @@ klokken_package:
               {%- endif -%}
             # Een frame op 32x8: batterijsymbool met vulniveau (links, kleur =
             # laden / ontladen / idle), percentage rechts uitgelijnd, en op de
-            # onderste rij een vermogensbalk vanaf links: lengte = vermogen
-            # (volle breedte = 2500 W), kleur = richting. Eerder liep die balk
-            # vanuit het midden, maar zonder zichtbaar nulpunt was niet af te
-            # lezen waar hij begon.
+            # onderste rij een vermogensbalk vanaf links: lengte = vermogen,
+            # kleur = richting. Eerder liep die balk vanuit het midden, maar
+            # zonder zichtbaar nulpunt was niet af te lezen waar hij begon.
+            #
+            # DE SCHAAL VAN DE BALK IS NOG NIET GEIJKT (20 september 2026)
+            # Volle breedte stond op 2500 W: het harde maximum van de Marstek,
+            # dus de balk kwam precies vol als de accu alles gaf. De Deye kan
+            # veelvouden daarvan en zou met die schaal vrijwel altijd op 32
+            # staan - een balk die nooit beweegt zegt niets. 5000 W is een
+            # eerste gok en geen meting; zodra er een week echte laad- en
+            # ontlaadpieken in de historie staan hoort dit getal daarnaartoe.
+            # Te hoog gekozen is minder erg dan te laag: dan gebruikt de balk
+            # zijn bovenste helft niet, in plaats van dat hij vastloopt.
             # Let op: bij "dt" is y de bovenkant van de tekst, niet de baseline -
             # daarom y=0, anders valt de tekst buiten het scherm.
             accu_payload: >-
-              {%- if has_value('sensor.lilygo_rs485_marstek_battery_state_of_charge') -%}
-              {%- set soc = [[states('sensor.lilygo_rs485_marstek_battery_state_of_charge') | float(0) | round(0) | int, 0] | max, 100] | min -%}
-              {%- set pw = states('sensor.lilygo_rs485_marstek_battery_power') | float(0) -%}
-              {%- set inv = states('sensor.lilygo_rs485_marstek_inverter_state') -%}
-              {%- set laadt = inv == 'Charge' or (inv not in ['Charge', 'Discharge'] and pw > 20) -%}
-              {%- set ontlaadt = inv == 'Discharge' or (inv not in ['Charge', 'Discharge'] and pw < -20) -%}
+              {%- if has_value('sensor.accu_lading') -%}
+              {#- `accu_lading` kapt zelf al af op 0..100 en `accu_status`
+                  kent de dode zone; beide staan in
+                  packages/9 - Other/Battery.yaml. De klok hoeft dus niets
+                  meer over het apparaat te weten - dat was precies het punt
+                  van die laag. -#}
+              {%- set soc = states('sensor.accu_lading') | int(0) -%}
+              {%- set pw = states('sensor.accu_vermogen') | float(0) -%}
+              {%- set st = states('sensor.accu_status') -%}
+              {%- set laadt = st == 'laden' -%}
+              {%- set ontlaadt = st == 'ontladen' -%}
               {%- set vul = [[(soc * 9 / 100) | round(0) | int, 1] | max, 9] | min -%}
               {%- set vulkleur = '#FF3B30' if soc <= 10 else ('#32D74B' if laadt else ('#FF9F0A' if ontlaadt else '#0A84FF')) -%}
               {%- set label = soc | string ~ '%' -%}
@@ -330,7 +344,7 @@ klokken_package:
                   structureel onder de (vrijwel altijd brandende)
                   prijsindicator. -#}
               {%- set tx = 31 - (label | length * 4) -%}
-              {%- set lengte = [[((pw | abs) * 32 / 2500) | round(0) | int, 32] | min, 1] | max -%}
+              {%- set lengte = [[((pw | abs) * 32 / 5000) | round(0) | int, 32] | min, 1] | max -%}
               {"draw": [
               {"df": [0, 7, 32, 1, "#222222"]},
               {"dr": [0, 0, 11, 6, "#3A3A3A"]},
