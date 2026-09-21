@@ -573,15 +573,25 @@ livingroom_media_package:
       alias: Livingroom - Media TV On
       description: "Unjoin everything if TV is turned on"
       mode: single
+      # `not_from` op allebei: na een herstart of een Apple TV die terugkomt
+      # uit `unavailable` staat hij meteen op `playing` (of de tv op `on`),
+      # en dat is geen tv die net aanging. Zonder deze guard haalde zo'n
+      # terugkeer alle Sonos-speakers in huis uit hun groep.
       triggers:
         - trigger: state
           entity_id:
             - media_player.woonkamer_77_oled_3
           to: "on"
+          not_from:
+            - unknown
+            - unavailable
         - trigger: state
           entity_id:
             - media_player.woonkamer_appletv
           to: playing
+          not_from:
+            - unknown
+            - unavailable
       conditions: []
       actions:
         - action: media_player.unjoin

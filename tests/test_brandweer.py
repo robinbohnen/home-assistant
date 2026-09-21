@@ -228,11 +228,24 @@ check("dubbele spatie ook hier weggepoetst",
 check("functies blijven staan",
       v["wijzigingen"][0]["functies"], ["Bediener RV", "Bevelvoerder", "Manschap"])
 check("periodes, geen namen, in eraf", v["wijzigingen"][0]["eraf"], ["18:00-22:00"])
+# Sinds 30 augustus 2026 (commit "Werkt") staat de richting er in woorden bij
+# en niet meer als + of −: op een vergrendelscherm is dat teken niet te
+# onderscheiden van het streepje in "18:00-22:00". Zie de kop van
+# custom_templates/brandweer.jinja.
 check("kort leest als een regel",
-      v["wijzigingen"][0]["kort"], "Nick Hermans − 18:00-22:00")
+      v["wijzigingen"][0]["kort"], "Nick Hermans gaat eraf 18:00-22:00")
 check("meerdere periodes op één regel",
-      v["wijzigingen"][2]["kort"], "Robin Bohnen − 09:00-12:00, 13:00-17:00")
-check("erbij krijgt een plus", v["wijzigingen"][1]["kort"], "Ben Paalman + 20:00-24:00")
+      v["wijzigingen"][2]["kort"], "Robin Bohnen gaat eraf 09:00-12:00, 13:00-17:00")
+check("erbij zegt het in woorden", v["wijzigingen"][1]["kort"], "Ben Paalman komt erbij 20:00-24:00")
+check("richting eraf", v["wijzigingen"][0]["richting"], "eraf")
+check("richting erbij", v["wijzigingen"][1]["richting"], "erbij")
+
+beide = copy.deepcopy(PAYLOAD)
+beide["wijzigingen"]["vandaag"]["ploegen"]["A"][0]["erbij"] = ["00:00-24:00"]
+w_beide = bezetting(beide)["wijzigingen"][0]
+check("erbij én eraf is richting beide", w_beide["richting"], "beide")
+check("beide op één regel, hele dienst als woord",
+      w_beide["kort"], "Nick Hermans komt erbij de hele dag, gaat eraf 18:00-22:00")
 
 # De oude payloadvorm (wijzigingen per functie) mag geen onzin opleveren.
 oud = copy.deepcopy(PAYLOAD)
@@ -262,9 +275,13 @@ check("pager uit met naam", "Pager uit: Twan van der Velden" in m["tekst"], True
 
 # In de melding alleen vandaag én alleen de dienstdoende ploeg: morgen en de
 # ploegen die geen dienst hebben zijn dashboardwerk.
-check("wijziging van vandaag in de tekst", "Nick Hermans − 18:00-22:00" in m["tekst"], True)
+# Twee regels, elk onder een eigen kopje, in plaats van één regel per persoon.
+check("wie erbij komt onder Erbij", "Erbij: Ben Paalman 20:00-24:00" in m["tekst"], True)
+check("wie eraf gaat onder Eraf", "Eraf: Nick Hermans 18:00-22:00" in m["tekst"], True)
+check("wijzigingen staan vóór Pager uit",
+      m["tekst"].index("Eraf:") < m["tekst"].index("Pager uit:"), True)
 check("andere ploeg blijft eruit", "Robin Bohnen" in m["tekst"], False)
-check("morgen blijft eruit", "Henry de Kock − 23:45-24:00" in m["tekst"], False)
+check("morgen blijft eruit", "Henry de Kock" in m["tekst"], False)
 
 veel = copy.deepcopy(PAYLOAD)
 veel["wijzigingen"]["vandaag"]["ploegen"]["A"] = [
@@ -272,8 +289,9 @@ veel["wijzigingen"]["vandaag"]["ploegen"]["A"] = [
     for n in range(1, 8)
 ]
 tekst = melding(veel)["tekst"]
-check("lange lijst wordt afgekapt", "Persoon 5" in tekst, False)
-check("en zegt hoeveel er wegvielen", "en nog 3 wijzigingen" in tekst, True)
+# Afgekapt op drie namen per richting.
+check("lange lijst wordt afgekapt", ("Persoon 3" in tekst, "Persoon 4" in tekst), (True, False))
+check("en zegt hoeveel er wegvielen", "Persoon 3 18:00-22:00 en nog 4" in tekst, True)
 
 # ---------------------------------------------------------------------------
 print("\nKrap: de ondergrens is dan de wens, niet het minimum")

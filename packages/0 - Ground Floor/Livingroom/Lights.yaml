@@ -305,55 +305,87 @@ livingsroom_lights_package:
         # Bewust geen default: een trigger zonder afgedekte id hoort niets te
         # doen. Zelfde reden als in de buitenlicht-blueprint.
 
+    ###########################################################################
+    ## HET AANVULLICHT IN DE TV-KAST
+    ##
+    ## De ledstrip had precies dezelfde kwaal als de humble hieronder, en krijgt
+    ## daarom dezelfde opzet: één beslissing bij elke verandering in plaats van
+    ## een aan-tak en een uit-tak die elk maar de helft zien. Wat er mis ging:
+    ##   - Hij keek naar `sensor.achtertuin_zon_luminance`, en die meter staat
+    ##     's ochtends in de schaduw en zit tot ver na zonsopkomst onder de
+    ##     1000 lux. Het ochtendlicht in de woonkamer zette de strip dus aan.
+    ##   - Daarna ging hij pas uit als álle woonkamerlicht uit was. Een uit-tak
+    ##     op "het is weer licht buiten" was er niet, dus bleef hij met een
+    ##     lamp aan de hele dag op 5% branden.
+    ##
+    ## Nu kijkt hij naar `sensor.buiten_zon_luminance_max` - de lichtste van de
+    ## twee buitenmeters, dus de schaduw van de één telt niet meer - met
+    ## dezelfde drempels als het dag-/avondniveau van de spots hierboven: aan
+    ## onder 1000, uit boven 2500, allebei vijf minuten aaneengesloten.
+    ## Daartussen blijft hij zoals hij staat, zodat een wolk hem niet laat
+    ## knipperen. Vallen beide meters weg, dan telt de zon (onder de horizon).
+    ##
+    ## Anders dan bij de humble telt kijken hier NIET: de strip zit achter de
+    ## tv en is tijdens een film juist prettig. Het blijft aanvullicht - brandt
+    ## er verder niets in de woonkamer, dan gaat hij uit.
+    ###########################################################################
     - id: livingroom_lights_ambient_fill
       alias: Livingroom - Ambient fill lights (low luminance)
       description: >
-        Zet de ledstrip aan op laag niveau als er woonkamerlicht brandt
-        (Hue-groep of de Matter-spots) en buiten-lux onder 1000 zakt. Zet hem
-        uit zodra allebei de groepen uit zijn. De humble heeft zijn eigen
+        Ledstrip in de tv-kast op laag niveau zolang er woonkamerlicht brandt
+        (Hue-groep of de Matter-spots) en het buiten donker is (lichtste
+        buitenmeter onder 1000 lux). Uit zodra het buiten weer licht is (boven
+        2500 lux) of alle woonkamerlicht uit is. De humble heeft zijn eigen
         automatisering, `livingroom_humble` hieronder.
       mode: restart
       triggers:
         - trigger: numeric_state
-          entity_id: sensor.achtertuin_zon_luminance
+          entity_id: sensor.buiten_zon_luminance_max
           below: 1000
-          id: lux_laag
-        # Allebei de groepen als trigger, en de uit-tak eist hieronder dat ze
-        # ook allebei uit zijn. Zou alleen `woonkamer_lampen` hier staan, dan
-        # bleef het aanvullicht weg op een avond waarop je alleen de spots
-        # aandoet - en zou het uitgaan van de Hue-lampen het aanvullicht doven
-        # terwijl de spots nog branden.
+          for: "00:05:00"
+        - trigger: numeric_state
+          entity_id: sensor.buiten_zon_luminance_max
+          above: 2500
+          for: "00:05:00"
+        - trigger: state
+          entity_id: sun.sun
+          to: ~
+        # Allebei de groepen: brandt alleen de ene, dan hoort het aanvullicht
+        # er ook bij, en het uitgaan van de ene mag hem niet doven zolang de
+        # andere nog brandt.
         - trigger: state
           entity_id:
             - light.woonkamer_lampen
             - light.woonkamer_spots
-          to: "on"
-          id: lampen_aan
-        - trigger: state
-          entity_id:
-            - light.woonkamer_lampen
-            - light.woonkamer_spots
-          to: "off"
-          id: lampen_uit
+          to:
+            - "on"
+            - "off"
+        - trigger: homeassistant
+          event: start
+      conditions: []
       actions:
+        - variables:
+            lux: "{{ states('sensor.buiten_zon_luminance_max') | float(none) }}"
+            # donker / licht / tussen. `tussen` is de band van 1000 tot 2500:
+            # daar verandert er niets.
+            buiten: >-
+              {%- if lux is none -%}
+                {{ 'donker' if is_state('sun.sun', 'below_horizon') else 'licht' }}
+              {%- elif lux < 1000 -%} donker
+              {%- elif lux > 2500 -%} licht
+              {%- else -%} tussen
+              {%- endif -%}
+            licht_aan: >-
+              {{ is_state('light.woonkamer_lampen', 'on')
+                 or is_state('light.woonkamer_spots', 'on') }}
+            strip_aan: "{{ is_state('light.woonkamer_ledstrip_tv_kast', 'on') }}"
+            gewenst: >-
+              {{ licht_aan and (buiten == 'donker'
+                                or (buiten == 'tussen' and strip_aan)) }}
         - choose:
             - conditions:
-                - condition: trigger
-                  id:
-                    - lux_laag
-                    - lampen_aan
-                - alias: Er brandt woonkamerlicht
-                  condition: or
-                  conditions:
-                    - condition: state
-                      entity_id: light.woonkamer_lampen
-                      state: "on"
-                    - condition: state
-                      entity_id: light.woonkamer_spots
-                      state: "on"
-                - condition: numeric_state
-                  entity_id: sensor.achtertuin_zon_luminance
-                  below: 1000
+                - condition: template
+                  value_template: "{{ gewenst and not strip_aan }}"
               sequence:
                 - action: light.turn_on
                   target:
@@ -362,16 +394,8 @@ livingsroom_lights_package:
                     brightness_pct: 5
                     color_temp_kelvin: 3984
             - conditions:
-                - condition: trigger
-                  id: lampen_uit
-                # Eén `condition: state` met twee entiteiten eist dat ze
-                # ALLEBEI uit zijn - dat is hier precies de bedoeling.
-                - alias: Allebei de woonkamergroepen uit
-                  condition: state
-                  entity_id:
-                    - light.woonkamer_lampen
-                    - light.woonkamer_spots
-                  state: "off"
+                - condition: template
+                  value_template: "{{ not gewenst and strip_aan }}"
               sequence:
                 - action: light.turn_off
                   target:

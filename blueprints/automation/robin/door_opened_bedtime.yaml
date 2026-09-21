@@ -74,6 +74,18 @@ blueprint:
         entity:
           filter:
             domain: input_boolean
+    stil_vanaf:
+      name: Schakelaar telt pas vanaf
+      description: >-
+        De schakelaar hierboven zet je 's avonds aan, voor de ochtend erna.
+        Hij legt dit alarm pas vanaf dit tijdstip stil, tot "Tot en met"
+        hierboven. Daarvóór - na bedtijd en 's nachts - gaat alles gewoon
+        door, ook met de schakelaar aan. Standaard hetzelfde 05:30 als
+        `binary_sensor.kinderen_mogen_nu_wakker_worden` in packages/9 -
+        Other/Kinderen Wakker.yaml; verschuif ze samen.
+      default: "05:30:00"
+      selector:
+        time:
     scene_id:
       name: Scene-id voor de momentopname
       description: >-
@@ -154,6 +166,8 @@ max_exceeded: silent
 variables:
   scene_id: !input scene_id
   stil_wanneer: !input stil_wanneer
+  stil_vanaf: !input stil_vanaf
+  tot: !input tot
   attentie_lampen: !input attentie_lampen
   mediaspeler: !input mediaspeler
   bezet_timer: !input bezet_timer
@@ -173,10 +187,16 @@ conditions:
   # (of is hij weg), dan telt hij als uit en doet de blueprint gewoon wat hij
   # altijd deed. Een ontbrekende helper hoort het seintje naar beneden niet
   # stil te leggen.
-  - alias: "Tenzij de kinderen wakker mogen worden"
+  #
+  # En alleen binnen de ochtend (`stil_vanaf` tot `tot`). De schakelaar gaat
+  # 's avonds al aan voor morgen; zonder dit venster lag het alarm dan de hele
+  # nacht stil, precies de uren waarvoor het er is.
+  - alias: "Tenzij de kinderen wakker mogen worden (alleen 's ochtends)"
     condition: template
     value_template: >-
-      {{ stil_wanneer in ['', none] or not is_state(stil_wanneer, 'on') }}
+      {{ stil_wanneer in ['', none]
+         or not is_state(stil_wanneer, 'on')
+         or not (today_at(stil_vanaf) <= now() < today_at(tot)) }}
 
 actions:
   - variables:

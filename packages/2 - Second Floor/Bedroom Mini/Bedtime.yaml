@@ -26,20 +26,25 @@ bedtime_mini_package:
     ## minuten aan staat. Bij Maxi ging het op 18 augustus 2026 mis; hier stond
     ## exact hetzelfde gat, alleen viel het nog niet op.
     ##
-    ## En dezelfde uitzondering: staat `input_boolean.kinderen_mogen_wakker_worden`
-    ## aan, dan laat de ochtendhelft het licht met rust. Zie de Maxi-package voor
-    ## het waarom.
+    ## En dezelfde uitzondering: mogen de kinderen wakker worden
+    ## (`binary_sensor.kinderen_mogen_nu_wakker_worden`, pas vanaf 05:30), dan
+    ## laat de ochtendhelft het licht met rust. Ook hier per dag één bedtijd:
+    ## vrijdag en zaterdag de weekendhelper, de rest de doordeweekse. Zie de
+    ## Maxi-package voor het waarom van allebei.
     ###########################################################################
     - id: bedtime_for_mini_lights_off
       alias: 'Bedroom Mini - Bedtime Lights Off'
       description: 'Turn off the lights at minis bedroom after bedtime'
       triggers:
+        # Twee triggers, maar per dag telt er één: zie "WELKE BEDTIJD" in de
+        # kop van de Maxi-package. De eigen id per trigger is wat de
+        # conditie hieronder laat kiezen.
         - at: input_datetime.bedtime_mini
           trigger: time
           id: bedtijd
         - at: input_datetime.bedtime_mini_weekend
           trigger: time
-          id: bedtijd
+          id: bedtijd_weekend
         - trigger: state
           entity_id: light.slaapkamer_mini_lampen
           to: "on"
@@ -54,7 +59,14 @@ bedtime_mini_package:
             - condition: and
               conditions:
                 - condition: trigger
-                  id: bedtijd
+                  id:
+                    - bedtijd
+                    - bedtijd_weekend
+                - alias: Alleen de bedtijd die vandaag geldt
+                  condition: template
+                  value_template: >-
+                    {{ trigger.id == ('bedtijd_weekend' if now().weekday() in [4, 5]
+                                     else 'bedtijd') }}
                 - condition: state
                   entity_id: light.slaapkamer_mini_lampen
                   state: "on"
@@ -68,16 +80,15 @@ bedtime_mini_package:
                   id: nabrander
                 - condition: template
                   value_template: >-
-                    {% set bedtijden = ['input_datetime.bedtime_mini',
-                                        'input_datetime.bedtime_mini_weekend']
-                                       | map('states')
-                                       | reject('in', ['unknown', 'unavailable', ''])
-                                       | list %}
-                    {% set na_bedtijd = bedtijden
-                       and now().strftime('%H:%M:%S') >= bedtijden | min %}
+                    {% set helper = 'input_datetime.bedtime_mini_weekend'
+                                    if now().weekday() in [4, 5]
+                                    else 'input_datetime.bedtime_mini' %}
+                    {% set bed = states(helper) %}
+                    {% set bed = bed if ':' in bed else '21:30:00' %}
+                    {% set na_bedtijd = now() >= today_at(bed) %}
                     {% set voor_opstaan = now().hour < 7
                        and is_state('input_boolean.klimaat_wakker', 'off')
-                       and not is_state('input_boolean.kinderen_mogen_wakker_worden', 'on') %}
+                       and not is_state('binary_sensor.kinderen_mogen_nu_wakker_worden', 'on') %}
                     {{ na_bedtijd or voor_opstaan }}
       actions:
         - action: light.turn_off

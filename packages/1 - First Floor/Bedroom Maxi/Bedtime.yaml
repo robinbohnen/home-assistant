@@ -111,8 +111,7 @@ bedtime_maxi_package:
     ## brandt al uren) op de seconde nauwkeurig, met dezelfde tien minuten
     ## speling als altijd. De twee triggers overlappen dus bewust.
     ##
-    ## Het nachtvenster loopt van de vroegste van de twee bedtijd-helpers tot
-    ## 07:00, en eerder als het huis zich voor die tijd wakker meldt
+    ## Het nachtvenster loopt van de bedtijd van vandaag tot 07:00, en eerder als het huis zich voor die tijd wakker meldt
     ## (`input_boolean.klimaat_wakker`, zie packages/9 - Other/Klimaat
     ## Zonwering.yaml). Die 07:00 is een KEUZE en geen bijeffect: 's nachts is
     ## brandend licht altijd fout, maar een kind dat 's ochtends zelf zijn licht
@@ -122,9 +121,21 @@ bedtime_maxi_package:
     ## bewegingslicht tegen, deze zet iets uit dat iemand net zelf aanzette.
     ## Wil je de grens verleggen, dan is dit het enige getal dat mee moet.
     ##
-    ## Die ochtendhelft kent sinds 22 augustus 2026 één uitzondering: staat
-    ## `input_boolean.kinderen_mogen_wakker_worden` aan, dan telt hij niet mee
-    ## en blijft het licht gewoon branden. Anders knipt deze automatisering het
+    ## WELKE BEDTIJD
+    ## Er zijn twee helpers, doordeweeks en weekend, en tot 21 september 2026
+    ## vuurden ze allebei elke dag - de nabrander rekende met de vroegste van
+    ## de twee. Stond het weekend later, dan ging het licht op vrijdag al om
+    ## de doordeweekse tijd uit. Nu telt per dag één helper, met dezelfde
+    ## verdeling als PC.yaml en de slaaptijd-sensor in Multisensor.yaml:
+    ## vrijdag en zaterdag (weekday() 4 en 5) de weekendtijd, de rest de
+    ## doordeweekse. Staat een helper op onzin, dan geldt 21:30.
+    ##
+    ## Die ochtendhelft kent sinds 22 augustus 2026 één uitzondering: mogen de
+    ## kinderen wakker worden, dan telt hij niet mee en blijft het licht
+    ## gewoon branden. Dat is `binary_sensor.kinderen_mogen_nu_wakker_worden`
+    ## en niet de schakelaar zelf: die zet je 's avonds al aan, en dan zou hij
+    ## vanaf middernacht de hele nacht meetellen. De sensor telt pas vanaf
+    ## 05:30. Anders knipt deze automatisering het
     ## licht dat om half zeven net voor Logan is aangedaan (packages/9 - Other/
     ## Kinderen Wakker.yaml) tien minuten later weer uit - twee regels die
     ## allebei doen wat ze horen te doen, met een kind in het donker als
@@ -140,12 +151,15 @@ bedtime_maxi_package:
       alias: Bedroom Maxi - Bedtime Lights Off
       description: Turn off the lights at maxis bedroom after bedtime
       triggers:
+        # Twee triggers, maar per dag telt er één: zie "WELKE BEDTIJD" in de
+        # kop. De eigen id per trigger is wat de conditie
+        # hieronder laat kiezen.
         - at: input_datetime.bedtime_maxi
           trigger: time
           id: bedtijd
         - at: input_datetime.bedtime_maxi_weekend
           trigger: time
-          id: bedtijd
+          id: bedtijd_weekend
         - trigger: state
           entity_id: light.slaapkamer_maxi_lampen
           to: "on"
@@ -163,7 +177,14 @@ bedtime_maxi_package:
             - condition: and
               conditions:
                 - condition: trigger
-                  id: bedtijd
+                  id:
+                    - bedtijd
+                    - bedtijd_weekend
+                - alias: Alleen de bedtijd die vandaag geldt
+                  condition: template
+                  value_template: >-
+                    {{ trigger.id == ('bedtijd_weekend' if now().weekday() in [4, 5]
+                                     else 'bedtijd') }}
                 - condition: state
                   entity_id: light.slaapkamer_maxi_lampen
                   state: "on"
@@ -180,16 +201,15 @@ bedtime_maxi_package:
                   id: nabrander
                 - condition: template
                   value_template: >-
-                    {% set bedtijden = ['input_datetime.bedtime_maxi',
-                                        'input_datetime.bedtime_maxi_weekend']
-                                       | map('states')
-                                       | reject('in', ['unknown', 'unavailable', ''])
-                                       | list %}
-                    {% set na_bedtijd = bedtijden
-                       and now().strftime('%H:%M:%S') >= bedtijden | min %}
+                    {% set helper = 'input_datetime.bedtime_maxi_weekend'
+                                    if now().weekday() in [4, 5]
+                                    else 'input_datetime.bedtime_maxi' %}
+                    {% set bed = states(helper) %}
+                    {% set bed = bed if ':' in bed else '21:30:00' %}
+                    {% set na_bedtijd = now() >= today_at(bed) %}
                     {% set voor_opstaan = now().hour < 7
                        and is_state('input_boolean.klimaat_wakker', 'off')
-                       and not is_state('input_boolean.kinderen_mogen_wakker_worden', 'on') %}
+                       and not is_state('binary_sensor.kinderen_mogen_nu_wakker_worden', 'on') %}
                     {{ na_bedtijd or voor_opstaan }}
       actions:
         - action: light.turn_off

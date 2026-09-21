@@ -27,6 +27,23 @@
 ##      te lezen. Alleen die ochtendhelft kent de uitzondering; ná bedtijd
 ##      blijft de bedtijdregel gewoon de baas.
 ##
+## DE VLAG TELT PAS VANAF 05:30
+## Je zet hem 's avonds aan, voor de ochtend erna. Werd hij meteen overal
+## gelezen, dan lag vanaf dat moment de hele nachtbewaking stil: een kind dat
+## om twee uur 's nachts zijn deur opendeed kreeg licht in plaats van dat er
+## beneden iets ging ademen, en de nabrander liet zijn kamerlicht branden.
+## "Mogen wakker worden" is een uitspraak over de OCHTEND, dus geldt hij pas
+## vanaf 05:30 en tot de reset van 09:30 hieronder.
+##
+## Dat venster staat op ÉÉN plek: `binary_sensor.kinderen_mogen_nu_wakker_worden`
+## hieronder. De automatisering hier en de nabranders in beide Bedtime.yaml's
+## kijken naar die sensor, niet naar de schakelaar zelf. Alleen de
+## kinderdeur-blueprint kan dat niet (zijn instanties geven de schakelaar mee,
+## en een blueprint hoort geen vaste entiteit te kennen); die heeft daarom een
+## eigen `stil_vanaf` met dezelfde 05:30 als standaard en gebruikt zijn eigen
+## `tot` (09:30) als einde. Verschuif je de 05:30, doe het dan op allebei de
+## plekken.
+##
 ## LET OP: dit is een nieuw packagebestand; het laadt pas na een volledige
 ## herstart van Home Assistant, een YAML-reload is niet genoeg.
 ##############################################################################
@@ -37,6 +54,22 @@ kinderen_wakker_package:
     kinderen_mogen_wakker_worden:
       name: "Kinderen - Mogen wakker worden"
       icon: mdi:weather-sunset-up
+
+  template:
+    - binary_sensor:
+        # De schakelaar, maar alleen binnen de ochtend - zie de kop. Na 09:30
+        # is hij sowieso uit (de reset hieronder); het einde staat er toch
+        # bij, zodat een schakelaar die je om 20:00 alvast aanzet niet
+        # meteen de avond van vandaag meeneemt.
+        #
+        # Geen availability: bestaat de schakelaar niet, dan is dit gewoon
+        # 'off' en doet de nachtbewaking wat hij altijd deed.
+        - name: kinderen_mogen_nu_wakker_worden
+          unique_id: kinderen_mogen_nu_wakker_worden
+          icon: mdi:weather-sunset-up
+          state: >-
+            {{ is_state('input_boolean.kinderen_mogen_wakker_worden', 'on')
+               and today_at('05:30') <= now() < today_at('09:30') }}
 
   automation:
     - id: kids_may_wake_up_light_on
@@ -56,9 +89,11 @@ kinderen_wakker_package:
             - binary_sensor.slaapkamer_mini_deur_contact
           from: "off"
           to: "on"
+      # De sensor en niet de schakelaar: om twee uur 's nachts is een open
+      # deur nog steeds nacht, ook als het licht voor morgenochtend al mag.
       conditions:
         - condition: state
-          entity_id: input_boolean.kinderen_mogen_wakker_worden
+          entity_id: binary_sensor.kinderen_mogen_nu_wakker_worden
           state: "on"
       actions:
         # De koppeling deur -> lamp staat hier expliciet uitgeschreven en wordt
@@ -93,7 +128,8 @@ kinderen_wakker_package:
       # 09:30 en geen ander tijdstip: dat is dezelfde grens waarop de rest van
       # het huis de nacht laat ophouden (de kinderdeur-blueprint en de knop naast
       # Logans bed gebruiken hem ook). Zet je hem 's avonds aan voor de ochtend
-      # erna, dan blijft hij dus de hele nacht staan en valt hij daarna vanzelf om.
+      # erna, dan blijft hij dus de hele nacht staan - maar hij telt pas vanaf
+      # 05:30 (zie de kop) - en valt daarna vanzelf om.
       triggers:
         - trigger: time
           at: "09:30:00"

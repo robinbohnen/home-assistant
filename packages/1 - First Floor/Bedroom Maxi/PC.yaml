@@ -239,15 +239,30 @@ pc_logan_package:
     ##    keer per dag (hij kan die grens maar één keer passeren), dus zonder
     ##    deze tweede zou een herstart na het porren gratis zijn.
     ##
+    ## TRIGGER 2 KIJKT NAAR HET VERMOGEN, NIET NAAR `binary_sensor.pc_logan_aan`
+    ## Dat deed hij eerst wel, en daar zat een gat van drie minuten in. De
+    ## porlus hieronder stopt zodra het vermogen zakt, maar de sensor valt pas
+    ## na zijn `delay_off` van drie minuten om. Pc uit en binnen die drie
+    ## minuten weer aan: de sensor is nooit 'off' geweest, dus er was geen
+    ## "weer aan", en trigger 1 vuurt die dag niet meer. Geen porren, geen
+    ## bericht naar boven, de rest van de dag. Nu telt twee minuten aan één
+    ## stuk boven de 50 W - hetzelfde als de `delay_on` van de sensor - en dat
+    ## ziet elke herstart van de pc, hoe snel ook.
+    ##
     ## Daarna houdt de run zichzelf aan tot de pc uitgaat (of tot het half uur
     ## porren om is). Komt trigger 2 langs terwijl er al gepord wordt, dan laat
     ## `mode: single` hem stilletjes vallen - dat is precies goed, hij wordt al
     ## gepord.
     ##
-    ## LET OP bij een herstart van Home Assistant: het dagtotaal komt uit de
-    ## recorder en overleeft een herstart dus wél, maar een lopende porlus niet.
-    ## Zat hij op dat moment over de limiet met de pc aan, dan pakt trigger 2
-    ## hem opnieuw zodra de sensor weer 'on' meldt.
+    ## EEN SENSOR DIE TERUGKOMT IS GEEN NIEUW MOMENT
+    ## Allebei de triggers vuren ook als hun sensor uit `unavailable` of
+    ## `unknown` terugkomt boven de grens: een `numeric_state`-trigger telt
+    ## "was niet te lezen" als "zat eronder". Na een herstart of een
+    ## template-reload begon zo het hele half uur porren opnieuw, met een
+    ## "tijd is op" naar boven erbij. De eerste conditie hieronder houdt dat
+    ## tegen. Gevolg, en dat is een keuze: een porlus die door een herstart
+    ## van Home Assistant wordt afgebroken, komt niet vanzelf terug. Pas als
+    ## Logan zijn pc uit en weer aan zet, begint het opnieuw.
     ##########################################################################
     # De `id` blijft met opzet `..._anderhalf_uur` heten, ook al gaat het daar
     # niet meer over: aan die id hangt HA de bestaande entiteit
@@ -270,17 +285,27 @@ pc_logan_package:
           trigger: numeric_state
           entity_id: sensor.pc_logan_gametijd
           above: input_number.pc_logan_gametijd_limiet
+        # `above: 49.9` en niet 50: de sensor telt `>= 50` als aan, deze
+        # trigger `>`. Het verschil doet er in de praktijk niet toe (tussen 30
+        # en 69 W komt vrijwel niets voor, zie de kop), maar zo is het dezelfde
+        # grens. Verzet je de `drempel` van `binary_sensor.pc_logan_aan`, zet
+        # hem dan hier ook.
         - id: weer_aan
-          trigger: state
-          entity_id: binary_sensor.pc_logan_aan
-          to: "on"
-          # Een sensor die na een herstart uit 'unknown' komt opborrelen is geen
-          # pc die net aanging; zelfde guard als op de deur- en raamtriggers
-          # elders in dit huis.
-          not_from:
-            - unknown
-            - unavailable
+          trigger: numeric_state
+          entity_id: sensor.slaapkamer_logan_slaapkamer_maxi_stopcontact_apparatuur_vermogen
+          above: 49.9
+          for: "00:02:00"
       conditions:
+        # Geen `not_from` mogelijk op een `numeric_state`-trigger, dus hier:
+        # een sensor die uit unknown/unavailable (of na een reload uit het
+        # niets) terugkomt boven de grens is geen pc die net aanging en geen
+        # limiet die net gepasseerd werd. Zie "EEN SENSOR DIE TERUGKOMT" in
+        # de kop.
+        - alias: Niet als de sensor alleen maar terugkomt
+          condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.from_state.state not in ['unknown', 'unavailable'] }}
         # DRAAIT HIJ OP DIT MOMENT ECHT?
         # Geen tijdvenster - het bericht aan de ouders gaat ALTIJD, ook 's
         # nachts; alleen de omroep en de knipper hieronder kijken naar de klok.

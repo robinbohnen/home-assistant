@@ -169,9 +169,9 @@ playroom_button_package:
         staat op scherp. Deze melding zegt het, met een knop om het alsnog uit
         te zetten zonder de automatisering op te hoeven zoeken.
 
-        Het venster is 20 minuten na de knopdruk: de pauze van 15 plus wat
-        speling voor een trage tracker. Ga je gewoon weg, dan is er geen
-        knopdruk geweest en blijft het stil.
+        Het venster zijn de 10 minuten nadat de pauze is afgelopen: speling
+        voor een trage tracker. Ga je gewoon weg, dan is er geen pauze geweest
+        en blijft het stil.
       mode: restart
       triggers:
         - trigger: state
@@ -183,24 +183,45 @@ playroom_button_package:
             - unknown
             - unavailable
       conditions:
-        # last_triggered is in templates een datetime, geen string. De entity_id
-        # hieronder is geverifieerd tegen de draaiende HA op 2026-08-17.
-        - condition: template
+        # KIJKEN NAAR DE PAUZE ZELF, NIET NAAR DE KNOP
+        # Dit keek eerst naar `last_triggered` van de knopautomatisering. Die
+        # schuift bij ELKE druk op, ook als de knop niets doet (de default-tak
+        # met "Knop speelkamer doet niets") - dus wie 's avonds per ongeluk op
+        # de knop drukte en daarna gewoon welterusten deed, kreeg bij de
+        # normale armed_home "Alarm ging alsnog aan" op zijn telefoon.
+        #
+        # Nu telt alleen een pauze die écht gelopen heeft en net is
+        # afgelopen: de timer staat weer op idle, en dat is minder dan tien
+        # minuten geleden gebeurd. Loopt de pauze nog, dan kan de
+        # automatische inschakeling het niet geweest zijn (die staat dan uit)
+        # en heeft iemand het alarm zelf aangezet - daar hoort geen melding
+        # bij. De timer wordt nergens geannuleerd, dus idle-sinds-kort
+        # betekent hier "afgelopen". armed_home blijft erin: de
+        # Robin-naar-werk-automatisering die de pauze stillegt kiest zelf
+        # armed_home als Samantha thuis is.
+        #
+        # Bekend randje: na een herstart van HA staat `last_changed` van de
+        # timer op het opstartmoment, dus een inschakeling in de eerste tien
+        # minuten daarna meldt zich hier ook. Zeldzaam en onschuldig - de
+        # melding heeft een knop om het alarm uit te zetten, meer niet.
+        - alias: Pauze van de speelkamerknop is net afgelopen
+          condition: template
           value_template: >-
-            {% set t = state_attr('automation.playroom_disable_alarm_temporary',
-            'last_triggered') %}
-            {{ t is not none and (now() - t).total_seconds() < 20*60 }}
+            {% set t = states.timer.alarm_automations_pauze %}
+            {{ t is not none and t.state == 'idle'
+               and (now() - t.last_changed).total_seconds() < 10*60 }}
       actions:
         - variables:
             minuten: >-
-              {{ ((now() - state_attr('automation.playroom_disable_alarm_temporary',
-                 'last_triggered')).total_seconds() / 60) | round(0) | int }}
+              {{ ((now() - states.timer.alarm_automations_pauze.last_changed)
+                  .total_seconds() / 60) | round(0) | int }}
         - action: notify.mobile_devices_adults
           data:
             title: Alarm ging alsnog aan
             message: >-
-              Je drukte {{ minuten }} minuten geleden op de knop in de
-              speelkamer, maar het alarm staat nu op
+              De pauze van de knop in de speelkamer liep {{ minuten }}
+              {{ 'minuut' if minuten == 1 else 'minuten' }} geleden af, en
+              het alarm staat nu op
               {{ states('alarm_control_panel.alarmo') | replace('armed_', '') }}.
             data:
               tag: speelkamer_knop_alarm
