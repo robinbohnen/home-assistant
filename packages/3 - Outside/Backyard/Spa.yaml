@@ -116,6 +116,33 @@ backyard_spa_package:
             {{ has_value('climate.intex_purespa')
                or (gezien > 0 and (now().timestamp() - gezien) < 86400) }}
 
+        # ECHT OVERSCHOT, NIET ALLEEN "DE METER STAAT OP NUL" (21-09-2026)
+        # De gratis-stroomregeling keek naar
+        # `switch.live_energieverbruik_totaal_negatief`: netto op de aansluiting
+        # <= 0. Met de Deye erbij klopt dat niet meer - die regelt het net zelf
+        # naar ~0 W, dus die schakelaar staat ook op "overschot" als de accu de
+        # spa voedt. Dan stook je op accustroom die vanavond van het net moet
+        # komen. Echt overschot is: niets van het net halen én de accu niet
+        # (noemenswaardig) laten ontladen.
+        #
+        # Bewust het vermogen en niet `sensor.accu_status`: die band van 50 W
+        # is nog niet geijkt, en op 21-09 stond de status de hele ochtend op
+        # "ontladen" door ~80 W eigenverbruik terwijl we 240 W terugleverden.
+        # Vandaar -100 W. De schakelaar in Electricity.yaml blijft wat hij was;
+        # de dashboards kleuren erop.
+        #
+        # Valt de Deye even weg (~2x per uur, ~10 s), dan telt de accu als 0:
+        # zo'n gat mag de spa niet laten uitgaan. Zonder netmeting is er geen
+        # oordeel - dan unavailable, en dan zet de regeling niets aan of uit.
+        - name: Backyard Spa - Echt overschot
+          unique_id: backyard_spa_echt_overschot
+          default_entity_id: binary_sensor.backyard_spa_echt_overschot
+          icon: mdi:solar-power-variant
+          availability: "{{ has_value('sensor.live_energieverbruik_totaal') }}"
+          state: >-
+            {{ states('sensor.live_energieverbruik_totaal') | float(0) <= 0
+               and states('sensor.accu_vermogen') | float(0) >= -100 }}
+
   automation:
     # Het stempel bijhouden zolang de spa leeft. De tijdtrigger is de echte
     # motor - een spa die uren stil op temperatuur staat verandert van state
@@ -303,10 +330,22 @@ backyard_spa_package:
       description: Automations for Spa Temperature
       mode: single
       triggers:
+        # Vergelijkt met het setpoint dat de spa zelf heeft, niet met de
+        # input_number. De gratis-stroomtak stookt naar 37 terwijl het doel op
+        # 38 staat; dit las toen "nog niet warm" en de spa stookte eindeloos
+        # door (21-09-2026). Pas zonder setpoint valt hij terug op de helper.
+        #
+        # Floats, geen `int`: 37,9 werd 37 en telde dus als niet gehaald. En
+        # alleen tijdens `heat`: een spa die uit unavailable terugkomt maakt
+        # anders een verse overgang naar waar, met melding en keep_warm erbij.
         - trigger: template
           value_template: >-
-            {{ state_attr('climate.intex_purespa', 'current_temperature') | int(0) >=
-            states('input_number.backyard_spa_target_temperature') | int(0) }}
+            {% set nu = state_attr('climate.intex_purespa', 'current_temperature') | float(none) %}
+            {% set setpoint = state_attr('climate.intex_purespa', 'temperature') | float(none) %}
+            {% set doel = setpoint if setpoint is not none
+               else states('input_number.backyard_spa_target_temperature') | float(none) %}
+            {{ is_state('climate.intex_purespa', 'heat')
+               and nu is not none and doel is not none and nu >= doel }}
           id: temperature_reached
         - trigger: time
           at: "23:59:00"
@@ -380,10 +419,18 @@ backyard_spa_package:
                 - if:
                     - condition: and
                       conditions:
+                        # Een spa die terugkomt uit unavailable is geen
+                        # afkoelend water; dat is alleen een verbinding die er
+                        # weer is.
                         - condition: template
                           value_template: >-
-                            {{ state_attr('climate.intex_purespa', 'current_temperature') | int(0) <
-                            states('input_number.backyard_spa_target_temperature') | int(0) }}
+                            {{ trigger.from_state is not none
+                               and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+                        - condition: template
+                          value_template: >-
+                            {% set nu = state_attr('climate.intex_purespa', 'current_temperature') | float(none) %}
+                            {% set doel = states('input_number.backyard_spa_target_temperature') | float(none) %}
+                            {{ nu is not none and doel is not none and nu < doel }}
                         - condition: state
                           entity_id: input_boolean.backyard_spa_keep_warm
                           state: "on"
@@ -491,23 +538,26 @@ backyard_spa_package:
       description: Turn on spa when heating is free (overcapacity) or even paid!
       mode: single
       triggers:
+        # Op het echte overschot en niet meer op de netmeter alleen - zie
+        # binary_sensor.backyard_spa_echt_overschot (21-09-2026).
         - trigger: state
           entity_id:
-            - switch.live_energieverbruik_totaal_negatief
+            - binary_sensor.backyard_spa_echt_overschot
           to: "on"
           for:
             hours: 0
             minutes: 5
             seconds: 0
           id: much_overcapacity
-        - trigger: numeric_state
+        - trigger: state
           entity_id:
-            - sensor.live_energieverbruik_totaal
+            - binary_sensor.backyard_spa_echt_overschot
+          from: "on"
+          to: "off"
           for:
             hours: 0
             minutes: 5
             seconds: 0
-          above: 0
           id: no_overcapacity
         # Let op de sensornaam: ..._negatieve_ALL_IN_prijs_nu, niet
         # ..._negatieve_prijs_nu. Die laatste kijkt naar de kale marktprijs,
@@ -539,6 +589,19 @@ backyard_spa_package:
             - unknown
             - unavailable
           id: positive_price
+        # VANGNET VOOR EEN GEMISTE UIT-FLANK (21-09-2026)
+        # De `not_from` hierboven is nodig, maar heeft een keerzijde: gaat de
+        # prijssensor via on -> unavailable -> off, dan valt ook de echte
+        # prijswissel weg en stookte de spa gratis door op vol tarief. Deze
+        # controle kijkt elke vijf minuten (en na een herstart) naar de
+        # toestand zelf. Een unavailable sensor telt daarbij niet als "off" -
+        # dat is geen prijs, dus dan blijft alles staan.
+        - trigger: time_pattern
+          minutes: "/5"
+          id: controle
+        - trigger: homeassistant
+          event: start
+          id: controle
       conditions:
         - condition: not
           conditions:
@@ -584,14 +647,31 @@ backyard_spa_package:
                 - action: script.spa_verwarmen_vragen
                   data:
                     reden: gratis
+            # Uit pas als het op géén van beide manieren meer gratis is. Eerst
+            # zette elk van de twee het apart uit: het overschot dat wegviel
+            # (de spa trekt zelf 2 kW) zette hem ook uit midden in een
+            # negatief all-in tarief, waar stoken juist geld oplevert
+            # (21-09-2026). Beide sensoren moeten echt "off" zeggen;
+            # unavailable is geen oordeel. De vijf minuten op het overschot
+            # zijn dezelfde rem als die van de trigger: één wolk die de
+            # controle toevallig treft mag de spa niet uitzetten.
             - conditions:
                 - condition: trigger
                   id:
                     - positive_price
                     - no_overcapacity
+                    - controle
                 - condition: state
                   entity_id: input_boolean.backyard_spa_free_heating_enabled
                   state: "on"
+                - condition: state
+                  entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu
+                  state: "off"
+                - condition: state
+                  entity_id: binary_sensor.backyard_spa_echt_overschot
+                  state: "off"
+                  for:
+                    minutes: 5
               sequence:
                 - action: climate.turn_off
                   metadata: {}
@@ -701,7 +781,7 @@ backyard_spa_package:
                       condition: template
                       value_template: >-
                         {{ is_state('binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu', 'on')
-                           or is_state('switch.live_energieverbruik_totaal_negatief', 'on') }}
+                           or is_state('binary_sensor.backyard_spa_echt_overschot', 'on') }}
                   then:
                     - if:
                         - condition: state
@@ -734,13 +814,28 @@ backyard_spa_package:
             # "Ja" op de koud- of warmhoudenvraag: opwarmen naar de ingestelde
             # streeftemperatuur. `backyard_spa_temperature` zet hem daar weer
             # uit zodra die gehaald is.
+            #
+            # Het setpoint gaat hier expliciet mee. Eerst werd alleen `heat`
+            # aangezet, en stond de spa nog op de 37 van een eerdere gratis
+            # beurt: dan werd de 38 van de helper nooit gehaald, en stookte hij
+            # eindeloos door (21-09-2026).
+            - if:
+                - condition: state
+                  entity_id: switch.intex_purespa_power
+                  state: "off"
+              then:
+                - action: switch.turn_on
+                  target:
+                    entity_id: switch.intex_purespa_power
             - action: climate.turn_on
               target:
                 entity_id: climate.intex_purespa
-            - action: climate.set_hvac_mode
+            - action: climate.set_temperature
               target:
                 entity_id: climate.intex_purespa
               data:
+                temperature: >-
+                  {{ states('input_number.backyard_spa_target_temperature') | float(38) | int }}
                 hvac_mode: heat
 
   script:

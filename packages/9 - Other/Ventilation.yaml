@@ -523,9 +523,21 @@ ventilation_cooling_package:
       actions:
         - choose:
             # AAN: rack-sensor al een half uur zonder meting
+            #
+            # Leest de toestand zelf en niet alleen de trigger `sensor_weg`
+            # (21-09-2026). Die vuurt precies één keer, na dertig minuten: liep
+            # op dat moment de handbediening, of was de sensor al dood vóór een
+            # herstart (dan komt er geen nieuwe overgang meer), dan gingen de
+            # ventilatoren nooit aan. Nu pakt elke kwartiercheck het op, ook
+            # zodra de handbediening afloopt. Na een herstart telt het half uur
+            # vanaf de herstart - `last_changed` begint dan opnieuw.
             - conditions:
-                - condition: trigger
-                  id: sensor_weg
+                - condition: template
+                  value_template: >-
+                    {% set rack = states.sensor.garage_serverrack_temperatuur_temperature %}
+                    {{ rack is none
+                       or (not is_number(rack.state)
+                           and now() - rack.last_changed >= timedelta(minutes=30)) }}
                 # Niets doen zolang de handbediening loopt
                 - condition: template
                   value_template: >-
@@ -539,11 +551,16 @@ ventilation_cooling_package:
                   target:
                     entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
             # AAN: boven de kritieke drempel - ook tijdens een lockout
+            #
+            # De `float(..)`-defaults in deze en de takken hieronder zijn de
+            # waarden uit de instel-automatisering hierboven. Een kale `| float`
+            # gooit een fout zodra een helper even `unavailable` is (reload van
+            # input_number), en dan valt juist deze tak stil (21-09-2026).
             - conditions:
                 - condition: template
                   value_template: >-
                     {% set binnen = states('sensor.garage_serverrack_temperatuur_temperature') | float(none) %}
-                    {% set kritiek = states('input_number.ventilation_serverrack_critical_threshold') | float %}
+                    {% set kritiek = states('input_number.ventilation_serverrack_critical_threshold') | float(35) %}
                     {{ binnen is not none and binnen >= kritiek }}
                 - condition: state
                   entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
@@ -558,8 +575,8 @@ ventilation_cooling_package:
                   value_template: >-
                     {% set binnen = states('sensor.garage_serverrack_temperatuur_temperature') | float(none) %}
                     {% set buiten = states('sensor.garage_garage_temperatuur_temperatuur') | float(none) %}
-                    {% set warm = states('input_number.ventilation_serverrack_warm_threshold') | float %}
-                    {% set delta_on = states('input_number.ventilation_serverrack_delta_on') | float %}
+                    {% set warm = states('input_number.ventilation_serverrack_warm_threshold') | float(28) %}
+                    {% set delta_on = states('input_number.ventilation_serverrack_delta_on') | float(2) %}
                     {{ binnen is not none and buiten is not none
                        and binnen >= warm and (binnen - buiten) >= delta_on }}
                 - condition: template
@@ -585,9 +602,9 @@ ventilation_cooling_package:
                   value_template: >-
                     {% set binnen = states('sensor.garage_serverrack_temperatuur_temperature') | float(none) %}
                     {% set buiten = states('sensor.garage_garage_temperatuur_temperatuur') | float(none) %}
-                    {% set koel = states('input_number.ventilation_serverrack_cool_threshold') | float %}
-                    {% set kritiek = states('input_number.ventilation_serverrack_critical_threshold') | float %}
-                    {% set delta_off = states('input_number.ventilation_serverrack_delta_off') | float %}
+                    {% set koel = states('input_number.ventilation_serverrack_cool_threshold') | float(25) %}
+                    {% set kritiek = states('input_number.ventilation_serverrack_critical_threshold') | float(35) %}
+                    {% set delta_off = states('input_number.ventilation_serverrack_delta_off') | float(0.5) %}
                     {{ binnen is not none and buiten is not none
                        and binnen < kritiek
                        and (binnen <= koel or (binnen - buiten) <= delta_off) }}
@@ -614,9 +631,9 @@ ventilation_cooling_package:
                 - condition: template
                   value_template: >-
                     {% set binnen = states('sensor.garage_serverrack_temperatuur_temperature') | float(none) %}
-                    {% set kritiek = states('input_number.ventilation_serverrack_critical_threshold') | float %}
+                    {% set kritiek = states('input_number.ventilation_serverrack_critical_threshold') | float(35) %}
                     {% set verandering = states('sensor.ventilatie_serverrack_temp_verandering_1u') | float(none) %}
-                    {% set stagnatie = states('input_number.ventilation_serverrack_stagnation_delta') | float %}
+                    {% set stagnatie = states('input_number.ventilation_serverrack_stagnation_delta') | float(0.2) %}
                     {{ binnen is not none and binnen < kritiek
                        and verandering is not none and verandering > (0 - stagnatie) }}
                 # Niets doen zolang de handbediening loopt
@@ -661,7 +678,14 @@ ventilation_cooling_package:
               max: 12
               step: 0.5
       sequence:
-        - action: switch.toggle
+        # Richting vóór het schakelen vastleggen, en dan expliciet aan of uit.
+        # Hier stond `switch.toggle` en las het logboek daarna de state terug -
+        # maar die loopt een paar seconden achter op het commando, dus meldde
+        # het logboek geregeld de verkeerde kant (21-09-2026).
+        - variables:
+            nieuw: >-
+              {{ 'off' if is_state('switch.garage_garage_stopcontact_serverrack_ventilatoren', 'on') else 'on' }}
+        - action: "switch.turn_{{ nieuw }}"
           target:
             entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
         - action: input_datetime.set_datetime
@@ -683,7 +707,7 @@ ventilation_cooling_package:
             name: Ventilatie serverrack
             message: >-
               Handbediening: ventilatoren
-              {{ 'aan' if is_state('switch.garage_garage_stopcontact_serverrack_ventilatoren', 'on') else 'uit' }}
+              {{ 'aan' if nieuw == 'on' else 'uit' }}
               gezet, automatisering pauzeert {{ (uren | default(2)) | float(2) }} uur.
 
     # Terug naar automatisch zonder te wachten: handbediening meteen aflopen

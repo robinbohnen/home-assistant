@@ -40,8 +40,9 @@ electricity_package:
     # Zelfde optelsom als de energieflow op het Overzicht-paneel (dashboards/
     # home/overzicht/kolom_midden.yaml, custom_field `flow` - wijzigt de formule
     # daar, dan ook hier): net + zon, min wat de accu wegzet. De accu telt
-    # positief bij laden, dus aftrekken; valt de accusensor weg dan rekenen we
-    # met 0, net als de flow-kaart. Onder nul komt in de praktijk alleen
+    # positief bij laden, dus aftrekken; valt de accusensor langer dan twee
+    # minuten weg dan rekenen we met 0, net als de flow-kaart (korter: zie de
+    # state hieronder). Onder nul komt in de praktijk alleen
     # meetruis voor, dus dat wordt op 0 afgekapt.
     #
     # `sensor.accu_vermogen` EN NIET DE OMVORMER ZELF (20 september 2026). Hier
@@ -67,12 +68,29 @@ electricity_package:
         - name: "Huis Verbruik"
           unique_id: huis_verbruik
           default_entity_id: sensor.huis_verbruik
+          # EEN ACCU-HIKJE IS GEEN SPRONG IN HET VERBRUIK (21-09-2026)
+          # De Deye valt ~2x per uur zo'n tien seconden weg. Met `float(0)`
+          # telde de accu dan als 0 W, en bij 3 kW laden sprong het huis voor
+          # die ene sample 3 kW omhoog - een piek die er nooit was. Zelfde
+          # keuze als bij de zonsensoren (Solarpanels.yaml): vasthouden in
+          # plaats van blanken. Is de accu korter dan twee minuten weg, dan
+          # blijft de vorige waarde staan; daarna wordt het weer "accu = 0",
+          # zodat een dode accu dit getal niet voor altijd bevriest. Geen
+          # availability op de accu: dan zat er elk half uur een gat in de
+          # live-grafiek.
           state: >-
             {% set netto = states('sensor.live_energieverbruik_totaal') | float(0) %}
             {% set zon_ruw = states('sensor.zon_vermogen_nu') | float(0) %}
             {% set zon = zon_ruw if state_attr('sensor.zon_vermogen_nu', 'unit_of_measurement') == 'kW' else zon_ruw / 1000 %}
+            {% set accu_bron = states.sensor.accu_vermogen %}
+            {% set hikje = accu_bron is not none
+               and not is_number(accu_bron.state)
+               and now() - accu_bron.last_changed < timedelta(minutes=2) %}
+            {% if hikje and is_number(this.state) %}{{ this.state | float }}
+            {% else %}
             {% set accu = states('sensor.accu_vermogen') | float(0) / 1000 %}
             {{ [netto + zon - accu, 0] | max | round(3) }}
+            {% endif %}
           # De guard op de zonsensor blijft staan - zonder zon is het huis-
           # verbruik niet te berekenen en zou de kaart een te laag getal tonen.
           # Hij kost sinds 27-08-2026 alleen bijna nooit meer wat: `zon_vermogen_nu`

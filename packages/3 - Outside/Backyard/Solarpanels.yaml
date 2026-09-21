@@ -176,6 +176,21 @@ backyard_solarpanels_package:
             - unknown
             - unavailable
           id: solar_panels_on
+        # VANGNET VOOR EEN GEMISTE UIT-FLANK (21-09-2026)
+        # De `not_from` hierboven heeft een keerzijde: gaat de prijssensor via
+        # on -> unavailable -> off (herstart of SlimHuys-hik precies op de
+        # prijswissel), dan valt ook de echte wissel weg en bleef de omvormer
+        # op `off_grid` tot het volgende negatieve venster. Deze controle kijkt
+        # naar de toestand zelf. Alleen de terugweg: uitzetten blijft aan de
+        # echte flank hangen, zodat er altijd een melding bij zit. Let op: zet
+        # je de omvormer met de hand op off_grid terwijl de prijs positief is,
+        # dan zet dit hem binnen vijf minuten terug.
+        - trigger: time_pattern
+          minutes: "/5"
+          id: controle
+        - trigger: homeassistant
+          event: start
+          id: controle
       conditions: []
       actions:
         - choose:
@@ -202,6 +217,15 @@ backyard_solarpanels_package:
                 - condition: trigger
                   id:
                     - solar_panels_on
+                    - controle
+                # Unavailable is geen prijs: alleen een echte `off` telt, en
+                # alleen als de omvormer ook echt nog uit staat.
+                - condition: state
+                  entity_id: binary_sensor.meterkast_slimhuys_zonneplan_negatieve_all_in_prijs_nu
+                  state: "off"
+                - condition: state
+                  entity_id: select.goodwe_bedrijfsmodus_omvormer
+                  state: off_grid
               sequence:
                 - action: select.select_option
                   metadata: {}
