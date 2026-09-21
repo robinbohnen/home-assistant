@@ -385,6 +385,102 @@ battery_package:
             afslag_procent: "{{ states('number.deye_battery_shutdown_soc') | int(10) }}"
             herstart_procent: "{{ states('number.deye_battery_restart_soc') | int(50) }}"
 
+    ##########################################################################
+    ## MarkeDroid energietellers - zie de MARKEDROID-kop hieronder
+    ##
+    ## MarkeDroid stuurt geen standen maar de Wh SINDS HET VORIGE BERICHT
+    ## (`TotWhInc` e.d.). Die tellen we hier op. Nauwkeuriger dan de
+    ## integratie-helper uit de handleiding, die het vermogen van tien seconden
+    ## geleden doortrekt: dit is wat MarkeDroid zelf gemeten heeft.
+    ##
+    ## IN Wh EN NIET IN kWh, met twee decimalen. Stationair komen er
+    ## increments van 0,02 Wh binnen; in kWh op drie decimalen rondt elk
+    ## daarvan af naar nul en telt de teller structureel te laag.
+    ##
+    ## Een trigger-sensor onthoudt zijn stand over een herstart. Wat MarkeDroid
+    ## publiceert terwijl HA plat ligt is weg - een gat, geen sprong. Een
+    ## negatief increment (zou niet moeten kunnen) telt als nul, anders ziet
+    ## `total_increasing` een meterwissel.
+    ##########################################################################
+    - triggers:
+        - trigger: mqtt
+          topic: "public/realtimedata/solar"
+      sensor:
+        - name: "MarkeDroid zon energie"
+          unique_id: markedroid_zon_energie
+          default_entity_id: sensor.markedroid_zon_energie
+          unit_of_measurement: "Wh"
+          device_class: energy
+          state_class: total_increasing
+          icon: mdi:solar-power
+          state: >-
+            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhInc | float(0), 0] | max)) | round(2) }}
+    - triggers:
+        - trigger: mqtt
+          topic: "public/realtimedata/load"
+      sensor:
+        - name: "MarkeDroid last energie"
+          unique_id: markedroid_last_energie
+          default_entity_id: sensor.markedroid_last_energie
+          unit_of_measurement: "Wh"
+          device_class: energy
+          state_class: total_increasing
+          icon: mdi:home-lightning-bolt
+          state: >-
+            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhInc | float(0), 0] | max)) | round(2) }}
+    - triggers:
+        - trigger: mqtt
+          topic: "public/realtimedata/battery"
+      sensor:
+        - name: "MarkeDroid accu geladen"
+          unique_id: markedroid_accu_geladen
+          default_entity_id: sensor.markedroid_accu_geladen
+          unit_of_measurement: "Wh"
+          device_class: energy
+          state_class: total_increasing
+          icon: mdi:battery-arrow-up
+          state: >-
+            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhChaInc | float(0), 0] | max)) | round(2) }}
+    - triggers:
+        - trigger: mqtt
+          topic: "public/realtimedata/battery"
+      sensor:
+        - name: "MarkeDroid accu ontladen"
+          unique_id: markedroid_accu_ontladen
+          default_entity_id: sensor.markedroid_accu_ontladen
+          unit_of_measurement: "Wh"
+          device_class: energy
+          state_class: total_increasing
+          icon: mdi:battery-arrow-down
+          state: >-
+            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhDisChaInc | float(0), 0] | max)) | round(2) }}
+    - triggers:
+        - trigger: mqtt
+          topic: "public/realtimedata/meter"
+      sensor:
+        - name: "MarkeDroid net afname"
+          unique_id: markedroid_net_afname
+          default_entity_id: sensor.markedroid_net_afname
+          unit_of_measurement: "Wh"
+          device_class: energy
+          state_class: total_increasing
+          icon: mdi:transmission-tower-import
+          state: >-
+            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhImpInc | float(0), 0] | max)) | round(2) }}
+    - triggers:
+        - trigger: mqtt
+          topic: "public/realtimedata/meter"
+      sensor:
+        - name: "MarkeDroid net teruglevering"
+          unique_id: markedroid_net_teruglevering
+          default_entity_id: sensor.markedroid_net_teruglevering
+          unit_of_measurement: "Wh"
+          device_class: energy
+          state_class: total_increasing
+          icon: mdi:transmission-tower-export
+          state: >-
+            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhExpInc | float(0), 0] | max)) | round(2) }}
+
   ############################################################################
   ## MARKEDROID - WAT DE REGISSEUR ZELF ZEGT (21 september 2026)
   ##
@@ -397,13 +493,17 @@ battery_package:
   ## berichten komen hier dus binnen via een BRUG in die Mosquitto
   ## (`topic public/realtimedata/+ in 0`), niet via een tweede integratie.
   ##
-  ## BEWUST MAAR DRIE ENTITEITEN, en geen twintig zoals de handleiding
-  ## voorstelt. Accuvermogen, lading, temperatuur en spanning hebben we al uit
-  ## de Deye zelf (sensor.accu_*), en het net uit de P1-meter
-  ## ([[slimhuys-p1-bron]]). Een tweede kopie van hetzelfde getal met een
-  ## andere vertraging is een uitnodiging om ze door elkaar te gebruiken.
-  ## Hier staat alleen wat NIEMAND anders weet: welke stand MarkeDroid de accu
-  ## in heeft gezet, of hij de teruglevering dichtzet, en of hij nog praat.
+  ## TWEE SOORTEN ENTITEITEN
+  ##   * Wat NIEMAND anders weet: `sensor.markedroid_regie` (in welke stand
+  ##     MarkeDroid de accu heeft gezet), `sensor.markedroid_exportbegrenzer`
+  ##     en `binary_sensor.markedroid_verbinding`. Daar mag een automatisering
+  ##     op sturen.
+  ##   * DE REST VAN DE FEED (`sensor.markedroid_zon_*`, `_last_*`, `_accu_*`,
+  ##     `_net_*` en de energietellers): wat MarkeDroid zelf ziet, om naast de
+  ##     Deye en de P1 te leggen als er iets niet klopt. NIET de bron voor de
+  ##     rest van het huis - dat blijven `sensor.accu_*` hierboven en de P1
+  ##     ([[slimhuys-p1-bron]]). Twee kopieën van hetzelfde getal met een
+  ##     andere vertraging is een uitnodiging om ze door elkaar te gebruiken.
   ##
   ## TWEE DINGEN UIT DE LIVE BERICHTEN DIE NIET IN DE HANDLEIDING STAAN
   ##   * HET TEKEN VAN `battery.W` IS HIER OMGEKEERD T.O.V. DE DOCUMENTATIE.
@@ -472,6 +572,175 @@ battery_package:
         icon: mdi:transmission-tower-export
         expire_after: 60
 
+      ########################################################################
+      ## DE REST VAN DE FEED - kijken, niet sturen (zie de kop hierboven)
+      ########################################################################
+      # Alleen de PV aan de Deye. De zolderpanelen hangen aan een eigen omvormer
+      # en zitten hier NIET in - daarvoor is `sensor.zon_vermogen_nu`.
+      - name: "MarkeDroid zon vermogen"
+        unique_id: markedroid_zon_vermogen
+        default_entity_id: sensor.markedroid_zon_vermogen
+        state_topic: "public/realtimedata/solar"
+        value_template: "{{ value_json.W }}"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        expire_after: 60
+      # Heet in de handleiding 'geinstalleerd PV-vermogen', maar staat bij ons op
+      # 20.000: dat is het vermogen van de omvormer, niet van de panelen.
+      - name: "MarkeDroid zon capaciteit"
+        unique_id: markedroid_zon_capaciteit
+        default_entity_id: sensor.markedroid_zon_capaciteit
+        state_topic: "public/realtimedata/solar"
+        value_template: "{{ value_json.SolarWCapacity }}"
+        unit_of_measurement: "W"
+        device_class: power
+        icon: mdi:solar-panel
+        expire_after: 60
+      # NIET het huisverbruik - zie de kop. `sensor.huis_verbruik` blijft de bron.
+      - name: "MarkeDroid last vermogen"
+        unique_id: markedroid_last_vermogen
+        default_entity_id: sensor.markedroid_last_vermogen
+        state_topic: "public/realtimedata/load"
+        value_template: "{{ value_json.W }}"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        expire_after: 60
+      # Doorgegeven zoals MarkeDroid het stuurt, en dat is bij ons POSITIEF =
+      # LADEN, tegen de handleiding in (zie de kop). Zet ModuSun dat ooit
+      # recht, dan draait dit getal om en `sensor.accu_vermogen` niet.
+      - name: "MarkeDroid accu vermogen"
+        unique_id: markedroid_accu_vermogen
+        default_entity_id: sensor.markedroid_accu_vermogen
+        state_topic: "public/realtimedata/battery"
+        value_template: "{{ value_json.W }}"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        expire_after: 60
+      - name: "MarkeDroid accu lading"
+        unique_id: markedroid_accu_lading
+        default_entity_id: sensor.markedroid_accu_lading
+        state_topic: "public/realtimedata/battery"
+        value_template: "{{ value_json.SoC }}"
+        unit_of_measurement: "%"
+        device_class: battery
+        state_class: measurement
+        expire_after: 60
+      # 30,72 kWh = 600 Ah x 51,2 V; `sensor.accu_capaciteit` rekent met 48 V.
+      - name: "MarkeDroid accu capaciteit"
+        unique_id: markedroid_accu_capaciteit
+        default_entity_id: sensor.markedroid_accu_capaciteit
+        state_topic: "public/realtimedata/battery"
+        value_template: "{{ (value_json.CapacityWh | float(0) / 1000) | round(2) }}"
+        unit_of_measurement: "kWh"
+        device_class: energy_storage
+        expire_after: 60
+      - name: "MarkeDroid accu temperatuur"
+        unique_id: markedroid_accu_temperatuur
+        default_entity_id: sensor.markedroid_accu_temperatuur
+        state_topic: "public/realtimedata/battery"
+        value_template: "{{ value_json.BatTemp }}"
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        expire_after: 60
+      - name: "MarkeDroid accu spanning"
+        unique_id: markedroid_accu_spanning
+        default_entity_id: sensor.markedroid_accu_spanning
+        state_topic: "public/realtimedata/battery"
+        value_template: "{{ value_json.DCV }}"
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+        expire_after: 60
+      - name: "MarkeDroid accu stroom"
+        unique_id: markedroid_accu_stroom
+        default_entity_id: sensor.markedroid_accu_stroom
+        state_topic: "public/realtimedata/battery"
+        value_template: "{{ value_json.DCI }}"
+        unit_of_measurement: "A"
+        device_class: current
+        state_class: measurement
+        expire_after: 60
+      # Het flex-doel (VPP), positief = van het net kopen. `unknown` zolang er
+      # geen flex-opdracht loopt of het veld nog niet is uitgerold.
+      - name: "MarkeDroid flex vermogen"
+        unique_id: markedroid_flex_vermogen
+        default_entity_id: sensor.markedroid_flex_vermogen
+        state_topic: "public/realtimedata/battery"
+        value_template: "{{ value_json.VppValue if value_json.VppValue is defined and value_json.VppValue is number else none }}"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        expire_after: 60
+      # Positief = afnemen, negatief = terugleveren. Zelfde punt als de P1;
+      # de P1 blijft de bron, dit is de getuige.
+      - name: "MarkeDroid net vermogen"
+        unique_id: markedroid_net_vermogen
+        default_entity_id: sensor.markedroid_net_vermogen
+        state_topic: "public/realtimedata/meter"
+        value_template: "{{ value_json.W }}"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        expire_after: 60
+      - name: "MarkeDroid net vermogen L1"
+        unique_id: markedroid_net_vermogen_l1
+        default_entity_id: sensor.markedroid_net_vermogen_l1
+        state_topic: "public/realtimedata/meter"
+        value_template: "{{ value_json.WphA }}"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        expire_after: 60
+      - name: "MarkeDroid net vermogen L2"
+        unique_id: markedroid_net_vermogen_l2
+        default_entity_id: sensor.markedroid_net_vermogen_l2
+        state_topic: "public/realtimedata/meter"
+        value_template: "{{ value_json.WphB }}"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        expire_after: 60
+      - name: "MarkeDroid net vermogen L3"
+        unique_id: markedroid_net_vermogen_l3
+        default_entity_id: sensor.markedroid_net_vermogen_l3
+        state_topic: "public/realtimedata/meter"
+        value_template: "{{ value_json.WphC }}"
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        expire_after: 60
+      - name: "MarkeDroid net spanning L1"
+        unique_id: markedroid_net_spanning_l1
+        default_entity_id: sensor.markedroid_net_spanning_l1
+        state_topic: "public/realtimedata/meter"
+        value_template: "{{ value_json.VphA }}"
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+        expire_after: 60
+      - name: "MarkeDroid net spanning L2"
+        unique_id: markedroid_net_spanning_l2
+        default_entity_id: sensor.markedroid_net_spanning_l2
+        state_topic: "public/realtimedata/meter"
+        value_template: "{{ value_json.VphB }}"
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+        expire_after: 60
+      - name: "MarkeDroid net spanning L3"
+        unique_id: markedroid_net_spanning_l3
+        default_entity_id: sensor.markedroid_net_spanning_l3
+        state_topic: "public/realtimedata/meter"
+        value_template: "{{ value_json.VphC }}"
+        unit_of_measurement: "V"
+        device_class: voltage
+        state_class: measurement
+        expire_after: 60
+
     binary_sensor:
       # Aan zolang er berichten komen; valt uit na een minuut stilte. Een
       # `off_delay` en niet `expire_after`: die tweede maakt er `unavailable`
@@ -484,3 +753,45 @@ battery_package:
         value_template: "ON"
         device_class: connectivity
         off_delay: 60
+
+      - name: "MarkeDroid teruglevering"
+        unique_id: markedroid_teruglevering
+        default_entity_id: binary_sensor.markedroid_teruglevering
+        state_topic: "public/realtimedata/meter"
+        # 100 W marge, zoals de handleiding: rond nul tikt de meter heen en weer.
+        value_template: "{{ 'ON' if value_json.W | float(0) < -100 else 'OFF' }}"
+        icon: mdi:transmission-tower-export
+        expire_after: 60
+
+      # Alle drie de fases onder 50 V, gezien door MarkeDroids eigen meter. Een
+      # tweede getuige naast `binary_sensor.huis_op_accu`, geen vervanging: die
+      # heeft de grendel en de 30 seconden vertraging.
+      - name: "MarkeDroid net uitgevallen"
+        unique_id: markedroid_net_uitgevallen
+        default_entity_id: binary_sensor.markedroid_net_uitgevallen
+        state_topic: "public/realtimedata/meter"
+        value_template: >-
+          {{ 'ON' if value_json.VphA | float(999) < 50 and value_json.VphB | float(999) < 50
+                     and value_json.VphC | float(999) < 50 else 'OFF' }}
+        device_class: problem
+        expire_after: 60
+
+      # De exportbegrenzer op 1. De handleiding noemt dit "negatieve prijs",
+      # maar MarkeDroid zegt alleen dát hij dichtzet, niet waarom.
+      - name: "MarkeDroid negatieve prijs"
+        unique_id: markedroid_negatieve_prijs
+        default_entity_id: binary_sensor.markedroid_negatieve_prijs
+        state_topic: "public/realtimedata/solar"
+        value_template: "{{ 'ON' if value_json.ExpLimiterState is defined and value_json.ExpLimiterState == 1 else 'OFF' }}"
+        icon: mdi:cash-minus
+        expire_after: 60
+
+      - name: "MarkeDroid flex actief"
+        unique_id: markedroid_flex_actief
+        default_entity_id: binary_sensor.markedroid_flex_actief
+        state_topic: "public/realtimedata/battery"
+        value_template: >-
+          {{ 'ON' if value_json.CurrentCmnd is defined and value_json.CurrentCmnd == 6
+                     and value_json.VppValue is defined and value_json.VppValue is number else 'OFF' }}
+        icon: mdi:swap-vertical-bold
+        expire_after: 60
