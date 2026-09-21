@@ -5,52 +5,44 @@
 # registers waar MarkeDroid op schrijft en staan hier bewust niet - ook niet
 # als "alleen tonen", want dan is de stap naar een schuifje klein.
 #
-# GEGENEREERD UIT EEN LIJST, maar met de hand te onderhouden: elke regel is
-# `e` (entiteit), `n` (naam), `u` (uitleg) en optioneel `a`/`s`/`eh`/`d` - zie
-# het template `ov_uitlegtabel` in overzicht_templates.yaml. Een regel erbij?
-# Zet de entiteit ook in `triggers_update` van dezelfde kaart, anders ververst
-# hij niet.
+# SECTIONS EN GEEN MASONRY: masonry zet elke kaart in de kortste kolom, en dan
+# stond "Deye · netkant" midden tussen de MarkeDroid-blokken. Hier is de
+# volgorde vast: eerst MarkeDroid, dan de Deye, met een kop ertussen.
 #
-# De uitleg bij 'Uitgang' en de UPS-last is een meting en geen handleiding:
+# Elke regel is `e` (entiteit, of een lijst voor L1/L2/L3 op één regel), `n`
+# (naam), `u` (uitleg) en optioneel `a`/`s`/`eh`/`d`/`min`/`m` - zie het
+# template `ov_uitlegtabel` in overzicht_templates.yaml. Een entiteit erbij?
+# Zet hem ook in `triggers_update` van dezelfde kaart, anders ververst hij niet.
+#
+# De uitleg bij de uitgang en de UPS-last is een meting en geen handleiding:
 # op 21 september liep `deye_load_l3_power` gelijk op met min de ZW-omvormer
 # op zolder, en `deye_load_ups_power` gaf 50-100 W bij een huis van ruim 1 kW.
 # Klopt dat na de definitieve aansluiting niet meer, pas dan de tekst aan.
+type: sections
+max_columns: 3
 title: Omvormer
 path: omvormer
 icon: mdi:solar-power-variant
-cards:
-- type: custom:button-card
-  show_icon: false
-  show_name: false
-  show_state: false
-  tap_action:
-    action: none
-  styles:
-    card:
-    - 'background: var(--ov-ink-4)'
-    - 'border: none'
-    - 'box-shadow: none'
-    - 'border-radius: 14px'
-    - 'padding: 14px 16px'
-    grid:
-    - 'grid-template-areas: ''"t"'''
-    - 'grid-template-columns: minmax(0, 1fr)'
-    custom_fields:
-      t:
-      - 'justify-self: start'
-      - 'text-align: left'
-      - 'font-size: 13px'
-      - 'line-height: 1.5'
-      - 'white-space: normal'
-      - 'color: var(--primary-text-color)'
-  custom_fields:
-    t: '<b>Alles op deze pagina is gelezen, niets is een knop.</b> De Deye wordt gestuurd door MarkeDroid (ModuSun), niet door Home Assistant. Bovenaan wat MarkeDroid zelf zegt (via MQTT), daaronder wat de omvormer via Solarman meldt. Veel getallen staan er dubbel, en ze lopen niet altijd gelijk: wat het huis gebruikt komt uit de P1-meter en <code>sensor.huis_verbruik</code>, wat de accu doet uit <code>sensor.accu_*</code>. Tik op een regel voor de historie.'
-- type: vertical-stack
+sections:
+- type: grid
+  column_span: 3
+  cards:
+  - type: markdown
+    content: '**Alles hier is gelezen; niets is een knop.** De Deye wordt gestuurd door MarkeDroid (ModuSun), niet door Home Assistant. Bovenaan wat MarkeDroid zelf meldt, daaronder wat de omvormer via Solarman meldt. Veel getallen staan er dubbel en lopen niet altijd gelijk: wat het huis gebruikt komt uit de P1-meter en `sensor.huis_verbruik`, wat de accu doet uit `sensor.accu_*`. Tik op een regel voor de historie.'
+- type: grid
+  column_span: 3
+  cards:
+  - type: heading
+    heading: MarkeDroid
+    heading_style: title
+- type: grid
   cards:
   - type: custom:button-card
     template: ov_title
     variables:
-      title: MARKEDROID · WAT HIJ BESLIST
+      title: WAT HIJ BESLIST
+    grid_options:
+      columns: full
   - type: custom:button-card
     template: ov_uitlegtabel
     triggers_update:
@@ -58,118 +50,35 @@ cards:
     - sensor.markedroid_regie
     - sensor.markedroid_exportbegrenzer
     - binary_sensor.markedroid_negatieve_prijs
-    - sensor.markedroid_flex_vermogen
     - binary_sensor.markedroid_flex_actief
+    - sensor.markedroid_flex_vermogen
     variables:
       rijen:
       - e: binary_sensor.markedroid_verbinding
         n: Verbinding
-        u: Komen er berichten van MarkeDroid binnen? Hij stuurt om de ~10 seconden; na een minuut stilte gaat dit uit.
+        u: Berichten komen om de ~10 s binnen; na een minuut stilte gaat dit uit.
       - e: sensor.markedroid_regie
         n: Regie
         a: omschrijving
-        u: 'In welke stand MarkeDroid de accu heeft gezet: vrij (eigen verbruik), vasthouden, laden van het net, flex, maximaal terugleveren. <b>Wordt bij ons nog niet meegestuurd</b> - ModuSun rolt dit veld geleidelijk uit. Tot dan staat hier dat het veld ontbreekt.'
-      - e: sensor.markedroid_exportbegrenzer
-        n: Exportbegrenzer
-        u: '''actief'' = MarkeDroid zet de teruglevering op 0 W, meestal omdat de prijs negatief is. ''storing'' = de begrenzer zelf werkt niet. Ook dit veld zit nog niet in onze berichten.'
-      - e: binary_sensor.markedroid_negatieve_prijs
-        n: Teruglevering dichtgezet
-        u: Aan zodra de exportbegrenzer actief is. De handleiding noemt dit 'negatieve prijs', maar MarkeDroid zegt alleen dát hij dichtzet, niet waarom.
-      - e: sensor.markedroid_flex_vermogen
+        u: De stand waarin MarkeDroid de accu zet (eigen verbruik, vasthouden, laden van het net, flex…). ModuSun rolt dit veld nog uit; bij ons ontbreekt het.
+      - e:
+        - sensor.markedroid_exportbegrenzer
+        - binary_sensor.markedroid_negatieve_prijs
+        n: Exportbegrenzer · dicht
+        u: '''actief'' = teruglevering op 0 W gezet, meestal bij een negatieve prijs. Ontbreekt ook nog in onze berichten.'
+      - e:
+        - binary_sensor.markedroid_flex_actief
+        - sensor.markedroid_flex_vermogen
         n: Flex-opdracht
-        u: Het vermogen dat een energiebedrijf via MarkeDroid van de accu vraagt (VPP/onbalansmarkt). Positief = van het net kopen, negatief = verkopen. Leeg zolang er geen opdracht loopt. Zulke opdrachten kunnen seconden duren en omdraaien.
-      - e: binary_sensor.markedroid_flex_actief
-        n: Flex actief
-        u: Aan als MarkeDroid op dit moment een flex-opdracht uitvoert. Zware lasten schakelen op zonne-overschot hoort dan te wachten.
-- type: vertical-stack
-  cards:
+        u: Een energiebedrijf vraagt via MarkeDroid vermogen van de accu. Positief = kopen, negatief = verkopen.
+    grid_options:
+      columns: full
   - type: custom:button-card
     template: ov_title
     variables:
-      title: MARKEDROID · WAT HIJ MEET
-  - type: custom:button-card
-    template: ov_uitlegtabel
-    triggers_update:
-    - sensor.markedroid_accu_vermogen
-    - sensor.markedroid_accu_lading
-    - sensor.markedroid_accu_capaciteit
-    - sensor.markedroid_accu_temperatuur
-    - sensor.markedroid_accu_spanning
-    - sensor.markedroid_accu_stroom
-    - sensor.markedroid_zon_vermogen
-    - sensor.markedroid_zon_capaciteit
-    - sensor.markedroid_last_vermogen
-    - sensor.markedroid_net_vermogen
-    - sensor.markedroid_net_vermogen_l1
-    - sensor.markedroid_net_vermogen_l2
-    - sensor.markedroid_net_vermogen_l3
-    - sensor.markedroid_net_spanning_l1
-    - sensor.markedroid_net_spanning_l2
-    - sensor.markedroid_net_spanning_l3
-    - binary_sensor.markedroid_teruglevering
-    - binary_sensor.markedroid_net_uitgevallen
-    variables:
-      rijen:
-      - e: sensor.markedroid_accu_vermogen
-        n: Accu vermogen
-        u: Positief = laden, negatief = ontladen. <b>Andersom dan de handleiding van ModuSun</b>; bij ons nagemeten op 21 september. Voor het huis blijft <code>sensor.accu_vermogen</code> de bron.
-      - e: sensor.markedroid_accu_lading
-        n: Accu lading
-        u: Laadtoestand zoals MarkeDroid hem van de omvormer leest. Hoort gelijk te lopen met de Deye.
-      - e: sensor.markedroid_accu_capaciteit
-        n: Accu capaciteit
-        u: 600 Ah × 51,2 V = 30,72 kWh. HA rekent zelf met 48 V nominaal en komt op 28,8 kWh; 51,2 V is de gebruikelijke nominale spanning van een 16-cels LFP-pakket.
-      - e: sensor.markedroid_accu_temperatuur
-        n: Accu temperatuur
-        u: Temperatuur van het accupakket.
-      - e: sensor.markedroid_accu_spanning
-        n: Accu spanning
-        u: Gelijkspanning van het pakket. Rond 52-53 V is normaal; bij vol laden loopt hij op richting 57 V.
-      - e: sensor.markedroid_accu_stroom
-        n: Accu stroom
-        u: Gelijkstroom uit of in het pakket, zelfde teken als het vermogen.
-      - e: sensor.markedroid_zon_vermogen
-        n: Zon (op de Deye)
-        u: Alleen panelen die rechtstreeks op de Deye zitten. Daar hangt bij ons niets aan, dus dit staat op 0. De zolderpanelen ziet MarkeDroid hier niet.
-      - e: sensor.markedroid_zon_capaciteit
-        n: Zon capaciteit
-        u: Volgens de handleiding het geïnstalleerde panelenvermogen, maar 20 kW is het vermogen van de omvormer zelf.
-      - e: sensor.markedroid_last_vermogen
-        n: Last
-        u: 'Wat MarkeDroid ''last'' noemt. <b>Niet het huisverbruik</b>: hij staat vaak op 0 terwijl het huis ruim 1 kW trekt. Voor het huis: <code>sensor.huis_verbruik</code>.'
-      - e: sensor.markedroid_net_vermogen
-        n: Net
-        u: Het aansluitpunt volgens MarkeDroid. Positief = afnemen, negatief = terugleveren. Hoort gelijk te lopen met de P1-meter.
-      - e: sensor.markedroid_net_vermogen_l1
-        n: Net L1
-        u: Zelfde, alleen fase 1.
-      - e: sensor.markedroid_net_vermogen_l2
-        n: Net L2
-        u: Zelfde, alleen fase 2.
-      - e: sensor.markedroid_net_vermogen_l3
-        n: Net L3
-        u: Zelfde, alleen fase 3.
-      - e: sensor.markedroid_net_spanning_l1
-        n: Spanning L1
-        u: Netspanning per fase, normaal 220-245 V.
-      - e: sensor.markedroid_net_spanning_l2
-        n: Spanning L2
-        u: Idem, fase 2.
-      - e: sensor.markedroid_net_spanning_l3
-        n: Spanning L3
-        u: Idem, fase 3.
-      - e: binary_sensor.markedroid_teruglevering
-        n: Levert terug
-        u: Aan als er meer dan 100 W het net op gaat.
-      - e: binary_sensor.markedroid_net_uitgevallen
-        n: Net uitgevallen
-        u: Aan als alle drie de fases onder 50 V zakken. Een tweede getuige naast 'Huis op accu' op de Accu-pagina.
-- type: vertical-stack
-  cards:
-  - type: custom:button-card
-    template: ov_title
-    variables:
-      title: MARKEDROID · OPGETELD SINDS 21 SEPTEMBER
+      title: OPGETELD SINDS 21 SEPTEMBER
+    grid_options:
+      columns: full
   - type: custom:button-card
     template: ov_uitlegtabel
     triggers_update:
@@ -179,172 +88,315 @@ cards:
     - sensor.markedroid_net_teruglevering
     - sensor.markedroid_zon_energie
     - sensor.markedroid_last_energie
+    - binary_sensor.markedroid_teruglevering
+    - binary_sensor.markedroid_net_uitgevallen
     variables:
       rijen:
-      - e: sensor.markedroid_accu_geladen
-        n: Accu geladen
+      - e:
+        - sensor.markedroid_accu_geladen
+        - sensor.markedroid_accu_ontladen
+        n: Accu geladen · ontladen
         s: 0.001
         eh: kWh
         d: 2
-        u: MarkeDroid stuurt per bericht de Wh sinds het vorige bericht; HA telt die op. Wat er binnenkomt terwijl HA plat ligt, telt niet mee.
-      - e: sensor.markedroid_accu_ontladen
-        n: Accu ontladen
+        u: Opgeteld uit MarkeDroids eigen metingen sinds 21 september. Terwijl HA plat ligt telt er niets.
+      - e:
+        - sensor.markedroid_net_afname
+        - sensor.markedroid_net_teruglevering
+        n: Net afname · terug
         s: 0.001
         eh: kWh
         d: 2
-        u: Idem, uit de accu.
-      - e: sensor.markedroid_net_afname
-        n: Net afname
+        u: De rekening volgt de P1-meter, niet dit.
+      - e:
+        - sensor.markedroid_zon_energie
+        - sensor.markedroid_last_energie
+        n: Zon · last
         s: 0.001
         eh: kWh
         d: 2
-        u: Idem, van het net. De rekening volgt de P1-meter, niet dit getal.
-      - e: sensor.markedroid_net_teruglevering
-        n: Net teruglevering
-        s: 0.001
-        eh: kWh
-        d: 2
-        u: Idem, naar het net.
-      - e: sensor.markedroid_zon_energie
-        n: Zon
-        s: 0.001
-        eh: kWh
-        d: 2
-        u: Idem, alleen panelen op de Deye (dus 0).
-      - e: sensor.markedroid_last_energie
-        n: Last
-        s: 0.001
-        eh: kWh
-        d: 2
-        u: Idem, MarkeDroids 'last' (niet het huisverbruik).
-- type: vertical-stack
+      - e:
+        - binary_sensor.markedroid_teruglevering
+        - binary_sensor.markedroid_net_uitgevallen
+        n: Levert terug · net weg
+        u: Terug = meer dan 100 W naar het net. Net weg = alle fases onder 50 V.
+    grid_options:
+      columns: full
+- type: grid
   cards:
   - type: custom:button-card
     template: ov_title
     variables:
-      title: DEYE · STATUS
+      title: WAT HIJ MEET
+    grid_options:
+      columns: full
   - type: custom:button-card
     template: ov_uitlegtabel
     triggers_update:
-    - binary_sensor.deye
-    - sensor.deye_device
-    - sensor.deye_device_state
-    - sensor.deye_device_alarm
-    - sensor.deye_device_fault
-    - sensor.deye_device_relay
-    - binary_sensor.deye_battery_alarm
-    - binary_sensor.deye_battery_fault
-    - binary_sensor.deye_connection
-    - sensor.deye_update_interval
+    - sensor.markedroid_accu_vermogen
+    - sensor.markedroid_accu_lading
+    - sensor.markedroid_accu_capaciteit
+    - sensor.markedroid_accu_temperatuur
+    - sensor.markedroid_accu_spanning
+    - sensor.markedroid_accu_stroom
     variables:
       rijen:
-      - e: binary_sensor.deye
-        n: Draait
-        u: Staat de omvormer in bedrijf.
-      - e: sensor.deye_device
-        n: Model
-        u: LV 3-fase hybride, 20 kW, twee MPPT-ingangen. Serienummer en firmwareversies staan in de attributen (aanklikken → attributen).
-      - e: sensor.deye_device_state
-        n: Bedrijfsstand
-        u: Standby, Self-test, Normal, Alarm of Fault. 'Normal' is goed.
-      - e: sensor.deye_device_alarm
-        n: Waarschuwingen
-        u: Waarschuwingen van de omvormer zelf. 'OK' = niets aan de hand.
-      - e: sensor.deye_device_fault
-        n: Storingen
-        u: Storingscodes. Bij een storing stopt de omvormer met omzetten.
-      - e: sensor.deye_device_relay
-        n: Relais
-        u: 'Welke schakelrelais in de omvormer dicht staan: Inv = omvormer, Grid = net, Gen = GEN-poort.'
-      - e: binary_sensor.deye_battery_alarm
-        n: Accu-waarschuwing
-        u: Waarschuwing van het BMS van de accu.
-      - e: binary_sensor.deye_battery_fault
-        n: Accustoring
-        u: Storing gemeld door het BMS.
-      - e: binary_sensor.deye_connection
-        n: Verbinding
-        u: Verbinding tussen HA en de datalogger (Solarman). Een onderbreking van ~10 seconden af en toe is normaal.
-      - e: sensor.deye_update_interval
-        n: Uitleesronde
-        u: Hoe lang de laatste ronde uitlezen duurde. Normaal ~5 s; loopt dit op, dan heeft de logger het zwaar.
-- type: vertical-stack
+      - e: sensor.markedroid_accu_vermogen
+        n: Accu vermogen
+        u: Positief = laden. <b>Andersom dan de handleiding</b>, nagemeten op 21 september.
+      - e: sensor.markedroid_accu_lading
+        n: Accu lading
+        d: 0
+      - e: sensor.markedroid_accu_capaciteit
+        n: Accu capaciteit
+        d: 2
+        u: 600 Ah × 51,2 V. HA rekent zelf met 48 V en komt op 28,8 kWh.
+      - e: sensor.markedroid_accu_temperatuur
+        n: Accu temperatuur
+      - e:
+        - sensor.markedroid_accu_spanning
+        - sensor.markedroid_accu_stroom
+        n: Accu spanning · stroom
+        d: 2
+    grid_options:
+      columns: full
+- type: grid
   cards:
   - type: custom:button-card
     template: ov_title
     variables:
-      title: DEYE · ACCU
+      title: NET, LAST EN ZON
+    grid_options:
+      columns: full
+  - type: custom:button-card
+    template: ov_uitlegtabel
+    triggers_update:
+    - sensor.markedroid_net_vermogen
+    - sensor.markedroid_net_vermogen_l1
+    - sensor.markedroid_net_vermogen_l2
+    - sensor.markedroid_net_vermogen_l3
+    - sensor.markedroid_net_spanning_l1
+    - sensor.markedroid_net_spanning_l2
+    - sensor.markedroid_net_spanning_l3
+    - sensor.markedroid_last_vermogen
+    - sensor.markedroid_zon_vermogen
+    - sensor.markedroid_zon_capaciteit
+    variables:
+      rijen:
+      - e: sensor.markedroid_net_vermogen
+        n: Net
+        d: 0
+        u: Positief = afnemen. Hoort gelijk te lopen met de P1-meter.
+      - e:
+        - sensor.markedroid_net_vermogen_l1
+        - sensor.markedroid_net_vermogen_l2
+        - sensor.markedroid_net_vermogen_l3
+        n: Net L1 · L2 · L3
+        d: 0
+      - e:
+        - sensor.markedroid_net_spanning_l1
+        - sensor.markedroid_net_spanning_l2
+        - sensor.markedroid_net_spanning_l3
+        n: Spanning L1 · L2 · L3
+      - e: sensor.markedroid_last_vermogen
+        n: Last
+        d: 0
+        u: <b>Niet het huisverbruik</b>, vaak 0 terwijl het huis 1 kW trekt.
+      - e: sensor.markedroid_zon_vermogen
+        n: Zon op de Deye
+        d: 0
+        u: Er hangen geen panelen aan de Deye, dus 0.
+      - e: sensor.markedroid_zon_capaciteit
+        n: Zon capaciteit
+        d: 0
+        u: Eigenlijk het vermogen van de omvormer, niet van panelen.
+    grid_options:
+      columns: full
+- type: grid
+  column_span: 3
+  cards:
+  - type: heading
+    heading: Deye via Solarman
+    heading_style: title
+- type: grid
+  cards:
+  - type: custom:button-card
+    template: ov_title
+    variables:
+      title: ACCU
+    grid_options:
+      columns: full
   - type: custom:button-card
     template: ov_uitlegtabel
     triggers_update:
     - sensor.deye_battery
     - sensor.deye_battery_power
     - sensor.deye_battery_state
-    - sensor.deye_battery_current
     - sensor.deye_battery_voltage
+    - sensor.deye_battery_current
     - sensor.deye_battery_temperature
-    - sensor.deye_battery_soh
-    - sensor.deye_battery_capacity
-    - sensor.deye_today_battery_life_cycles
-    - sensor.deye_total_battery_life_cycles
     - sensor.deye_today_battery_charge
     - sensor.deye_today_battery_discharge
     - sensor.deye_total_battery_charge
     - sensor.deye_total_battery_discharge
+    - sensor.deye_today_battery_life_cycles
+    - sensor.deye_total_battery_life_cycles
+    - sensor.deye_battery_soh
+    - sensor.deye_battery_capacity
     variables:
       rijen:
       - e: sensor.deye_battery
         n: Lading
-        u: Laadtoestand volgens het BMS. De attributen tonen BMS-spanning, -stroom en de laad- en ontlaadgrenzen die het BMS aan de omvormer doorgeeft.
+        d: 0
       - e: sensor.deye_battery_power
         n: Vermogen
-        u: <b>Positief = ontladen</b>, negatief = laden (Deye-conventie). HA draait dit om in <code>sensor.accu_vermogen</code>; gebruik die.
+        d: 0
+        u: <b>Positief = ontladen</b> (Deye). HA draait dit om in <code>sensor.accu_vermogen</code>.
       - e: sensor.deye_battery_state
         n: Richting
-        u: Door de integratie afgeleid uit het vermogen, met een dode zone van ±50 W.
-      - e: sensor.deye_battery_current
-        n: Stroom
-        u: Gelijkstroom aan de accukant, zelfde teken als het vermogen.
-      - e: sensor.deye_battery_voltage
-        n: Spanning
-        u: Gelijkspanning van het pakket, gemeten door de omvormer.
+        m:
+          charging: laden
+          discharging: ontladen
+          standby: rust
+          idle: rust
+        u: Afgeleid uit het vermogen, dode zone ±50 W.
+      - e:
+        - sensor.deye_battery_voltage
+        - sensor.deye_battery_current
+        n: Spanning · stroom
+        d: 2
       - e: sensor.deye_battery_temperature
         n: Temperatuur
-        u: Temperatuur van het accupakket.
-      - e: sensor.deye_battery_soh
-        n: Gezondheid (SoH)
-        u: Door de integratie <i>geschat</i> uit de totaal geladen hoeveelheid, niet gemeten door het BMS.
-      - e: sensor.deye_battery_capacity
-        n: Capaciteit (schatting)
-        u: Schatting van de integratie tijdens laden en ontladen. Blijft bij ons leeg; HA rekent de capaciteit zelf uit (Accu-pagina).
+      - e:
+        - sensor.deye_today_battery_charge
+        - sensor.deye_today_battery_discharge
+        n: Vandaag geladen · ontladen
+      - e:
+        - sensor.deye_total_battery_charge
+        - sensor.deye_total_battery_discharge
+        n: Totaal geladen · ontladen
+      - e:
+        - sensor.deye_today_battery_life_cycles
+        - sensor.deye_total_battery_life_cycles
+        n: Cycli vandaag · totaal
+        d: 2
       - e: sensor.deye_battery
         n: Ontworpen cycli
         a: Life Cycle Rating
-        u: Hoeveel volledige laadcycli het pakket volgens het BMS meegaat.
-      - e: sensor.deye_today_battery_life_cycles
-        n: Cycli vandaag
-        u: Geladen kWh vandaag gedeeld door de capaciteit.
-      - e: sensor.deye_total_battery_life_cycles
-        n: Cycli totaal
-        u: Idem, sinds de installatie.
-      - e: sensor.deye_today_battery_charge
-        n: Geladen vandaag
-        u: In de accu gegaan, vandaag.
-      - e: sensor.deye_today_battery_discharge
-        n: Ontladen vandaag
-        u: Uit de accu gekomen, vandaag.
-      - e: sensor.deye_total_battery_charge
-        n: Geladen totaal
-        u: Sinds de installatie.
-      - e: sensor.deye_total_battery_discharge
-        n: Ontladen totaal
-        u: Sinds de installatie.
-- type: vertical-stack
+        d: 0
+      - e: sensor.deye_battery_soh
+        n: Gezondheid
+        d: 0
+        u: Geschat door de integratie, niet gemeten.
+      - e: sensor.deye_battery_capacity
+        n: Capaciteit (schatting)
+        u: Blijft bij ons leeg.
+    grid_options:
+      columns: full
+- type: grid
   cards:
   - type: custom:button-card
     template: ov_title
     variables:
-      title: DEYE · NETKANT
+      title: UITGANG (HET HUIS)
+    grid_options:
+      columns: full
+  - type: custom:button-card
+    template: ov_uitlegtabel
+    triggers_update:
+    - sensor.deye_load_power
+    - sensor.deye_load_l1_power
+    - sensor.deye_load_l2_power
+    - sensor.deye_load_l3_power
+    - sensor.deye_load_l1_voltage
+    - sensor.deye_load_l2_voltage
+    - sensor.deye_load_l3_voltage
+    - sensor.deye_load_frequency
+    - sensor.deye_load_ups_power
+    - sensor.deye_load_ups_l1_power
+    - sensor.deye_load_ups_l2_power
+    - sensor.deye_load_ups_l3_power
+    - sensor.deye_power
+    - sensor.deye_output_l1_power
+    - sensor.deye_output_l2_power
+    - sensor.deye_output_l3_power
+    - sensor.deye_output_l1_current
+    - sensor.deye_output_l2_current
+    - sensor.deye_output_l3_current
+    - sensor.deye_output_l1_voltage
+    - sensor.deye_output_l2_voltage
+    - sensor.deye_output_l3_voltage
+    - sensor.deye_output_frequency
+    - sensor.deye_today_load_consumption
+    - sensor.deye_total_load_consumption
+    variables:
+      rijen:
+      - e: sensor.deye_load_power
+        n: Uitgang
+        d: 0
+        u: 'De backup-uitgang waar het huis aan hangt. <b>Niet het huisverbruik</b>: op L3 komt de ZW-omvormer van zolder als min-getal binnen.'
+      - e:
+        - sensor.deye_load_l1_power
+        - sensor.deye_load_l2_power
+        - sensor.deye_load_l3_power
+        n: Uitgang L1 · L2 · L3
+        d: 0
+      - e:
+        - sensor.deye_load_l1_voltage
+        - sensor.deye_load_l2_voltage
+        - sensor.deye_load_l3_voltage
+        n: Spanning L1 · L2 · L3
+        u: Tijdens een stroomstoring maakt de omvormer deze spanning zelf.
+      - e: sensor.deye_load_frequency
+        n: Frequentie
+        min: 2
+      - e: sensor.deye_load_ups_power
+        n: '''UPS''-last'
+        d: 0
+        u: 50–100 W terwijl het huis 1 kW trekt; wat dit meet is onduidelijk. <b>'Noodstroom resterend' rekent hiermee en zit daardoor veel te hoog.</b>
+      - e:
+        - sensor.deye_load_ups_l1_power
+        - sensor.deye_load_ups_l2_power
+        - sensor.deye_load_ups_l3_power
+        n: '''UPS''-last L1 · L2 · L3'
+        d: 0
+      - e: sensor.deye_power
+        n: Omvormer AC
+        d: 0
+        u: Wat de omvormer zelf aan wisselstroom levert (+) of opneemt (−).
+      - e:
+        - sensor.deye_output_l1_power
+        - sensor.deye_output_l2_power
+        - sensor.deye_output_l3_power
+        n: Omvormer L1 · L2 · L3
+        d: 0
+      - e:
+        - sensor.deye_output_l1_current
+        - sensor.deye_output_l2_current
+        - sensor.deye_output_l3_current
+        n: Omvormer stroom
+      - e:
+        - sensor.deye_output_l1_voltage
+        - sensor.deye_output_l2_voltage
+        - sensor.deye_output_l3_voltage
+        n: Omvormer spanning
+      - e: sensor.deye_output_frequency
+        n: Omvormer frequentie
+        min: 2
+      - e:
+        - sensor.deye_today_load_consumption
+        - sensor.deye_total_load_consumption
+        n: Uitgang vandaag · totaal
+    grid_options:
+      columns: full
+- type: grid
+  cards:
+  - type: custom:button-card
+    template: ov_title
+    variables:
+      title: NETKANT
+    grid_options:
+      columns: full
   - type: custom:button-card
     template: ov_uitlegtabel
     triggers_update:
@@ -379,211 +431,159 @@ cards:
       rijen:
       - e: binary_sensor.deye_grid
         n: Net aanwezig
-        u: 'Ziet de omvormer netspanning. Uit = hij draait los van het net: een stroomstoring, of hij heeft zichzelf afgekoppeld.'
+        u: Uit = de omvormer draait los van het net.
       - e: sensor.deye_grid_frequency
-        n: Netfrequentie
-        u: Hoort rond 50,00 Hz te liggen.
-      - e: sensor.deye_grid_l1_voltage
-        n: Spanning L1
-        u: Netspanning per fase, gemeten door de omvormer.
-      - e: sensor.deye_grid_l2_voltage
-        n: Spanning L2
-        u: Idem, fase 2.
-      - e: sensor.deye_grid_l3_voltage
-        n: Spanning L3
-        u: Idem, fase 3.
+        n: Frequentie
+        min: 2
+      - e:
+        - sensor.deye_grid_l1_voltage
+        - sensor.deye_grid_l2_voltage
+        - sensor.deye_grid_l3_voltage
+        n: Spanning L1 · L2 · L3
       - e: sensor.deye_grid_power
         n: Netvermogen
-        u: Wat de Deye met zijn externe stroomklemmen op het net meet. Loopt bij ons niet gelijk met de P1-meter; voor het echte netverbruik is de P1 leidend.
-      - e: sensor.deye_grid_l1_power
-        n: Netvermogen L1
-        u: Idem, fase 1.
-      - e: sensor.deye_grid_l2_power
-        n: Netvermogen L2
-        u: Idem, fase 2.
-      - e: sensor.deye_grid_l3_power
-        n: Netvermogen L3
-        u: Idem, fase 3.
+        d: 0
+        u: Volgens de eigen stroomklemmen van de Deye. Loopt niet gelijk met de P1-meter; die is leidend.
+      - e:
+        - sensor.deye_grid_l1_power
+        - sensor.deye_grid_l2_power
+        - sensor.deye_grid_l3_power
+        n: Net L1 · L2 · L3
+        d: 0
       - e: sensor.deye_external_power
         n: Externe klemmen
-        u: Som van de drie externe stroomklemmen (CT's). Daarmee regelt de omvormer op het aansluitpunt.
-      - e: sensor.deye_external_ct1_power
-        n: Externe klem 1
-        u: Vermogen door klem 1.
-      - e: sensor.deye_external_ct2_power
-        n: Externe klem 2
-        u: Vermogen door klem 2.
-      - e: sensor.deye_external_ct3_power
-        n: Externe klem 3
-        u: Vermogen door klem 3.
-      - e: sensor.deye_external_ct1_current
-        n: Externe klem 1 stroom
-        u: Idem, in ampère.
-      - e: sensor.deye_external_ct2_current
-        n: Externe klem 2 stroom
-        u: Idem, in ampère.
-      - e: sensor.deye_external_ct3_current
-        n: Externe klem 3 stroom
-        u: Idem, in ampère.
+        d: 0
+        u: De CT's in de meterkast waarop de omvormer regelt.
+      - e:
+        - sensor.deye_external_ct1_power
+        - sensor.deye_external_ct2_power
+        - sensor.deye_external_ct3_power
+        n: Klem 1 · 2 · 3
+        d: 0
+      - e:
+        - sensor.deye_external_ct1_current
+        - sensor.deye_external_ct2_current
+        - sensor.deye_external_ct3_current
+        n: Klem 1 · 2 · 3 stroom
+        d: 2
       - e: sensor.deye_internal_power
         n: Interne meting
-        u: 'Wat de omvormer zelf aan zijn netpoort meet: wat hij uit het net haalt of erin stopt.'
-      - e: sensor.deye_internal_ct1_power
-        n: Intern L1
-        u: Idem, fase 1.
-      - e: sensor.deye_internal_ct2_power
-        n: Intern L2
-        u: Idem, fase 2.
-      - e: sensor.deye_internal_ct3_power
-        n: Intern L3
-        u: Idem, fase 3.
-      - e: sensor.deye_internal_ct1_current
-        n: Intern L1 stroom
-        u: Idem, in ampère.
-      - e: sensor.deye_internal_ct2_current
-        n: Intern L2 stroom
-        u: Idem, in ampère.
-      - e: sensor.deye_internal_ct3_current
-        n: Intern L3 stroom
-        u: Idem, in ampère.
-      - e: sensor.deye_today_energy_import
-        n: Afgenomen vandaag
-        u: Van het net volgens de Deye. De rekening volgt de P1-meter.
-      - e: sensor.deye_today_energy_export
-        n: Teruggeleverd vandaag
-        u: Naar het net volgens de Deye.
-      - e: sensor.deye_total_energy_import
-        n: Afgenomen totaal
-        u: Sinds de installatie.
-      - e: sensor.deye_total_energy_export
-        n: Teruggeleverd totaal
-        u: Sinds de installatie.
-- type: vertical-stack
+        d: 0
+        u: Wat de omvormer zelf aan zijn netpoort meet.
+      - e:
+        - sensor.deye_internal_ct1_power
+        - sensor.deye_internal_ct2_power
+        - sensor.deye_internal_ct3_power
+        n: Intern L1 · L2 · L3
+        d: 0
+      - e:
+        - sensor.deye_internal_ct1_current
+        - sensor.deye_internal_ct2_current
+        - sensor.deye_internal_ct3_current
+        n: Intern stroom
+        d: 2
+      - e:
+        - sensor.deye_today_energy_import
+        - sensor.deye_today_energy_export
+        n: Vandaag af · terug
+      - e:
+        - sensor.deye_total_energy_import
+        - sensor.deye_total_energy_export
+        n: Totaal af · terug
+    grid_options:
+      columns: full
+- type: grid
   cards:
   - type: custom:button-card
     template: ov_title
     variables:
-      title: DEYE · UITGANG (HET HUIS)
+      title: STATUS EN OMVORMER
+    grid_options:
+      columns: full
   - type: custom:button-card
     template: ov_uitlegtabel
     triggers_update:
-    - sensor.deye_load_power
-    - sensor.deye_load_l1_power
-    - sensor.deye_load_l2_power
-    - sensor.deye_load_l3_power
-    - sensor.deye_load_l1_voltage
-    - sensor.deye_load_l2_voltage
-    - sensor.deye_load_l3_voltage
-    - sensor.deye_load_frequency
-    - sensor.deye_load_ups_power
-    - sensor.deye_load_ups_l1_power
-    - sensor.deye_load_ups_l2_power
-    - sensor.deye_load_ups_l3_power
-    - sensor.deye_power
-    - sensor.deye_output_l1_power
-    - sensor.deye_output_l2_power
-    - sensor.deye_output_l3_power
-    - sensor.deye_output_l1_current
-    - sensor.deye_output_l2_current
-    - sensor.deye_output_l3_current
-    - sensor.deye_output_l1_voltage
-    - sensor.deye_output_l2_voltage
-    - sensor.deye_output_l3_voltage
-    - sensor.deye_output_frequency
-    - sensor.deye_today_load_consumption
-    - sensor.deye_total_load_consumption
+    - binary_sensor.deye
+    - sensor.deye_device_state
+    - sensor.deye_device_alarm
+    - sensor.deye_device_fault
+    - binary_sensor.deye_battery_alarm
+    - binary_sensor.deye_battery_fault
+    - sensor.deye_device_relay
+    - binary_sensor.deye_connection
+    - sensor.deye_update_interval
+    - sensor.deye_device
+    - sensor.deye_temperature
+    - sensor.deye_dc_temperature
+    - sensor.deye_power_losses
+    - sensor.deye_today_losses
+    - sensor.deye_total_losses
     variables:
       rijen:
-      - e: sensor.deye_load_power
-        n: Uitgang
-        u: 'Vermogen op de backup-uitgang, waar het huis aan hangt. <b>Niet het huisverbruik</b>: op L3 staat structureel ongeveer min het vermogen van de ZW-omvormer op zolder (21 september: -950..-1060 W tegen 950 W zon). Die panelen lijken aan de uitgangskant op L3 terug te leveren.'
-      - e: sensor.deye_load_l1_power
-        n: Uitgang L1
-        u: Idem, fase 1.
-      - e: sensor.deye_load_l2_power
-        n: Uitgang L2
-        u: Idem, fase 2.
-      - e: sensor.deye_load_l3_power
-        n: Uitgang L3
-        u: Idem, fase 3 - hier komt de ZW-omvormer als negatief getal binnen.
-      - e: sensor.deye_load_l1_voltage
-        n: Spanning L1
-        u: Spanning op de uitgang. Tijdens een storing maakt de omvormer die zelf.
-      - e: sensor.deye_load_l2_voltage
-        n: Spanning L2
-        u: Idem, fase 2.
-      - e: sensor.deye_load_l3_voltage
-        n: Spanning L3
-        u: Idem, fase 3.
-      - e: sensor.deye_load_frequency
-        n: Frequentie
-        u: Frequentie op de uitgang.
-      - e: sensor.deye_load_ups_power
-        n: '''UPS''-last'
-        u: Door de integratie 'Load UPS' genoemd. Staat bij ons op 50-100 W terwijl het huis ruim 1 kW trekt; wat dit register precies meet is nog niet duidelijk. <b>Let op:</b> 'Noodstroom resterend' rekent hiermee en zit daardoor veel te hoog.
-      - e: sensor.deye_load_ups_l1_power
-        n: '''UPS''-last L1'
-        u: Idem, fase 1.
-      - e: sensor.deye_load_ups_l2_power
-        n: '''UPS''-last L2'
-        u: Idem, fase 2.
-      - e: sensor.deye_load_ups_l3_power
-        n: '''UPS''-last L3'
-        u: Idem, fase 3.
-      - e: sensor.deye_power
-        n: Omvormer AC
-        u: Wat de omvormer zelf aan wisselstroom levert (positief) of opneemt (negatief), alle fases samen.
-      - e: sensor.deye_output_l1_power
-        n: Omvormer L1
-        u: Idem per fase. Loopt vrijwel gelijk met de uitgang.
-      - e: sensor.deye_output_l2_power
-        n: Omvormer L2
-        u: Idem, fase 2.
-      - e: sensor.deye_output_l3_power
-        n: Omvormer L3
-        u: Idem, fase 3.
-      - e: sensor.deye_output_l1_current
-        n: Omvormer L1 stroom
-        u: Idem, in ampère.
-      - e: sensor.deye_output_l2_current
-        n: Omvormer L2 stroom
-        u: Idem, in ampère.
-      - e: sensor.deye_output_l3_current
-        n: Omvormer L3 stroom
-        u: Idem, in ampère.
-      - e: sensor.deye_output_l1_voltage
-        n: Omvormer L1 spanning
-        u: Spanning aan de AC-kant van de omvormer.
-      - e: sensor.deye_output_l2_voltage
-        n: Omvormer L2 spanning
-        u: Idem, fase 2.
-      - e: sensor.deye_output_l3_voltage
-        n: Omvormer L3 spanning
-        u: Idem, fase 3.
-      - e: sensor.deye_output_frequency
-        n: Omvormer frequentie
-        u: Frequentie aan de AC-kant.
-      - e: sensor.deye_today_load_consumption
-        n: Uitgang vandaag
-        u: Energie over de uitgang vandaag, volgens de Deye. Om dezelfde reden als hierboven niet het huisverbruik.
-      - e: sensor.deye_total_load_consumption
-        n: Uitgang totaal
-        u: Sinds de installatie.
-- type: vertical-stack
+      - e:
+        - binary_sensor.deye
+        - sensor.deye_device_state
+        n: Draait · stand
+        m:
+          Normal: normaal
+          Standby: stand-by
+          Self-test: zelftest
+          Alarm: alarm
+          Fault: storing
+      - e:
+        - sensor.deye_device_alarm
+        - sensor.deye_device_fault
+        n: Waarschuwing · storing
+        m:
+          OK: geen
+      - e:
+        - binary_sensor.deye_battery_alarm
+        - binary_sensor.deye_battery_fault
+        n: 'Accu: waarschuwing · storing'
+        u: Gemeld door het BMS van de accu.
+      - e: sensor.deye_device_relay
+        n: Relais
+        u: 'Welke relais dicht staan: Inv = omvormer, Grid = net, Gen = GEN-poort.'
+      - e: binary_sensor.deye_connection
+        n: Verbinding
+        u: HA ↔ Solarman-logger. Af en toe 10 s weg is normaal.
+      - e: sensor.deye_update_interval
+        n: Uitleesronde
+        u: Normaal ~5 s.
+      - e: sensor.deye_device
+        n: Model
+        u: '20 kW, twee MPPT''s. Serienummer en firmware: tik → attributen.'
+      - e:
+        - sensor.deye_temperature
+        - sensor.deye_dc_temperature
+        n: Temperatuur AC · DC
+      - e: sensor.deye_power_losses
+        n: Verlies nu
+        d: 0
+        u: Eigenverbruik plus omzettingsverlies.
+      - e:
+        - sensor.deye_today_losses
+        - sensor.deye_total_losses
+        n: Verlies vandaag · totaal
+    grid_options:
+      columns: full
+- type: grid
   cards:
   - type: custom:button-card
     template: ov_title
     variables:
-      title: DEYE · ZON
+      title: ZON EN GEN-POORT
+    grid_options:
+      columns: full
   - type: custom:button-card
     template: ov_uitlegtabel
     triggers_update:
     - sensor.deye_pv_power
     - sensor.deye_pv1_power
-    - sensor.deye_pv1_voltage
-    - sensor.deye_pv1_current
     - sensor.deye_pv2_power
+    - sensor.deye_pv1_voltage
     - sensor.deye_pv2_voltage
+    - sensor.deye_pv1_current
     - sensor.deye_pv2_current
     - sensor.deye_today_production
     - sensor.deye_total_production
@@ -601,89 +601,45 @@ cards:
       rijen:
       - e: sensor.deye_pv_power
         n: Panelen op de Deye
-        u: 'De twee eigen MPPT-ingangen. Daar hangt niets aan: 0,2 V terwijl de zolderpanelen 1 kW leverden. Die hebben hun eigen omvormers.'
-      - e: sensor.deye_pv1_power
-        n: PV1
-        u: Ingang 1.
-      - e: sensor.deye_pv1_voltage
-        n: PV1 spanning
-        u: Staat er een string op, dan honderden volts.
-      - e: sensor.deye_pv1_current
-        n: PV1 stroom
-        u: Idem, stroom.
-      - e: sensor.deye_pv2_power
-        n: PV2
-        u: Ingang 2.
-      - e: sensor.deye_pv2_voltage
-        n: PV2 spanning
-        u: Idem.
-      - e: sensor.deye_pv2_current
-        n: PV2 stroom
-        u: Idem.
-      - e: sensor.deye_today_production
-        n: Opgewekt vandaag
-        u: Van deze twee ingangen.
-      - e: sensor.deye_total_production
-        n: Opgewekt totaal
-        u: Idem, sinds de installatie (blijft leeg zolang er niets is opgewekt).
-      - e: binary_sensor.deye_microinverter
+        d: 0
+        u: Er hangt niets aan (0,2 V). De zolderpanelen hebben eigen omvormers.
+      - e:
+        - sensor.deye_pv1_power
+        - sensor.deye_pv2_power
+        n: PV1 · PV2
+        d: 0
+      - e:
+        - sensor.deye_pv1_voltage
+        - sensor.deye_pv2_voltage
+        n: PV1 · PV2 spanning
+      - e:
+        - sensor.deye_pv1_current
+        - sensor.deye_pv2_current
+        n: PV1 · PV2 stroom
+      - e:
+        - sensor.deye_today_production
+        - sensor.deye_total_production
+        n: Opgewekt vandaag · totaal
+      - e:
+        - binary_sensor.deye_microinverter
+        - sensor.deye_microinverter_power
         n: GEN-poort als zoningang
-        u: De GEN-poort kan een generator of een micro-omvormer (AC-gekoppelde panelen) aannemen. Aan = ingesteld als zoningang.
-      - e: sensor.deye_microinverter_power
-        n: GEN-poort vermogen
-        u: 'Wat er via de GEN-poort binnenkomt. Staat bij ons op 0: de zolderomvormers hangen daar niet aan.'
-      - e: sensor.deye_microinverter_l1_power
-        n: GEN L1
-        u: Idem, fase 1.
-      - e: sensor.deye_microinverter_l2_power
-        n: GEN L2
-        u: Idem, fase 2.
-      - e: sensor.deye_microinverter_l3_power
-        n: GEN L3
-        u: Idem, fase 3.
-      - e: sensor.deye_microinverter_l1_voltage
-        n: GEN L1 spanning
-        u: Spanning op de GEN-poort.
-      - e: sensor.deye_microinverter_l2_voltage
-        n: GEN L2 spanning
-        u: Idem, fase 2.
-      - e: sensor.deye_microinverter_l3_voltage
-        n: GEN L3 spanning
-        u: Idem, fase 3.
-      - e: sensor.deye_microinverter_energy_today
-        n: GEN vandaag
-        u: Energie via de GEN-poort vandaag.
-      - e: sensor.deye_microinverter_energy
-        n: GEN totaal
-        u: Idem, totaal.
-- type: vertical-stack
-  cards:
-  - type: custom:button-card
-    template: ov_title
-    variables:
-      title: DEYE · DE OMVORMER ZELF
-  - type: custom:button-card
-    template: ov_uitlegtabel
-    triggers_update:
-    - sensor.deye_temperature
-    - sensor.deye_dc_temperature
-    - sensor.deye_power_losses
-    - sensor.deye_today_losses
-    - sensor.deye_total_losses
-    variables:
-      rijen:
-      - e: sensor.deye_temperature
-        n: Temperatuur
-        u: Temperatuur van de omvormer (AC-kant/koelplaat). Onder de 60 °C is ruim binnen de marge.
-      - e: sensor.deye_dc_temperature
-        n: Temperatuur DC
-        u: Temperatuur van de DC-omzetting (accu- en paneelkant).
-      - e: sensor.deye_power_losses
-        n: Verlies nu
-        u: Eigenverbruik van de omvormer plus omzettingsverlies.
-      - e: sensor.deye_today_losses
-        n: Verlies vandaag
-        u: Idem, opgeteld over vandaag.
-      - e: sensor.deye_total_losses
-        n: Verlies totaal
-        u: Idem, sinds de installatie.
+        d: 0
+        u: 'Voor AC-gekoppelde panelen. Staat aan, maar er komt niets binnen: de zolder hangt hier niet aan.'
+      - e:
+        - sensor.deye_microinverter_l1_power
+        - sensor.deye_microinverter_l2_power
+        - sensor.deye_microinverter_l3_power
+        n: GEN L1 · L2 · L3
+        d: 0
+      - e:
+        - sensor.deye_microinverter_l1_voltage
+        - sensor.deye_microinverter_l2_voltage
+        - sensor.deye_microinverter_l3_voltage
+        n: GEN spanning
+      - e:
+        - sensor.deye_microinverter_energy_today
+        - sensor.deye_microinverter_energy
+        n: GEN vandaag · totaal
+    grid_options:
+      columns: full

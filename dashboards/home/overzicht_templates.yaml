@@ -1124,27 +1124,30 @@ kamer_onderhoud_lijst:
         return `<div style="width:100%">${r}</div>`;
       ]]]
 
-# --- Uitlegtabel: naam, waarde en een zin uitleg per entiteit ----------------
+# --- Uitlegtabel: naam, waarde en een zin uitleg per regel -------------------
 # Voor de Omvormer-pagina (dashboards/home/omvormer.yaml): ruim honderd
-# sensoren met elk een verklaring. Eén button-card per groep en niet één per
-# regel - honderd kaarten die elk om de vijf seconden hertekenen merk je op
-# een wandpaneel.
+# sensoren met uitleg. Eén button-card per groep en niet één per regel -
+# honderd kaarten die elk om de vijf seconden hertekenen merk je op een
+# wandpaneel.
 #
 # `variables.rijen` is een lijst van:
-#   e   entity_id
-#   n   naam op de regel
-#   u   uitleg (mag HTML)
-#   a   optioneel: toon dit attribuut in plaats van de state
-#   s   optioneel: vermenigvuldig met dit getal (Wh -> kWh = 0.001)
-#   eh  optioneel: eenheid die de sensor-eenheid vervangt
-#   d   optioneel: maximaal aantal decimalen (standaard 2)
+#   e    entity_id, of een LIJST entity_id's (bijv. L1/L2/L3): die komen dan
+#        als "2 · 4 · 1 W" op één regel, met de eenheid één keer achteraan
+#   n    naam op de regel
+#   u    uitleg (mag HTML; mag weg)
+#   a    optioneel: toon dit attribuut in plaats van de state
+#   s    optioneel: vermenigvuldig met dit getal (Wh -> kWh = 0.001)
+#   eh   optioneel: eenheid die de sensor-eenheid vervangt
+#   d    optioneel: maximaal aantal decimalen (standaard 1)
+#   min  optioneel: minimaal aantal decimalen (50,00 Hz i.p.v. 50 Hz)
+#   m    optioneel: vertaaltabel voor tekststanden, {charging: laden}
 #
 # De instantie moet zelf `triggers_update` zetten met dezelfde entiteiten:
 # zonder `entity` hertekent button-card anders nooit, en `all` zou hem bij elke
 # statuswissel van het hele huis laten rekenen.
 #
-# Een regel aanklikken opent het more-info-venster (met historie) van die
-# entiteit, via hetzelfde event dat HA zelf gebruikt.
+# Een regel aanklikken opent het more-info-venster (met historie) van de
+# eerste entiteit op die regel, via hetzelfde event dat HA zelf gebruikt.
 ov_uitlegtabel:
   show_icon: false
   show_name: false
@@ -1170,29 +1173,47 @@ ov_uitlegtabel:
   custom_fields:
     tabel: |
       [[[
-        var fmt = function(r){
-          var s = states[r.e];
-          if(!s) return '<span style="color:var(--ov-ink-40)">bestaat niet</span>';
+        var grijs = function(t){ return '<span style="color:var(--ov-ink-40);font-weight:400">' + t + '</span>'; };
+        // Eén waarde: {t: tekst, eh: eenheid} of {t: html} als er niets te rekenen valt.
+        var een = function(r, id){
+          var s = states[id];
+          if(!s) return {t: grijs('bestaat niet')};
           var v = r.a ? s.attributes[r.a] : s.state;
-          if(v === undefined || v === null || v === 'unknown' || v === '') return '<span style="color:var(--ov-ink-40)">—</span>';
-          if(v === 'unavailable') return '<span style="color:var(--ov-bad)">onbereikbaar</span>';
-          if(!r.a && r.e.indexOf('binary_sensor.') === 0) return v === 'on' ? 'aan' : 'uit';
+          if(v === undefined || v === null || v === 'unknown' || v === '') return {t: grijs('—')};
+          if(v === 'unavailable') return {t: '<span style="color:var(--ov-bad)">weg</span>'};
+          if(!r.a && id.indexOf('binary_sensor.') === 0) return {t: v === 'on' ? 'aan' : 'uit'};
           var n = Number(v);
           if(typeof v !== 'boolean' && !isNaN(n)){
             if(r.s) n = n * r.s;
-            var eh = (r.eh !== undefined) ? r.eh : (r.a ? '' : (s.attributes.unit_of_measurement || ''));
-            return n.toLocaleString('nl-NL', {maximumFractionDigits: (r.d !== undefined ? r.d : 2)}) + (eh ? ' ' + eh : '');
+            return {
+              t: n.toLocaleString('nl-NL', {minimumFractionDigits: r.min || 0,
+                                            maximumFractionDigits: Math.max(r.d !== undefined ? r.d : 1, r.min || 0)}),
+              eh: (r.eh !== undefined) ? r.eh : (r.a ? '' : (s.attributes.unit_of_measurement || ''))
+            };
           }
-          return String(v);
+          v = String(v);
+          return {t: (r.m && r.m[v] !== undefined) ? r.m[v] : v};
+        };
+        var waarde = function(r){
+          var ids = Array.isArray(r.e) ? r.e : [r.e];
+          var w = ids.map(function(id){ return een(r, id); });
+          // Eén eenheid achteraan als ze allemaal gelijk zijn (230 · 231 · 229 V),
+          // anders elk zijn eigen (52,4 V · -2,6 A).
+          var ehs = w.map(function(x){ return x.eh || ''; }).filter(function(x){ return x; });
+          var gelijk = ehs.every(function(x){ return x === ehs[0]; });
+          if(gelijk) return w.map(function(x){ return x.t; }).join(grijs(' · ')) + (ehs.length ? ' ' + ehs[0] : '');
+          return w.map(function(x){ return x.t + (x.eh ? ' ' + x.eh : ''); }).join(grijs(' · '));
         };
         var html = '';
         (variables.rijen || []).forEach(function(r, i){
-          html += '<div onclick="this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + r.e + '\'},bubbles:true,composed:true}))"'
-            + ' style="cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;padding:9px 0;'
-            + (i ? 'border-top:1px solid var(--ov-ink-6);' : '') + '">'
-            + '<div style="font-size:14px;font-weight:600;color:var(--primary-text-color)">' + r.n + '</div>'
-            + '<div style="font-size:14px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;color:var(--primary-text-color)">' + fmt(r) + '</div>'
-            + '<div style="grid-column:1 / span 2;font-size:12.5px;line-height:1.4;color:var(--ov-ink-58);margin-top:2px;white-space:normal">' + (r.u || '') + '</div>'
+          var eerste = Array.isArray(r.e) ? r.e[0] : r.e;
+          html += '<div onclick="this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + eerste + '\'},bubbles:true,composed:true}))"'
+            + ' style="cursor:pointer;padding:10px 0;' + (i ? 'border-top:1px solid var(--ov-ink-6);' : '') + '">'
+            + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">'
+            +   '<span style="font-size:14px;color:var(--ov-ink-80)">' + r.n + '</span>'
+            +   '<span style="font-size:15px;font-weight:600;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--primary-text-color)">' + waarde(r) + '</span>'
+            + '</div>'
+            + (r.u ? '<div style="font-size:12px;line-height:1.4;color:var(--ov-ink-50);margin-top:3px;white-space:normal">' + r.u + '</div>' : '')
             + '</div>';
         });
         return html;
