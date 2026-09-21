@@ -132,6 +132,61 @@ cards:
               var klok = (t && !isNaN(t.getTime())) ? ('0'+t.getHours()).slice(-2)+':'+('0'+t.getMinutes()).slice(-2) : '';
               return `<span style="display:flex;align-items:center;gap:7px;color:var(--ov-warn)"><ha-icon icon="mdi:doorbell-video" style="--mdc-icon-size:16px"></ha-icon>er is aangebeld${klok ? ' · ' + klok : ''}</span>`;
             ]]]
+      # Conditioneel: het huis draait op de accu. Achter de deurbel (daar staat
+      # iemand vóór de deur) maar vóór al het andere: bij een storing is dit
+      # de eerste vraag, en de wand zelf draait op datzelfde accupakket.
+      #
+      # De drempels staan niet hier. Of het een storing is (en welke soort)
+      # beslist `binary_sensor.huis_op_accu`, de duur komt uit
+      # `sensor.noodstroom_resterend` - dezelfde getallen als op de accu-view,
+      # zie packages/9 - Other/Battery.yaml. Tot de installatie kan deze pil
+      # niet verschijnen: de grendel daar staat dan nog uit.
+      - type: custom:button-card
+        template: ov_pill
+        entity: binary_sensor.huis_op_accu
+        triggers_update:
+          - sensor.noodstroom_resterend
+          - sensor.accu_lading
+        tap_action:
+          action: navigate
+          navigation_path: /lovelace/accu
+        visibility:
+          - condition: state
+            entity: binary_sensor.huis_op_accu
+            state: "on"
+        styles:
+          card:
+            # Rood bij een stroomstoring, oranje als het net er wel is en de
+            # omvormer zichzelf heeft losgemaakt - dan is er iets te doen in de
+            # meterkast, maar er valt niets uit.
+            - background: >-
+                [[[ return (entity && entity.attributes.oorzaak === 'stroomstoring')
+                      ? 'var(--ov-bad-16)' : 'var(--ov-warn-16)'; ]]]
+            - border: >-
+                [[[ return (entity && entity.attributes.oorzaak === 'stroomstoring')
+                      ? '1px solid var(--ov-bad-35)' : '1px solid var(--ov-warn-35)'; ]]]
+        custom_fields:
+          c: |
+            [[[
+              var storing = entity && entity.attributes.oorzaak === 'stroomstoring';
+              var kleur = storing ? 'var(--ov-bad)' : 'var(--ov-warn)';
+              var delen = [storing ? 'stroomstoring' : 'huis op de accu'];
+              var soc = states['sensor.accu_lading'];
+              if(soc && !isNaN(Number(soc.state))) delen.push('accu ' + Math.round(Number(soc.state)) + '%');
+              // Kort, want dit staat in de kopbalk: "nog 5 u 20", of wat er
+              // in plaats van een duur te zeggen valt.
+              var r = states['sensor.noodstroom_resterend'];
+              var a = r ? (r.attributes || {}) : {};
+              var h = r ? Number(r.state) : NaN;
+              if(a.stand === 'laadt_bij') delen.push('zon laadt bij');
+              else if(!isNaN(h)){
+                var m = Math.round(h * 60);
+                delen.push('nog ' + (m >= 60 ? Math.floor(m / 60) + ' u' + (m % 60 ? ' ' + (m % 60) : '')
+                                             : m + ' min'));
+              }
+              var icoon = storing ? 'mdi:flash-off' : 'mdi:home-battery';
+              return `<span style="display:flex;align-items:center;gap:7px;color:${kleur}"><ha-icon icon="${icoon}" style="--mdc-icon-size:16px"></ha-icon>${delen.join(' · ')}</span>`;
+            ]]]
       # Conditioneel: het huis heeft een vraag gesteld (satelliet + telefoon,
       # zie script.spraak_vraag_stellen in Kitchen/Voice.yaml) en het
       # antwoordvenster loopt nog. Tik opent #ov-vraag met Ja/Nee-knoppen -

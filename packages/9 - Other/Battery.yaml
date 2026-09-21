@@ -68,7 +68,85 @@
 ## terwijl er niets gebeurt, dan is deze 50 te laag.
 ##############################################################################
 
+##############################################################################
+## NOODSTROOM (21 september 2026)
+##
+## Alle groepen hangen aan de backup-uitgang van de Deye, BEHALVE DE LAADPAAL.
+## Die zit bewust aan de netkant: de auto uit de thuisaccu laden is twee keer
+## omzettingsverlies (net -> accu -> auto) voor stroom die je ook direct had
+## kunnen nemen - advies van de elektricien. Gevolg bij een storing: het hele
+## huis draait door, de laadpaal valt stil.
+##
+## Daardoor is `sensor.deye_load_ups_power` precies "het huis zonder de
+## laadpaal", zonder aftreksom. Controleer dat één keer zodra hij aangesloten
+## is: tijdens een laadsessie van 11 kW mag dat getal NIET mee omhoog. Doet hij
+## dat wel, dan hangt de laadpaal toch aan de backup-kant en rekent de kaart
+## met een last die bij een storing in één keer de accu leegtrekt.
+##
+## HOE WEET JE DAT HET EEN STORING IS
+## `binary_sensor.deye_grid` alleen is niet genoeg: tot de installatie staat
+## die permanent uit (de Deye hangt nergens aan). En de P1-meter alleen ook
+## niet - die was tussen 5 en 21 september vier keer onbeschikbaar (één keer
+## vier uur) en 84 keer langer dan 30 seconden stil, zonder dat er één keer
+## een storing was. Dus drie lagen:
+##
+##   1. `binary_sensor.accu_geinstalleerd` - een GRENDEL die aangaat zodra de
+##      Deye één keer netspanning heeft gezien en daarna nooit meer uit. Tot de
+##      installatie kan er dus niets alarmeren, en daarna hoeft niemand iets om
+##      te zetten.
+##   2. `binary_sensor.huis_op_accu` - de Deye ziet geen net, en de grendel is
+##      aan. Dat is het feit dat telt: het huis draait op de accu.
+##   3. Het attribuut `oorzaak` daarop - is de P1-meter óók stil, dan is het
+##      een stroomstoring (de dongel haalt zijn stroom uit de meter en die
+##      staat aan de netkant). Praat de meter nog, dan is het net er wel en
+##      heeft de omvormer zichzelf losgekoppeld: een zekering, of netspanning
+##      buiten de grenzen. Ook dan draait het huis op de accu, maar de
+##      oplossing is een andere.
+##
+## HOE LANG NOG
+## `sensor.noodstroom_resterend` rekent in twee standen met een ander getal:
+##   * NET ERBIJ: het uurgemiddelde van de huislast. Dat is "als het nú
+##     uitvalt". Niet het momentane getal: een waterkoker maakt van zes uur
+##     anders even anderhalf.
+##   * OP DE ACCU: wat de accu het laatste kwartier WERKELIJK afgaf. Levert de
+##     zon tijdens de storing mee (hangt er zon aan de backup-kant), dan zit dat
+##     daar vanzelf in, zonder dat deze som hoeft te weten hoe die bedraad is.
+## Gerekend tot het afslagpunt (`number.deye_battery_shutdown_soc`), niet tot
+## 0%. En let op het HERSTARTPUNT (`number.deye_battery_restart_soc`, 50% op
+## 21 september): is hij eenmaal afgeslagen, dan gaat de uitgang pas weer aan
+## als de accu terug op dat niveau is. Bij 28,8 kWh is dat ruim 11 kWh zon.
+##############################################################################
+
 battery_package:
+
+  # Tijdgewogen gemiddelden (`average_step`) en geen gewoon `mean`: de bron
+  # meldt zich alleen als het getal verandert, dus een gewoon gemiddelde telt
+  # een onrustig kwartiertje zwaarder dan een uur vlakke last.
+  sensor:
+    - platform: statistics
+      name: "Noodstroom huislast uurgemiddelde"
+      unique_id: noodstroom_huislast_uurgemiddelde
+      entity_id: sensor.deye_load_ups_power
+      state_characteristic: average_step
+      # Om de vijf seconden een meting, dus ~720 per uur; ruim erboven zodat
+      # het venster door de tijd wordt begrensd en niet door de buffer.
+      sampling_size: 2000
+      max_age:
+        hours: 1
+      # Zonder deze regel valt het gemiddelde op `unknown` zodra de last een
+      # uur lang precies gelijk blijft - 's nachts niet ondenkbaar.
+      keep_last_sample: true
+    - platform: statistics
+      name: "Noodstroom accu kwartiergemiddelde"
+      unique_id: noodstroom_accu_kwartiergemiddelde
+      # `accu_vermogen` en niet de Deye zelf: hetzelfde teken als overal
+      # (positief = laden), dus leeglopen is hier NEGATIEF.
+      entity_id: sensor.accu_vermogen
+      state_characteristic: average_step
+      sampling_size: 1000
+      max_age:
+        minutes: 15
+      keep_last_sample: true
 
   template:
     - sensor:
@@ -188,3 +266,121 @@ battery_package:
           state: >-
             {{ (states('sensor.accu_capaciteit') | float(0)
                 * states('sensor.accu_lading') | float(0) / 100) | round(2) }}
+
+    ##########################################################################
+    ## Noodstroom - zie de NOODSTROOM-kop bovenaan
+    ##########################################################################
+    # De grendel. Vijf minuten als vangnet naast de state-trigger: gaat de
+    # opgeslagen stand ooit verloren terwijl het net er gewoon is, dan komt er
+    # geen overgang naar `on` meer langs en zou hij anders `unknown` blijven.
+    - triggers:
+        - trigger: state
+          entity_id: binary_sensor.deye_grid
+          to: "on"
+        - trigger: homeassistant
+          event: start
+        - trigger: time_pattern
+          minutes: "/5"
+      binary_sensor:
+        - name: "Accu geïnstalleerd"
+          unique_id: accu_geinstalleerd
+          default_entity_id: binary_sensor.accu_geinstalleerd
+          icon: mdi:transmission-tower-import
+          # Eenmaal aan, altijd aan. Er is bewust geen weg terug: een Deye die
+          # later geen net ziet is precies het geval dat we willen melden.
+          state: "{{ this.state == 'on' or is_state('binary_sensor.deye_grid', 'on') }}"
+
+    # Om de tien seconden opnieuw, naast de statuswissels: de P1-meter die
+    # stilvalt is geen statuswissel, die houdt gewoon op. Zonder deze tik zou
+    # `oorzaak` tot een minuut lang "omvormer" zeggen tijdens een echte storing.
+    # Kost niets in de database: zolang stand en attributen gelijk blijven
+    # schrijft HA geen nieuwe rij.
+    - triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.deye_grid
+            - binary_sensor.accu_geinstalleerd
+        - trigger: time_pattern
+          seconds: "/10"
+        - trigger: homeassistant
+          event: start
+      binary_sensor:
+        - name: "Huis op accu"
+          unique_id: huis_op_accu
+          default_entity_id: binary_sensor.huis_op_accu
+          icon: >-
+            {{ 'mdi:home-battery' if is_state('binary_sensor.deye_grid', 'off')
+               else 'mdi:transmission-tower' }}
+          # Weet HA niet of de Deye net ziet, dan weet hij ook niet of het huis
+          # op de accu draait - en "nee" zeggen zou een storing kunnen
+          # verzwijgen.
+          availability: "{{ has_value('binary_sensor.deye_grid') }}"
+          state: >-
+            {{ is_state('binary_sensor.accu_geinstalleerd', 'on')
+               and is_state('binary_sensor.deye_grid', 'off') }}
+          # Een spanningsdip is geen storing. De meter telde er tientallen per
+          # fase; de Deye schakelt binnen milliseconden om en weer terug, en
+          # zonder deze vertraging knippert de pil op het wandpaneel.
+          delay_on: "00:00:30"
+          attributes:
+            # `stroomstoring` | `omvormer` - zie de kop. `last_reported` en niet
+            # `last_updated`: die tweede verspringt alleen als het getal
+            # verandert, en een vlakke meting is geen stille meter.
+            oorzaak: >-
+              {% set p1 = 'sensor.meterkast_slimhuys_zonneplan_netto_vermogen' %}
+              {% set stil = not has_value(p1)
+                 or (now() - states[p1].last_reported).total_seconds() > 60 %}
+              {{ 'stroomstoring' if stil else 'omvormer' }}
+
+    - sensor:
+        - name: "Noodstroom resterend"
+          unique_id: noodstroom_resterend
+          default_entity_id: sensor.noodstroom_resterend
+          unit_of_measurement: "h"
+          state_class: measurement
+          icon: mdi:timer-sand
+          # Zonder installatie is er geen noodstroom om over te rekenen: de Deye
+          # voedt dan alleen zichzelf (66 W), en dat leverde "95 uur" op.
+          availability: >-
+            {{ is_state('binary_sensor.accu_geinstalleerd', 'on')
+               and has_value('sensor.accu_lading') and has_value('sensor.accu_capaciteit') }}
+          # `unknown` als er niets af gaat - de zon vult hem bij, of er is geen
+          # last. Bewust geen 0: dat leest als "leeg". Wat er dan wél aan de
+          # hand is staat in het attribuut `stand`.
+          state: >-
+            {% set cap = states('sensor.accu_capaciteit') | float(0) %}
+            {% set vloer = states('number.deye_battery_shutdown_soc') | float(10) %}
+            {% set bruikbaar = [(states('sensor.accu_lading') | float(0) - vloer) / 100 * cap, 0] | max %}
+            {% if is_state('binary_sensor.huis_op_accu', 'on') %}
+              {% set last = 0 - states('sensor.noodstroom_accu_kwartiergemiddelde') | float(0) %}
+            {% else %}
+              {% set last = states('sensor.noodstroom_huislast_uurgemiddelde') | float(0) %}
+            {% endif %}
+            {{ (bruikbaar / (last / 1000)) | round(1) if last >= 50 else none }}
+          attributes:
+            # Wat de kaart en de pil tonen. Hier één keer uitgerekend, zodat ze
+            # niet ieder hun eigen versie van deze som bijhouden.
+            bruikbaar_kwh: >-
+              {% set cap = states('sensor.accu_capaciteit') | float(0) %}
+              {% set vloer = states('number.deye_battery_shutdown_soc') | float(10) %}
+              {{ ([(states('sensor.accu_lading') | float(0) - vloer) / 100 * cap, 0] | max) | round(1) }}
+            last_w: >-
+              {% if is_state('binary_sensor.huis_op_accu', 'on') %}
+                {{ (0 - states('sensor.noodstroom_accu_kwartiergemiddelde') | float(0)) | round(0) }}
+              {% else %}
+                {{ states('sensor.noodstroom_huislast_uurgemiddelde') | float(0) | round(0) }}
+              {% endif %}
+            # `huislast_uur` = gerekend met wat het huis het laatste uur trok;
+            # `accu_kwartier` = met wat de accu tijdens de storing werkelijk afgaf.
+            basis: >-
+              {{ 'accu_kwartier' if is_state('binary_sensor.huis_op_accu', 'on') else 'huislast_uur' }}
+            # `loopt_leeg` | `laadt_bij` | `geen_last`
+            stand: >-
+              {% if is_state('binary_sensor.huis_op_accu', 'on') %}
+                {% set pw = states('sensor.noodstroom_accu_kwartiergemiddelde') | float(0) %}
+                {{ 'loopt_leeg' if pw <= -50 else ('laadt_bij' if pw >= 50 else 'geen_last') }}
+              {% else %}
+                {{ 'loopt_leeg' if states('sensor.noodstroom_huislast_uurgemiddelde') | float(0) >= 50 else 'geen_last' }}
+              {% endif %}
+            afslag_procent: "{{ states('number.deye_battery_shutdown_soc') | int(10) }}"
+            herstart_procent: "{{ states('number.deye_battery_restart_soc') | int(50) }}"

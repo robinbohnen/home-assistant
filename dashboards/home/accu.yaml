@@ -40,10 +40,19 @@ cards:
       # maar sloeg nergens op - de accu liep leeg op zijn eigen elektronica.
       # Zolang die situatie kan bestaan hoort dat als eerste in beeld, anders
       # sta je naar een kloppende kaart te kijken met een verkeerd verhaal.
+      #
+      # NA DE INSTALLATIE NEEMT HET NOODSTROOMBLOK DIT OVER. Deze tekst ("klopt
+      # wel, maar gaat over een accu op een eiland") is geschreven voor een
+      # Deye die nog nergens aan hangt. Tijdens een echte storing zou hij het
+      # tegenovergestelde beweren van wat er gebeurt, dus hij verdwijnt zodra
+      # de grendel `binary_sensor.accu_geinstalleerd` aangaat.
       - type: conditional
         conditions:
           - condition: state
             entity: binary_sensor.deye_grid
+            state_not: "on"
+          - condition: state
+            entity: binary_sensor.accu_geinstalleerd
             state_not: "on"
         card:
           type: custom:button-card
@@ -178,43 +187,147 @@ cards:
               return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:var(--ov-ink-60);background:var(--ov-ink-8)">${t} kWh</span>`;
             ]]]
 
-      # HOE LANG NOG - de enige vraag die telt tijdens een stroomstoring.
-      # De meter telde er 127, waarvan 35 lange
-      # (sensor.meterkast_slimhuys_zonneplan_stroomuitvallen), dus dit is geen
-      # theoretische kaart. Gerekend tot het AFSLAGPUNT VAN DE OMVORMER en niet
-      # tot 0%: onder `number.deye_battery_shutdown_soc` komt er niets meer uit,
-      # dus die kilowatturen meetellen zou een uur beloven dat er niet is.
+  # ------------------------------------------------------------- noodstroom
+  # Alle groepen hangen aan de backup-uitgang van de Deye, behalve de
+  # laadpaal. Hoe er wordt vastgesteld dat het huis op de accu draait, en
+  # waarom dat drie lagen nodig heeft, staat in de NOODSTROOM-kop van
+  # packages/9 - Other/Battery.yaml. Deze kaart rekent zelf niets uit: de duur,
+  # de bruikbare kilowatturen en de last komen uit `sensor.noodstroom_resterend`,
+  # zodat de pil op het Overzicht precies hetzelfde getal noemt.
+  - type: vertical-stack
+    cards:
+      - type: custom:button-card
+        template: ov_title
+        variables:
+          title: NOODSTROOM
+
+      # Wat er NU aan de hand is. Vier standen, en de twee storingsstanden
+      # hebben een andere oplossing: bij een stroomstoring wacht je op de
+      # netbeheerder, bij een omvormer die zichzelf losgekoppeld heeft ga je
+      # naar de meterkast.
       - type: custom:button-card
         template: ov_listrow
-        entity: sensor.accu_inhoud
+        entity: binary_sensor.huis_op_accu
         triggers_update:
-          - sensor.deye_load_power
-          - sensor.accu_lading
-        variables:
-          mdi: mdi:home-lightning-bolt-outline
-          kleur: "var(--ov-info-strong)"
-          title: Hiermee draait het huis door
+          - binary_sensor.accu_geinstalleerd
+          - sensor.time
         custom_fields:
+          ic: |
+            [[[
+              var inst = states['binary_sensor.accu_geinstalleerd'];
+              var aan = entity && entity.state === 'on';
+              var storing = aan && entity.attributes.oorzaak === 'stroomstoring';
+              var v = !inst || inst.state !== 'on' ? ['mdi:transmission-tower-off','var(--ov-ink-35)']
+                    : (!entity || entity.state === 'unavailable') ? ['mdi:help-circle-outline','var(--ov-ink-35)']
+                    : storing ? ['mdi:flash-off','var(--ov-bad)']
+                    : aan ? ['mdi:home-battery','var(--ov-warn)']
+                    : ['mdi:transmission-tower','var(--ov-ok)'];
+              return `<ha-icon icon="${v[0]}" style="--mdc-icon-size:22px;color:${v[1]}"></ha-icon>`;
+            ]]]
+          t: |
+            [[[
+              var inst = states['binary_sensor.accu_geinstalleerd'];
+              if(!inst || inst.state !== 'on') return 'Nog niet actief';
+              if(!entity || entity.state === 'unavailable') return 'Omvormer niet bereikbaar';
+              if(entity.state !== 'on') return 'Het net is er';
+              // Tijdstip plus hoe lang: om tien uur 's avonds wil je allebei
+              // weten - wanneer het begon en of je al moet gaan rekenen.
+              var d = new Date(entity.last_changed);
+              var min = Math.max(0, Math.round((Date.now() - d.getTime()) / 60000));
+              var klok = ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
+              var duur = min < 60 ? min + ' min' : Math.floor(min/60) + ' u ' + (min % 60) + ' min';
+              var wat = entity.attributes.oorzaak === 'stroomstoring'
+                ? 'Stroomstoring' : 'Omvormer los van het net';
+              return wat + ' · sinds ' + klok + ' (' + duur + ')';
+            ]]]
           s: |
             [[[
-              var num = function(id){ var s = states[id];
-                return (s && !isNaN(Number(s.state))) ? Number(s.state) : null; };
-              var soc = num('sensor.accu_lading');
-              var cap = num('sensor.accu_capaciteit');
-              var vloer = num('number.deye_battery_shutdown_soc');
-              var last = num('sensor.deye_load_power');
-              if(soc === null || cap === null) return 'accu niet leesbaar';
-              if(vloer === null) vloer = 10;
-              var bruikbaar = Math.max(0, (soc - vloer) / 100 * cap);
-              var tekst = bruikbaar.toFixed(1).replace('.',',') + ' kWh bruikbaar';
-              if(last === null || last < 50)
-                return tekst + ' · geen noemenswaardige last om mee te rekenen';
-              var uren = bruikbaar / (last / 1000);
-              var duur = uren >= 1
-                ? Math.floor(uren) + ' uur ' + Math.round((uren % 1) * 60) + ' min'
-                : Math.round(uren * 60) + ' minuten';
-              return tekst + ' · ' + duur + ' bij ' + Math.round(last) + ' W';
+              var inst = states['binary_sensor.accu_geinstalleerd'];
+              if(!inst || inst.state !== 'on')
+                return 'de omvormer heeft nog nooit netspanning gezien; dit gaat vanzelf aan na de installatie';
+              if(!entity || entity.state === 'unavailable')
+                return 'HA weet niet of het net er is';
+              if(entity.state !== 'on')
+                return 'valt het uit, dan neemt de accu het hele huis over, behalve de laadpaal';
+              if(entity.attributes.oorzaak === 'stroomstoring')
+                return 'het huis draait op de accu · de laadpaal ligt stil';
+              // De meter praat nog, dus er ís net. De Deye heeft zichzelf
+              // losgemaakt - daar is iets aan te doen, en dat moet er staan.
+              return 'de meter heeft wél stroom · kijk naar de groep van de omvormer of zijn netbeveiliging · het huis draait zolang op de accu';
             ]]]
+
+      # Hoe lang nog. Buiten een storing is het "als het nu uitvalt", tijdens
+      # een storing "nog te gaan" - zelfde getal, andere vraag, en de sensor
+      # rekent in die twee standen ook met een andere last (zie Battery.yaml).
+      - type: custom:button-card
+        template: ov_listrow
+        entity: sensor.noodstroom_resterend
+        triggers_update:
+          - binary_sensor.huis_op_accu
+        custom_fields:
+          ic: |
+            [[[
+              var op = states['binary_sensor.huis_op_accu'];
+              var kleur = (op && op.state === 'on') ? 'var(--ov-warn)' : 'var(--ov-info-strong)';
+              return `<ha-icon icon="mdi:timer-sand" style="--mdc-icon-size:22px;color:${kleur}"></ha-icon>`;
+            ]]]
+          t: |
+            [[[
+              var op = states['binary_sensor.huis_op_accu'];
+              var tijdens = op && op.state === 'on';
+              if(!entity || entity.state === 'unavailable')
+                return tijdens ? 'Nog te gaan' : 'Als het nu uitvalt';
+              var a = entity.attributes || {};
+              var h = Number(entity.state);
+              var duur;
+              if(a.stand === 'laadt_bij') duur = 'de zon vult hem bij';
+              else if(a.stand === 'geen_last' || isNaN(h)) duur = 'nauwelijks last';
+              else {
+                // Eerst naar hele minuten, dan splitsen: `h % 1` afronden gaf
+                // bij 5,995 uur "5 uur 60 min".
+                var m = Math.round(h * 60);
+                duur = m >= 60 ? Math.floor(m / 60) + ' uur' + (m % 60 ? ' ' + (m % 60) + ' min' : '')
+                               : m + ' minuten';
+              }
+              return (tijdens ? 'Nog te gaan: ' : 'Als het nu uitvalt: ') + duur;
+            ]]]
+          s: |
+            [[[
+              if(!entity || entity.state === 'unavailable') return 'pas te berekenen na de installatie';
+              var a = entity.attributes || {};
+              var kwh = Number(a.bruikbaar_kwh);
+              var w = Number(a.last_w);
+              var t = (isNaN(kwh) ? '—' : kwh.toFixed(1).replace('.',',')) + ' kWh bruikbaar';
+              // `last_w` is wat de accu AFGEEFT, dus negatief betekent dat hij
+              // tijdens de storing oplaadt. Dat stond er eerst als "gaf 800 W"
+              // - precies de verkeerde kant op.
+              if(!isNaN(w) && Math.abs(w) >= 50)
+                t += a.basis !== 'accu_kwartier'
+                  ? ' · huis trok het laatste uur gemiddeld ' + Math.round(w) + ' W'
+                  : (w > 0 ? ' · accu gaf het laatste kwartier ' + Math.round(w) + ' W'
+                           : ' · zon laadt hem op met ' + Math.round(-w) + ' W');
+              // HET HERSTARTPUNT HOORT ERBIJ ZODRA HET ERTOE DOET. Is de accu
+              // eenmaal op zijn afslagpunt, dan gaat de uitgang pas weer aan
+              // als hij terug op dit niveau is - bij een 28,8 kWh-accu ruim
+              // 11 kWh zon. Buiten een storing is dat ruis; tijdens een storing
+              // is het het verschil tussen "even donker" en "tot morgenmiddag".
+              var op = states['binary_sensor.huis_op_accu'];
+              if(op && op.state === 'on' && a.stand === 'loopt_leeg' && a.herstart_procent !== undefined)
+                t += ' · daarna uit tot hij weer op ' + a.herstart_procent + '% is';
+              return t;
+            ]]]
+
+      - type: custom:button-card
+        template: ov_listrow
+        entity: binary_sensor.accu_geinstalleerd
+        variables:
+          mdi: mdi:ev-station
+          kleur: "var(--ov-ink-45)"
+          title: De laadpaal hangt er niet aan
+        custom_fields:
+          # Staat er zodat niemand bij een storing gaat zoeken waarom de auto
+          # niet laadt. De reden erbij, want "waarom niet?" is de volgende vraag.
+          s: "auto laden uit de accu is twee keer omzettingsverlies, dus die blijft aan de netkant"
 
   # ------------------------------------------------------------- vandaag
   - type: vertical-stack
