@@ -1141,6 +1141,8 @@ kamer_onderhoud_lijst:
 #   d    optioneel: maximaal aantal decimalen (standaard 1)
 #   min  optioneel: minimaal aantal decimalen (50,00 Hz i.p.v. 50 Hz)
 #   m    optioneel: vertaaltabel voor tekststanden, {charging: laden}
+#   tag  optioneel: kort label achter de naam voor een valkuil ("teken
+#        omgekeerd", "niet het huis"); `tk` kiest de kleur (warn|info|bad)
 #
 # De instantie moet zelf `triggers_update` zetten met dezelfde entiteiten:
 # zonder `entity` hertekent button-card anders nooit, en `all` zou hem bij elke
@@ -1208,9 +1210,12 @@ ov_uitlegtabel:
         (variables.rijen || []).forEach(function(r, i){
           var eerste = Array.isArray(r.e) ? r.e[0] : r.e;
           html += '<div onclick="this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + eerste + '\'},bubbles:true,composed:true}))"'
-            + ' style="cursor:pointer;padding:10px 0;' + (i ? 'border-top:1px solid var(--ov-ink-6);' : '') + '">'
+            + ' style="cursor:pointer;padding:8px 0;' + (i ? 'border-top:1px solid var(--ov-ink-6);' : '') + '">'
             + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">'
-            +   '<span style="font-size:14px;color:var(--ov-ink-80)">' + r.n + '</span>'
+            +   '<span style="font-size:14px;color:var(--ov-ink-80)">' + r.n
+            +     (r.tag ? ' <span style="font-size:10.5px;font-weight:600;padding:1px 7px;margin-left:4px;border-radius:10px;white-space:nowrap;'
+                           + 'color:var(--ov-' + (r.tk || 'warn') + ');background:var(--ov-' + (r.tk || 'warn') + '-12)">' + r.tag + '</span>' : '')
+            +   '</span>'
             +   '<span style="font-size:15px;font-weight:600;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--primary-text-color)">' + waarde(r) + '</span>'
             + '</div>'
             + (r.u ? '<div style="font-size:12px;line-height:1.4;color:var(--ov-ink-50);margin-top:3px;white-space:normal">' + r.u + '</div>' : '')

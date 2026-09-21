@@ -1,23 +1,34 @@
-# Omvormer: alles wat MarkeDroid en de Deye (Solarman) melden, met uitleg.
+# Omvormer: wat gebeurt er nu, is alles in orde, en kloppen de bronnen.
 #
 # ALLEEN LEZEN (21 september 2026). De Deye wordt gestuurd door MarkeDroid;
 # de `number.deye_*`, `select.deye_*`, `switch.deye_*` en `time.deye_*` zijn
 # registers waar MarkeDroid op schrijft en staan hier bewust niet - ook niet
 # als "alleen tonen", want dan is de stap naar een schuifje klein.
 #
-# SECTIONS EN GEEN MASONRY: masonry zet elke kaart in de kortste kolom, en dan
-# stond "Deye · netkant" midden tussen de MarkeDroid-blokken. Hier is de
-# volgorde vast: eerst MarkeDroid, dan de Deye, met een kop ertussen.
+# OPBOUW. Bovenaan vier kaarten die elk één vraag beantwoorden: NU (grote
+# getallen, kleur = richting), IN ORDE? (stoplicht per onderwerp), KLOPPEN DE
+# BRONNEN? (P1, MarkeDroid en Deye naast elkaar) en PER FASE (balkjes vanuit
+# het midden). Daaronder "Alle waarden": alle ~100 Deye- en MarkeDroid-
+# sensoren, fases samengevoegd op één regel, zonder uitleg - alleen een label
+# waar een getal iets anders betekent dan zijn naam doet vermoeden. De
+# uitleg per sensor staat in de koppen van packages/9 - Other/Battery.yaml.
+# Een eerste versie had bij elke regel een zin uitleg; dat was 131 regels
+# tekst waarin niets opviel.
 #
-# Elke regel is `e` (entiteit, of een lijst voor L1/L2/L3 op één regel), `n`
-# (naam), `u` (uitleg) en optioneel `a`/`s`/`eh`/`d`/`min`/`m` - zie het
-# template `ov_uitlegtabel` in overzicht_templates.yaml. Een entiteit erbij?
-# Zet hem ook in `triggers_update` van dezelfde kaart, anders ververst hij niet.
+# SECTIONS EN GEEN MASONRY: masonry zet elke kaart in de kortste kolom, en
+# dan staat de volgorde op zijn kop.
 #
-# De uitleg bij de uitgang en de UPS-last is een meting en geen handleiding:
+# KLEUREN: zon = clip (geel), afname = info (blauw), teruglevering en laden =
+# ok (groen), accu levert = warn (oranje), MarkeDroid = accent (paars).
+#
+# DE LABELS 'niet het huis' EN 'onduidelijk' ZIJN METINGEN, geen handleiding:
 # op 21 september liep `deye_load_l3_power` gelijk op met min de ZW-omvormer
 # op zolder, en `deye_load_ups_power` gaf 50-100 W bij een huis van ruim 1 kW.
-# Klopt dat na de definitieve aansluiting niet meer, pas dan de tekst aan.
+# Klopt dat na de definitieve aansluiting niet meer, pas dan de labels aan.
+#
+# De tabellen onderaan zijn gegenereerd uit een lijst maar met de hand te
+# onderhouden: zie het template `ov_uitlegtabel` in overzicht_templates.yaml.
+# Een entiteit erbij? Zet hem ook in `triggers_update` van dezelfde kaart.
 type: sections
 max_columns: 3
 title: Omvormer
@@ -27,150 +38,171 @@ sections:
 - type: grid
   column_span: 3
   cards:
-  - type: markdown
-    content: '**Alles hier is gelezen; niets is een knop.** De Deye wordt gestuurd door MarkeDroid (ModuSun), niet door Home Assistant. Bovenaan wat MarkeDroid zelf meldt, daaronder wat de omvormer via Solarman meldt. Veel getallen staan er dubbel en lopen niet altijd gelijk: wat het huis gebruikt komt uit de P1-meter en `sensor.huis_verbruik`, wat de accu doet uit `sensor.accu_*`. Tik op een regel voor de historie.'
-- type: grid
-  column_span: 3
-  cards:
-  - type: heading
-    heading: MarkeDroid
-    heading_style: title
+  - type: custom:button-card
+    template: ov_title
+    variables:
+      title: NU
+    grid_options:
+      columns: full
+  - type: custom:button-card
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: none
+    triggers_update:
+    - sensor.zon_vermogen_nu
+    - sensor.meterkast_slimhuys_zonneplan_netto_vermogen
+    - sensor.accu_vermogen
+    - sensor.accu_status
+    - sensor.accu_lading
+    - sensor.huis_verbruik
+    - sensor.markedroid_regie
+    - sensor.markedroid_exportbegrenzer
+    - binary_sensor.markedroid_verbinding
+    - binary_sensor.markedroid_flex_actief
+    styles: &id001
+      card:
+      - 'background: none'
+      - 'border: none'
+      - 'box-shadow: none'
+      - 'padding: 0 2px 6px 2px'
+      grid:
+      - 'grid-template-areas: ''"x"'''
+      - 'grid-template-columns: minmax(0, 1fr)'
+      custom_fields:
+        x:
+        - 'justify-self: stretch'
+        - 'text-align: left'
+        - 'min-width: 0'
+    custom_fields:
+      x: "[[[\n\n        var num = function(id){ var s = states[id]; if(!s) return null; var n = Number(s.state);\n          return (s.state === '' || isNaN(n)) ? null : n; };\n        var nl = function(n, d){ return n.toLocaleString('nl-NL', {maximumFractionDigits: d === undefined ? 0 : d}); };\n        var watt = function(w){ if(w === null) return '—'; var a = Math.abs(w);\n          return a >= 1000 ? nl(a/1000, 1) + ' kW' : nl(a) + ' W'; };\n        var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\\'hass-more-info\\',{detail:{entityId:\\'' + id + '\\'},bubbles:true,composed:true}))'; };\n        var stip = function(k){ return '<span style=\"display:inline-block;width:9px;height:9px;border-radius:50%;flex:none;background:var(--ov-' + k + ')\"></span>'; };\n\n        var tegel = function(id, label, waarde, kleur, sub){\n          return '<div onclick=\"' + info(id) + '\" style=\"cursor:pointer;flex:1 1 150px;min-width:0;background:var(--ov-ink-4);border-radius:14px;padding:13px 16px\">'\n            + '<div style=\"font-size:11px;font-weight:700;letter-spacing:1.1px;color:var(--ov-ink-55)\">' + label + '</div>'\n            + '<div style=\"font-size:26px;font-weight:700;line-height:1.25;margin-top:4px;white-space:nowrap;font-variant-numeric:tabular-nums;color:' + kleur + '\">' + waarde + '</div>'\n            + '<div style=\"font-size:12.5px;color:var(--ov-ink-58);margin-top:1px\">' + sub + '</div></div>';\n        };\n        var t = [];\n\n        var zon = num('sensor.zon_vermogen_nu');\n        t.push(tegel('sensor.zon_vermogen_nu', 'ZON', watt(zon),\n          (zon || 0) > 50 ? 'var(--ov-clip)' : 'var(--ov-ink-35)', 'zolderpanelen'));\n\n        var net = num('sensor.meterkast_slimhuys_zonneplan_netto_vermogen');\n        t.push(tegel('sensor.meterkast_slimhuys_zonneplan_netto_vermogen', 'NET', watt(net),\n          net === null ? 'var(--ov-ink-35)' : (net < -50 ? 'var(--ov-ok)' : (net > 50 ? 'var(--ov-info)' : 'var(--ov-ink-35)')),\n          net === null ? 'P1-meter stil' : (net < -50 ? 'terug naar het net' : (net > 50 ? 'van het net' : 'in balans'))));\n\n        var acc = num('sensor.accu_vermogen'), st = states['sensor.accu_status'], ld = num('sensor.accu_lading');\n        var ak = st && st.state === 'laden' ? 'var(--ov-ok)' : (st && st.state === 'ontladen' ? 'var(--ov-warn)' : 'var(--ov-ink-35)');\n        var aw = st && st.state === 'laden' ? 'laadt' : (st && st.state === 'ontladen' ? 'levert' : 'rust');\n        t.push(tegel('sensor.accu_vermogen', 'ACCU', watt(acc), ak, aw + (ld !== null ? ' · ' + nl(ld) + '% vol' : '')));\n\n        var huis = num('sensor.huis_verbruik');\n        t.push(tegel('sensor.huis_verbruik', 'HUIS', huis === null ? '—' : watt(huis * 1000), 'var(--primary-text-color)', 'verbruik nu'));\n\n        // MarkeDroid: zijn keuze, of - zolang hij die nog niet meestuurt - dat hij er is.\n        var vb = states['binary_sensor.markedroid_verbinding'], rg = states['sensor.markedroid_regie'];\n        var ex = states['sensor.markedroid_exportbegrenzer'], fl = states['binary_sensor.markedroid_flex_actief'];\n        var mw, mk, ms;\n        if(!vb || vb.state !== 'on'){ mw = 'stil'; mk = 'var(--ov-bad)'; ms = 'geen berichten meer'; }\n        else if(rg && rg.state !== 'niet_geleverd' && rg.attributes.omschrijving){\n          mw = rg.state.replace(/_/g, ' '); mk = 'var(--ov-accent)'; ms = rg.attributes.omschrijving;\n        } else { mw = 'verbonden'; mk = 'var(--ov-accent)'; ms = 'stuurt zijn keuze nog niet mee'; }\n        if(fl && fl.state === 'on') ms = 'flex-opdracht loopt';\n        if(ex && ex.state === 'actief') ms = 'teruglevering dichtgezet';\n        t.push(tegel('sensor.markedroid_regie', 'MARKEDROID', mw, mk, ms));\n\n        return '<div style=\"display:flex;flex-wrap:wrap;gap:10px\">' + t.join('') + '</div>';\n      ]]]"
+    grid_options:
+      columns: full
 - type: grid
   cards:
   - type: custom:button-card
     template: ov_title
     variables:
-      title: WAT HIJ BESLIST
+      title: IN ORDE?
+    grid_options:
+      columns: full
+  - type: custom:button-card
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: none
+    triggers_update:
+    - sensor.deye_device_state
+    - sensor.deye_device_alarm
+    - sensor.deye_device_fault
+    - binary_sensor.deye_battery_alarm
+    - binary_sensor.deye_battery_fault
+    - binary_sensor.deye_grid
+    - sensor.deye_grid_l1_voltage
+    - sensor.deye_grid_frequency
+    - sensor.deye_battery_temperature
+    - sensor.deye_temperature
+    - binary_sensor.deye_connection
+    - binary_sensor.markedroid_verbinding
+    - sensor.deye_update_interval
+    styles: *id001
+    custom_fields:
+      x: "[[[\n\n        var num = function(id){ var s = states[id]; if(!s) return null; var n = Number(s.state);\n          return (s.state === '' || isNaN(n)) ? null : n; };\n        var nl = function(n, d){ return n.toLocaleString('nl-NL', {maximumFractionDigits: d === undefined ? 0 : d}); };\n        var watt = function(w){ if(w === null) return '—'; var a = Math.abs(w);\n          return a >= 1000 ? nl(a/1000, 1) + ' kW' : nl(a) + ' W'; };\n        var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\\'hass-more-info\\',{detail:{entityId:\\'' + id + '\\'},bubbles:true,composed:true}))'; };\n        var stip = function(k){ return '<span style=\"display:inline-block;width:9px;height:9px;border-radius:50%;flex:none;background:var(--ov-' + k + ')\"></span>'; };\n\n        var rij = function(id, k, naam, tekst, i){\n          return '<div onclick=\"' + info(id) + '\" style=\"cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 0;'\n            + (i ? 'border-top:1px solid var(--ov-ink-6)' : '') + '\">' + stip(k)\n            + '<span style=\"font-size:14px;color:var(--ov-ink-80);flex:1\">' + naam + '</span>'\n            + '<span style=\"font-size:14px;font-weight:600;text-align:right;color:' + (k === 'ok' ? 'var(--primary-text-color)' : 'var(--ov-' + k + ')') + '\">' + tekst + '</span></div>';\n        };\n        var r = [];\n        var ds = states['sensor.deye_device_state'];\n        var stand = ds ? ds.state : null;\n        r.push(['sensor.deye_device_state', stand === 'Normal' ? 'ok' : (stand === 'Standby' || stand === 'Self-test' ? 'warn' : 'bad'), 'Omvormer',\n          {Normal:'normaal', Standby:'stand-by', 'Self-test':'zelftest', Alarm:'alarm', Fault:'storing'}[stand] || (stand || '—')]);\n\n        var mel = [];\n        ['sensor.deye_device_alarm','sensor.deye_device_fault'].forEach(function(id){ var s = states[id];\n          if(s && ['OK','unknown','unavailable'].indexOf(s.state) === -1) mel.push(s.state); });\n        if(states['binary_sensor.deye_battery_alarm'] && states['binary_sensor.deye_battery_alarm'].state === 'on') mel.push('accu-alarm');\n        if(states['binary_sensor.deye_battery_fault'] && states['binary_sensor.deye_battery_fault'].state === 'on') mel.push('accustoring');\n        r.push(['sensor.deye_device_alarm', mel.length ? 'bad' : 'ok', 'Meldingen', mel.length ? mel.join(', ') : 'geen']);\n\n        var grid = states['binary_sensor.deye_grid'];\n        var vs = ['1','2','3'].map(function(f){ return num('sensor.deye_grid_l' + f + '_voltage'); }).filter(function(v){ return v !== null; });\n        var hz = num('sensor.deye_grid_frequency');\n        if(grid && grid.state !== 'on') r.push(['binary_sensor.deye_grid', 'bad', 'Net', 'weg — huis op accu']);\n        else {\n          var lo = Math.min.apply(null, vs), hi = Math.max.apply(null, vs);\n          var goed = vs.length === 3 && lo >= 207 && hi <= 253 && hz !== null && Math.abs(hz - 50) <= 0.2;\n          r.push(['sensor.deye_grid_l1_voltage', goed ? 'ok' : 'warn', 'Net',\n            (vs.length ? nl(lo) + (hi !== lo ? '–' + nl(hi) : '') + ' V' : '—') + (hz !== null ? ' · ' + hz.toFixed(2).replace('.', ',') + ' Hz' : '')]);\n        }\n\n        var ta = num('sensor.deye_battery_temperature'), ti = num('sensor.deye_temperature');\n        var tk = 'ok';\n        if(ta !== null && (ta < 5 || ta > 40)) tk = 'warn';\n        if(ti !== null && ti > 65) tk = 'warn';\n        if((ta !== null && (ta < 0 || ta > 45)) || (ti !== null && ti > 75)) tk = 'bad';\n        r.push(['sensor.deye_temperature', tk, 'Temperatuur',\n          'accu ' + (ta === null ? '—' : nl(ta, 1)) + ' · omvormer ' + (ti === null ? '—' : nl(ti)) + ' °C']);\n\n        var weg = [];\n        if(!states['binary_sensor.deye_connection'] || states['binary_sensor.deye_connection'].state !== 'on') weg.push('Solarman');\n        if(!states['binary_sensor.markedroid_verbinding'] || states['binary_sensor.markedroid_verbinding'].state !== 'on') weg.push('MarkeDroid');\n        var ui = num('sensor.deye_update_interval');\n        r.push(['binary_sensor.deye_connection', weg.length ? 'bad' : (ui !== null && ui > 15 ? 'warn' : 'ok'), 'Verbindingen',\n          weg.length ? weg.join(' en ') + ' stil' : (ui !== null && ui > 15 ? 'Solarman traag (' + nl(ui) + ' s)' : 'Solarman · MarkeDroid')]);\n\n        return r.map(function(x, i){ return rij(x[0], x[1], x[2], x[3], i); }).join('');\n      ]]]"
+    grid_options:
+      columns: full
+- type: grid
+  cards:
+  - type: custom:button-card
+    template: ov_title
+    variables:
+      title: KLOPPEN DE BRONNEN?
+    grid_options:
+      columns: full
+  - type: custom:button-card
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: none
+    triggers_update:
+    - sensor.meterkast_slimhuys_zonneplan_netto_vermogen
+    - sensor.markedroid_net_vermogen
+    - sensor.deye_external_power
+    - sensor.accu_vermogen
+    - sensor.markedroid_accu_vermogen
+    - sensor.accu_lading
+    - sensor.markedroid_accu_lading
+    - sensor.slimhuys_zonneplan_spanning_l1
+    - sensor.markedroid_net_spanning_l1
+    - sensor.deye_grid_l1_voltage
+    styles: *id001
+    custom_fields:
+      x: "[[[\n\n        var num = function(id){ var s = states[id]; if(!s) return null; var n = Number(s.state);\n          return (s.state === '' || isNaN(n)) ? null : n; };\n        var nl = function(n, d){ return n.toLocaleString('nl-NL', {maximumFractionDigits: d === undefined ? 0 : d}); };\n        var watt = function(w){ if(w === null) return '—'; var a = Math.abs(w);\n          return a >= 1000 ? nl(a/1000, 1) + ' kW' : nl(a) + ' W'; };\n        var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\\'hass-more-info\\',{detail:{entityId:\\'' + id + '\\'},bubbles:true,composed:true}))'; };\n        var stip = function(k){ return '<span style=\"display:inline-block;width:9px;height:9px;border-radius:50%;flex:none;background:var(--ov-' + k + ')\"></span>'; };\n\n        // Zelfde getal uit twee bronnen. Groen als ze binnen de marge liggen;\n        // de meetmomenten lopen tot ~10 s uiteen, dus bij wisselende last\n        // mag er af en toe een oranje tussen zitten.\n        var bron = function(naam, w, eh){ return '<span style=\"color:var(--ov-ink-45);font-weight:500;font-size:11.5px\">' + naam + '</span> '\n          + (w === null ? '—' : w) + (eh && w !== null ? ' ' + eh : ''); };\n        var rij = function(id, naam, k, delen, noot, i){\n          return '<div onclick=\"' + info(id) + '\" style=\"cursor:pointer;padding:9px 0;' + (i ? 'border-top:1px solid var(--ov-ink-6)' : '') + '\">'\n            + '<div style=\"display:flex;align-items:center;gap:10px\">' + stip(k)\n            + '<span style=\"font-size:14px;color:var(--ov-ink-80);flex:1\">' + naam + '</span>'\n            + '<span style=\"font-size:14px;font-weight:600;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums\">' + delen.join('<span style=\"color:var(--ov-ink-25)\">  ·  </span>') + '</span></div>'\n            + (noot ? '<div style=\"font-size:11.5px;color:var(--ov-ink-45);margin:2px 0 0 19px\">' + noot + '</div>' : '') + '</div>';\n        };\n        var eens = function(a, b, marge){ if(a === null || b === null) return 'ink-25';\n          return Math.abs(a - b) <= Math.max(marge, 0.15 * Math.max(Math.abs(a), Math.abs(b))) ? 'ok' : 'warn'; };\n        var r = [];\n\n        // MarkeDroid leest het net via de externe klemmen van de Deye, niet via\n        // de P1: die twee horen gelijk te lopen. Het verschil met de P1 is wat\n        // er aan de netkant van die klemmen hangt (21-9: 100-900 W).\n        var p1 = num('sensor.meterkast_slimhuys_zonneplan_netto_vermogen'), mdn = num('sensor.markedroid_net_vermogen'), dx = num('sensor.deye_external_power');\n        var buiten = (p1 === null || dx === null) ? '' : 'P1 (hele aansluiting): ' + nl(p1) + ' W — ' + nl(Math.abs(p1 - dx)) + ' W '\n          + (p1 >= dx ? 'meer' : 'minder') + ' dan de klemmen zien';\n        r.push(rij('sensor.markedroid_net_vermogen', 'Net bij de klemmen', eens(dx, mdn, 100),\n          [bron('Deye', dx === null ? null : nl(dx)), bron('MD', mdn === null ? null : nl(mdn), 'W')], buiten, 0));\n\n        var da = num('sensor.accu_vermogen'), ma = num('sensor.markedroid_accu_vermogen');\n        r.push(rij('sensor.markedroid_accu_vermogen', 'Accu vermogen', eens(da, ma, 100),\n          [bron('Deye', da === null ? null : nl(da)), bron('MD', ma === null ? null : nl(ma), 'W')], '', 1));\n\n        var dl = num('sensor.accu_lading'), ml = num('sensor.markedroid_accu_lading');\n        r.push(rij('sensor.markedroid_accu_lading', 'Lading', eens(dl, ml, 1.5),\n          [bron('Deye', dl === null ? null : nl(dl)), bron('MD', ml === null ? null : nl(ml), '%')], '', 2));\n\n        var pv = num('sensor.slimhuys_zonneplan_spanning_l1'), mv = num('sensor.markedroid_net_spanning_l1'), dv = num('sensor.deye_grid_l1_voltage');\n        var vk = (pv === null || mv === null || dv === null) ? 'ink-25'\n               : (Math.max(pv, mv, dv) - Math.min(pv, mv, dv) <= 4 ? 'ok' : 'warn');\n        r.push(rij('sensor.markedroid_net_spanning_l1', 'Spanning L1', vk,\n          [bron('P1', pv === null ? null : nl(pv)), bron('MD', mv === null ? null : nl(mv)), bron('Deye', dv === null ? null : nl(dv), 'V')], '', 3));\n\n        return r.join('');\n      ]]]"
+    grid_options:
+      columns: full
+- type: grid
+  cards:
+  - type: custom:button-card
+    template: ov_title
+    variables:
+      title: PER FASE
+    grid_options:
+      columns: full
+  - type: custom:button-card
+    show_icon: false
+    show_name: false
+    show_state: false
+    tap_action:
+      action: none
+    triggers_update:
+    - sensor.slimhuys_zonneplan_vermogen_l1
+    - sensor.slimhuys_zonneplan_vermogen_l2
+    - sensor.slimhuys_zonneplan_vermogen_l3
+    - sensor.deye_load_l1_power
+    - sensor.deye_load_l2_power
+    - sensor.deye_load_l3_power
+    - sensor.slimhuys_zonneplan_spanning_l1
+    - sensor.slimhuys_zonneplan_spanning_l2
+    - sensor.slimhuys_zonneplan_spanning_l3
+    styles: *id001
+    custom_fields:
+      x: "[[[\n\n        var num = function(id){ var s = states[id]; if(!s) return null; var n = Number(s.state);\n          return (s.state === '' || isNaN(n)) ? null : n; };\n        var nl = function(n, d){ return n.toLocaleString('nl-NL', {maximumFractionDigits: d === undefined ? 0 : d}); };\n        var watt = function(w){ if(w === null) return '—'; var a = Math.abs(w);\n          return a >= 1000 ? nl(a/1000, 1) + ' kW' : nl(a) + ' W'; };\n        var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\\'hass-more-info\\',{detail:{entityId:\\'' + id + '\\'},bubbles:true,composed:true}))'; };\n        var stip = function(k){ return '<span style=\"display:inline-block;width:9px;height:9px;border-radius:50%;flex:none;background:var(--ov-' + k + ')\"></span>'; };\n\n        // Balk vanuit het midden: rechts = afname/verbruik, links = teruglevering.\n        // Schaal: 3 kW per kant, of meer als een fase daarboven zit.\n        var ids = {net: ['1','2','3'].map(function(f){ return 'sensor.slimhuys_zonneplan_vermogen_l' + f; }),\n                   uit: ['1','2','3'].map(function(f){ return 'sensor.deye_load_l' + f + '_power'; })};\n        var alle = ids.net.concat(ids.uit).map(num).filter(function(v){ return v !== null; }).map(Math.abs);\n        var schaal = Math.max.apply(null, [3000].concat(alle));\n        var balk = function(w){\n          if(w === null) return '<div style=\"height:8px;border-radius:4px;background:var(--ov-ink-6)\"></div>';\n          var pct = Math.min(Math.abs(w) / schaal * 50, 50);\n          var kl = w < 0 ? 'var(--ov-ok)' : 'var(--ov-info)';\n          return '<div style=\"position:relative;height:8px;border-radius:4px;background:var(--ov-ink-6)\">'\n            + '<div style=\"position:absolute;top:0;bottom:0;left:50%;width:1px;background:var(--ov-ink-25)\"></div>'\n            + '<div style=\"position:absolute;top:0;bottom:0;border-radius:4px;background:' + kl + ';'\n            + (w < 0 ? 'right:50%;' : 'left:50%;') + 'width:' + pct + '%\"></div></div>';\n        };\n        var regel = function(label, id, w){\n          return '<div onclick=\"' + info(id) + '\" style=\"cursor:pointer;display:grid;grid-template-columns:52px minmax(0,1fr) 62px;align-items:center;column-gap:10px;margin:3px 0\">'\n            + '<span style=\"font-size:11.5px;color:var(--ov-ink-50)\">' + label + '</span>' + balk(w)\n            + '<span style=\"font-size:13px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums\">' + (w === null ? '—' : nl(w)) + '</span></div>';\n        };\n        var html = '';\n        ['1','2','3'].forEach(function(f, i){\n          var v = num('sensor.slimhuys_zonneplan_spanning_l' + f);\n          html += '<div style=\"padding:9px 0;' + (i ? 'border-top:1px solid var(--ov-ink-6)' : '') + '\">'\n            + '<div style=\"display:flex;justify-content:space-between;font-size:14px;margin-bottom:3px\">'\n            + '<span style=\"font-weight:600\">L' + f + '</span><span style=\"color:var(--ov-ink-50);font-size:12.5px\">' + (v === null ? '—' : nl(v) + ' V') + '</span></div>'\n            + regel('net', ids.net[i], num(ids.net[i])) + regel('uitgang', ids.uit[i], num(ids.uit[i])) + '</div>';\n        });\n        html += '<div style=\"font-size:11.5px;color:var(--ov-ink-45);margin-top:4px\">'\n          + '<span style=\"color:var(--ov-info)\">■</span> afname / verbruik  ·  <span style=\"color:var(--ov-ok)\">■</span> teruglevering  ·  '\n          + 'net = P1-meter, uitgang = backup-kant van de Deye. Op L3 levert de ZW-omvormer van zolder terug.</div>';\n        return html;\n      ]]]"
+    grid_options:
+      columns: full
+- type: grid
+  column_span: 3
+  cards:
+  - type: heading
+    heading: Alle waarden
+    heading_style: title
+    icon: mdi:format-list-bulleted
+    grid_options:
+      columns: full
+- type: grid
+  cards:
+  - type: custom:button-card
+    template: ov_title
+    variables:
+      title: MARKEDROID
     grid_options:
       columns: full
   - type: custom:button-card
     template: ov_uitlegtabel
     triggers_update:
-    - binary_sensor.markedroid_verbinding
     - sensor.markedroid_regie
     - sensor.markedroid_exportbegrenzer
     - binary_sensor.markedroid_negatieve_prijs
     - binary_sensor.markedroid_flex_actief
     - sensor.markedroid_flex_vermogen
-    variables:
-      rijen:
-      - e: binary_sensor.markedroid_verbinding
-        n: Verbinding
-        u: Berichten komen om de ~10 s binnen; na een minuut stilte gaat dit uit.
-      - e: sensor.markedroid_regie
-        n: Regie
-        a: omschrijving
-        u: De stand waarin MarkeDroid de accu zet (eigen verbruik, vasthouden, laden van het net, flex…). ModuSun rolt dit veld nog uit; bij ons ontbreekt het.
-      - e:
-        - sensor.markedroid_exportbegrenzer
-        - binary_sensor.markedroid_negatieve_prijs
-        n: Exportbegrenzer · dicht
-        u: '''actief'' = teruglevering op 0 W gezet, meestal bij een negatieve prijs. Ontbreekt ook nog in onze berichten.'
-      - e:
-        - binary_sensor.markedroid_flex_actief
-        - sensor.markedroid_flex_vermogen
-        n: Flex-opdracht
-        u: Een energiebedrijf vraagt via MarkeDroid vermogen van de accu. Positief = kopen, negatief = verkopen.
-    grid_options:
-      columns: full
-  - type: custom:button-card
-    template: ov_title
-    variables:
-      title: OPGETELD SINDS 21 SEPTEMBER
-    grid_options:
-      columns: full
-  - type: custom:button-card
-    template: ov_uitlegtabel
-    triggers_update:
-    - sensor.markedroid_accu_geladen
-    - sensor.markedroid_accu_ontladen
-    - sensor.markedroid_net_afname
-    - sensor.markedroid_net_teruglevering
-    - sensor.markedroid_zon_energie
-    - sensor.markedroid_last_energie
-    - binary_sensor.markedroid_teruglevering
-    - binary_sensor.markedroid_net_uitgevallen
-    variables:
-      rijen:
-      - e:
-        - sensor.markedroid_accu_geladen
-        - sensor.markedroid_accu_ontladen
-        n: Accu geladen · ontladen
-        s: 0.001
-        eh: kWh
-        d: 2
-        u: Opgeteld uit MarkeDroids eigen metingen sinds 21 september. Terwijl HA plat ligt telt er niets.
-      - e:
-        - sensor.markedroid_net_afname
-        - sensor.markedroid_net_teruglevering
-        n: Net afname · terug
-        s: 0.001
-        eh: kWh
-        d: 2
-        u: De rekening volgt de P1-meter, niet dit.
-      - e:
-        - sensor.markedroid_zon_energie
-        - sensor.markedroid_last_energie
-        n: Zon · last
-        s: 0.001
-        eh: kWh
-        d: 2
-      - e:
-        - binary_sensor.markedroid_teruglevering
-        - binary_sensor.markedroid_net_uitgevallen
-        n: Levert terug · net weg
-        u: Terug = meer dan 100 W naar het net. Net weg = alle fases onder 50 V.
-    grid_options:
-      columns: full
-- type: grid
-  cards:
-  - type: custom:button-card
-    template: ov_title
-    variables:
-      title: WAT HIJ MEET
-    grid_options:
-      columns: full
-  - type: custom:button-card
-    template: ov_uitlegtabel
-    triggers_update:
+    - binary_sensor.markedroid_verbinding
     - sensor.markedroid_accu_vermogen
     - sensor.markedroid_accu_lading
     - sensor.markedroid_accu_capaciteit
-    - sensor.markedroid_accu_temperatuur
     - sensor.markedroid_accu_spanning
     - sensor.markedroid_accu_stroom
-    variables:
-      rijen:
-      - e: sensor.markedroid_accu_vermogen
-        n: Accu vermogen
-        u: Positief = laden. <b>Andersom dan de handleiding</b>, nagemeten op 21 september.
-      - e: sensor.markedroid_accu_lading
-        n: Accu lading
-        d: 0
-      - e: sensor.markedroid_accu_capaciteit
-        n: Accu capaciteit
-        d: 2
-        u: 600 Ah × 51,2 V. HA rekent zelf met 48 V en komt op 28,8 kWh.
-      - e: sensor.markedroid_accu_temperatuur
-        n: Accu temperatuur
-      - e:
-        - sensor.markedroid_accu_spanning
-        - sensor.markedroid_accu_stroom
-        n: Accu spanning · stroom
-        d: 2
-    grid_options:
-      columns: full
-- type: grid
-  cards:
-  - type: custom:button-card
-    template: ov_title
-    variables:
-      title: NET, LAST EN ZON
-    grid_options:
-      columns: full
-  - type: custom:button-card
-    template: ov_uitlegtabel
-    triggers_update:
+    - sensor.markedroid_accu_temperatuur
     - sensor.markedroid_net_vermogen
     - sensor.markedroid_net_vermogen_l1
     - sensor.markedroid_net_vermogen_l2
@@ -181,12 +213,55 @@ sections:
     - sensor.markedroid_last_vermogen
     - sensor.markedroid_zon_vermogen
     - sensor.markedroid_zon_capaciteit
+    - sensor.markedroid_accu_geladen
+    - sensor.markedroid_accu_ontladen
+    - sensor.markedroid_net_afname
+    - sensor.markedroid_net_teruglevering
+    - sensor.markedroid_zon_energie
+    - sensor.markedroid_last_energie
+    - binary_sensor.markedroid_teruglevering
+    - binary_sensor.markedroid_net_uitgevallen
     variables:
       rijen:
+      - e: sensor.markedroid_regie
+        n: Regie
+        a: omschrijving
+        tag: nog niet geleverd
+        tk: info
+      - e:
+        - sensor.markedroid_exportbegrenzer
+        - binary_sensor.markedroid_negatieve_prijs
+        n: Exportbegrenzer · dicht
+        tag: nog niet geleverd
+        tk: info
+      - e:
+        - binary_sensor.markedroid_flex_actief
+        - sensor.markedroid_flex_vermogen
+        n: Flex-opdracht
+      - e: binary_sensor.markedroid_verbinding
+        n: Verbinding
+      - e: sensor.markedroid_accu_vermogen
+        n: Accu vermogen
+        tag: + = laden, tegen de docs in
+      - e: sensor.markedroid_accu_lading
+        n: Accu lading
+        d: 0
+      - e: sensor.markedroid_accu_capaciteit
+        n: Accu capaciteit
+        d: 2
+        tag: 51,2 V, HA rekent 48 V
+        tk: info
+      - e:
+        - sensor.markedroid_accu_spanning
+        - sensor.markedroid_accu_stroom
+        - sensor.markedroid_accu_temperatuur
+        n: Accu V · A · temp
+        d: 1
       - e: sensor.markedroid_net_vermogen
         n: Net
         d: 0
-        u: Positief = afnemen. Hoort gelijk te lopen met de P1-meter.
+        tag: = Deye-klemmen, niet de P1
+        tk: info
       - e:
         - sensor.markedroid_net_vermogen_l1
         - sensor.markedroid_net_vermogen_l2
@@ -201,29 +276,47 @@ sections:
       - e: sensor.markedroid_last_vermogen
         n: Last
         d: 0
-        u: <b>Niet het huisverbruik</b>, vaak 0 terwijl het huis 1 kW trekt.
-      - e: sensor.markedroid_zon_vermogen
-        n: Zon op de Deye
+        tag: niet het huis
+      - e:
+        - sensor.markedroid_zon_vermogen
+        - sensor.markedroid_zon_capaciteit
+        n: Zon · capaciteit
         d: 0
-        u: Er hangen geen panelen aan de Deye, dus 0.
-      - e: sensor.markedroid_zon_capaciteit
-        n: Zon capaciteit
-        d: 0
-        u: Eigenlijk het vermogen van de omvormer, niet van panelen.
+        tag: geen panelen op de Deye
+        tk: info
+      - e:
+        - sensor.markedroid_accu_geladen
+        - sensor.markedroid_accu_ontladen
+        n: Accu in · uit sinds 21-9
+        s: 0.001
+        eh: kWh
+        d: 2
+      - e:
+        - sensor.markedroid_net_afname
+        - sensor.markedroid_net_teruglevering
+        n: Net af · terug sinds 21-9
+        s: 0.001
+        eh: kWh
+        d: 2
+      - e:
+        - sensor.markedroid_zon_energie
+        - sensor.markedroid_last_energie
+        n: Zon · last sinds 21-9
+        s: 0.001
+        eh: kWh
+        d: 2
+      - e:
+        - binary_sensor.markedroid_teruglevering
+        - binary_sensor.markedroid_net_uitgevallen
+        n: Levert terug · net weg
     grid_options:
       columns: full
-- type: grid
-  column_span: 3
-  cards:
-  - type: heading
-    heading: Deye via Solarman
-    heading_style: title
 - type: grid
   cards:
   - type: custom:button-card
     template: ov_title
     variables:
-      title: ACCU
+      title: DEYE · ACCU
     grid_options:
       columns: full
   - type: custom:button-card
@@ -251,7 +344,7 @@ sections:
       - e: sensor.deye_battery_power
         n: Vermogen
         d: 0
-        u: <b>Positief = ontladen</b> (Deye). HA draait dit om in <code>sensor.accu_vermogen</code>.
+        tag: + = ontladen
       - e: sensor.deye_battery_state
         n: Richting
         m:
@@ -259,22 +352,20 @@ sections:
           discharging: ontladen
           standby: rust
           idle: rust
-        u: Afgeleid uit het vermogen, dode zone ±50 W.
       - e:
         - sensor.deye_battery_voltage
         - sensor.deye_battery_current
-        n: Spanning · stroom
-        d: 2
-      - e: sensor.deye_battery_temperature
-        n: Temperatuur
+        - sensor.deye_battery_temperature
+        n: V · A · temp
+        d: 1
       - e:
         - sensor.deye_today_battery_charge
         - sensor.deye_today_battery_discharge
-        n: Vandaag geladen · ontladen
+        n: Vandaag in · uit
       - e:
         - sensor.deye_total_battery_charge
         - sensor.deye_total_battery_discharge
-        n: Totaal geladen · ontladen
+        n: Totaal in · uit
       - e:
         - sensor.deye_today_battery_life_cycles
         - sensor.deye_total_battery_life_cycles
@@ -287,114 +378,16 @@ sections:
       - e: sensor.deye_battery_soh
         n: Gezondheid
         d: 0
-        u: Geschat door de integratie, niet gemeten.
+        tag: geschat
+        tk: info
       - e: sensor.deye_battery_capacity
         n: Capaciteit (schatting)
-        u: Blijft bij ons leeg.
     grid_options:
       columns: full
-- type: grid
-  cards:
   - type: custom:button-card
     template: ov_title
     variables:
-      title: UITGANG (HET HUIS)
-    grid_options:
-      columns: full
-  - type: custom:button-card
-    template: ov_uitlegtabel
-    triggers_update:
-    - sensor.deye_load_power
-    - sensor.deye_load_l1_power
-    - sensor.deye_load_l2_power
-    - sensor.deye_load_l3_power
-    - sensor.deye_load_l1_voltage
-    - sensor.deye_load_l2_voltage
-    - sensor.deye_load_l3_voltage
-    - sensor.deye_load_frequency
-    - sensor.deye_load_ups_power
-    - sensor.deye_load_ups_l1_power
-    - sensor.deye_load_ups_l2_power
-    - sensor.deye_load_ups_l3_power
-    - sensor.deye_power
-    - sensor.deye_output_l1_power
-    - sensor.deye_output_l2_power
-    - sensor.deye_output_l3_power
-    - sensor.deye_output_l1_current
-    - sensor.deye_output_l2_current
-    - sensor.deye_output_l3_current
-    - sensor.deye_output_l1_voltage
-    - sensor.deye_output_l2_voltage
-    - sensor.deye_output_l3_voltage
-    - sensor.deye_output_frequency
-    - sensor.deye_today_load_consumption
-    - sensor.deye_total_load_consumption
-    variables:
-      rijen:
-      - e: sensor.deye_load_power
-        n: Uitgang
-        d: 0
-        u: 'De backup-uitgang waar het huis aan hangt. <b>Niet het huisverbruik</b>: op L3 komt de ZW-omvormer van zolder als min-getal binnen.'
-      - e:
-        - sensor.deye_load_l1_power
-        - sensor.deye_load_l2_power
-        - sensor.deye_load_l3_power
-        n: Uitgang L1 · L2 · L3
-        d: 0
-      - e:
-        - sensor.deye_load_l1_voltage
-        - sensor.deye_load_l2_voltage
-        - sensor.deye_load_l3_voltage
-        n: Spanning L1 · L2 · L3
-        u: Tijdens een stroomstoring maakt de omvormer deze spanning zelf.
-      - e: sensor.deye_load_frequency
-        n: Frequentie
-        min: 2
-      - e: sensor.deye_load_ups_power
-        n: '''UPS''-last'
-        d: 0
-        u: 50–100 W terwijl het huis 1 kW trekt; wat dit meet is onduidelijk. <b>'Noodstroom resterend' rekent hiermee en zit daardoor veel te hoog.</b>
-      - e:
-        - sensor.deye_load_ups_l1_power
-        - sensor.deye_load_ups_l2_power
-        - sensor.deye_load_ups_l3_power
-        n: '''UPS''-last L1 · L2 · L3'
-        d: 0
-      - e: sensor.deye_power
-        n: Omvormer AC
-        d: 0
-        u: Wat de omvormer zelf aan wisselstroom levert (+) of opneemt (−).
-      - e:
-        - sensor.deye_output_l1_power
-        - sensor.deye_output_l2_power
-        - sensor.deye_output_l3_power
-        n: Omvormer L1 · L2 · L3
-        d: 0
-      - e:
-        - sensor.deye_output_l1_current
-        - sensor.deye_output_l2_current
-        - sensor.deye_output_l3_current
-        n: Omvormer stroom
-      - e:
-        - sensor.deye_output_l1_voltage
-        - sensor.deye_output_l2_voltage
-        - sensor.deye_output_l3_voltage
-        n: Omvormer spanning
-      - e: sensor.deye_output_frequency
-        n: Omvormer frequentie
-        min: 2
-      - e:
-        - sensor.deye_today_load_consumption
-        - sensor.deye_total_load_consumption
-        n: Uitgang vandaag · totaal
-    grid_options:
-      columns: full
-- type: grid
-  cards:
-  - type: custom:button-card
-    template: ov_title
-    variables:
-      title: NETKANT
+      title: DEYE · NETKANT
     grid_options:
       columns: full
   - type: custom:button-card
@@ -431,7 +424,6 @@ sections:
       rijen:
       - e: binary_sensor.deye_grid
         n: Net aanwezig
-        u: Uit = de omvormer draait los van het net.
       - e: sensor.deye_grid_frequency
         n: Frequentie
         min: 2
@@ -443,7 +435,8 @@ sections:
       - e: sensor.deye_grid_power
         n: Netvermogen
         d: 0
-        u: Volgens de eigen stroomklemmen van de Deye. Loopt niet gelijk met de P1-meter; die is leidend.
+        tag: ≠ P1
+        tk: info
       - e:
         - sensor.deye_grid_l1_power
         - sensor.deye_grid_l2_power
@@ -453,7 +446,6 @@ sections:
       - e: sensor.deye_external_power
         n: Externe klemmen
         d: 0
-        u: De CT's in de meterkast waarop de omvormer regelt.
       - e:
         - sensor.deye_external_ct1_power
         - sensor.deye_external_ct2_power
@@ -464,12 +456,11 @@ sections:
         - sensor.deye_external_ct1_current
         - sensor.deye_external_ct2_current
         - sensor.deye_external_ct3_current
-        n: Klem 1 · 2 · 3 stroom
+        n: Klem stroom
         d: 2
       - e: sensor.deye_internal_power
         n: Interne meting
         d: 0
-        u: Wat de omvormer zelf aan zijn netpoort meet.
       - e:
         - sensor.deye_internal_ct1_power
         - sensor.deye_internal_ct2_power
@@ -497,7 +488,100 @@ sections:
   - type: custom:button-card
     template: ov_title
     variables:
-      title: STATUS EN OMVORMER
+      title: DEYE · UITGANG
+    grid_options:
+      columns: full
+  - type: custom:button-card
+    template: ov_uitlegtabel
+    triggers_update:
+    - sensor.deye_load_power
+    - sensor.deye_load_l1_power
+    - sensor.deye_load_l2_power
+    - sensor.deye_load_l3_power
+    - sensor.deye_load_l1_voltage
+    - sensor.deye_load_l2_voltage
+    - sensor.deye_load_l3_voltage
+    - sensor.deye_load_frequency
+    - sensor.deye_load_ups_power
+    - sensor.deye_load_ups_l1_power
+    - sensor.deye_load_ups_l2_power
+    - sensor.deye_load_ups_l3_power
+    - sensor.deye_power
+    - sensor.deye_output_l1_power
+    - sensor.deye_output_l2_power
+    - sensor.deye_output_l3_power
+    - sensor.deye_output_l1_current
+    - sensor.deye_output_l2_current
+    - sensor.deye_output_l3_current
+    - sensor.deye_output_l1_voltage
+    - sensor.deye_output_l2_voltage
+    - sensor.deye_output_l3_voltage
+    - sensor.deye_output_frequency
+    - sensor.deye_today_load_consumption
+    - sensor.deye_total_load_consumption
+    variables:
+      rijen:
+      - e: sensor.deye_load_power
+        n: Uitgang
+        d: 0
+        tag: niet het huis
+      - e:
+        - sensor.deye_load_l1_power
+        - sensor.deye_load_l2_power
+        - sensor.deye_load_l3_power
+        n: Uitgang L1 · L2 · L3
+        d: 0
+      - e:
+        - sensor.deye_load_l1_voltage
+        - sensor.deye_load_l2_voltage
+        - sensor.deye_load_l3_voltage
+        n: Spanning L1 · L2 · L3
+      - e: sensor.deye_load_frequency
+        n: Frequentie
+        min: 2
+      - e: sensor.deye_load_ups_power
+        n: '''UPS''-last'
+        d: 0
+        tag: onduidelijk
+        tk: bad
+      - e:
+        - sensor.deye_load_ups_l1_power
+        - sensor.deye_load_ups_l2_power
+        - sensor.deye_load_ups_l3_power
+        n: '''UPS''-last L1 · L2 · L3'
+        d: 0
+      - e: sensor.deye_power
+        n: Omvormer AC
+        d: 0
+      - e:
+        - sensor.deye_output_l1_power
+        - sensor.deye_output_l2_power
+        - sensor.deye_output_l3_power
+        n: Omvormer L1 · L2 · L3
+        d: 0
+      - e:
+        - sensor.deye_output_l1_current
+        - sensor.deye_output_l2_current
+        - sensor.deye_output_l3_current
+        n: Omvormer stroom
+      - e:
+        - sensor.deye_output_l1_voltage
+        - sensor.deye_output_l2_voltage
+        - sensor.deye_output_l3_voltage
+        n: Omvormer spanning
+      - e: sensor.deye_output_frequency
+        n: Omvormer frequentie
+        min: 2
+      - e:
+        - sensor.deye_today_load_consumption
+        - sensor.deye_total_load_consumption
+        n: Uitgang vandaag · totaal
+    grid_options:
+      columns: full
+  - type: custom:button-card
+    template: ov_title
+    variables:
+      title: DEYE · STATUS EN ZON
     grid_options:
       columns: full
   - type: custom:button-card
@@ -518,66 +602,6 @@ sections:
     - sensor.deye_power_losses
     - sensor.deye_today_losses
     - sensor.deye_total_losses
-    variables:
-      rijen:
-      - e:
-        - binary_sensor.deye
-        - sensor.deye_device_state
-        n: Draait · stand
-        m:
-          Normal: normaal
-          Standby: stand-by
-          Self-test: zelftest
-          Alarm: alarm
-          Fault: storing
-      - e:
-        - sensor.deye_device_alarm
-        - sensor.deye_device_fault
-        n: Waarschuwing · storing
-        m:
-          OK: geen
-      - e:
-        - binary_sensor.deye_battery_alarm
-        - binary_sensor.deye_battery_fault
-        n: 'Accu: waarschuwing · storing'
-        u: Gemeld door het BMS van de accu.
-      - e: sensor.deye_device_relay
-        n: Relais
-        u: 'Welke relais dicht staan: Inv = omvormer, Grid = net, Gen = GEN-poort.'
-      - e: binary_sensor.deye_connection
-        n: Verbinding
-        u: HA ↔ Solarman-logger. Af en toe 10 s weg is normaal.
-      - e: sensor.deye_update_interval
-        n: Uitleesronde
-        u: Normaal ~5 s.
-      - e: sensor.deye_device
-        n: Model
-        u: '20 kW, twee MPPT''s. Serienummer en firmware: tik → attributen.'
-      - e:
-        - sensor.deye_temperature
-        - sensor.deye_dc_temperature
-        n: Temperatuur AC · DC
-      - e: sensor.deye_power_losses
-        n: Verlies nu
-        d: 0
-        u: Eigenverbruik plus omzettingsverlies.
-      - e:
-        - sensor.deye_today_losses
-        - sensor.deye_total_losses
-        n: Verlies vandaag · totaal
-    grid_options:
-      columns: full
-- type: grid
-  cards:
-  - type: custom:button-card
-    template: ov_title
-    variables:
-      title: ZON EN GEN-POORT
-    grid_options:
-      columns: full
-  - type: custom:button-card
-    template: ov_uitlegtabel
-    triggers_update:
     - sensor.deye_pv_power
     - sensor.deye_pv1_power
     - sensor.deye_pv2_power
@@ -599,10 +623,50 @@ sections:
     - sensor.deye_microinverter_energy
     variables:
       rijen:
+      - e:
+        - binary_sensor.deye
+        - sensor.deye_device_state
+        n: Draait · stand
+        m:
+          Normal: normaal
+          Standby: stand-by
+          Self-test: zelftest
+          Alarm: alarm
+          Fault: storing
+      - e:
+        - sensor.deye_device_alarm
+        - sensor.deye_device_fault
+        n: Waarschuwing · storing
+        m:
+          OK: geen
+      - e:
+        - binary_sensor.deye_battery_alarm
+        - binary_sensor.deye_battery_fault
+        n: BMS waarschuwing · storing
+      - e: sensor.deye_device_relay
+        n: Relais
+      - e:
+        - binary_sensor.deye_connection
+        - sensor.deye_update_interval
+        n: Verbinding · uitleesronde
+      - e: sensor.deye_device
+        n: Model
+      - e:
+        - sensor.deye_temperature
+        - sensor.deye_dc_temperature
+        n: Temperatuur AC · DC
+      - e: sensor.deye_power_losses
+        n: Verlies nu
+        d: 0
+      - e:
+        - sensor.deye_today_losses
+        - sensor.deye_total_losses
+        n: Verlies vandaag · totaal
       - e: sensor.deye_pv_power
         n: Panelen op de Deye
         d: 0
-        u: Er hangt niets aan (0,2 V). De zolderpanelen hebben eigen omvormers.
+        tag: niets aangesloten
+        tk: info
       - e:
         - sensor.deye_pv1_power
         - sensor.deye_pv2_power
@@ -623,9 +687,8 @@ sections:
       - e:
         - binary_sensor.deye_microinverter
         - sensor.deye_microinverter_power
-        n: GEN-poort als zoningang
+        n: GEN-poort · vermogen
         d: 0
-        u: 'Voor AC-gekoppelde panelen. Staat aan, maar er komt niets binnen: de zolder hangt hier niet aan.'
       - e:
         - sensor.deye_microinverter_l1_power
         - sensor.deye_microinverter_l2_power
