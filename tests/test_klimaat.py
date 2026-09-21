@@ -1507,6 +1507,68 @@ check_airco("ontbrekende helper zet de unit stil", "woonkamer", "cool", uitvoere
 wereld("kamersensor weg", **{W: "unavailable", "climate.airco_woonkamer": "cool"})
 check_airco("temperatuur onbekend: niets sturen", "woonkamer", "rust")
 
+# --- van wie kwam de wissel? ----------------------------------------------
+# Aanleiding: de handbediening keek naar het advies, en dat rekent met de stand
+# van de unit zelf. Zette de "naar bed"-knop hem om 21:45 uit, dan draaide het
+# advies mee naar 'off', kwam er geen override, en zette de uitvoerder hem om
+# 21:55 weer aan. Nu beslist de context. EIGEN = de context.id die de uitvoerder
+# wegschreef.
+EIGEN = "01REGIE000000000000000000"
+
+
+def check_herkomst(naam, verwacht, van="cool", naar="off", ctx="01ANDERS", parent=None,
+                   user=None, eigen=EIGEN, gestart=False):
+    uit = MOD.airco_wissel_herkomst(van, naar, ctx, parent, user, eigen, gestart).strip()
+    ok = uit == verwacht
+    print(f"{'PASS' if ok else 'FAIL'}  {naam:52} -> {uit}")
+    if not ok:
+        FOUTEN.append(f"herkomst {naam}: kreeg {uit}, verwachtte {verwacht}")
+
+
+check_herkomst("onze eigen opdracht", "eigen", ctx=EIGEN)
+check_herkomst("via script_attic_ac_off (parent is onze run)", "eigen", parent=EIGEN)
+check_herkomst("naar-bed-knop (automatisering, parent_id)", "hand", parent="01KNOP")
+check_herkomst("naar-bed-knop binnen het startvenster", "hand", parent="01KNOP", gestart=True)
+check_herkomst("dashboard (user_id)", "hand", user="robin")
+check_herkomst("afstandsbediening buiten het startvenster", "hand")
+check_herkomst("zelf uitgevallen binnen het halfuur (E48)", "storing", gestart=True)
+check_herkomst("met de hand aan tussen doel en aanzetgrens", "hand", van="off", naar="cool")
+check_herkomst("cloud-hik: uit unavailable", "negeren", van="unavailable")
+check_herkomst("cloud-hik: naar unknown", "negeren", naar="unknown")
+check_herkomst("nog nooit iets gestuurd (input_text leeg)", "hand", eigen="")
+# Een lege input_text mag geen lege parent_id als "eigen" laten tellen.
+check_herkomst("lege handtekening matcht geen lege parent", "hand", eigen="", parent="")
+
+
+# --- voortgangsoordeel -----------------------------------------------------
+# Aanleiding: "komt niet vooruit" vlak bij het doel. Een kamer die 0,2° boven
+# het doel staat kán geen 0,3° meer zakken.
+def check_voortgang(naam, verwacht, stand="cool", start=23.0, nu=22.9, sp=21.5,
+                    unit_temp=None, drempel=0.3):
+    uit = MOD.airco_voortgang_oordeel(stand, start, nu, sp, unit_temp, drempel).strip()
+    ok = uit == verwacht
+    print(f"{'PASS' if ok else 'FAIL'}  {naam:52} -> {uit}")
+    if not ok:
+        FOUTEN.append(f"voortgang {naam}: kreeg {uit}, verwachtte {verwacht}")
+
+
+check_voortgang("genoeg gezakt", "vooruit", start=24.0, nu=23.4)
+check_voortgang("niets gedaan, ver van het doel", "kansloos", start=24.0, nu=23.9)
+check_voortgang("vlak bij het doel: niet oordelen", "bij_doel", start=21.8, nu=21.7)
+check_voortgang("0,4 boven het doel: wel oordelen", "kansloos",
+                start=22.0, nu=21.9, sp=21.5)
+check_voortgang("unit heeft zijn eigen setpoint gehaald", "bij_doel",
+                start=24.0, nu=23.9, sp=23.0, unit_temp=23.0)
+check_voortgang("unit nog boven zijn setpoint", "kansloos",
+                start=24.0, nu=23.9, sp=23.0, unit_temp=24.0)
+check_voortgang("verwarmen: vlak bij het doel", "bij_doel", stand="heat",
+                start=19.3, nu=19.4, sp=19.5)
+check_voortgang("verwarmen: kansloos", "kansloos", stand="heat", start=17.0, nu=17.1)
+check_voortgang("setpoint onbekend: gewoon oordelen", "kansloos",
+                start=24.0, nu=23.9, sp=None)
+check_voortgang("geen starttemperatuur", "geen_meting", start="unknown")
+check_voortgang("unit staat uit", "geen_meting", stand="off")
+
 # --- consistentiechecks laag 5 ---------------------------------------------
 airco_pakket = open(f"{CONFIG}/packages/9 - Other/Klimaat Airco.yaml").read()
 units_cfg = json.loads(MOD.aircos_json())
@@ -1578,6 +1640,7 @@ for domein, prefix in [("input_boolean", "airco_handmatig_"),
                        ("timer", "airco_voortgang_"),
                        ("timer", "airco_kansloos_"),
                        ("input_number", "airco_start_temp_"),
+                       ("input_text", "airco_regie_context_"),
                        ("counter", "airco_storingen_")]:
     ontbreekt = [u for u in units_cfg if f"{prefix}{u}:" not in airco_pakket]
     if ontbreekt:

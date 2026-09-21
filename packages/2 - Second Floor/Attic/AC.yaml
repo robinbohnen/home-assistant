@@ -95,6 +95,15 @@ attic_ac_package:
           condition: time
           after: "08:00:00"
           before: "22:30:00"
+        # Met de aircoregie aan is deze vraag dubbel werk, en erger: hij vecht.
+        # Hij kwam op 24°, de regie zet de zolderunit pas op 24,5° aan (zijn
+        # band ligt een graad hoger). Wie "Ja" tikte kreeg 18°/high, en zodra
+        # het advies bijtrok zette de regie hem weer uit. De regie beslist dan
+        # zelf; zie packages/9 - Other/Klimaat Airco.yaml.
+        - alias: Alleen als de aircoregie niet zelf stuurt
+          condition: state
+          entity_id: input_boolean.aircoregie_actief
+          state: "off"
       actions:
         # Hier stond een `not` op het attribuut `fan_mode` (staat hij al op
         # `high`?). Dat is de verkeerde vraag op twee manieren: een airco die
@@ -141,27 +150,57 @@ attic_ac_package:
           state: active
       actions:
         # Venster meteen dicht: twee telefoons die allebei "Ja" tikken hoeven
-        # de airco niet twee keer aan te zetten.
+        # de airco niet twee keer aan te zetten. Dat mag vooraan staan omdat
+        # hieronder niets de run meer kan afbreken: alles staat op
+        # continue_on_error en het aanzetten wordt herhaald. Zonder dat brak
+        # een onbereikbare unit de run af op de eerste climate-call, en was
+        # het antwoord weg terwijl het venster al dicht was.
         - action: timer.cancel
           target:
             entity_id: timer.airco_zolder_antwoord
         - action: cover.close_cover
           target:
             entity_id: cover.all_covers_upstairs
-        - action: climate.turn_on
-          target:
-            entity_id: climate.airco_zolder
-        - action: climate.set_temperature
-          target:
-            entity_id: climate.airco_zolder
-          data:
-            temperature: 18
-            hvac_mode: cool
+          continue_on_error: true
+        # Zelfde herhaalpatroon als script_attic_ac_off hieronder: de unit is
+        # regelmatig onbereikbaar. `hvac_mode` in dezelfde call zet hem ook
+        # aan; een losse `climate.turn_on` ervoor was dus overbodig, en was
+        # juist de call zonder vangnet.
+        - repeat:
+            sequence:
+              - action: climate.set_temperature
+                target:
+                  entity_id: climate.airco_zolder
+                data:
+                  temperature: 18
+                  hvac_mode: cool
+                continue_on_error: true
+              - wait_template: "{{ is_state('climate.airco_zolder', 'cool') }}"
+                timeout: "{{ 5 if repeat.index <= 6 else 30 }}"
+                continue_on_timeout: true
+            until:
+              - condition: template
+                value_template: >-
+                  {{ is_state('climate.airco_zolder', 'cool') or repeat.index >= 16 }}
         - action: climate.set_fan_mode
           target:
             entity_id: climate.airco_zolder
           data:
             fan_mode: high
+          continue_on_error: true
+        - if:
+            - condition: not
+              conditions:
+                - condition: state
+                  entity_id: climate.airco_zolder
+                  state: cool
+          then:
+            - action: notify.mobile_devices_adults
+              data:
+                title: Airco zolder
+                message: >-
+                  De airco op zolder kon niet worden aangezet, hij blijft
+                  onbereikbaar.
 
   script:
     # ALLEEN VRAGEN; HET ANTWOORD WORDT ELDERS AFGEHANDELD

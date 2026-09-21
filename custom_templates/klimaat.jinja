@@ -941,9 +941,10 @@
        niet opnieuw starten.
     4. De uitvoerder laat een unit met rust in de AIRCO_RUSTPAUZE minuten na
        zijn laatste standswijziging, precies zoals de rustpauze op de covers.
-       Dat remt niet alleen ons eigen heen-en-weer, het geeft ook de
-       handbediening-herkenning (vijf minuten) de tijd om te winnen van de
-       uitvoerder (tien) als iemand de airco zelf aanzet.
+       Dat remt ons eigen heen-en-weer, en het is een vangnet voor een unit
+       die zijn nieuwe stand traag terugmeldt. De handbediening zelf hangt
+       er niet meer aan: die wordt herkend aan de context van de wissel (zie
+       `airco_wissel_herkomst`), op het moment dat hij binnenkomt.
     5. Het setpoint gaat één keer mee bij het aanzetten en wordt daarna niet
        meer bijgesteld. De inverter moduleert zelf; hem elke ronde een nieuw
        streefgetal geven is precies hoe je een warmtepomp aan het stuiteren
@@ -954,12 +955,10 @@
 -#}
 
 {#- Hoe lang de uitvoerder van een unit afblijft na diens laatste
-    standswijziging. Langer dan de vijf minuten van de handbediening-herkenning,
-    zodat die altijd eerst is: zet iemand de airco met de hand aan, dan staat er
-    een override op vóórdat de uitvoerder hem terug kan zetten. Zonder die
-    volgorde lijkt de knop niets te doen: de uitvoerder zet hem binnen vijf
-    minuten weer terug, en dat is bij een apparaat dat zijn stand traag
-    terugmeldt niet te zien aan wat er op het scherm staat. -#}
+    standswijziging. Vroeger was dit ook wat de handbediening liet winnen (die
+    wachtte vijf minuten, dit is tien); sinds die op de context van de wissel
+    let staat de override er binnen een seconde en is dit alleen nog de rem op
+    ons eigen heen-en-weer en op een cloud die de stand traag terugmeldt. -#}
 {%- set AIRCO_RUSTPAUZE = 10 -%}
 
 {#- Een reistijd die niet meer ververst is geen reistijd. Blijft de sensor van
@@ -1347,4 +1346,82 @@
      'uit_script': u.uit_script,
      'rustpauze_min': AIRCO_RUSTPAUZE,
      'regime': regime} | to_json -}}
+{%- endmacro -%}
+
+{#- Van wie kwam deze standswijziging van een airco?
+
+    Geeft 'eigen', 'storing', 'hand' of 'negeren'. De handbediening-herkenning
+    en de storingsdetectie in `packages/9 - Other/Klimaat Airco.yaml` lezen
+    allebei deze ene uitkomst, zodat een wissel nooit tegelijk als storing én
+    als handbediening kan tellen.
+
+    Waarom de context en niet het advies. Het advies hangt zelf aan de stand
+    van de unit (`draait` in `airco_advies`): zet iemand hem uit, dan draait
+    het advies in dezelfde seconde mee. "Staat hij anders dan het advies?" was
+    daardoor nooit waar, er kwam geen override, en tien minuten later zette de
+    uitvoerder hem gewoon weer aan - de "naar bed"-knop van 21:45 hield het tot
+    21:55. Andersom zag een met de hand aangezette unit tussen het doel en de
+    aanzetgrens een advies 'rust', dat telde niet mee, en dan zette de regie hem
+    uit. De context liegt niet: de uitvoerder schrijft zijn eigen `context.id`
+    weg voordat hij iets stuurt, en alles wat met een ándere context binnenkomt
+    is niet van ons.
+
+    - van/naar unknown/unavailable: een hik in de cloud of een herstart, geen
+      mens. `negeren`.
+    - context (of zijn parent) is die van onze laatste opdracht: `eigen`.
+    - naar 'off' tijdens `gestart`, en niet via Home Assistant (geen user_id,
+      geen parent_id): de unit viel zelf uit - E48. `storing`. Een lege context
+      kan net zo goed de afstandsbediening zijn; binnen dat halfuur kiezen we
+      voor storing, want die herstart pas na de rustpauze en blokkeert na twee
+      keer, terwijl een gemiste storing de compressor de hele dag laat klappen.
+    - de rest: `hand`. Dat is ook een andere automatisering (de "naar
+      bed"-knop, `ac_off_nobody_home`, `ac_off_evening`): die zetten hem met
+      opzet uit, en dat moet de regie net zo respecteren als een vinger op de
+      afstandsbediening. Een tijdgestuurde automatisering heeft geen parent_id
+      en is dus niet van een apparaat te onderscheiden; binnen `gestart` telt
+      die als storing, daarbuiten als hand.
+
+    `gestart` is een boolean: liep `timer.airco_gestart_<unit>` op het moment
+    van de wissel. -#}
+{%- macro airco_wissel_herkomst(van, naar, ctx_id, ctx_parent, ctx_user, eigen, gestart) -%}
+{%- set leeg = [none, '', 'None', 'unknown', 'unavailable'] -%}
+{%- set via_ha = ctx_user not in leeg or ctx_parent not in leeg -%}
+{%- if van in leeg or naar in leeg -%}negeren
+{%- elif eigen not in leeg and eigen in [ctx_id, ctx_parent] -%}eigen
+{%- elif naar == 'off' and gestart and not via_ha -%}storing
+{%- else -%}hand
+{%- endif -%}
+{%- endmacro -%}
+
+{#- Hoe ging het voortgangsvenster van een draaiende unit?
+
+    Geeft 'vooruit', 'bij_doel', 'kansloos' of 'geen_meting'.
+
+    `bij_doel` bestaat omdat "minder dan AIRCO_VOORTGANG_MIN opgeschoven" vlak
+    bij het doel niets zegt: een kamer van 21,7° met een doel van 21,5° kán
+    geen 0,3° meer zakken zonder eronder te gaan. Zonder deze tak kreeg je daar
+    "komt niet vooruit" en twee uur stilstand van een unit die zijn werk al had
+    gedaan. Hetzelfde als de unit op zijn eigen thermometer het setpoint al
+    heeft gehaald: dan moduleert hij terug en is er weinig voortgang om te
+    meten. Het venster begint dan gewoon opnieuw.
+
+    Alles in °C. `setpoint` en `unit_temp` mogen none zijn. -#}
+{%- macro airco_voortgang_oordeel(stand, start, nu, setpoint, unit_temp, drempel) -%}
+{%- set start = start | float(none) -%}
+{%- set nu = nu | float(none) -%}
+{%- set sp = setpoint | float(none) -%}
+{%- set ut = unit_temp | float(none) -%}
+{%- set drempel = drempel | float(0.3) -%}
+{%- if stand not in ['cool', 'heat'] or start is none or nu is none -%}geen_meting
+{%- else -%}
+  {%- set koelt = stand == 'cool' -%}
+  {%- set vooruit = (start - nu) if koelt else (nu - start) -%}
+  {%- set rest = none if sp is none else ((nu - sp) if koelt else (sp - nu)) -%}
+  {%- set unit_klaar = sp is not none and ut is not none
+                       and ((ut <= sp) if koelt else (ut >= sp)) -%}
+  {%- if vooruit >= drempel -%}vooruit
+  {%- elif (rest is not none and rest < drempel) or unit_klaar -%}bij_doel
+  {%- else -%}kansloos
+  {%- endif -%}
+{%- endif -%}
 {%- endmacro -%}

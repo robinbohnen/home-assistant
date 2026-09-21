@@ -26,6 +26,10 @@ airco_livingroom_package:
             - condition: state
               entity_id: climate.airco_zolder
               state: *aan_standen
+      # Met de aircoregie aan zet die hier geen handbediening op (zie
+      # `klimaat_airco_handbediening_herkennen`): in een leeg huis wil het
+      # advies zelf al 'off', en een override zou het voorkoelen blokkeren als
+      # er binnen vier uur iemand thuiskomt.
       actions:
         - action: climate.turn_off
           data: {}
@@ -43,6 +47,11 @@ airco_livingroom_package:
             title: Airco's uitgeschakeld
             message: Niemand meer thuis, airco's zijn automatisch uitgezet.
 
+    # Met de aircoregie aan telt deze uitschakeling als handbediening: de
+    # wissel draagt niet de context van de regie, dus
+    # `klimaat_airco_handbediening_herkennen` zet er een override op en de regie
+    # zet hem niet om 21:10 weer aan. Daarvoor keek die herkenning naar het
+    # advies, en dat draaide bij het uitzetten meteen mee - geen override.
     - id: ac_off_evening
       alias: Livingroom - AC Automatically off
       description: "Turn off AC when is on for more than 2 hours and almost time to go to bed"

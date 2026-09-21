@@ -371,8 +371,8 @@ regelt op het gemiddelde van de vijf kamersensoren en niet op één kamer.
 De slug bepaalt weer de namen van de helpers: `sensor.airco_advies_<unit>`,
 `timer.airco_override_<unit>`, `timer.airco_minimaal_aan_<unit>`,
 `timer.airco_rust_<unit>`, `timer.airco_gestart_<unit>`,
-`input_boolean.airco_handmatig_<unit>`, `input_boolean.airco_storing_<unit>` en
-`counter.airco_storingen_<unit>`.
+`input_boolean.airco_handmatig_<unit>`, `input_boolean.airco_storing_<unit>`,
+`counter.airco_storingen_<unit>` en `input_text.airco_regie_context_<unit>`.
 
 De staat van zo'n sensor is `cool`, `heat`, `off` of `rust` (= niets sturen).
 Attributen: `doel`, `fan`, `uitvoeren`, `spoed`, `reden` en `blokkade`.
@@ -402,11 +402,16 @@ van stuiteren:
    streefgetal geven is dé manier om een warmtepomp aan het stuiteren te
    krijgen.
 
-Rem 4 doet nog iets tweeds, en dat is de reden dat hij op tien minuten staat en
-de handbediening-herkenning op vijf: zet iemand de airco met de hand aan terwijl
-het advies `off` is, dan staat er een override op vóórdat de uitvoerder hem kan
-terugzetten. Zonder die volgorde zou de knop "niets doen": de uitvoerder
-zet hem binnen vijf minuten weer uit en niemand begrijpt waarom.
+Rem 4 was vroeger ook wat de handbediening liet winnen (die wachtte vijf
+minuten, rem 4 tien). Sinds de handbediening aan de context van de wissel wordt
+herkend staat de override er binnen een seconde; rem 4 is nu alleen nog de rem
+op ons eigen heen-en-weer en het vangnet voor een cloud die traag terugmeldt.
+
+Na een herstart wacht de uitvoerder anderhalve minuut voor hij iets doet: de
+adviessensoren komen terug met het advies van vóór de herstart, en juist die
+eerste ronde mag de rustpauze overslaan. Een unit op `unknown`/`unavailable`
+wordt nooit aangezet — dan zouden de timers en de starttemperatuur worden
+gezet voor een commando dat nergens aankomt.
 
 #### Thuis, en bijna thuis
 
@@ -463,16 +468,41 @@ in een leeg huis is geen comfort maar een rekening.
 
 #### Handbediening
 
-Net als bij de covers: onze eigen commando's eindigen per definitie op het
-advies, dus alles wat vijf minuten lang op iets ánders staat is een mens (of de
-afstandsbediening, of de Intesis-app). Die unit wordt dan `klimaat_override_uren`
-met rust gelaten.
+Elke standswijziging die niet van de uitvoerder komt is handbediening, in beide
+richtingen: met de hand uit blijft uit, met de hand aan blijft aan, zolang
+`klimaat_override_uren` duurt. "Niet van de uitvoerder" is ook een ándere
+automatisering — de "naar bed"-knop, `ac_off_evening` — want die zetten hem met
+opzet uit.
 
-Vijf minuten en niet anderhalve, want een climate-entiteit doet er via de cloud
-soms een minuut over voordat hij de nieuwe stand terugmeldt. En een advies van
-`rust` telt hier niet mee: zodra wij een unit aanzetten slaat het advies binnen
-een paar minuten om naar `rust` (minimale looptijd, of "koelt door"), en dan zou
-een draaiende airco zijn eigen start als handbediening zien.
+Herkend aan de **context** van de wissel, niet aan het advies. De uitvoerder
+schrijft zijn `context.id` in `input_text.airco_regie_context_<unit>` voordat
+hij iets stuurt; een wissel met die context (of met die als `parent_id`, via
+`script_attic_ac_off`) is van ons, al het andere niet. De beslissing staat in
+`airco_wissel_herkomst` in `klimaat.jinja`, en de storingsdetectie leest
+dezelfde macro — één wissel kan dus nooit tegelijk storing en handbediening
+zijn.
+
+> **Waarom niet meer het advies.** Hier stond "staat hij vijf minuten anders
+> dan het advies?". Maar het advies rekent met de stand van de unit zelf
+> (`draait`): zet iemand hem uit, dan draait het advies in dezelfde seconde mee
+> naar `off`. Geen verschil, geen override, en tien minuten later zette de
+> uitvoerder hem weer aan — naar bed om 21:45, airco weer aan om 21:55.
+> Andersom gaf een met de hand aangezette unit onder de aanzetgrens het advies
+> `rust`, dat telde niet mee, en dan zette de regie hem uit.
+
+Twee uitzonderingen:
+
+- **Uit binnen het startvenster, zonder Home Assistant-context** (geen
+  `user_id`, geen `parent_id`) is een storing, geen handbediening. Een lege
+  context kan ook de afstandsbediening zijn; binnen dat halfuur kiezen we voor
+  storing, want een gemiste E48 laat de compressor de hele dag klappen.
+- **Uit terwijl er niemand thuis is** zet geen override. Dat is
+  `ac_off_nobody_home`; het advies zegt dan zelf al `off`, en een override zou
+  alleen het voorkoelen blokkeren als er binnen vier uur iemand thuiskomt.
+
+Een tijdgestuurde automatisering (`ac_off_evening`) heeft geen `parent_id` en is
+dus niet van een apparaat te onderscheiden. Buiten het startvenster maakt dat
+niet uit — beide zijn handbediening.
 
 #### Als het doel niet gehaald wordt
 
@@ -496,6 +526,10 @@ moment staat in `input_number.airco_start_temp_<unit>`. Elke 45 minuten:
   begint opnieuw vanaf de huidige stand, zodat de volgende controle over de
   vólgende drie kwartier gaat. Anders zou een unit die alleen in het eerste half
   uur iets deed de rest van de dag als "in orde" blijven gelden.
+- **vlak bij het doel** → niet oordelen, venster opnieuw. Staat de kamer minder
+  dan die 0,3 °C van het setpoint af, of heeft de unit zijn setpoint op zijn
+  eigen thermometer al gehaald, dan kán er niet veel meer bij. Zonder deze regel
+  kreeg je "komt niet vooruit" van een unit die zijn werk al had gedaan.
 - **minder dan dat** → `timer.airco_kansloos_<unit>` gaat twee uur lopen, de unit
   gaat uit, en je krijgt een melding met de gemeten cijfers. Na die twee uur
   probeert hij het gewoon opnieuw; tegen die tijd staat de zon ergens anders of
@@ -504,6 +538,11 @@ moment staat in `input_number.airco_start_temp_<unit>`. Elke 45 minuten:
 0,3 °C op drie kwartier is bewust laag. Een airco die het echt wint doet in die
 tijd een halve tot anderhalve graad; alles daaronder is ruis op een sensor die op
 een tiende meet.
+
+Loopt het venster af terwijl Home Assistant herstart, dan vuurt `timer.finished`
+bij het opstarten — voordat de automatiseringen luisteren. Die controle is dan
+weg. `klimaat_airco_na_herstart` start het venster twee minuten na het opstarten
+opnieuw voor elke draaiende unit waar de regie over gaat.
 
 Dit is nadrukkelijk **geen storingsvlag**. De unit is waarschijnlijk in orde en
 vecht tegen iets anders; daarom blokkeert het ook niet tot de volgende ochtend
@@ -543,7 +582,12 @@ maar twee uur, en daarom staat het los van `airco_storing_<unit>`.
 #### Een unit die zichzelf uitschakelt
 
 `automation.klimaat_airco_storing_herkennen` telt hoe vaak een unit binnen een
-kwartier ná onze start weer uitvalt. Bij de tweede keer op een dag gaat
+halfuur ná onze start weer uitvalt (`timer.airco_gestart_<unit>`; stond op een
+kwartier, maar E48 kwam na 10-25 minuten en de trage helft telde dan nergens).
+Na elke uitval gaat ook de rustpauze lopen, zodat de regie hem niet de volgende
+ronde meteen opnieuw start. Een uitschakeling via Home Assistant (met
+`user_id` of `parent_id`, zoals de "naar bed"-knop) telt niet. Bij de tweede
+keer op een dag gaat
 `input_boolean.airco_storing_<unit>` om, start de regie hem niet meer, en krijg
 je een melding. Elke nacht om 04:00 gaan teller en vlag terug op nul, zodat één
 hik niet permanent blokkeert en een echte storing zich de volgende dag opnieuw
@@ -577,6 +621,10 @@ gesloten rolluik telt anderhalve minuut later als handbediening. Dat script is
 hier bewust ongemoeid gelaten — het is een gebruikersactie met een mens erbij —
 maar het is wel de plek om te kijken als er boven vier uur lang niets meer
 beweegt na een handmatige airco-vraag.
+
+Die vraag (`airco_automatic_on`) wordt alleen nog gesteld als
+`aircoregie_actief` uit staat. Hij kwam op 24°, de regie start de zolderunit pas
+op 24,5°; wie "Ja" tikte kreeg 18°/high, en daarna zette de regie hem weer uit.
 
 ## Aanzetten en terugdraaien
 
