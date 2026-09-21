@@ -1123,3 +1123,77 @@ kamer_onderhoud_lijst:
         }).join('');
         return `<div style="width:100%">${r}</div>`;
       ]]]
+
+# --- Uitlegtabel: naam, waarde en een zin uitleg per entiteit ----------------
+# Voor de Omvormer-pagina (dashboards/home/omvormer.yaml): ruim honderd
+# sensoren met elk een verklaring. Eén button-card per groep en niet één per
+# regel - honderd kaarten die elk om de vijf seconden hertekenen merk je op
+# een wandpaneel.
+#
+# `variables.rijen` is een lijst van:
+#   e   entity_id
+#   n   naam op de regel
+#   u   uitleg (mag HTML)
+#   a   optioneel: toon dit attribuut in plaats van de state
+#   s   optioneel: vermenigvuldig met dit getal (Wh -> kWh = 0.001)
+#   eh  optioneel: eenheid die de sensor-eenheid vervangt
+#   d   optioneel: maximaal aantal decimalen (standaard 2)
+#
+# De instantie moet zelf `triggers_update` zetten met dezelfde entiteiten:
+# zonder `entity` hertekent button-card anders nooit, en `all` zou hem bij elke
+# statuswissel van het hele huis laten rekenen.
+#
+# Een regel aanklikken opent het more-info-venster (met historie) van die
+# entiteit, via hetzelfde event dat HA zelf gebruikt.
+ov_uitlegtabel:
+  show_icon: false
+  show_name: false
+  show_state: false
+  tap_action:
+    action: none
+  variables:
+    rijen: []
+  styles:
+    grid:
+      - grid-template-areas: '"tabel"'
+      - grid-template-columns: minmax(0, 1fr)
+    card:
+      - background: none
+      - border: none
+      - box-shadow: none
+      - padding: 0 2px 6px 2px
+    custom_fields:
+      tabel:
+        - justify-self: stretch
+        - text-align: left
+        - min-width: 0
+  custom_fields:
+    tabel: |
+      [[[
+        var fmt = function(r){
+          var s = states[r.e];
+          if(!s) return '<span style="color:var(--ov-ink-40)">bestaat niet</span>';
+          var v = r.a ? s.attributes[r.a] : s.state;
+          if(v === undefined || v === null || v === 'unknown' || v === '') return '<span style="color:var(--ov-ink-40)">—</span>';
+          if(v === 'unavailable') return '<span style="color:var(--ov-bad)">onbereikbaar</span>';
+          if(!r.a && r.e.indexOf('binary_sensor.') === 0) return v === 'on' ? 'aan' : 'uit';
+          var n = Number(v);
+          if(typeof v !== 'boolean' && !isNaN(n)){
+            if(r.s) n = n * r.s;
+            var eh = (r.eh !== undefined) ? r.eh : (r.a ? '' : (s.attributes.unit_of_measurement || ''));
+            return n.toLocaleString('nl-NL', {maximumFractionDigits: (r.d !== undefined ? r.d : 2)}) + (eh ? ' ' + eh : '');
+          }
+          return String(v);
+        };
+        var html = '';
+        (variables.rijen || []).forEach(function(r, i){
+          html += '<div onclick="this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + r.e + '\'},bubbles:true,composed:true}))"'
+            + ' style="cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;padding:9px 0;'
+            + (i ? 'border-top:1px solid var(--ov-ink-6);' : '') + '">'
+            + '<div style="font-size:14px;font-weight:600;color:var(--primary-text-color)">' + r.n + '</div>'
+            + '<div style="font-size:14px;font-weight:600;text-align:right;font-variant-numeric:tabular-nums;color:var(--primary-text-color)">' + fmt(r) + '</div>'
+            + '<div style="grid-column:1 / span 2;font-size:12.5px;line-height:1.4;color:var(--ov-ink-58);margin-top:2px;white-space:normal">' + (r.u || '') + '</div>'
+            + '</div>';
+        });
+        return html;
+      ]]]
