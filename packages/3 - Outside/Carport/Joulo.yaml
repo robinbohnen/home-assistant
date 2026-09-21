@@ -25,7 +25,9 @@ carport_joulo_package:
   #  2. `current_session` bestaat ALLEEN tijdens het laden. `| default(0)` op
   #     `current_session.kwh_so_far` vangt dat niet altijd op, want het valt al
   #     eerder om op het ontbrekende tussenniveau. Vandaar de expliciete
-  #     `is defined`-guards.
+  #     `is defined`-guards. Om dezelfde reden staat er voor `chargers` zelf
+  #     een guard: een foutantwoord van de API (verlopen token, storing) heeft
+  #     die sleutel niet, en dan viel elke sensor hier met een template-fout om.
   #
   # Pollen heeft geen zin sneller dan dit: Joulo synct zelf elk kwartier vanaf
   # de upstream-provider, en hun eigen richtlijn is 300 s of meer voor
@@ -39,7 +41,8 @@ carport_joulo_package:
         - name: "Joulo Charger Status"
           unique_id: joulo_charger_status
           value_template: >-
-            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {% set alle = value_json.chargers if value_json is mapping and value_json.chargers is list else [] %}
+            {% set l = alle | selectattr('connection_type', 'eq', 'ocpp') | list %}
             {{ l[0].status if l else 'onbekend' }}
 
         # Alleen hier om de herstart-service hieronder te voeden. Zo staat het
@@ -49,7 +52,8 @@ carport_joulo_package:
           unique_id: joulo_charger_id
           icon: mdi:identifier
           value_template: >-
-            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {% set alle = value_json.chargers if value_json is mapping and value_json.chargers is list else [] %}
+            {% set l = alle | selectattr('connection_type', 'eq', 'ocpp') | list %}
             {{ l[0].id if l else '' }}
 
         - name: "Joulo Session kWh"
@@ -57,7 +61,8 @@ carport_joulo_package:
           unit_of_measurement: "kWh"
           device_class: energy
           value_template: >-
-            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {% set alle = value_json.chargers if value_json is mapping and value_json.chargers is list else [] %}
+            {% set l = alle | selectattr('connection_type', 'eq', 'ocpp') | list %}
             {% set c = l[0] if l else none %}
             {% set s = c.current_session if c is not none and c.current_session is defined else none %}
             {{ (s.kwh_so_far | float(0)) if s else 0 }}
@@ -68,7 +73,8 @@ carport_joulo_package:
           unique_id: joulo_active_tag_id
           icon: mdi:card-account-details-outline
           value_template: >-
-            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {% set alle = value_json.chargers if value_json is mapping and value_json.chargers is list else [] %}
+            {% set l = alle | selectattr('connection_type', 'eq', 'ocpp') | list %}
             {% set c = l[0] if l else none %}
             {% set s = c.current_session if c is not none and c.current_session is defined else none %}
             {{ s.id_tag if s and s.id_tag else 'geen' }}
@@ -80,20 +86,33 @@ carport_joulo_package:
         # De meterstand hieronder is dezelfde teller die modbus uit register
         # 1036 leest, dus die twee horen gelijk te lopen; lopen ze uit elkaar,
         # dan mist Joulo sessies.
+        #
+        # Geen meterstand is `unavailable`, NOOIT 0. Met total_increasing leest
+        # de statistiek een 0 als "teller gereset", en als de echte stand
+        # daarna terugkomt telt hij de hele meterstand als verbruik van dat uur.
+        # Via `availability` en niet via een `none` uit de value_template: die
+        # komt bij een REST-sensor als de tekst "None" aan en dan weigert HA
+        # de state van een energiesensor.
         - name: "Joulo Meterstand"
           unique_id: joulo_meter
           unit_of_measurement: "kWh"
           device_class: energy
           state_class: total_increasing
+          availability: >-
+            {% set alle = value_json.chargers if value_json is mapping and value_json.chargers is list else [] %}
+            {% set l = alle | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {{ (l[0].latest_meter_wh if l and l[0].latest_meter_wh is defined else none) | float(0) > 0 }}
           value_template: >-
-            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {% set alle = value_json.chargers if value_json is mapping and value_json.chargers is list else [] %}
+            {% set l = alle | selectattr('connection_type', 'eq', 'ocpp') | list %}
             {{ (l[0].latest_meter_wh | float(0) / 1000) | round(3) if l else 0 }}
 
         - name: "Joulo Meterstand bijgewerkt"
           unique_id: joulo_meter_updated
           device_class: timestamp
           value_template: >-
-            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {% set alle = value_json.chargers if value_json is mapping and value_json.chargers is list else [] %}
+            {% set l = alle | selectattr('connection_type', 'eq', 'ocpp') | list %}
             {% set c = l[0] if l else none %}
             {{ c.meter_updated_at if c is not none and c.meter_updated_at is defined else none }}
 
@@ -105,7 +124,8 @@ carport_joulo_package:
           unique_id: joulo_is_charging
           device_class: battery_charging
           value_template: >-
-            {% set l = value_json.chargers | selectattr('connection_type', 'eq', 'ocpp') | list %}
+            {% set alle = value_json.chargers if value_json is mapping and value_json.chargers is list else [] %}
+            {% set l = alle | selectattr('connection_type', 'eq', 'ocpp') | list %}
             {{ l[0].is_charging | default(false) if l else false }}
 
     - resource: https://api.joulo.nl/functions/v1/api/energy

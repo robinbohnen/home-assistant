@@ -13,40 +13,12 @@ carport_charging_station_package:
     112hooktest:
       url: !secret hook112_test_url
 
-  automation:
-    - id: carport_charging_station_charge
-      alias: Carport - Charging Station Charge
-      description: Start and stop charging at certain times
-      mode: parallel
-      max: 3
-      triggers:
-        - at: "22:00:00"
-          trigger: time
-          id: start
-        - trigger: time
-          at: "06:15:00"
-          id: stop_6
-        - trigger: time
-          at: "08:05:00"
-          id: stop_8
-      conditions: []
-      actions:
-        - choose:
-            - conditions:
-                - condition: trigger
-                  id:
-                    - start
-              sequence:
-                - data: {}
-                  action: rest_command.start_charging
-            - conditions:
-                - condition: trigger
-                  id:
-                    - stop_6
-                    - stop_8
-              sequence:
-                - data: {}
-                  action: rest_command.stop_charging_if_full
-          # Bewust geen default. Hier stond rest_command.start_charging: elke
-          # later toegevoegde trigger zonder afgedekte id zou dan stilletjes
-          # het laden starten.
+  # Hier stond `carport_charging_station_charge`: een vast nachtschema dat om
+  # 22:00 de oude EVHUB startte en hem om 06:15 en 08:05 stopte als hij vol
+  # was, via laadpaal24.php. Sinds de KEBA P40 Pro op de kwartierprijzen laadt
+  # (KEBA P40 Pro.yaml) was dat een tweede baas die elke dag nog vuurde, dus
+  # weg ermee. De rest_commands hierboven blijven bewust staan als
+  # handgereedschap voor die oude paal; niets roept ze nog automatisch aan.
+  #
+  # De "Laadpaal Starten"-knoppen op het dashboard wezen naar dat schema en
+  # roepen nu script.charging_station_nu_laden aan.

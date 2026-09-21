@@ -841,10 +841,14 @@ sections:
               - condition: state
                 entity: sensor.accu_status
                 state: ontladen
+      # Nu laden, geen goedkoop venster afwachten. Riep eerst het oude
+      # EVHUB-nachtschema aan met skip_condition, maar zonder trigger-id deed
+      # de choose daarin niets; dat schema is nu weg. Het script weet wie er
+      # stuurt (slim laden, handbediening of de paal zelf) - zie KEBA P40 Pro.yaml.
       - type: custom:bubble-card
         card_type: button
         button_type: state
-        entity: automation.carport_charging_station_charge
+        entity: script.charging_station_nu_laden
         name: Laadpaal Starten
         icon: phu:generic-car-charger
         show_last_changed: false
@@ -852,11 +856,7 @@ sections:
         show_state: false
         tap_action:
           action: perform-action
-          target:
-            entity_id: automation.carport_charging_station_charge
-          perform_action: automation.trigger
-          data:
-            skip_condition: true
+          perform_action: script.charging_station_nu_laden
         modules:
           - default
         visibility:
@@ -3224,10 +3224,11 @@ sections:
             hold_action:
               action: more-info
             show_icon: true
+          # Zelfde knop als hierboven, zie de toelichting daar.
           - type: custom:bubble-card
             card_type: button
             button_type: state
-            entity: automation.carport_charging_station_charge
+            entity: script.charging_station_nu_laden
             name: Laadpaal Starten
             icon: mdi:ev-station
             show_last_changed: false
@@ -3235,11 +3236,7 @@ sections:
             show_state: false
             tap_action:
               action: perform-action
-              target:
-                entity_id: automation.carport_charging_station_charge
-              perform_action: automation.trigger
-              data:
-                skip_condition: true
+              perform_action: script.charging_station_nu_laden
             modules:
               - default
             attribute: last_triggered

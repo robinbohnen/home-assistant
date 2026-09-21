@@ -954,6 +954,8 @@ cards:
               past niet meer voor de deadline · begint meteen
               {%- elif r == 'geen prijzen' %}
               geen prijsvoorspelling · begint meteen
+              {%- elif r == 'wacht op prijzen' %}
+              wacht op de prijzen van morgen · deadline haalbaar
               {%- else %}
               plan nog niet berekend
               {%- endif %}
@@ -1056,7 +1058,9 @@ cards:
             primary: "{{ 'Home Assistant stuurt' if is_state('input_boolean.charging_station_modbus_control','on') else 'Laadpaal stuurt zichzelf' }}"
             secondary: >-
               {% if is_state('input_boolean.charging_station_modbus_control','on') %}
-                setpoint {{ states('input_number.charging_station_charging_current') | int(0) }} A · wordt elke 15 s herhaald
+                {#- De gewenste stroom en niet de schuif: staat slim laden aan, dan
+                    stuurt die en negeert HA de schuif. #}
+                setpoint {{ states('sensor.charging_station_gewenste_stroom') | int(0) }} A · wordt elke 15 s herhaald
               {% else %}
                 tik om de laadstroom over te nemen
               {% endif %}

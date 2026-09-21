@@ -9,16 +9,13 @@ carport_keba_p40_package:
   # naar het adres voordat je aan modbus gaat sleutelen - Joulo blijft in
   # zo'n geval vrolijk melden dat het laadstation actief is, zie de
   # opmerking bij de meterkoppeling in de Lader-popup.
-  # Hij praat twee talen tegelijk en die bijten elkaar niet:
   #
-  #  * De HACS-integratie `keba_p40` (Ich-h4lt) gebruikt de lokale REST v2-API
-  #    met JWT. Die levert de bedienbare kant: number/select/button voor stroom,
-  #    fases en start/stop, plus temperatuur en firmware (5.0.1). Alleen heten
-  #    al zijn entiteiten `sensor.keba_p40_36462996_2`, `_3`, `_stroom_4` - niet
-  #    te lezen op een dashboard.
-  #  * Dit bestand leest modbus TCP op poort 502. Dat geeft nette namen en een
-  #    paar dingen die de REST-API niet heeft: kabelstatus, sessie-energie,
-  #    power factor, failsafe-instellingen en het fast-charging-veld.
+  # Dit bestand is de ENIGE koppeling met de paal: modbus TCP op poort 502,
+  # zowel lezen als sturen. De HACS-integratie `keba_p40` (Ich-h4lt, lokale
+  # REST v2-API met JWT) heeft er een tijd naast gedraaid, maar is uit Home
+  # Assistant verwijderd; er bestaan geen `keba_p40_*`-entiteiten meer. Kom je
+  # die naam nog ergens tegen in een kaart of template, dan is dat een
+  # overblijfsel en leest het `unavailable`.
   #
   # LET OP - de wallbox accepteert maar EEN modbus-sessie tegelijk. De TCP-
   # handshake van een tweede client lukt nog wel, maar daarna komt er nooit een
@@ -40,14 +37,14 @@ carport_keba_p40_package:
   #     geeft op elk adres modbus-exception 2, dus `input_type: input` werkt
   #     nergens. De HA-default is holding, daarom staat het er niet bij.
   #
-  # De schalen zijn gecontroleerd tegen de REST-sensoren van de HACS-integratie,
-  # die onafhankelijk dezelfde meting doen: register 1036 = 55280 naast
-  # `sensor.keba_p40_36462996_energie` = 5,528 kWh, register 1008 = 4 naast
-  # 0,004 A, 1100 = 16000 naast 16 A. mA, mW en 0,1 Wh dus.
+  # De schalen zijn destijds gecontroleerd tegen de REST-sensoren van die
+  # HACS-integratie, die onafhankelijk dezelfde meting deden: register 1036 =
+  # 55280 naast 5,528 kWh, register 1008 = 4 naast 0,004 A, 1100 = 16000 naast
+  # 16 A. mA, mW en 0,1 Wh dus.
   #
-  # Niet opgenomen omdat ze niets toevoegen: 1014 (serienummer) en 1016
-  # (producttype) staan al in de entity-id's van de REST-integratie, en 1700 /
-  # 1702 antwoorden wel (12 en 7) maar staan in geen enkele registerlijst.
+  # Niet opgenomen omdat ze niets toevoegen: 1014 (serienummer, staat hierboven
+  # al) en 1016 (producttype), en 1700 / 1702 antwoorden wel (12 en 7) maar
+  # staan in geen enkele registerlijst.
   modbus:
     - name: KebaP40Pro
       type: tcp
@@ -119,8 +116,8 @@ carport_keba_p40_package:
           device_class: current
           scan_interval: 30
 
-        # Levert 10500 op, en dat is NIET de firmwareversie zoals de REST-API
-        # die noemt (5.0.1). Wat het wel is heb ik niet kunnen herleiden, dus
+        # Levert 10500 op, en dat is NIET de firmwareversie zoals de paal hem
+        # zelf noemt (5.0.1). Wat het wel is heb ik niet kunnen herleiden, dus
         # het blijft een ruw getal - handig om te zien of er iets wijzigt na een
         # update, niet om aan iemand te tonen.
         - name: "Charging Station - Firmware version (raw)"
@@ -323,9 +320,9 @@ carport_keba_p40_package:
           scan_interval: 15
 
   # --------------------------------------------------------------------------
-  # De vertaling van de ruwe statusgetallen. Bewust geen binary_sensor voor
-  # "stekker erin" of "laadt": die staan al in de REST-integratie
-  # (binary_sensor.keba_p40_36462996_stekker en _actief) en twee bronnen voor
+  # De vertaling van de ruwe statusgetallen. Geen binary_sensor voor "stekker
+  # erin" of "laadt": de automatiseringen hieronder lezen de ruwe getallen
+  # rechtstreeks (kabel 5/7, laadstatus 3), en een tweede afgeleide bron voor
   # dezelfde ja/nee-vraag is precies hoe je later een tegenstrijdig dashboard
   # krijgt.
   template:
@@ -357,9 +354,8 @@ carport_keba_p40_package:
               '7': 'In laadpaal en auto, vergrendeld' } %}
             {{ m.get(states('sensor.charging_station_cable_state_raw'), 'Onbekend') }}
 
-        # 1 of 3, en dit is de stand die er ECHT staat. De REST-integratie
-        # heeft hier ook een select van, maar die onthoudt alleen wat er als
-        # laatste gevraagd is; de API geeft de werkelijke stand niet terug.
+        # 1 of 3, en dit is de stand die er ECHT staat - niet wat er als
+        # laatste gevraagd is (de oude REST-integratie had alleen dat laatste).
         - name: "Charging Station - Phases"
           unique_id: charging_station_phases
           icon: mdi:sine-wave
@@ -443,11 +439,20 @@ carport_keba_p40_package:
             - sensor.hrh85f_batterij
             - number.megane_e_tech_target_charge_level
             - input_datetime.charging_station_klaar_om
+            # Voor de startdrempel hieronder: die geldt alleen buiten een sessie.
+            - input_boolean.charging_station_laadsessie
       variables:
         plan: >-
           {% set cap = 60 %}
           {% set rendement = 0.90 %}
           {% set marge = 1.15 %}
+          {# Pas een nieuwe sessie plannen als de accu minstens zoveel procent
+             onder het doel zit. Zonder deze drempel werd elke procent
+             standby-verlies een eigen laadbeurt: 97% van 100 leverde een plan
+             van 1,8 kWh op, met de wallbox die daarvoor aan en uit schakelt.
+             Een LOPENDE sessie merkt hier niets van; die laadt door tot het
+             doel zelf (zie de stop-automatisering). #}
+          {% set startdrempel = 5 %}
           {% set soc = states('sensor.hrh85f_batterij') | float(none) %}
           {% set doel = states('number.megane_e_tech_target_charge_level') | float(100) %}
           {% set amp = states('sensor.charging_station_max_supported_current') | float(16) %}
@@ -477,7 +482,9 @@ carport_keba_p40_package:
           {% set punten = ns.punten | sort(attribute='t') %}
           {% set nu = as_timestamp(now()) %}
           {% set eind_ts = as_timestamp(eind) %}
-          {% if uren <= 0.01 %}
+          {% set bijna_vol = soc is not none and soc > doel - startdrempel
+                             and is_state('input_boolean.charging_station_laadsessie', 'off') %}
+          {% if uren <= 0.01 or bijna_vol %}
             {{ {'reden': 'vol', 'uren': 0, 'kwh': 0, 'vermogen': vermogen, 'deadline': eind.isoformat()} }}
           {% elif (punten | count) < 2 %}
             {{ {'reden': 'geen prijzen', 'uren': uren, 'kwh': tekort | round(2), 'vermogen': vermogen, 'deadline': eind.isoformat()} }}
@@ -504,7 +511,18 @@ carport_keba_p40_package:
                 {% endif %}
               {% endif %}
             {% endfor %}
-            {% if best.gem is none %}
+            {# Geen venster gevonden kan twee dingen betekenen. Of de deadline is
+               echt te krap, of de prijzen reiken nog niet tot de deadline (die
+               van morgen komen pas in de loop van de middag binnen). Alleen
+               het eerste is "past niet"; bij het tweede zou meteen beginnen
+               midden in de avondpiek laden terwijl de goedkope nacht nog moet
+               komen. Dan wachten we op de prijzen - en komen die niet op tijd,
+               dan wordt het vanzelf "past niet" zodra de laatste starttijd
+               voor de deadline bereikt is. #}
+            {% if best.gem is none and eind_ts - uren * 3600 > nu %}
+              {{ {'reden': 'wacht op prijzen', 'uren': uren, 'kwh': tekort | round(2),
+                  'vermogen': vermogen, 'deadline': eind.isoformat()} }}
+            {% elif best.gem is none %}
               {{ {'reden': 'past niet', 'uren': uren, 'kwh': tekort | round(2),
                   'vermogen': vermogen, 'deadline': eind.isoformat(),
                   'van': (nu | as_datetime | as_local).isoformat(), 'tot': eind.isoformat()} }}
@@ -520,7 +538,8 @@ carport_keba_p40_package:
         # De state is de RÉDEN en niet de starttijd. Een timestamp-sensor zou
         # `unavailable` moeten worden zodra er niets te plannen valt, en dan zijn
         # de attributen in een automatisering ook niet meer te vertrouwen.
-        # "vol" / "plan" / "past niet" / "geen prijzen" is altijd leesbaar.
+        # "vol" / "plan" / "past niet" / "geen prijzen" / "wacht op prijzen" is
+        # altijd leesbaar.
         - name: "Charging Station - Laadplan"
           unique_id: charging_station_laadplan
           icon: mdi:calendar-clock
@@ -581,6 +600,14 @@ carport_keba_p40_package:
     # accustand staan, schuift het venster terug, en begint het laden weer.
     # Daarom: eenmaal begonnen blijft de sessie open tot de auto vol is, de
     # deadline verstrijkt of de stekker eruit gaat.
+    #
+    # Bewust GEEN `initial:`, hier niet en niet bij de datetimes hieronder: een
+    # initial wint het bij elke start van de opgeslagen stand. Maar ook zonder
+    # initial is het herstel niet waterdicht. HA bewaart die stand elk kwartier
+    # en bij een nette stop; valt hij hard om, dan komt de stand van het
+    # vorige kwartier terug. Zo ging op 2026-09-17 om 11:38 en 11:49 een sessie
+    # die om 11:30 geopend was verloren, en stond de sessie-deadline weer op die
+    # van vijf dagen eerder. Daarvoor is de herstel-automatisering verderop.
     charging_station_laadsessie:
       name: "Charging Station - Laadsessie actief"
       icon: mdi:ev-station
@@ -668,10 +695,18 @@ carport_keba_p40_package:
     # eerstvolgende 07:00 is. Een script doet dat wel, en nu delen de melding op
     # je telefoon en de knoppen in de popup dezelfde regel.
     #
-    # Die regel: neem het eerstvolgende moment met die kloktijd dat minstens
-    # drie uur weg is. Zonder ondergrens zou "middag" om kwart voor vijf 's
-    # middags een deadline van een kwartier later opleveren, en dan is er niets
-    # meer te plannen.
+    # De regels:
+    #  * "ochtend" is de eerstvolgende 07:00, hoe dichtbij ook. Steek je om
+    #    half vijf 's nachts in, dan moet de auto VANDAAG om zeven uur mee;
+    #    een ondergrens schoof dat door naar morgen, en dan stond de auto 's
+    #    ochtends onopgeladen. Past het niet meer, dan meldt het plan "past
+    #    niet" en begint hij meteen - de enige goede keuze op dat uur.
+    #  * "middag" is de eerstvolgende 17:00 die minstens drie uur weg is. Zonder
+    #    die ondergrens zou "middag" om kwart voor vijf een deadline van een
+    #    kwartier later opleveren, en wie dan op die knop drukt bedoelt
+    #    morgenmiddag.
+    #  * "later" is "ochtend" plus een dag: de auto hoeft pas de ochtend daarna
+    #    mee.
     charging_station_deadline_zetten:
       alias: "Charging Station - Deadline zetten"
       icon: mdi:clock-check-outline
@@ -695,10 +730,71 @@ carport_keba_p40_package:
           data:
             datetime: >-
               {% set klok = '17:00' if wanneer == 'middag' else '07:00' %}
+              {% set ondergrens = 10800 if wanneer == 'middag' else 0 %}
               {% set t = today_at(klok) %}
-              {% set t = t if (t - now()).total_seconds() > 10800 else t + timedelta(days=1) %}
+              {% set t = t if (t - now()).total_seconds() > ondergrens else t + timedelta(days=1) %}
               {% set t = t + timedelta(days=1) if wanneer == 'later' else t %}
               {{ t.strftime('%Y-%m-%d %H:%M:%S') }}
+
+    # Eén plek waar een laadsessie opengaat: het geplande venster, het herstel
+    # na een herstart en de "Laadpaal Starten"-knop gebruiken allemaal deze.
+    # Eerst de deadline vastleggen, dan pas de grendel open. Andersom kan de
+    # stop-automatisering een sessie zien met een deadline van de vorige keer.
+    charging_station_sessie_openen:
+      alias: "Charging Station - Laadsessie openen"
+      icon: mdi:ev-station
+      mode: single
+      sequence:
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.charging_station_sessie_deadline
+          data:
+            datetime: >-
+              {% set dl = state_attr('sensor.charging_station_laadplan', 'deadline') | as_datetime(none) %}
+              {{ (dl | as_local).strftime('%Y-%m-%d %H:%M:%S')
+                 if dl is not none else (now() + timedelta(hours=12)).strftime('%Y-%m-%d %H:%M:%S') }}
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.charging_station_laadsessie
+
+    # "Laadpaal Starten" op het dashboard: nu laden, geen venster afwachten.
+    # Die knop trapte vroeger het nachtschema van de oude EVHUB af (via
+    # laadpaal24.php); dat schema is weg, zie Charging Station.yaml.
+    #
+    # Wat "nu laden" betekent hangt af van wie er stuurt:
+    #  * slim laden aan: de sessie openen, precies alsof het venster nu begint.
+    #    Hij sluit dan weer op de gewone manier: vol, deadline of stekker eruit.
+    #    Zonder auto aan de kabel gebeurt er niets, anders sloot de
+    #    stop-automatisering hem binnen vijf minuten toch weer.
+    #  * handbediening aan: het setpoint op de maximale stroom zetten.
+    #  * allebei uit: niets te doen, de paal laadt dan zelf al op vol vermogen.
+    charging_station_nu_laden:
+      alias: "Charging Station - Nu laden"
+      icon: mdi:ev-station
+      mode: single
+      sequence:
+        - choose:
+            - conditions:
+                - condition: state
+                  entity_id: input_boolean.charging_station_smart_charging
+                  state: "on"
+                - condition: template
+                  value_template: "{{ states('sensor.charging_station_cable_state_raw') in ['5', '7'] }}"
+              sequence:
+                - action: script.charging_station_sessie_openen
+            - conditions:
+                - condition: state
+                  entity_id: input_boolean.charging_station_smart_charging
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.charging_station_modbus_control
+                  state: "on"
+              sequence:
+                - action: input_number.set_value
+                  target:
+                    entity_id: input_number.charging_station_charging_current
+                  data:
+                    value: "{{ states('sensor.charging_station_max_supported_current') | float(16) | round(0) | int }}"
 
     charging_station_set_phases:
       alias: "Charging Station - Set phases"
@@ -746,6 +842,16 @@ carport_keba_p40_package:
         # heeft staat de verbinding.
         - condition: template
           value_template: "{{ has_value('sensor.charging_station_max_supported_current') }}"
+        # De eerste minuut na een start NIET schrijven. Register 5004 staat dan
+        # nog op wat HA er vóór de uitval in zette, en dat is het enige bewijs
+        # dat er een laadsessie liep - de herstel-automatisering verderop leest
+        # het na 45 seconden. Schrijft de hartslag eerst, dan staat er 0 en is
+        # dat bewijs weg. Die minuut kost niets: de wallbox staat sinds de
+        # uitval toch al op zijn failsafe.
+        - condition: template
+          value_template: >-
+            {% set start = states('sensor.home_assistant_gestart') | as_datetime(none) %}
+            {{ start is none or (now() - start).total_seconds() >= 60 }}
       actions:
         - action: script.charging_station_push_setpoint
 
@@ -754,9 +860,16 @@ carport_keba_p40_package:
       description: "Geeft de wallbox terug aan zichzelf zodra HA stopt met sturen"
       mode: single
       triggers:
+        # Niet van en naar `unknown`/`unavailable`: bij elke template-reload
+        # gaat deze sensor 0 → unavailable → 0, en dan schreef dit 16 A naar
+        # 5004 terwijl de hartslag er 0 in wilde houden. Zeven keer in tien
+        # dagen gebeurd, telkens een race tussen die twee schrijvers.
         - trigger: state
           entity_id: sensor.charging_station_gewenste_stroom
           to:
+            - unavailable
+            - unknown
+          not_from:
             - unavailable
             - unknown
       conditions:
@@ -767,6 +880,14 @@ carport_keba_p40_package:
           value_template: >-
             {{ trigger.from_state is not none
                and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+        # Het echte loslaten: beide schakelaars staan uit. Is er nog één aan,
+        # dan was de `unavailable` een reload of hapering van de sensor zelf en
+        # stuurt HA gewoon door.
+        - condition: state
+          entity_id:
+            - input_boolean.charging_station_smart_charging
+            - input_boolean.charging_station_modbus_control
+          state: "off"
       actions:
         - action: script.charging_station_release
 
@@ -810,7 +931,9 @@ carport_keba_p40_package:
           value_template: "{{ states('sensor.charging_station_cable_state_raw') in ['5', '7'] }}"
         # "vol" valt hier af, want dan is er niets te laden. "geen prijzen"
         # start meteen: zonder prijsvoorspelling is een lege auto 's ochtends
-        # erger dan een paar euro te veel betalen.
+        # erger dan een paar euro te veel betalen. "wacht op prijzen" valt ook
+        # af: er zijn wel prijzen en er is nog tijd, alleen reiken ze nog niet
+        # tot de deadline. Het plan wordt vanzelf "past niet" als die tijd op is.
         - condition: template
           value_template: >-
             {% set reden = states('sensor.charging_station_laadplan') %}
@@ -818,19 +941,7 @@ carport_keba_p40_package:
             {{ reden in ['plan', 'past niet', 'geen prijzen']
                and (van is none or now() >= van) }}
       actions:
-        # Eerst de deadline vastleggen, dan pas de grendel open. Andersom kan de
-        # stop-automatisering een sessie zien met een deadline van de vorige keer.
-        - action: input_datetime.set_datetime
-          target:
-            entity_id: input_datetime.charging_station_sessie_deadline
-          data:
-            datetime: >-
-              {% set dl = state_attr('sensor.charging_station_laadplan', 'deadline') | as_datetime(none) %}
-              {{ (dl | as_local).strftime('%Y-%m-%d %H:%M:%S')
-                 if dl is not none else (now() + timedelta(hours=12)).strftime('%Y-%m-%d %H:%M:%S') }}
-        - action: input_boolean.turn_on
-          target:
-            entity_id: input_boolean.charging_station_laadsessie
+        - action: script.charging_station_sessie_openen
 
     # Vier manieren om te stoppen, en geen daarvan is "het venster is voorbij".
     # Het geplande vermogen is een BOVENGRENS uit de wallbox; kan de auto minder
@@ -845,11 +956,17 @@ carport_keba_p40_package:
       triggers:
         - trigger: time_pattern
           minutes: "/5"
+        # Niet naar `unknown`/`unavailable`: de modbus-sensoren vallen geregeld
+        # 8 tot 30 seconden weg (op 2026-09-17 om 12:46:19 nog), en een lege
+        # kabelstatus is geen stekker eruit.
         - trigger: state
           entity_id:
             - sensor.hrh85f_batterij
             - sensor.charging_station_cable_state_raw
             - input_boolean.charging_station_smart_charging
+          not_to:
+            - unavailable
+            - unknown
       conditions:
         - condition: state
           entity_id: input_boolean.charging_station_laadsessie
@@ -863,7 +980,10 @@ carport_keba_p40_package:
                "can't compare offset-naive and offset-aware datetimes" en dan
                stopt deze automatisering nooit meer. #}
             {% set dl = state_attr('input_datetime.charging_station_sessie_deadline', 'timestamp') | float(none) %}
-            {{ states('sensor.charging_station_cable_state_raw') not in ['5', '7']
+            {# `has_value` eerst: `unavailable` staat ook "niet in 5 of 7", en
+               dan sloot een modbus-hapering een lopende sessie. #}
+            {{ (has_value('sensor.charging_station_cable_state_raw')
+                and states('sensor.charging_station_cable_state_raw') not in ['5', '7'])
                or is_state('input_boolean.charging_station_smart_charging', 'off')
                or (soc is not none and soc >= doel)
                or (dl is not none and as_timestamp(now()) >= dl) }}
@@ -871,6 +991,49 @@ carport_keba_p40_package:
         - action: input_boolean.turn_off
           target:
             entity_id: input_boolean.charging_station_laadsessie
+
+    # Een sessie die bij een harde herstart verloren ging weer openen. Zie de
+    # toelichting bij de helper voor hoe dat gebeurt.
+    #
+    # "Laadt de auto nu?" is daarvoor NIET genoeg. Zolang HA weg is valt de
+    # wallbox na 30 seconden terug op zijn failsafe en laadt dan op vol
+    # vermogen, sessie of niet. Laadstatus 3 na een herstart is dus meestal de
+    # failsafe, en daarop een sessie openen zou een auto die op het venster van
+    # morgenmiddag wacht nu meteen op het dure uur volladen.
+    #
+    # Het bewijs zit in register 5004. Dat spiegelt wat HA er het laatst in
+    # SCHREEF, niet wat de wallbox doet, en de failsafe verandert het niet:
+    # op 2026-09-17 om 11:38 las het na drie minuten uitval nog 16 A. Stond er
+    # 6 A of meer, dan liet HA vlak voor de uitval laden en liep er een sessie;
+    # stond er 0, dan niet. De hartslag houdt daarom de eerste minuut na een
+    # start zijn mond, anders schrijft hij er een 0 overheen voordat dit het
+    # gelezen heeft.
+    #
+    # 45 seconden wachten omdat de modbus-sensoren bij het opstarten eerst hun
+    # opgeslagen - mogelijk net zo verouderde - stand terugzetten; na één
+    # echte uitlezing (elke 30 s) staat er wat de paal nu zegt.
+    - id: charging_station_sessie_herstel
+      alias: "Carport - Charging Station Sessie herstel"
+      description: "Heropent na een herstart een laadsessie die de restore niet overleefde"
+      mode: single
+      triggers:
+        - trigger: homeassistant
+          event: start
+      conditions: []
+      actions:
+        - delay: "00:00:45"
+        - condition: state
+          entity_id: input_boolean.charging_station_smart_charging
+          state: "on"
+        - condition: state
+          entity_id: input_boolean.charging_station_laadsessie
+          state: "off"
+        - condition: template
+          value_template: >-
+            {{ states('sensor.charging_station_cable_state_raw') in ['5', '7']
+               and states('sensor.charging_station_charging_state_raw') == '3'
+               and states('sensor.charging_station_modbus_current_setpoint') | float(0) >= 6 }}
+        - action: script.charging_station_sessie_openen
 
     # ------------------------------------------------------------------------
     # "WANNEER MOET HIJ KLAAR ZIJN?"
@@ -887,10 +1050,10 @@ carport_keba_p40_package:
     #
     # De knoppen heten naar het tijdstip en niet naar de dag ("Ochtend 07:00",
     # niet "morgenochtend"), want steek je om twee uur 's nachts in, dan is de
-    # eerstvolgende ochtend vandaag. De regel die dat uitrekent staat drie keer
-    # hieronder: neem het eerstvolgende moment met die kloktijd dat minstens
-    # drie uur weg is. Zonder die ondergrens zou "Middag 17:00" om kwart voor
-    # vijf 's middags een deadline van een kwartier later opleveren.
+    # eerstvolgende ochtend vandaag. Welk moment elke knop precies wordt, staat
+    # op één plek: het script `charging_station_deadline_zetten`. De meldingen
+    # noemen daarom de dag erbij zodra die niet vandaag is - "07:00" alleen zegt
+    # niet of het vanochtend of morgenochtend is.
     - id: charging_station_vraag_deadline
       alias: "Carport - Charging Station Vraag deadline"
       description: "Vraagt bij het insteken hoe laat de auto klaar moet zijn"
@@ -905,12 +1068,14 @@ carport_keba_p40_package:
         - condition: state
           entity_id: input_boolean.charging_station_smart_charging
           state: "on"
-        # Niet vragen als de kabel alleen even los zat: van 5 naar 7 is
-        # vergrendelen, niet opnieuw insteken.
+        # Alleen vragen bij echt insteken: de kabel hing aantoonbaar NIET in de
+        # auto (0, 1 of 3). Van 5 naar 7 is vergrendelen, en 7 → unavailable →
+        # 7 is een modbus-hapering; die zette eerst een al gekozen deadline
+        # terug op 07:00 en stelde de vraag opnieuw.
         - condition: template
           value_template: >-
             {{ trigger.from_state is not none
-               and trigger.from_state.state not in ['5', '7'] }}
+               and trigger.from_state.state in ['0', '1', '3'] }}
       actions:
         # Terugvallen op de veilige aanname. Doet niemand iets, dan is de auto
         # 's ochtends vol.
@@ -925,13 +1090,25 @@ carport_keba_p40_package:
           data:
             title: Auto hangt aan de lader
             message: >-
+              {% macro moment(d) -%}
+                {%- set n = (d.date() - now().date()).days -%}
+                {{ '' if n == 0 else ('morgen ' if n == 1 else ('overmorgen ' if n == 2 else d.strftime('%d-%m '))) }}{{ d.strftime('%H:%M') }}
+              {%- endmacro %}
+              {% set reden = states('sensor.charging_station_laadplan') %}
               {% set van = state_attr('sensor.charging_station_laadplan', 'van') | as_datetime(none) %}
               {% set tot = state_attr('sensor.charging_station_laadplan', 'tot') | as_datetime(none) %}
               {% set kwh = state_attr('sensor.charging_station_laadplan', 'kwh') | float(0) %}
               {% set gem = state_attr('sensor.charging_station_laadplan', 'gemiddelde') | float(none) %}
-              {% if van is not none %}
-              Klaar om 07:00 betekent laden van {{ van.strftime('%H:%M') }} tot {{ tot.strftime('%H:%M') }}:
+              {# De deadline waar het plan echt mee rekent, niet de helper: staat die in
+                 het verleden, dan rekent het plan met de eerstvolgende 07:00. #}
+              {% set dl = state_attr('sensor.charging_station_laadplan', 'deadline') | as_datetime(none) %}
+              {% set klaar = 'Klaar om ' ~ moment(dl | as_local) if dl is not none else 'Klaar om 07:00' %}
+              {% if van is not none and tot is not none %}
+              {{ klaar }} betekent laden van {{ moment(van) }} tot {{ moment(tot) if tot.date() != van.date() else tot.strftime('%H:%M') }}:
               {{ kwh | round(0) | int }} kWh{{ ' voor € ' ~ ('%.2f' | format(gem * kwh)) | replace('.', ',') if gem is not none else '' }}.
+              Mag hij later klaar zijn? Dan is het meestal een stuk goedkoper.
+              {% elif reden == 'wacht op prijzen' %}
+              {{ klaar }}: de prijzen tot dan zijn er nog niet, het plan volgt zodra ze binnen zijn.
               Mag hij later klaar zijn? Dan is het meestal een stuk goedkoper.
               {% else %}
               Hoe laat moet hij klaar zijn?
@@ -968,9 +1145,37 @@ carport_keba_p40_package:
           id: later
       conditions: []
       actions:
+        # Voor de vergelijking hieronder: veranderde de deadline echt?
+        - variables:
+            oude_deadline: "{{ state_attr('input_datetime.charging_station_klaar_om', 'timestamp') | float(0) }}"
         - action: script.charging_station_deadline_zetten
           data:
             wanneer: "{{ trigger.id }}"
+
+        # Een nieuwe deadline tijdens een LOPENDE sessie. Die sessie laadt door
+        # op de deadline van toen hij opende, dus zonder ingreep deed de keuze
+        # niets terwijl de bevestiging hieronder een nieuw venster noemde.
+        # Alleen de sessie-deadline bijwerken is niet genoeg: wie "later" kiest
+        # wil juist dat het dure laden van nu stopt en naar het goedkopere
+        # venster schuift. Dus de sessie sluiten en het plan opnieuw laten
+        # kiezen. Valt het nieuwe venster op nu, of past het niet meer, dan
+        # opent de start-automatisering hem hieronder meteen weer.
+        #
+        # Alleen bij een ECHT andere deadline. Opnieuw op dezelfde knop drukken
+        # zou anders precies het heen-en-weer geven waar de grendel tegen is:
+        # met een halfvolle accu schuift het venster naar later.
+        - if:
+            - condition: state
+              entity_id: input_boolean.charging_station_laadsessie
+              state: "on"
+            - condition: template
+              value_template: >-
+                {{ state_attr('input_datetime.charging_station_klaar_om', 'timestamp') | float(0)
+                   != oude_deadline | float(0) }}
+          then:
+            - action: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.charging_station_laadsessie
 
         # De melding staat ook op de andere telefoon; zonder dit blijft daar een
         # vraag staan die al beantwoord is.
@@ -979,23 +1184,46 @@ carport_keba_p40_package:
             message: clear_notification
             data:
               tag: laadpaal_deadline
+        # Het plan rekent opnieuw zodra de deadline of de grendel verandert (beide
+        # staan in zijn triggerlijst). Daarna meteen de start-automatisering
+        # langs zijn eigen condities halen, in plaats van tot vijf minuten te
+        # wachten op zijn tik.
         - delay: "00:00:05"
+        - action: automation.trigger
+          target:
+            entity_id: automation.carport_charging_station_smart_charge_start
+          data:
+            skip_condition: false
+        - delay: "00:00:01"
         - action: notify.mobile_devices_adults
           data:
             title: Laadplan aangepast
             message: >-
+              {% macro moment(d) -%}
+                {%- set n = (d.date() - now().date()).days -%}
+                {{ '' if n == 0 else ('morgen ' if n == 1 else ('overmorgen ' if n == 2 else d.strftime('%d-%m '))) }}{{ d.strftime('%H:%M') }}
+              {%- endmacro %}
               {% set reden = states('sensor.charging_station_laadplan') %}
               {% set van = state_attr('sensor.charging_station_laadplan', 'van') | as_datetime(none) %}
               {% set tot = state_attr('sensor.charging_station_laadplan', 'tot') | as_datetime(none) %}
               {% set kwh = state_attr('sensor.charging_station_laadplan', 'kwh') | float(0) %}
               {% set gem = state_attr('sensor.charging_station_laadplan', 'gemiddelde') | float(none) %}
-              {% set dl = state_attr('input_datetime.charging_station_klaar_om', 'timestamp') | as_datetime(none) %}
-              {% if reden == 'plan' and van is not none %}
-              Klaar om {{ (dl | as_local).strftime('%H:%M') }}. Laden van
-              {{ van.strftime('%H:%M') }} tot {{ tot.strftime('%H:%M') }}, {{ kwh | round(0) | int }} kWh
+              {# De deadline waar het plan echt mee rekent, niet de helper: staat die in
+                 het verleden, dan rekent het plan met de eerstvolgende 07:00. #}
+              {% set dl = state_attr('sensor.charging_station_laadplan', 'deadline') | as_datetime(none) %}
+              {% set klaar = 'Klaar om ' ~ moment(dl | as_local) if dl is not none else 'Klaar' %}
+              {% if is_state('input_boolean.charging_station_laadsessie', 'on') %}
+              {{ klaar }}. Hij laadt nu, door tot de auto vol is.
+              {% elif reden == 'plan' and van is not none and tot is not none %}
+              {{ klaar }}. Laden van
+              {{ moment(van) }} tot {{ moment(tot) if tot.date() != van.date() else tot.strftime('%H:%M') }}, {{ kwh | round(0) | int }} kWh
               {{- ' voor € ' ~ ('%.2f' | format(gem * kwh)) | replace('.', ',') if gem is not none else '' }}.
               {% elif reden == 'vol' %}
               De auto is al vol, er valt niets te plannen.
+              {% elif reden == 'wacht op prijzen' %}
+              {{ klaar }}. De prijzen tot dan zijn er nog niet; het plan volgt zodra ze binnen zijn.
+              {% elif reden == 'geen prijzen' %}
+              Er zijn geen prijzen bekend, dus hij begint meteen.
               {% else %}
               Het past niet meer voor die tijd, hij begint meteen.
               {% endif %}
