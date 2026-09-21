@@ -384,3 +384,103 @@ battery_package:
               {% endif %}
             afslag_procent: "{{ states('number.deye_battery_shutdown_soc') | int(10) }}"
             herstart_procent: "{{ states('number.deye_battery_restart_soc') | int(50) }}"
+
+  ############################################################################
+  ## MARKEDROID - WAT DE REGISSEUR ZELF ZEGT (21 september 2026)
+  ##
+  ## De MarkeDroid-appliance (192.168.30.64) draait een eigen MQTT-broker
+  ## zonder login en publiceert daar om de ~10 seconden vier JSON-berichten
+  ## op `public/realtimedata/{solar,load,battery,meter}`. Alleen lezen: hij
+  ## neemt over MQTT geen opdrachten aan, en dat is precies goed zo.
+  ##
+  ## HA's MQTT-integratie praat met één broker, en dat is die in CT 108. De
+  ## berichten komen hier dus binnen via een BRUG in die Mosquitto
+  ## (`topic public/realtimedata/+ in 0`), niet via een tweede integratie.
+  ##
+  ## BEWUST MAAR DRIE ENTITEITEN, en geen twintig zoals de handleiding
+  ## voorstelt. Accuvermogen, lading, temperatuur en spanning hebben we al uit
+  ## de Deye zelf (sensor.accu_*), en het net uit de P1-meter
+  ## ([[slimhuys-p1-bron]]). Een tweede kopie van hetzelfde getal met een
+  ## andere vertraging is een uitnodiging om ze door elkaar te gebruiken.
+  ## Hier staat alleen wat NIEMAND anders weet: welke stand MarkeDroid de accu
+  ## in heeft gezet, of hij de teruglevering dichtzet, en of hij nog praat.
+  ##
+  ## TWEE DINGEN UIT DE LIVE BERICHTEN DIE NIET IN DE HANDLEIDING STAAN
+  ##   * HET TEKEN VAN `battery.W` IS HIER OMGEKEERD T.O.V. DE DOCUMENTATIE.
+  ##     De handleiding zegt "negatief = laden". Op 21 september 17:07 gaf
+  ##     MarkeDroid -697 W terwijl `TotWhDisChaInc` opliep, `TotWhChaInc` op 0
+  ##     stond, `DCI` negatief was en de Deye zelf +716 W ONTladen meldde.
+  ##     Bij ons is het dus positief = laden, gelijk aan `sensor.accu_vermogen`.
+  ##     Wie hier ooit een vermogen van overneemt: vertrouw de handleiding niet,
+  ##     vertrouw de `Inc`-tellers.
+  ##   * `load.W` IS NIET HET HUISVERBRUIK. Op datzelfde moment: load 728 W,
+  ##     terwijl de zolderpanelen 2,4 kW leverden en de P1 op nul stond. De
+  ##     panelen op zolder hangen aan een eigen omvormer die MarkeDroid niet
+  ##     ziet. `sensor.huis_verbruik` blijft de bron.
+  ##
+  ## `CurrentCmnd`, `VppValue` en `VppComponent` worden volgens ModuSun
+  ## geleidelijk uitgerold en zaten op 21 september nog NIET in onze
+  ## berichten. Tot ze komen staat de regie op `niet_geleverd` - en dat is
+  ## geen storing.
+  ############################################################################
+  mqtt:
+    sensor:
+      # De stand waarin MarkeDroid de accu nu heeft gezet. Bedoeld als rem voor
+      # alles wat later zware lasten op zonne-overschot schakelt: tijdens
+      # `geforceerd_laden`, `flex` en `geblokkeerd` doet MarkeDroid iets met
+      # opzet, en een automatisering die daar tegenin stuurt is de tweede baas
+      # waar de kop van dit bestand voor waarschuwt.
+      - name: "MarkeDroid regie"
+        unique_id: markedroid_regie
+        default_entity_id: sensor.markedroid_regie
+        state_topic: "public/realtimedata/battery"
+        icon: mdi:battery-sync
+        # Een ontbrekend veld is een ander verhaal dan een stille broker: het
+        # eerste geeft `niet_geleverd`, het tweede via `expire_after`
+        # `unavailable`.
+        value_template: >-
+          {% set namen = {0: 'geen_regie', 1: 'geblokkeerd', 2: 'vasthouden',
+                          3: 'geforceerd_laden', 4: 'teruglevering_voorrang',
+                          5: 'eigen_verbruik', 6: 'flex', 7: 'max_terugleveren'} %}
+          {% set c = value_json.CurrentCmnd if value_json.CurrentCmnd is defined else none %}
+          {{ 'niet_geleverd' if c is none else namen.get(c | int(-1), 'onbekend_' ~ c) }}
+        json_attributes_topic: "public/realtimedata/battery"
+        json_attributes_template: >-
+          {% set tekst = {0: 'MarkeDroid stuurt niet', 1: 'accu geblokkeerd, laden en ontladen dicht',
+                          2: 'vasthouden, alleen laden', 3: 'geforceerd laden van het net',
+                          4: 'teruglevering heeft voorrang', 5: 'vrij, eigen verbruik',
+                          6: 'flex-opdracht (VPP)', 7: 'maximaal terugleveren'} %}
+          {% set c = value_json.CurrentCmnd if value_json.CurrentCmnd is defined else none %}
+          {{ {
+               'code': c,
+               'omschrijving': ('geen regie-veld in de berichten' if c is none
+                                else tekst.get(c | int(-1), 'onbekende code ' ~ c)),
+               'flex_w': value_json.VppValue if value_json.VppValue is defined else none,
+               'flex_meetpunt': value_json.VppComponent if value_json.VppComponent is defined else none
+             } | tojson }}
+        expire_after: 60
+
+      # 0 = teruglevering zoals altijd, 1 = MarkeDroid zet de export op 0 W
+      # (meestal een negatieve prijs), 2 = de begrenzer zelf is in storing.
+      - name: "MarkeDroid exportbegrenzer"
+        unique_id: markedroid_exportbegrenzer
+        default_entity_id: sensor.markedroid_exportbegrenzer
+        state_topic: "public/realtimedata/solar"
+        value_template: >-
+          {% set s = value_json.ExpLimiterState if value_json.ExpLimiterState is defined else none %}
+          {{ {0: 'uit', 1: 'actief', 2: 'storing'}.get(s | int(-1), 'onbekend') if s is not none else 'onbekend' }}
+        icon: mdi:transmission-tower-export
+        expire_after: 60
+
+    binary_sensor:
+      # Aan zolang er berichten komen; valt uit na een minuut stilte. Een
+      # `off_delay` en niet `expire_after`: die tweede maakt er `unavailable`
+      # van, en dan kan een kaart "geen verbinding" niet onderscheiden van
+      # "HA weet het niet". De timer begint bij elk bericht opnieuw.
+      - name: "MarkeDroid verbinding"
+        unique_id: markedroid_verbinding
+        default_entity_id: binary_sensor.markedroid_verbinding
+        state_topic: "public/realtimedata/battery"
+        value_template: "ON"
+        device_class: connectivity
+        off_delay: 60

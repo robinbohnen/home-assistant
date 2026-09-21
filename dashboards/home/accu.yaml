@@ -559,3 +559,32 @@ cards:
                        : (min < 1440 ? Math.round(min/60) + ' uur' : Math.round(min/1440) + ' dagen');
               return 'in orde · laatste onderbreking ' + duur + ' geleden';
             ]]]
+      # WAT MARKEDROID MET DE ACCU DOET
+      # Eén regel: de stand die hij gekozen heeft, en alleen als het iets zegt
+      # de exportbegrenzer erachter. Zonder regie-veld in de berichten (nog
+      # niet uitgerold, zie Battery.yaml) staat er gewoon dat hij praat.
+      - type: custom:button-card
+        template: ov_listrow
+        entity: binary_sensor.markedroid_verbinding
+        triggers_update:
+          - sensor.markedroid_regie
+          - sensor.markedroid_exportbegrenzer
+        variables:
+          mdi: mdi:robot-outline
+          title: MarkeDroid
+        custom_fields:
+          s: |
+            [[[
+              if(!entity) return '—';
+              if(entity.state !== 'on') return '<span style="color:var(--ov-bad)">geen berichten meer van MarkeDroid</span>';
+              var r = states['sensor.markedroid_regie'];
+              var e = states['sensor.markedroid_exportbegrenzer'];
+              var delen = [];
+              delen.push((r && r.state !== 'niet_geleverd' && r.attributes.omschrijving)
+                ? r.attributes.omschrijving : 'verbonden');
+              if(r && r.attributes.flex_w !== null && r.attributes.flex_w !== undefined)
+                delen.push('flex ' + r.attributes.flex_w + ' W');
+              if(e && e.state === 'actief') delen.push('teruglevering dicht');
+              if(e && e.state === 'storing') delen.push('<span style="color:var(--ov-bad)">exportbegrenzer in storing</span>');
+              return delen.join(' · ');
+            ]]]
