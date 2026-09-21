@@ -12,10 +12,34 @@ frontyard_movement_package:
           entity_id:
             - binary_sensor.g6_180_persoon_gedetecteerd
           to: "on"
+      ##################################################################
+      ## "LAMPEN AAN" ALLEEN IS NIET GENOEG (21 september 2026)
+      ##
+      ## De carportspots (IKEA GU10) vallen overdag geregeld even van het
+      ## netwerk en komen dan vanzelf AAN terug - op 20 september om
+      ## 10:16, 11:15 en 11:29. Daarna stond de groep de hele dag op `on`
+      ## en maakte elke persoonsdetectie ze fel, tot 's avonds aan toe.
+      ## Overdag zie je dat niet, dus het hoeft ook niet: fel maken alleen
+      ## als het ook echt donker is. "Donker" is hetzelfde venster als in
+      ## blueprints/automation/robin/buitenlicht.yaml: zonsondergang -1u
+      ## tot zonsopkomst +1u, of de luxmeter onder zijn aan-drempel.
+      ##################################################################
       conditions:
         - condition: state
           entity_id: light.carport_lampen
           state: "on"
+        - &donker
+          condition: or
+          conditions:
+            - condition: sun
+              after: sunset
+              after_offset: "-01:00:00"
+            - condition: sun
+              before: sunrise
+              before_offset: "+01:00:00"
+            - condition: numeric_state
+              entity_id: sensor.buiten_zon_luminance_max
+              below: 1000
       actions:
         - action: scene.create
           metadata: {}
@@ -37,8 +61,21 @@ frontyard_movement_package:
             minutes: 0
             seconds: 30
             milliseconds: 0
-        - action: scene.turn_on
-          metadata: {}
-          target:
-            entity_id: scene.carport_previous_state
+        # Is het in die 30 seconden licht geworden, dan niet de oude stand
+        # terugzetten: op 17 september gingen de lampen om 08:15:44 uit op
+        # zonsopkomst en zette deze scène ze om 08:16:09 weer aan, voor
+        # nog een half uur overdag.
+        - if:
+            - *donker
+          then:
+            - action: scene.turn_on
+              metadata: {}
+              target:
+                entity_id: scene.carport_previous_state
+          else:
+            - action: light.turn_off
+              target:
+                entity_id:
+                  - light.carport_lampen
+                  - light.voortuin_lampen
       mode: single

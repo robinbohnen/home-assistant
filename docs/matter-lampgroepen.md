@@ -58,8 +58,8 @@ Zo'n paar hoort overal samen genoemd te worden. De plekken die dat sinds
 
 | Bestand | Wat |
 | --- | --- |
-| `packages/0 - Ground Floor/Livingroom/Lights.yaml` | thuiskomst/vertrek (twee blueprint-instanties, zie hieronder), aanvullicht humble + ledstrip, kleur terug naar 2600 K, dag-/avondniveau van de spots |
-| `packages/0 - Ground Floor/Livingroom/Media.yaml` | `plafond` in `script.woonkamer_media_licht` (spots dimmen apart naar 20%), de terugzet-tak, de humble-check |
+| `packages/0 - Ground Floor/Livingroom/Lights.yaml` | thuiskomst/vertrek (twee blueprint-instanties, zie hieronder), aanvullicht ledstrip, de humble (`livingroom_humble`), kleur terug naar 2600 K, dag-/avondniveau van de spots |
+| `packages/0 - Ground Floor/Livingroom/Media.yaml` | `plafond` in `script.woonkamer_media_licht` (spots dimmen apart naar 20%), de terugzet-tak |
 | `packages/0 - Ground Floor/Livingroom/Cast.yaml` | opnieuw casten zodra er licht aangaat |
 | `packages/0 - Ground Floor/Hallway/Alarm.yaml` | de vertrekronde |
 | `packages/0 - Ground Floor/Hallway/Lights.yaml` | het bewegingslicht van de entree (blueprint) |

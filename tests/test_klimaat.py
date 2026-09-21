@@ -167,7 +167,7 @@ def scenario(naam, tijd, **kw):
         "sensor.kantoor_kantoor_temperatuur_temperatuur": "20",
         "sensor.badkamer_badkamer_temperatuur_temperatuur": "20",
         "sensor.slaapkamer_slaapkamer_temperatuur_temperatuur": "20",
-        "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur": "20",
+        "sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur": "20",
         "sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur": "20",
     })
     for z in json.loads(MOD.zone_lijst()):
@@ -290,12 +290,51 @@ scenario("winterdag met zon", "12:00",
 check("winter: zon binnenhalen", "kantoor_links", "open")
 check("winter: screens moeten in bij vorst", "keuken_screens", "open")
 
+# De naar-bed-routine staat hier op 20:30, zoals thuis. In de basiswereld is
+# dat 18:00, en dan zou dit scenario al in de slaapstand vallen.
 scenario("winteravond", "19:30",
          **{"input_select.klimaat_regime": "Verwarmen",
             "input_number.klimaat_verwachte_max": "6",
-            "sun.sun.elevation": -12.0})
+            "sun.sun.elevation": -12.0,
+            "input_datetime.bedtime_maxi_1h_off": "20:30:00",
+            "input_datetime.bedtime_mini_1h_off": "20:30:00"})
 check("winter: isolatie na zonsondergang", "kantoor_links", "dicht")
 check("winter: kind slaapt", "slaapkamer_logan", "dicht")
+
+# --- slaapstand ------------------------------------------------------------
+# Vanaf de naar-bed-routine van de kinderen gaan de rolluiken buiten de
+# kinderkamers alvast op de ventilatiestand. Van helemaal dicht naar de kier
+# maakt herrie; dat moet gebeuren vóór de kinderen slapen, niet om 23:00.
+bedtijd_2030 = {"input_datetime.bedtime_maxi_1h_off": "20:30:00",
+                "input_datetime.bedtime_mini_1h_off": "20:30:00"}
+scenario("winteravond, kinderen gaan naar bed", "20:15",
+         **dict(bedtijd_2030, **{"input_select.klimaat_regime": "Verwarmen",
+                                 "input_number.klimaat_verwachte_max": "6",
+                                 "sun.sun.elevation": -25.0}))
+check("slaapstand: kantoor op de kier", "kantoor_links", "kier", True)
+check("slaapstand: badkamer op de kier", "badkamer", "kier", True)
+check("slaapstand: slaapkamer op de kier", "slaapkamer", "kier", True)
+check("slaapstand: kinderkamer blijft dicht", "slaapkamer_logan", "dicht")
+check("slaapstand: keukenrolgordijn doet niet mee", "keuken_rolgordijn_groot", "rust")
+
+scenario("nacht, nachtspui uit, kantoor", "03:00",
+         **dict(bedtijd_2030, **{"input_select.klimaat_regime": "Neutraal",
+                                 "input_boolean.klimaat_nachtspui": "off",
+                                 "sun.sun.elevation": -30.0}))
+# Het kantoor is geen stille zone; hij ging op 21 september om 03:00 nog
+# van de kier naar dicht.
+check("slaapstand: kantoor blijft 's nachts op de kier", "kantoor_links", "kier")
+check("slaapstand: slaapkamer beweegt niet", "slaapkamer", "rust", False)
+
+scenario("donkere winterochtend", "07:30",
+         **dict(bedtijd_2030, **{"input_select.klimaat_regime": "Verwarmen",
+                                 "sun.sun.elevation": -6.0}))
+check("slaapstand: kantoor niet nog even dicht", "kantoor_links", "kier")
+
+scenario("winterochtend, licht", "08:30",
+         **dict(bedtijd_2030, **{"input_select.klimaat_regime": "Verwarmen",
+                                 "sun.sun.elevation": 3.0}))
+check("slaapstand voorbij zodra het licht is", "kantoor_links", "open")
 
 # --- nacht -----------------------------------------------------------------
 scenario("zomernacht, buiten flink koeler", "21:30",
@@ -315,7 +354,7 @@ scenario("zomernacht binnen stille uren, warme kamer", "23:30",
             "sun.sun.elevation": -20.0,
             "sensor.knmi_temperatuur": "19",
             "sensor.slaapkamer_slaapkamer_temperatuur_temperatuur": "25",
-            "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur": "25",
+            "sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur": "25",
             "sensor.badkamer_badkamer_temperatuur_temperatuur": "20"})
 check("stille uren: spuien mag nog wel", "slaapkamer", "kier", True)
 check("stille uren: koele kamer blijft met rust", "badkamer", "rust", False)
@@ -586,6 +625,9 @@ check("voorgevel is klaar, Logan mag open", "slaapkamer_logan", "open")
 # --- avondzon op de achtergevel -------------------------------------------
 scenario("avondzon achter", "18:00",
          **{"input_select.klimaat_regime": "Koelen",
+            # Na 17:40 zou de basiswereld (routine 18:00) al slaapstand zijn.
+            "input_datetime.bedtime_maxi_1h_off": "20:30:00",
+            "input_datetime.bedtime_mini_1h_off": "20:30:00",
             "input_number.klimaat_verwachte_max": "30",
             "sensor.knmi_temperatuur": "28",
             "binary_sensor.zon_op_achtergevel": "on",
@@ -694,7 +736,7 @@ scenario("warme ochtend, nog niemand op, spuien mag", "08:00",
             "input_number.klimaat_verwachte_max": "31",
             "sensor.knmi_temperatuur": "19",
             "sensor.slaapkamer_slaapkamer_temperatuur_temperatuur": "25",
-            "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur": "25",
+            "sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur": "25",
             "sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur": "25",
             "input_boolean.klimaat_wakker": "off"})
 check("ventileren mag wel, omhoog niet", "slaapkamer", "kier")
@@ -709,7 +751,7 @@ scenario("zelfde warme ochtend, maar het huis is wakker", "08:00",
          **{"input_select.klimaat_regime": "Koelen",
             "input_number.klimaat_verwachte_max": "31",
             "sensor.knmi_temperatuur": "19",
-            "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur": "25",
+            "sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur": "25",
             "input_boolean.klimaat_wakker": "on"})
 check("na het wakker-signaal mag de kinderkamer weer", "slaapkamer_logan", "kier")
 
@@ -717,7 +759,7 @@ scenario("warme ochtend, niemand drukte, na de noodrem", "10:30",
          **{"input_select.klimaat_regime": "Koelen",
             "input_number.klimaat_verwachte_max": "31",
             "sensor.knmi_temperatuur": "19",
-            "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur": "25",
+            "sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur": "25",
             "input_boolean.klimaat_wakker": "off"})
 check("na 10:00 doet de kinderkamer weer mee", "slaapkamer_logan", "kier")
 
@@ -725,7 +767,7 @@ scenario("kinderkamer, nacht met warme kamer", "02:00",
          **{"input_select.klimaat_regime": "Koelen",
             "input_number.klimaat_verwachte_max": "31",
             "sensor.knmi_temperatuur": "19",
-            "sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur": "25",
+            "sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur": "25",
             "sun.sun.elevation": -20.0,
             "input_boolean.klimaat_wakker": "off"})
 check("blijft 's nachts gewoon dicht", "slaapkamer_logan", "rust", False)

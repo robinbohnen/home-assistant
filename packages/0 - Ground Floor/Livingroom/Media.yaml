@@ -251,7 +251,6 @@ livingroom_media_package:
                   - light.speelkamer_lampen
                   - light.garage_lampen
                   - light.trapkast_lampen
-                  - light.woonkamer_humble
             # 1% is niet uit, maar wel het minimum dat de AWTRIX kent: je kunt
             # de tijd nog aflezen zonder dat er een lampje naast het beeld staat
             # te branden.
@@ -320,33 +319,8 @@ livingroom_media_package:
                           {{ states('input_number.lights_livingroom_spots_percentage')
                              | int(80) }}
 
-            # De humble ging bij het kijken uit en zit in geen enkele groep
-            # hierboven, dus ook niet in de momentopname.
-            # `livingroom_lights_ambient_fill` in Lights.yaml zet hem alleen op
-            # zijn eigen triggers aan (lux die onder 1000 zakt, of
-            # woonkamer_lampen die aangaan) en die komen na een film niet meer
-            # langs. De 20% en 3984 K hieronder horen gelijk te blijven aan wat
-            # daar staat.
-            - if:
-                - condition: numeric_state
-                  entity_id: sensor.achtertuin_zon_luminance
-                  below: 1000
-                - alias: Er brandt woonkamerlicht
-                  condition: or
-                  conditions:
-                    - condition: state
-                      entity_id: light.woonkamer_lampen
-                      state: "on"
-                    - condition: state
-                      entity_id: light.woonkamer_spots
-                      state: "on"
-              then:
-                - action: light.turn_on
-                  target:
-                    entity_id: light.woonkamer_humble
-                  data:
-                    brightness_pct: 20
-                    color_temp_kelvin: 3984
+            # De humble staat hier niet meer in: die volgt de tv zelf, zie
+            # `livingroom_humble` in Lights.yaml.
             # Terug naar het gewone niveau. Een vast percentage en geen
             # momentopname: de 1% van hierboven is de enige stand die deze
             # schermen ooit anders zet, dus er valt niets te bewaren.

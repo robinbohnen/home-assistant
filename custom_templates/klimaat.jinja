@@ -520,6 +520,28 @@
 {%- set na_bedtijd = now() >= ((bed.t if bed.t is not none
                                 else today_at(BEDTIJD_TERUGVAL))
                                - timedelta(minutes=BEDTIJD_MARGE)) -%}
+{#- SLAAPSTAND: de rolluiken buiten de kinderkamers staan 's nachts op de
+    ventilatiestand (de kier). Daar kwamen ze tot 21 september 2026 pas als
+    iemand de knop naast het bed indrukte, tussen 22:20 en 23:40. Tot die tijd
+    had deze regie ze bij het donker worden helemaal dichtgedaan ("dicht voor
+    de nacht"). Van helemaal dicht naar de kier is precies de beweging die
+    herrie maakt, en om die tijd liggen de kinderen al te slapen. Van open naar
+    de kier gaat juist zacht; die mag dus gewoon later komen.
+
+    Vanaf de naar-bed-routine van de kinderen (`na_bedtijd`, dus mét
+    BEDTIJD_MARGE) adviseren deze zones daarom meteen de kier, en nooit meer
+    dicht, tot 's ochtends STIL_TOT. De slaapzones blijven daarna op 'rust'
+    tot het huis wakker is (`nog_slapen`). Het kantoor is geen slaapzone en
+    mocht 's nachts nog heen en weer: op 21 september om 03:00 van de kier
+    naar dicht en de nacht ervoor om 05:30 weer terug. Dat valt nu ook weg,
+    net als de sprong naar dicht op een winterochtend die om 07:00 nog donker
+    is (vandaar `nacht` tot WAKKER_UITERLIJK).
+
+    De kinderkamers doen niet mee: die blijven helemaal dicht (blok 2). -#}
+{%- set slaapstand = z.slaap != 'kind' and z.kier and not z.screen
+                     and not z.get('binnen')
+                     and (na_bedtijd or now() < today_at(STIL_TOT)
+                          or (nacht and now() < today_at(WAKKER_UITERLIJK))) -%}
 
 {%- set ns = namespace(a='open', r='', spoed=false) -%}
 
@@ -548,6 +570,13 @@
 {%- elif kind_slaapt -%}
   {%- set ns.a = 'dicht' -%}
   {%- set ns.r = 'slaapvenster kinderkamer' -%}
+
+{#- 2b. Slaapstand: vanaf de naar-bed-routine van de kinderen alvast op de
+       ventilatiestand, zodat hij later op de avond niet meer vanuit helemaal
+       dicht omhoog hoeft. Zie `slaapstand` hierboven. -#}
+{%- elif slaapstand -%}
+  {%- set ns.a = 'kier' -%}
+  {%- set ns.r = 'slaapstand: vanaf de naar-bed-routine van de kinderen tot de ochtend op de ventilatiestand' -%}
 
 {#- 3. Nacht. -#}
 {%- elif nacht -%}

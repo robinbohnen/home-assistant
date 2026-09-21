@@ -174,6 +174,12 @@ De beslistabel, van hoog naar laag:
    punt 1 daar 's ochtends weer aan en gingen de kinderrolluiken op een warme
    ochtend alsnog een stukje open. Zolang niemand wakker is, verandert er in een
    kinderkamer dus níéts: dicht blijft dicht, een kier blijft een kier.
+   **Slaapstand** (alle rolluiken buiten de kinderkamers, sinds 21 september
+   2026): vanaf de naar-bed-routine van de kinderen (`bedtime_*_1h_off`, min
+   `BEDTIJD_MARGE`) tot de ochtend staan ze op de kier, nooit dicht. Voorheen
+   gingen ze bij het donker worden helemaal dicht en pas bij de avondknop
+   (22:20-23:40) naar 15. Van dicht naar de kier maakt herrie, en om die tijd
+   sliepen de kinderen al. Van open naar de kier gaat zacht.
 3. **Nacht**: dicht, of een kier bij nachtspui in het koelregime.
 4. **Overdag per regime**:
    - *Koelen*: zon op de gevel → dicht. Niemand thuis op een warme dag → dicht.

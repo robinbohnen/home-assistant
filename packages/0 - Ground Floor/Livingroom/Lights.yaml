@@ -308,9 +308,10 @@ livingsroom_lights_package:
     - id: livingroom_lights_ambient_fill
       alias: Livingroom - Ambient fill lights (low luminance)
       description: >
-        Zet humble + ledstrip aan op laag niveau als er woonkamerlicht brandt
-        (Hue-groep of de Matter-spots) en buiten-lux onder 1000 zakt. Zet ze
-        uit zodra allebei de groepen uit zijn.
+        Zet de ledstrip aan op laag niveau als er woonkamerlicht brandt
+        (Hue-groep of de Matter-spots) en buiten-lux onder 1000 zakt. Zet hem
+        uit zodra allebei de groepen uit zijn. De humble heeft zijn eigen
+        automatisering, `livingroom_humble` hieronder.
       mode: restart
       triggers:
         - trigger: numeric_state
@@ -356,12 +357,6 @@ livingsroom_lights_package:
               sequence:
                 - action: light.turn_on
                   target:
-                    entity_id: light.woonkamer_humble
-                  data:
-                    brightness_pct: 20
-                    color_temp_kelvin: 3984
-                - action: light.turn_on
-                  target:
                     entity_id: light.woonkamer_ledstrip_tv_kast
                   data:
                     brightness_pct: 5
@@ -380,9 +375,116 @@ livingsroom_lights_package:
               sequence:
                 - action: light.turn_off
                   target:
-                    entity_id:
-                      - light.woonkamer_humble
-                      - light.woonkamer_ledstrip_tv_kast
+                    entity_id: light.woonkamer_ledstrip_tv_kast
+
+    ###########################################################################
+    ## DE HUMBLE (21 september 2026)
+    ##
+    ## De humble werkt op een batterij en stond veel te vaak aan. Hij hing mee
+    ## aan het aanvullicht hierboven, en dat ging op drie punten mis:
+    ##   - 's Ochtends ging hij aan met het woonkamerlicht, want de
+    ##     achtertuinmeter staat dan nog in de schaduw en zit tot ver na
+    ##     zonsopkomst onder de 1000 lux.
+    ##   - Daarna ging hij pas uit als álle woonkamerlicht uit was. Op 16
+    ##     september brandde hij zo van 07:02 tot 17:19, en op 14 september
+    ##     van 07:04 tot 19:32.
+    ##   - Een luxtrigger midden in een film kon hem weer aanzetten.
+    ##
+    ## Hier beslist daarom één automatisering bij elke verandering opnieuw of
+    ## hij aan hoort te staan. Aan alleen als dit allemaal waar is:
+    ##   1. Het is echt donker: de lichtste van de twee buitenmeters zit onder
+    ##      de 150 lux. Rond de 50 is de bodem van de meter (nacht); op 20
+    ##      september ging hij om 19:46 door de 250 en om 20:01 naar 50. Vallen
+    ##      beide meters weg, dan telt de zon (onder de horizon).
+    ##   2. Er brandt woonkamerlicht. Het blijft aanvullicht: brandt er verder
+    ##      niets, dan hoeft deze ook niet.
+    ##   3. Er wordt niet gekeken of gegamed. Een pauze of het menu op de Apple
+    ##      TV telt als niet kijken, en muziek via de Apple TV ook niet - net
+    ##      als in `livingroom_media_playing` in Media.yaml.
+    ##   4. Er is iemand thuis (`zone.home` telt de vier personen).
+    ##
+    ## Media.yaml doet sindsdien niets meer met de humble; dit is de enige
+    ## plek.
+    ###########################################################################
+    - id: livingroom_humble
+      alias: Livingroom - Humble
+      description: >-
+        Humble alleen aan als het echt donker is, er woonkamerlicht brandt,
+        de tv niet speelt en er iemand thuis is. Anders uit.
+      mode: restart
+      triggers:
+        - trigger: numeric_state
+          entity_id: sensor.buiten_zon_luminance_max
+          below: 150
+          for: "00:05:00"
+        - trigger: numeric_state
+          entity_id: sensor.buiten_zon_luminance_max
+          above: 150
+          for: "00:05:00"
+        - trigger: state
+          entity_id: sun.sun
+          to: ~
+        - trigger: state
+          entity_id:
+            - light.woonkamer_lampen
+            - light.woonkamer_spots
+          to:
+            - "on"
+            - "off"
+        # Tien seconden, zodat een snelle pauze of het wisselen van app de
+        # humble niet aan en weer uit laat klikken. `to: ~` = elke
+        # statuswissel, geen attribuutwijzigingen zoals de afspeelpositie.
+        - trigger: state
+          entity_id:
+            - media_player.woonkamer_appletv
+            - media_player.playstation_5
+            - media_player.woonkamer_77_oled_3
+          to: ~
+          for: "00:00:10"
+        - trigger: state
+          entity_id: zone.home
+          to: ~
+        - trigger: homeassistant
+          event: start
+      conditions: []
+      actions:
+        - variables:
+            lux: "{{ states('sensor.buiten_zon_luminance_max') | float(none) }}"
+            donker: >-
+              {{ lux < 150 if lux is not none
+                 else is_state('sun.sun', 'below_horizon') }}
+            licht_aan: >-
+              {{ is_state('light.woonkamer_lampen', 'on')
+                 or is_state('light.woonkamer_spots', 'on') }}
+            appletv: "{{ states('media_player.woonkamer_appletv') }}"
+            kijken: >-
+              {{ (appletv == 'playing'
+                  and state_attr('media_player.woonkamer_appletv',
+                                 'media_content_type') != 'music')
+                 or is_state('media_player.playstation_5', 'playing')
+                 or (is_state('media_player.woonkamer_77_oled_3', 'on')
+                     and appletv not in ['playing', 'paused', 'idle']) }}
+            thuis: "{{ states('zone.home') | int(0) > 0 }}"
+            gewenst: "{{ donker and licht_aan and not kijken and thuis }}"
+        - choose:
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {{ gewenst and not is_state('light.woonkamer_humble', 'on') }}
+              sequence:
+                - action: light.turn_on
+                  target:
+                    entity_id: light.woonkamer_humble
+                  data:
+                    brightness_pct: 20
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {{ not gewenst and is_state('light.woonkamer_humble', 'on') }}
+              sequence:
+                - action: light.turn_off
+                  target:
+                    entity_id: light.woonkamer_humble
 
     - id: livingroom_lights_backtonormal
       alias: Livingroom - Lights back to normal
