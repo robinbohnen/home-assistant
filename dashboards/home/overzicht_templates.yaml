@@ -1186,6 +1186,16 @@ ov_uitlegtabel:
           if(!r.a && id.indexOf('binary_sensor.') === 0) return {t: v === 'on' ? 'aan' : 'uit'};
           var n = Number(v);
           if(typeof v !== 'boolean' && !isNaN(n)){
+            // Leesfouten van ha-solarman (21-9 in de historie gevonden): een
+            // negatief vermogen dat zonder teken binnenkomt (65.286 = -250 W),
+            // en af en toe onzin in de miljarden. Alleen voor watts; de
+            // omvormer kan er 20.000 aan.
+            if(!r.a && s.attributes.unit_of_measurement === 'W'){
+              if(n >= 32768 && n < 65536) n = n - 65536;
+              if(Math.abs(n) > 100000) return {t: grijs('leesfout')};
+            }
+            // Frequentie 0 terwijl er spanning staat is ook een leesfout.
+            if(!r.a && s.attributes.unit_of_measurement === 'Hz' && n < 40) return {t: grijs('—')};
             if(r.s) n = n * r.s;
             return {
               t: n.toLocaleString('nl-NL', {minimumFractionDigits: r.min || 0,
