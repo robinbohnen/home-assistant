@@ -64,6 +64,19 @@ hallway_lock_package:
                     - condition: state
                       entity_id: lock.kroon18voordeur
                       state: locked
+                    # DE STEM KRIJGT EEN KLEINER VENSTER DAN DE KNOP
+                    # Kitchen/Voice.yaml stuurt dit event met `bron: stem`. De
+                    # knop drukt iemand die naast het bed staat; een zin kan ook
+                    # van de tv komen of via Assist in de app van buiten. Daarom
+                    # ontgrendelt de stem alleen tussen 06:00 en 10:00 en alleen
+                    # als er een volwassene thuis is. Buiten dat venster doet de
+                    # rest van de ochtendroutine gewoon zijn werk, alleen de
+                    # deur blijft op slot.
+                    - condition: template
+                      value_template: >-
+                        {{ trigger.event.data.get('bron') != 'stem'
+                           or (6 <= now().hour < 10
+                               and is_state('group.all_adults', 'home')) }}
                   then:
                     - action: lock.unlock
                       target:
@@ -92,6 +105,12 @@ hallway_lock_package:
                     - condition: state
                       entity_id: group.all_adults
                       state: home
+                    # Staat het alarm nog in nachtstand (uitslapen in het
+                    # weekend), dan is het huis nog niet op: dan blijft de deur
+                    # dicht tot iemand het alarm uitzet.
+                    - condition: state
+                      entity_id: alarm_control_panel.alarmo
+                      state: disarmed
                     - condition: state
                       entity_id: lock.kroon18voordeur
                       state: locked
@@ -161,7 +180,13 @@ hallway_lock_package:
                 - locking
                 - unavailable
                 - unknown
+        # Een grendel die uitschiet terwijl de deur openstaat, houdt de deur
+        # open: dan gaat hij niet meer dicht. Staat de deur open, dan wacht dit
+        # tot hij dicht is (hooguit een halfuur) en doet hem dan pas op slot.
       actions:
+        - wait_template: "{{ is_state('binary_sensor.entree_entree_voordeur_deur', 'off') }}"
+          timeout: "00:30:00"
+          continue_on_timeout: false
         - action: lock.lock
           metadata: {}
           data: {}

@@ -17,6 +17,7 @@ Twee dingen worden hier bewaakt.
 
 Net als test_klimaat.py doen de stubs de Home Assistant-functies na.
 """
+import datetime as dt
 import os
 import re
 
@@ -55,10 +56,19 @@ def f_float(value, default=0.0):
         return default
 
 
+# Vaste klok zodat tijdafhankelijke teksten reproduceerbaar zijn; een
+# scenario dat een ander uur nodig heeft zet KLOK zelf en zet hem daarna terug.
+KLOK = [dt.datetime(2026, 9, 21, 8, 0)]
+
+
+def ha_now():
+    return KLOK[0]
+
+
 env = Environment()
 env.filters["float"] = f_float
 env.globals.update(states=ha_states, state_attr=ha_state_attr,
-                   is_state=ha_is_state, has_value=ha_has_value)
+                   is_state=ha_is_state, has_value=ha_has_value, now=ha_now)
 
 with open(PAKKET, encoding="utf-8") as fh:
     PACKAGE = yaml.safe_load(fh)["keuken_voice_package"]
@@ -286,30 +296,36 @@ check("ergste eerst", zeg("HuisAandacht"),
 # ---------------------------------------------------------------------------
 print("\nThuisaccu")
 
+# Leest via de abstractielaag uit packages/9 - Other/Battery.yaml:
+# accu_vermogen is positief bij laden, accu_status draagt de dode zone (50 W).
 wereld(**{
-    "sensor.lilygo_rs485_marstek_battery_state_of_charge": "62.4",
-    "sensor.lilygo_rs485_marstek_battery_power": "850",
-    "sensor.lilygo_rs485_marstek_inverter_state": "Charge",
+    "sensor.accu_lading": "62.4",
+    "sensor.accu_vermogen": "850",
+    "sensor.accu_status": "laden",
 })
 check("accu laadt", zeg("ThuisAccu"), ["62 procent", "laadt met 850 watt"])
 
 wereld(**{
-    "sensor.lilygo_rs485_marstek_battery_state_of_charge": "17.0",
-    "sensor.lilygo_rs485_marstek_battery_power": "-420",
-    "sensor.lilygo_rs485_marstek_inverter_state": "Discharge",
+    "sensor.accu_lading": "17.0",
+    "sensor.accu_vermogen": "-3240",
+    "sensor.accu_status": "ontladen",
 })
-check("accu levert", zeg("ThuisAccu"), ["17 procent", "levert 420 watt"])
+check("accu levert", zeg("ThuisAccu"), ["17 procent", "levert 3,2 kilowatt"])
 
-# Een onbekende inverter-state met een klein restvermogen is gewoon stilstand;
-# dezelfde dode zone van 20 W als de accu-app op de klokken.
+# Binnen de dode zone meldt accu_status `rust`: dan geen richting noemen.
 wereld(**{
-    "sensor.lilygo_rs485_marstek_battery_state_of_charge": "45",
-    "sensor.lilygo_rs485_marstek_battery_power": "5",
-    "sensor.lilygo_rs485_marstek_inverter_state": "Sleep",
+    "sensor.accu_lading": "45",
+    "sensor.accu_vermogen": "5",
+    "sensor.accu_status": "rust",
 })
 check("accu stil", zeg("ThuisAccu"), "45 procent.")
 
-wereld(**{"sensor.lilygo_rs485_marstek_battery_state_of_charge": "unavailable"})
+# Weggevallen vermogen: status zegt laden, maar geen "0 watt" uitspreken.
+wereld(**{"sensor.accu_lading": "80", "sensor.accu_status": "laden",
+          "sensor.accu_vermogen": "unavailable"})
+check("accu zonder vermogen", zeg("ThuisAccu"), "80 procent en laadt.")
+
+wereld(**{"sensor.accu_lading": "unavailable"})
 check("accu weg", zeg("ThuisAccu"), "thuisaccu even niet lezen")
 
 # ---------------------------------------------------------------------------
@@ -486,6 +502,14 @@ check("alarm onbereikbaar", zeg("AlarmAan"), "even niet bereiken")
 wereld()
 check("avondroutine", zeg("RoutineAvond"), "Welterusten")
 check("ochtendroutine", zeg("RoutineOchtend"), "Goedemorgen")
+
+# Buiten 06:00-17:00 start de stem geen ochtendroutine (en doet dus ook de
+# voordeur niet van het slot) - en zegt dat ook.
+KLOK[0] = dt.datetime(2026, 9, 21, 2, 0)
+check("ochtendroutine 's nachts", zeg("RoutineOchtend"), "alleen tussen zes uur")
+KLOK[0] = dt.datetime(2026, 9, 21, 16, 59)
+check("ochtendroutine net voor vijven", zeg("RoutineOchtend"), "Goedemorgen")
+KLOK[0] = dt.datetime(2026, 9, 21, 8, 0)
 
 # ---------------------------------------------------------------------------
 # 12. Antwoorden

@@ -118,7 +118,21 @@ proxmox_nuc_package:
             - unavailable
             - unknown
           for: "00:05:00"
+        # NA EEN HERSTART ZIET DE TRIGGER HIERBOVEN NIETS
+        # Komt HA op terwijl de NUC al zwijgt, dan wordt de sensor meteen als
+        # `unknown` aangemaakt: dat is geen overgang, dus de state-trigger vuurt
+        # nooit. Zo bleef het op 20-09-2026 vanaf 10:16 een hele dag stil
+        # zonder melding. Elk kwartier kijken vangt dat af; de conditie
+        # hieronder eist dat hij al tien minuten zonder waarde is.
+        - trigger: time_pattern
+          minutes: /15
       conditions:
+        - condition: template
+          value_template: >-
+            {% set s = states.sensor.proxmox_nuc_intel_cpu_temperatuur %}
+            {{ s is none
+               or (s.state in ['unknown', 'unavailable']
+                   and now() - s.last_changed > timedelta(minutes=10)) }}
         - condition: template
           value_template: >-
             {{ this.attributes.last_triggered is none

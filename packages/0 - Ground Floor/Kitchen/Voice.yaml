@@ -740,11 +740,28 @@ keuken_voice_package:
     RoutineOchtend:
       description: Start de ochtendroutine, hetzelfde als de knop naast het bed.
       action:
-        - event: huis_routine
-          event_data:
-            routine: ochtend
+        # Zelfde grens als de router van de knop (Bedroom/Buttons.yaml): buiten
+        # 06:00-17:00 is er geen ochtend. De stem ging eerst rechtstreeks naar
+        # het event en sloeg die grens over, waardoor "we zijn wakker" om 02:00
+        # de voordeur van het slot deed. `bron: stem` laat Hallway/Lock.yaml
+        # daarbovenop een krapper venster voor het ontgrendelen hanteren.
+        - if:
+            - condition: time
+              after: "06:00:00"
+              before: "17:00:00"
+          then:
+            - event: huis_routine
+              event_data:
+                routine: ochtend
+                bron: stem
       speech:
-        text: "Goedemorgen. Ik zet het huis aan."
+        text: >-
+          {% if 6 <= now().hour < 17 -%}
+            Goedemorgen. Ik zet het huis aan.
+          {%- else -%}
+            De ochtendroutine start ik alleen tussen zes uur 's ochtends en vijf
+            uur 's middags.
+          {%- endif %}
 
     AutoAirco:
       description: Start de airco van de auto alvast.
