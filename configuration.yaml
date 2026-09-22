@@ -99,46 +99,11 @@ recorder:
       - update
     entity_globs:
       - sensor.sun_*
-      ######################################################################
-      ## DE DEYE-OMVORMER, drie soorten ruis (20 september 2026)
-      ##
-      ## De thuisaccu kwam op 19 september binnen via ha-solarman en bracht
-      ## 203 entiteiten mee, die om de vijf seconden worden gepolld. Gemeten
-      ## over de eerste twaalf uur, met een omvormer die NIETS deed (niet aan
-      ## het net, geen zon, 66 W last): tien van die entiteiten schreven samen
-      ## 35.299 rijen weg. Ter vergelijking - `sensor.huis_verbruik` is in
-      ## packages/9 - Other/Electricity.yaml bewust op vijf seconden
-      ## GESAMPLED om onder de 17.000 rijen per dag te blijven, en dat gold
-      ## toen als de bovengrens.
-      ##
-      ## Wat hier weggaat is per stuk overbodig, niet zomaar veel:
-      ##
-      ## 1. ALLES PER FASE. De omvormer geeft L1, L2 en L3 los én de som. Die
-      ##    som blijft (`sensor.deye_load_power`, `deye_grid_power`,
-      ##    `deye_power`), de drie delen niet - drie keer zoveel rijen voor een
-      ##    uitsplitsing waar geen enkele kaart naar kijkt. Wil je ooit
-      ##    faseonbalans onderzoeken, dan staat die al in de P1-meter
-      ##    (`sensor.slimhuys_zonneplan_vermogen_l1..l3`), en dat is de meting
-      ##    die telt want die bepaalt de rekening.
-      ## 2. DE STROOMKLEMMEN. Interne en externe CT's meten hetzelfde punt als
-      ##    het netvermogen, alleen in ampères.
-      ## 3. `sensor.deye_update_interval`. Dat is geen meting maar de duur van
-      ##    de laatste pollronde: 7.131 rijen in twaalf uur, oftewel ruim
-      ##    14.000 per dag, aan een getal dat altijd rond de 5 schommelt.
-      ##
-      ## Uitsluiten van de recorder haalt de entiteiten NIET weg - ze staan
-      ## gewoon in de statuslijst en op een kaart. Alleen hun historie wordt
-      ## niet bewaard, en die heeft niemand ooit opgevraagd.
-      ##
-      ## De tweede knop, als het alsnog te veel wordt, is het pollinterval in
-      ## de opties van de integratie; dat staat nu op vijf seconden.
-      ######################################################################
-      - sensor.deye_*_l[123]_*
-      - sensor.deye_*_ct[123]_*
-      - sensor.deye_update_interval
-      # MarkeDroid (packages/9 - Other/Battery.yaml): dezelfde soorten ruis,
-      # om de tien seconden. Per fase en de DC-kant van de accu; de sommen,
-      # de lading en de energietellers blijven wel bewaard.
+      # MarkeDroid (packages/9 - Other/Battery.yaml), om de tien seconden. Per
+      # fase en de DC-kant van de accu gaan eruit: niemand kijkt ernaar, en de
+      # sommen, de lading en de energietellers blijven wel bewaard. (Hier
+      # stonden tot 22 september 2026 ook de `sensor.deye_*`-globs van de
+      # Solarman-integratie, die 203 entiteiten om de vijf seconden pollde.)
       - sensor.markedroid_net_*_l[123]
       - sensor.markedroid_accu_spanning
       - sensor.markedroid_accu_stroom
@@ -177,12 +142,6 @@ recorder:
       # Interne sensor van bubble-card met de kaartmodules erin. Geen meetwaarde,
       # alleen code die toevallig in een attribuut staat.
       - sensor.bubble_card_modules
-      # 5.002 rijen in twaalf uur bij een stilstaande accu. De stroom is het
-      # vermogen gedeeld door de spanning en zegt er niets bovenop;
-      # `sensor.accu_vermogen` is wat de kaarten lezen. De accuSPANNING blijft
-      # wel bewaard (1.182 rijen, en een wegzakkende spanning onder belasting
-      # is het eerste teken van een cel die het opgeeft).
-      - sensor.deye_battery_current
 
 tts:
   - platform: microsoft

@@ -34,8 +34,7 @@
 ##
 ## Daarom komt alles hier uit de MQTT-berichten die MarkeDroid zelf stuurt
 ## (zie de MARKEDROID-kop onderaan): HA vraagt niets meer aan de logger. De
-## Solarman-integratie gaat eruit; tot dan staat hij er nog, maar niets in
-## dit bestand of op de Accu-pagina leest hem nog.
+## Solarman-integratie is op 22 september verwijderd.
 ##
 ## Wat daarbij verloren gaat, bewust: de meldingen en storingscodes van de
 ## omvormer, zijn eigen temperatuur, het omzettingsverlies en de stand van
@@ -503,9 +502,12 @@ battery_package:
   ##     stond, `DCI` negatief was en de Deye zelf +716 W ONTladen meldde.
   ##     Bij ons is het dus positief = laden. `markedroid_accu_vermogen` leest
   ##     de richting daarom uit de `Inc`-tellers en niet uit het teken.
-  ##   * `meter.W` IS NIET DE P1-METER maar wat de externe stroomklemmen van
-  ##     de Deye zien - die twee liepen op 21 september gelijk rond 0 W terwijl
-  ##     de P1 ~100-200 W hoger stond. Voor het net blijft de P1 de bron.
+  ##   * `meter.W` IS NIET DE P1-METER. Het loopt gelijk met de externe
+  ##     stroomklemmen van de Deye (21-9 nagemeten tegen `deye_external_power`),
+  ##     maar die hangen niet op de hoofdaansluiting: op 22 september stond dit
+  ##     op 912 W tegen 632 W op de P1, en op -443 W tegen 1.433 W. Waar die
+  ##     klemmen precies zitten is niet uitgezocht. Voor het net is de P1 de
+  ##     enige bron.
   ##   * `load.W` IS NIET HET HUISVERBRUIK. Op datzelfde moment: load 728 W,
   ##     terwijl de zolderpanelen 2,4 kW leverden en de P1 op nul stond. De
   ##     panelen op zolder hangen aan een eigen omvormer die MarkeDroid niet
@@ -680,12 +682,9 @@ battery_package:
         device_class: power
         state_class: measurement
         expire_after: 60
-      # Positief = afnemen, negatief = terugleveren. NIET DE P1-METER: dit loopt
-      # gelijk met de externe stroomklemmen van de Deye (`deye_external_power`),
-      # beide rond 0 W terwijl de P1 op 21 september ~100-200 W hoger stond.
-      # Dat verschil is wat er aan de netkant van die klemmen hangt. Pieken van
-      # honderden watts zijn meetmoment: de P1 meldt 2x per seconde, de
-      # klemmen om de 5-10 s, dus een last die aangaat ziet de P1 eerst.
+      # Positief = afnemen, negatief = terugleveren - volgens de externe
+      # stroomklemmen van de Deye, NIET de P1-meter; zie de kop. Scheelt soms
+      # anderhalve kilowatt, dus nooit gebruiken als netverbruik.
       - name: "MarkeDroid net vermogen"
         unique_id: markedroid_net_vermogen
         default_entity_id: sensor.markedroid_net_vermogen
