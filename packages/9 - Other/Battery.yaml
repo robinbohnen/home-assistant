@@ -502,12 +502,17 @@ battery_package:
   ##     stond, `DCI` negatief was en de Deye zelf +716 W ONTladen meldde.
   ##     Bij ons is het dus positief = laden. `markedroid_accu_vermogen` leest
   ##     de richting daarom uit de `Inc`-tellers en niet uit het teken.
-  ##   * `meter.W` IS NIET DE P1-METER. Het loopt gelijk met de externe
-  ##     stroomklemmen van de Deye (21-9 nagemeten tegen `deye_external_power`),
-  ##     maar die hangen niet op de hoofdaansluiting: op 22 september stond dit
-  ##     op 912 W tegen 632 W op de P1, en op -443 W tegen 1.433 W. Waar die
-  ##     klemmen precies zitten is niet uitgezocht. Voor het net is de P1 de
-  ##     enige bron.
+  ##   * `meter.W` IS HETZELFDE PUNT ALS DE P1-METER, MAAR LOOPT ~16 s VOOR.
+  ##     Op 22 september drie uur historie over elkaar gelegd: zonder
+  ##     verschuiving correlatie 0,68 (en momenten als 912 W hier tegen 632 W
+  ##     op de P1), met de P1 zestien seconden later 0,94. Niet MarkeDroid is
+  ##     traag - die meldt om de 10 s en zijn `time` klopt met de ontvangst -
+  ##     maar de P1-waarden komen via SlimHuys zo laat in HA binnen. Na die
+  ##     verschuiving blijft er een mediaan verschil van ~100 W; niet
+  ##     uitgezocht of dat meetfout is of het meldritme van 10 s.
+  ##     GEVOLG: `sensor.huis_verbruik` telt een P1 van 16 s geleden op bij
+  ##     een accuvermogen van nu. Bij een last die aan- of uitgaat staat hij
+  ##     daardoor even honderden watts naast de werkelijkheid.
   ##   * `load.W` IS NIET HET HUISVERBRUIK. Op datzelfde moment: load 728 W,
   ##     terwijl de zolderpanelen 2,4 kW leverden en de P1 op nul stond. De
   ##     panelen op zolder hangen aan een eigen omvormer die MarkeDroid niet
@@ -682,9 +687,8 @@ battery_package:
         device_class: power
         state_class: measurement
         expire_after: 60
-      # Positief = afnemen, negatief = terugleveren - volgens de externe
-      # stroomklemmen van de Deye, NIET de P1-meter; zie de kop. Scheelt soms
-      # anderhalve kilowatt, dus nooit gebruiken als netverbruik.
+      # Positief = afnemen, negatief = terugleveren. Zelfde punt als de P1,
+      # maar ~16 s eerder in HA dan de P1 zelf - zie de kop.
       - name: "MarkeDroid net vermogen"
         unique_id: markedroid_net_vermogen
         default_entity_id: sensor.markedroid_net_vermogen
