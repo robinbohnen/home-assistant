@@ -13,14 +13,14 @@
 # "heeft hij het goed gedaan", en dat lees je af aan de grafiek onderaan: de
 # lading van vandaag over de kwartierprijzen heen.
 #
-# LADING, VERMOGEN, STATUS EN INHOUD KOMEN UIT sensor.accu_* EN NIET UIT
-# sensor.deye_*. Die laag staat in packages/9 - Other/Battery.yaml en draait
-# onder meer het teken van het vermogen om (de Deye telt ontladen positief).
-# Zet hier een `sensor.deye_battery_power` neer en de kaart wijst de verkeerde
-# kant op. Wat wél rechtstreeks van de Deye komt (netspanning, huislast,
-# dagtellers, meldingen, temperaturen, verbinding, afslagpunt) heeft geen
-# tegenhanger in die laag en geen teken om te draaien - zie de kop van
-# Battery.yaml waarom dat zo blijft.
+# ALLES KOMT VAN MARKEDROID, NIETS MEER VAN SOLARMAN (22 september 2026).
+# Lading, vermogen, status en inhoud uit `sensor.accu_*` (Battery.yaml), de
+# dagtellers uit `sensor.accu_geladen_vandaag` / `_ontladen_vandaag`, en de
+# rest uit `sensor.markedroid_*`. Tot die dag las deze pagina een dozijn
+# `sensor.deye_*`-sensoren via de Solarman-logger; die botste met MarkeDroid
+# op dezelfde lijn (zie de kop van Battery.yaml). Wat MarkeDroid niet stuurt -
+# meldingen en storingscodes van de omvormer, zijn eigen temperatuur, het
+# omzettingsverlies - staat hier daarom niet meer; dat is de ModuSun-app.
 title: Accu
 path: accu
 icon: mdi:home-battery
@@ -33,68 +33,6 @@ cards:
         template: ov_title
         variables:
           title: DE ACCU
-
-      # DE WAARSCHUWING STAAT BOVENAAN EN NIET ONDERIN
-      # Op 20 september stond de Deye wel in HA maar nog niet in de meterkast:
-      # alle drie de netfases op 0 V. Elk getal op deze pagina was toen echt,
-      # maar sloeg nergens op - de accu liep leeg op zijn eigen elektronica.
-      # Zolang die situatie kan bestaan hoort dat als eerste in beeld, anders
-      # sta je naar een kloppende kaart te kijken met een verkeerd verhaal.
-      #
-      # NA DE INSTALLATIE NEEMT HET NOODSTROOMBLOK DIT OVER. Deze tekst ("klopt
-      # wel, maar gaat over een accu op een eiland") is geschreven voor een
-      # Deye die nog nergens aan hangt. Tijdens een echte storing zou hij het
-      # tegenovergestelde beweren van wat er gebeurt, dus hij verdwijnt zodra
-      # de grendel `binary_sensor.accu_geinstalleerd` aangaat.
-      - type: conditional
-        conditions:
-          - condition: state
-            entity: binary_sensor.deye_grid
-            state_not: "on"
-          - condition: state
-            entity: binary_sensor.accu_geinstalleerd
-            state_not: "on"
-        card:
-          type: custom:button-card
-          entity: binary_sensor.deye_grid
-          show_icon: false
-          show_name: false
-          show_state: false
-          tap_action:
-            action: more-info
-          styles:
-            card:
-              - background: var(--ov-warn-15)
-              - border: none
-              - box-shadow: none
-              - border-radius: 14px
-              - padding: 11px 14px
-            grid:
-              - grid-template-areas: '"ic t"'
-              - grid-template-columns: 26px 1fr
-              - align-items: center
-              - column-gap: 11px
-            custom_fields:
-              ic:
-                - grid-area: ic
-              t:
-                - grid-area: t
-                - justify-self: start
-                - font-size: 13px
-                - color: var(--primary-text-color)
-          custom_fields:
-            ic: '<ha-icon icon="mdi:transmission-tower-off" style="--mdc-icon-size:20px;color:var(--ov-warn)"></ha-icon>'
-            t: |
-              [[[
-                var v = states['sensor.deye_grid_l1_voltage'];
-                var volt = (v && !isNaN(Number(v.state))) ? Number(v.state) : null;
-                return '<b>Geen netspanning op de omvormer</b> — '
-                  + (volt === 0 ? 'alle fases op 0 V. '
-                               : (volt === null ? '' : volt + ' V op L1. '))
-                  + 'Alles hieronder klopt wel, maar gaat over een accu die op '
-                  + 'een eiland draait: laden uit het net kan niet en de zon '
-                  + 'komt er niet in.';
-              ]]]
 
       # Lading, richting en inhoud in één regel. Zelfde opzet als de
       # accukaart die hier stond, maar zonder de ondergrens-badge (die was een
@@ -336,9 +274,12 @@ cards:
         template: ov_title
         variables:
           title: VANDAAG
+      # Tellers die HA zelf bijhoudt uit MarkeDroids berichten (Wh sinds het
+      # vorige bericht, opgeteld), elke nacht op nul. Wat MarkeDroid publiceert
+      # terwijl HA plat ligt telt niet mee - een gat, geen verkeerd getal.
       - type: custom:button-card
         template: ov_listrow
-        entity: sensor.deye_today_battery_charge
+        entity: sensor.accu_geladen_vandaag
         variables:
           mdi: mdi:battery-arrow-up
           kleur: "var(--ov-ok)"
@@ -346,12 +287,18 @@ cards:
         custom_fields:
           s: |
             [[[
-              var v = entity && !isNaN(Number(entity.state)) ? Number(entity.state) : null;
+              var v = entity && !isNaN(Number(entity.state)) ? Number(entity.state) / 1000 : null;
               return v === null ? '—' : v.toFixed(1).replace('.',',') + ' kWh erin';
             ]]]
+      # HET RENDEMENT IS EEN DAGCIJFER EN GEEN MOMENTOPNAME. Halverwege de
+      # ochtend staat er 4 kWh in en 0,2 kWh uit, en dan is "5%" onzin. Daarom
+      # pas een verhouding zodra er aan beide kanten genoeg staat. Het is geen
+      # zuiver rendement: de lading aan het begin en eind van de dag verschilt.
       - type: custom:button-card
         template: ov_listrow
-        entity: sensor.deye_today_battery_discharge
+        entity: sensor.accu_ontladen_vandaag
+        triggers_update:
+          - sensor.accu_geladen_vandaag
         variables:
           mdi: mdi:battery-arrow-down
           kleur: "var(--ov-warn)"
@@ -359,34 +306,13 @@ cards:
         custom_fields:
           s: |
             [[[
-              var v = entity && !isNaN(Number(entity.state)) ? Number(entity.state) : null;
-              return v === null ? '—' : v.toFixed(1).replace('.',',') + ' kWh eruit';
-            ]]]
-      # HET RENDEMENT IS EEN DAGCIJFER EN GEEN MOMENTOPNAME. Halverwege de
-      # ochtend staat er 4 kWh in en 0,2 kWh uit, en dan is "5%" onzin. Daarom
-      # pas een percentage zodra er aan beide kanten genoeg staat; daaronder
-      # gewoon de kale verliezen.
-      - type: custom:button-card
-        template: ov_listrow
-        entity: sensor.deye_today_losses
-        triggers_update:
-          - sensor.deye_today_battery_charge
-          - sensor.deye_today_battery_discharge
-        variables:
-          mdi: mdi:transfer
-          kleur: "var(--ov-ink-45)"
-          title: Omzettingsverlies
-        custom_fields:
-          s: |
-            [[[
               var num = function(id){ var s = states[id];
-                return (s && !isNaN(Number(s.state))) ? Number(s.state) : null; };
-              var verl = num('sensor.deye_today_losses');
-              var inn = num('sensor.deye_today_battery_charge');
-              var uit = num('sensor.deye_today_battery_discharge');
-              var t = verl === null ? '—' : verl.toFixed(1).replace('.',',') + ' kWh';
-              if(inn !== null && uit !== null && inn >= 2 && uit >= 2)
-                t += ' · retourrendement ' + Math.round(uit / inn * 100) + '%';
+                return (s && !isNaN(Number(s.state))) ? Number(s.state) / 1000 : null; };
+              var uit = num('sensor.accu_ontladen_vandaag'), inn = num('sensor.accu_geladen_vandaag');
+              if(uit === null) return '—';
+              var t = uit.toFixed(1).replace('.',',') + ' kWh eruit';
+              if(inn !== null && inn >= 2 && uit >= 2)
+                t += ' · ' + Math.round(uit / inn * 100) + '% van wat erin ging';
               return t;
             ]]]
 
@@ -482,82 +408,31 @@ cards:
           legend_value: true
 
   # -------------------------------------------------------------- gezondheid
+  # Wat MarkeDroid over de accu meldt. De meldingen, storingscodes en
+  # temperatuur van de omvormer zelf stonden hier tot 22 september uit
+  # Solarman; MarkeDroid stuurt ze niet door (zie de kop van dit bestand).
   - type: vertical-stack
     cards:
       - type: custom:button-card
         template: ov_title
         variables:
-          title: STAAT VAN DE OMVORMER
-      # De drie meldsensoren van de Deye op één regel. Ze staan bijna altijd op
-      # OK, en dan hoort er één rustige regel te staan en geen lijstje groene
-      # vinkjes - dat leest niemand na een week nog.
+          title: STAAT VAN DE ACCU
       - type: custom:button-card
         template: ov_listrow
-        entity: sensor.deye_device_state
-        triggers_update:
-          - sensor.deye_device_fault
-          - sensor.deye_device_alarm
-          - binary_sensor.deye_battery_alarm
-          - binary_sensor.deye_battery_fault
-        variables:
-          mdi: mdi:state-machine
-          title: Meldingen
-        custom_fields:
-          s: |
-            [[[
-              var mel = [];
-              var tekst = function(id){ var s = states[id];
-                return (s && ['OK','unknown','unavailable'].indexOf(s.state) === -1) ? s.state : null; };
-              var aan = function(id, label){ var s = states[id];
-                return (s && s.state === 'on') ? label : null; };
-              [tekst('sensor.deye_device_fault'),
-               tekst('sensor.deye_device_alarm'),
-               aan('binary_sensor.deye_battery_fault', 'accustoring'),
-               aan('binary_sensor.deye_battery_alarm', 'accualarm')]
-                .forEach(function(m){ if(m) mel.push(m); });
-              var st = states['sensor.deye_device_state'];
-              var stand = st ? st.state : '—';
-              return mel.length
-                ? '<span style="color:var(--ov-bad)">' + mel.join(' · ') + '</span> · staat op ' + stand
-                : 'geen meldingen · staat op ' + stand;
-            ]]]
-      - type: custom:button-card
-        template: ov_listrow
-        entity: sensor.deye_battery_temperature
-        triggers_update:
-          - sensor.deye_temperature
+        entity: sensor.markedroid_accu_temperatuur
         variables:
           mdi: mdi:thermometer
           title: Temperatuur
         custom_fields:
           s: |
             [[[
-              var f = function(id){ var s = states[id];
-                return (s && !isNaN(Number(s.state)))
-                  ? Number(s.state).toFixed(1).replace('.',',') + ' °C' : '—'; };
-              return 'accu ' + f('sensor.deye_battery_temperature')
-                   + ' · omvormer ' + f('sensor.deye_temperature');
-            ]]]
-      # DE VERBINDING VALT KORT WEG EN DAT IS GEEN STORING
-      # Op 20 september tussen 05:00 en 07:00 twee keer, allebei ongeveer tien
-      # seconden. Daarom hier geen rood vlak maar het tijdstip van de laatste
-      # onderbreking: eens per uur tien seconden is normaal, elke minuut niet.
-      - type: custom:button-card
-        template: ov_listrow
-        entity: binary_sensor.deye_connection
-        variables:
-          mdi: mdi:lan-connect
-          title: Verbinding
-        custom_fields:
-          s: |
-            [[[
-              if(!entity) return '—';
-              if(entity.state !== 'on') return '<span style="color:var(--ov-bad)">geen verbinding met de omvormer</span>';
-              var d = new Date(entity.last_changed);
-              var min = Math.round((Date.now() - d.getTime()) / 60000);
-              var duur = min < 60 ? min + ' min'
-                       : (min < 1440 ? Math.round(min/60) + ' uur' : Math.round(min/1440) + ' dagen');
-              return 'in orde · laatste onderbreking ' + duur + ' geleden';
+              if(!entity || isNaN(Number(entity.state))) return '—';
+              var t = Number(entity.state);
+              var txt = t.toFixed(1).replace('.',',') + ' °C';
+              // LFP laadt niet onder 0 °C en houdt niet van boven 45 °C; binnen
+              // 5-40 °C is er niets om over na te denken.
+              if(t < 5 || t > 40) return '<span style="color:var(--ov-warn)">' + txt + ' · buiten het comfortgebied van de cellen</span>';
+              return txt;
             ]]]
       # WAT MARKEDROID MET DE ACCU DOET
       # Eén regel: de stand die hij gekozen heeft, en alleen als het iets zegt

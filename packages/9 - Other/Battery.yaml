@@ -11,110 +11,92 @@
 ##
 ## WAT ER VOOR IN DE PLAATS KOMT
 ## Vijf sensoren die de rest van het huis leest. Geen automatisering en geen
-## dashboard leest lading, vermogen of inhoud nog rechtstreeks van
-## `sensor.deye_*` - net zoals niemand de ruwe omvormersensoren leest maar
-## iedereen `sensor.zon_vermogen_nu` (packages/2 - Second Floor/Attic/
-## Solarpanels.yaml). Die wissel kostte deze keer elf bestanden; de volgende
-## keer is het dit ene.
-##
-## EEN UITZONDERING, BEWUST (21-09-2026): de Accu-pagina
-## (dashboards/home/accu.yaml) leest wél `sensor.deye_*` voor wat alleen déze
-## omvormer heeft en waar geen teken aan zit: netspanning, huislast,
-## dagtellers, verlies, meldingen, temperaturen, verbinding en het
-## afslagpunt. Die hier allemaal doorlussen levert een tweede naam per sensor
-## op zonder dat er iets aan omgerekend wordt, en bij een andere accu is die
-## pagina toch opnieuw te maken. Het vermogen - het enige getal met een
-## omgedraaid teken - komt ook daar uit `sensor.accu_vermogen`.
+## dashboard leest lading, vermogen of inhoud rechtstreeks van de bron - net
+## zoals niemand de ruwe omvormersensoren leest maar iedereen
+## `sensor.zon_vermogen_nu` (packages/2 - Second Floor/Attic/Solarpanels.yaml).
+## De Marstek-wissel kostte elf bestanden; de wissel van Solarman naar
+## MarkeDroid (22 september) kostte er daardoor maar twee.
 ##
 ##   sensor.accu_lading       %     hoe vol
-##   sensor.accu_vermogen     W     POSITIEF = LADEN (zie hieronder)
+##   sensor.accu_vermogen     W     POSITIEF = LADEN
 ##   sensor.accu_status             laden | ontladen | rust
-##   sensor.accu_capaciteit   kWh   wat er in zou passen
+##   sensor.accu_capaciteit   kWh   wat er in zou passen (+ afslag/herstart)
 ##   sensor.accu_inhoud       kWh   wat er nu in zit
 ##
-## ================== HET TEKEN IS OMGEKEERD ==================
-## DE DEYE TELT ONTLADEN POSITIEF, DE MARSTEK TELDE LADEN POSITIEF.
+## ================== DE BRON IS MARKEDROID, NIET SOLARMAN ==================
+## Tot 22 september las HA de Deye om de vijf seconden uit via de Solarman-
+## logger (LSW-3, 192.168.30.152:8899). MarkeDroid leest via DIEZELFDE logger,
+## en die zet alles om naar één RS485-lijn naar de omvormer. Twee partijen
+## die tegelijk vragen botsen: 30-50 mislukte uitleesrondes per uur vanaf de
+## eerste dag (`unpack requires a buffer of 250 bytes` in het log), ~1x per
+## uur alles tien seconden `unavailable`. En elke botsing kon net zo goed een
+## verzoek van MarkeDroid raken - de partij die de accu stuurt.
 ##
-## Vastgesteld op 20 september 2026 uit de eerste veertien uur historie:
-## `sensor.deye_battery_power` stond onafgebroken op +75..83 W terwijl de
-## laadtoestand van 51% naar 44% zakte, `today_battery_charge` op 0 stond en
-## `today_battery_discharge` op 0,7 kWh. Twee onafhankelijke bevestigingen uit
-## de integratie zelf: `sensor.deye_battery_state` (die ha-solarman uit
-## datzelfde vermogen afleidt met een band van ±50 W) meldde `discharging`, en
-## de sensor draagt een attribuut `−x` met de waarde −80.
+## Daarom komt alles hier uit de MQTT-berichten die MarkeDroid zelf stuurt
+## (zie de MARKEDROID-kop onderaan): HA vraagt niets meer aan de logger. De
+## Solarman-integratie gaat eruit; tot dan staat hij er nog, maar niets in
+## dit bestand of op de Accu-pagina leest hem nog.
 ##
-## LET OP - DE LAADKANT IS NOG NIET GEZIEN. De Deye hing tijdens die meting
-## niet aan het net (alle drie de fases op 0 V) en heeft nog geen kilowattuur
-## geladen. Zodra hij voor het eerst écht laadt, is dit de eerste sensor om te
-## controleren: staat `accu_vermogen` dan NEGATIEF terwijl de lading oploopt,
-## dan moet de min hieronder eruit. Alles wat met de accu rekent hangt aan dit
-## teken - de huis-verbruiksom in Electricity.yaml, de energieflow op het
-## Overzicht, de klokdisplay - dus één keer verkeerd is overal verkeerd.
+## Wat daarbij verloren gaat, bewust: de meldingen en storingscodes van de
+## omvormer, zijn eigen temperatuur, het omzettingsverlies en de stand van
+## zijn netrelais. MarkeDroid stuurt die niet door; die staan in de ModuSun-
+## app.
 ##
-## DE RICHTING IS DIE VAN DE MARSTEK GEBLEVEN (laden positief) en niet die van
-## de Deye. Niet uit gewoonte: `sensor.huis_verbruik` trekt het accuvermogen
-## van de som af, en in alle kaarten staat `> 0 = laadt`. Het teken hier
-## omdraaien betekent vijftien plekken omdraaien, en één vergeten plek geeft
-## een huisverbruik dat er structureel een paar kilowatt naast zit zonder dat
-## iets op storing springt.
+## ================== HET TEKEN ==================
+## POSITIEF = LADEN, zoals bij de Marstek. `sensor.huis_verbruik` trekt het
+## accuvermogen van de som af en alle kaarten lezen `> 0 = laadt`; één
+## vergeten plek geeft een huisverbruik dat er kilowatts naast zit.
+##
+## MarkeDroid stuurt dat teken bij ons al zo, maar TEGEN ZIJN EIGEN
+## HANDLEIDING IN. `sensor.markedroid_accu_vermogen` haalt de richting daarom
+## uit de Wh-tellers in hetzelfde bericht en niet uit het teken - zet ModuSun
+## het ooit "recht", dan merkt dit huis daar niets van.
 ##
 ## ================== DE DODE ZONE ==================
-## `accu_status` gebruikt ±50 W, dezelfde band als ha-solarman zelf hanteert.
-## Bij de Marstek stond die op 15 W, gemeten aan zijn eigen ruststroom. Voor de
-## Deye is die band NIET geijkt: op 20 september trok hij 80 W uit de accu,
-## maar dat was eilandbedrijf zonder net - met het net erop komt dat verbruik
-## uit de meterkast en niet uit de accu. Kijk hier opnieuw naar zodra hij een
-## week normaal gedraaid heeft; staat de kaart dan de halve dag op "ontladen"
-## terwijl er niets gebeurt, dan is deze 50 te laag.
+## `accu_status` gebruikt ±50 W. Niet geijkt; staat de kaart de halve dag op
+## "ontladen" terwijl er niets gebeurt, dan is deze 50 te laag.
 ##############################################################################
 
 ##############################################################################
-## NOODSTROOM (21 september 2026)
+## NOODSTROOM (21 september 2026, bron omgezet 22 september)
 ##
 ## Alle groepen hangen aan de backup-uitgang van de Deye, BEHALVE DE LAADPAAL.
 ## Die zit bewust aan de netkant: de auto uit de thuisaccu laden is twee keer
-## omzettingsverlies (net -> accu -> auto) voor stroom die je ook direct had
-## kunnen nemen - advies van de elektricien. Gevolg bij een storing: het hele
-## huis draait door, de laadpaal valt stil.
-##
-## Daardoor is `sensor.deye_load_ups_power` precies "het huis zonder de
-## laadpaal", zonder aftreksom. Controleer dat één keer zodra hij aangesloten
-## is: tijdens een laadsessie van 11 kW mag dat getal NIET mee omhoog. Doet hij
-## dat wel, dan hangt de laadpaal toch aan de backup-kant en rekent de kaart
-## met een last die bij een storing in één keer de accu leegtrekt.
+## omzettingsverlies (net -> accu -> auto) - advies van de elektricien.
+## Gevolg bij een storing: het huis draait door, de laadpaal valt stil.
 ##
 ## HOE WEET JE DAT HET EEN STORING IS
-## `binary_sensor.deye_grid` alleen is niet genoeg: tot de installatie staat
-## die permanent uit (de Deye hangt nergens aan). En de P1-meter alleen ook
-## niet - die was tussen 5 en 21 september vier keer onbeschikbaar (één keer
-## vier uur) en 84 keer langer dan 30 seconden stil, zonder dat er één keer
-## een storing was. Dus drie lagen:
+## Drie lagen:
 ##
-##   1. `binary_sensor.accu_geinstalleerd` - een GRENDEL die aangaat zodra de
-##      Deye één keer netspanning heeft gezien en daarna nooit meer uit. Tot de
-##      installatie kan er dus niets alarmeren, en daarna hoeft niemand iets om
-##      te zetten.
-##   2. `binary_sensor.huis_op_accu` - de Deye ziet geen net, en de grendel is
-##      aan. Dat is het feit dat telt: het huis draait op de accu.
-##   3. Het attribuut `oorzaak` daarop - is de P1-meter óók stil, dan is het
-##      een stroomstoring (de dongel haalt zijn stroom uit de meter en die
-##      staat aan de netkant). Praat de meter nog, dan is het net er wel en
-##      heeft de omvormer zichzelf losgekoppeld: een zekering, of netspanning
-##      buiten de grenzen. Ook dan draait het huis op de accu, maar de
-##      oplossing is een andere.
+##   1. `binary_sensor.accu_geinstalleerd` - een GRENDEL die aangaat zodra er
+##      één keer netspanning is gezien en daarna nooit meer uit.
+##   2. `binary_sensor.huis_op_accu` - het net is weg en de grendel is aan.
+##      "Het net is weg" = MarkeDroid meldt alle drie de fases onder 50 V
+##      (`binary_sensor.markedroid_net_uitgevallen`). Valt MarkeDroid zelf
+##      stil, dan telt het pas als de P1-meter óók stil is: die was tussen 5
+##      en 21 september 84 keer langer dan 30 seconden stil zonder storing,
+##      dus alleen is hij geen getuige, maar samen met een stille MarkeDroid
+##      wel.
+##   3. Het attribuut `oorzaak` - is de P1-meter óók stil, dan is het een
+##      stroomstoring (de dongel hangt aan de netkant). Praat de meter nog
+##      terwijl MarkeDroid 0 V meldt, dan is het `omvormer`: de Deye ziet geen
+##      net terwijl het er wel is.
+##
+## WAT ER NIET MEER IN ZIT: de Solarman-versie keek naar het netrelais van de
+## Deye. Dat ging op 21 september drie keer ~30 seconden open terwijl het net
+## er gewoon was, en zette deze sensor twee keer vals aan. MarkeDroid ziet de
+## netspanning, niet dat relais.
 ##
 ## HOE LANG NOG
 ## `sensor.noodstroom_resterend` rekent in twee standen met een ander getal:
-##   * NET ERBIJ: het uurgemiddelde van de huislast. Dat is "als het nú
-##     uitvalt". Niet het momentane getal: een waterkoker maakt van zes uur
-##     anders even anderhalf.
-##   * OP DE ACCU: wat de accu het laatste kwartier WERKELIJK afgaf. Levert de
-##     zon tijdens de storing mee (hangt er zon aan de backup-kant), dan zit dat
-##     daar vanzelf in, zonder dat deze som hoeft te weten hoe die bedraad is.
-## Gerekend tot het afslagpunt (`number.deye_battery_shutdown_soc`), niet tot
-## 0%. En let op het HERSTARTPUNT (`number.deye_battery_restart_soc`, 50% op
-## 21 september): is hij eenmaal afgeslagen, dan gaat de uitgang pas weer aan
-## als de accu terug op dat niveau is. Bij 28,8 kWh is dat ruim 11 kWh zon.
+##   * NET ERBIJ: het uurgemiddelde van `sensor.noodstroom_huislast` = het
+##     huisverbruik min de laadpaal. Dat is "als het nú uitvalt". Hier stond
+##     tot 22 september `deye_load_ups_power`, en dat bleek niet het huis te
+##     zijn: 50-100 W terwijl het huis 1,1 kW trok, dus "70 uur" in plaats
+##     van ~6. Plus af en toe een leeswaarde van anderhalf miljard watt.
+##   * OP DE ACCU: wat de accu het laatste kwartier WERKELIJK afgaf.
+## Gerekend tot het afslagpunt, niet tot 0%. Afslag- en herstartpunt staan als
+## attribuut op `sensor.accu_capaciteit` (zie daar waarom ze vast staan).
 ##############################################################################
 
 battery_package:
@@ -126,7 +108,7 @@ battery_package:
     - platform: statistics
       name: "Noodstroom huislast uurgemiddelde"
       unique_id: noodstroom_huislast_uurgemiddelde
-      entity_id: sensor.deye_load_ups_power
+      entity_id: sensor.noodstroom_huislast
       state_characteristic: average_step
       # Om de vijf seconden een meting, dus ~720 per uur; ruim erboven zodat
       # het venster door de tijd wordt begrensd en niet door de buffer.
@@ -139,14 +121,27 @@ battery_package:
     - platform: statistics
       name: "Noodstroom accu kwartiergemiddelde"
       unique_id: noodstroom_accu_kwartiergemiddelde
-      # `accu_vermogen` en niet de Deye zelf: hetzelfde teken als overal
-      # (positief = laden), dus leeglopen is hier NEGATIEF.
+      # Positief = laden, dus leeglopen is hier NEGATIEF.
       entity_id: sensor.accu_vermogen
       state_characteristic: average_step
       sampling_size: 1000
       max_age:
         minutes: 15
       keep_last_sample: true
+
+  # Dagtellers voor de Accu-pagina (VANDAAG). De bron zijn de Wh-tellers die
+  # HA zelf optelt uit MarkeDroids berichten, zie onderaan.
+  utility_meter:
+    accu_geladen_vandaag:
+      name: "Accu geladen vandaag"
+      unique_id: accu_geladen_vandaag
+      source: sensor.markedroid_accu_geladen
+      cycle: daily
+    accu_ontladen_vandaag:
+      name: "Accu ontladen vandaag"
+      unique_id: accu_ontladen_vandaag
+      source: sensor.markedroid_accu_ontladen
+      cycle: daily
 
   template:
     - sensor:
@@ -160,14 +155,14 @@ battery_package:
           device_class: battery
           state_class: measurement
           icon: mdi:home-battery
-          # De verbinding valt kort weg - op 20 september twee keer in een uur,
-          # ongeveer tien seconden per keer. Zonder deze guard leest `float(0)`
+          # MarkeDroid meldt om de ~10 s; na een minuut stilte gaat de bron op
+          # `unavailable` (expire_after). Zonder deze guard leest `float(0)`
           # dat als een lege accu en springt de klokdisplay op rood.
-          availability: "{{ has_value('sensor.deye_battery') }}"
-          # Afkappen op 0..100: de BMS geeft af en toe 101 terug en dan tekent
+          availability: "{{ has_value('sensor.markedroid_accu_lading') }}"
+          # Afkappen op 0..100: een BMS geeft af en toe 101 terug en dan tekent
           # het batterijsymbool op de klokken buiten zijn eigen vakje.
           state: >-
-            {{ [[states('sensor.deye_battery') | float(0) | round(0) | int, 0] | max, 100] | min }}
+            {{ [[states('sensor.markedroid_accu_lading') | float(0) | round(0) | int, 0] | max, 100] | min }}
 
         ######################################################################
         ## Vermogen - POSITIEF IS LADEN, zie de kop van dit bestand
@@ -179,13 +174,10 @@ battery_package:
           device_class: power
           state_class: measurement
           icon: mdi:battery-sync
-          availability: "{{ has_value('sensor.deye_battery_power') }}"
-          # De enige plek in het hele huis waar dit teken wordt omgedraaid.
-          # Niet via het attribuut `−x` van de bron: dat is een min-teken uit
-          # de Unicode (U+2212) en geen gewone koppelstreepje, en zo'n
-          # attribuutnaam is een voetangel in elk template dat er later bij
-          # komt.
-          state: "{{ (0 - (states('sensor.deye_battery_power') | float(0))) | round(0) }}"
+          availability: "{{ has_value('sensor.markedroid_accu_vermogen') }}"
+          # Het teken is al goed: `markedroid_accu_vermogen` haalt de richting
+          # uit de Wh-tellers, niet uit wat MarkeDroid als teken meestuurt.
+          state: "{{ states('sensor.markedroid_accu_vermogen') | float(0) | round(0) }}"
 
         ######################################################################
         ## Wat hij doet
@@ -200,10 +192,6 @@ battery_package:
             {{ 'mdi:battery-arrow-up' if pw > 50
                else ('mdi:battery-arrow-down' if pw < -50 else 'mdi:battery-clock') }}
           availability: "{{ has_value('sensor.accu_vermogen') }}"
-          # Zelf afgeleid en niet `sensor.deye_battery_state` overgenomen: die
-          # geeft Engelse woorden en een band die de integratie zonder
-          # aankondiging kan veranderen. Eén plek waar de dode zone staat is
-          # meer waard dan een sensor minder.
           state: >-
             {% set pw = states('sensor.accu_vermogen') | float(0) %}
             {{ 'laden' if pw > 50 else ('ontladen' if pw < -50 else 'rust') }}
@@ -221,38 +209,26 @@ battery_package:
           device_class: energy_storage
           state_class: measurement
           icon: mdi:battery-heart-variant
-          # `sensor.deye_battery_capacity` (kWh) en `sensor.deye_battery_soh`
-          # komen bij deze omvormer niet door - ze staan sinds de koppeling op
-          # `unknown`. Het getal staat wél in de attributen van
-          # sensor.deye_battery, die de BMS uitleest: 600 Ah bij 48 V nominaal
-          # = 28,8 kWh. Dus rekenen we het zelf uit, uit die attributen en niet
-          # uit een hier ingetypt getal - dan klopt het vanzelf nog als er een
-          # rek bij komt.
-          availability: >-
-            {{ (state_attr('sensor.deye_battery', 'Corrected Capacity') | float(0)) > 0
-               or (states('number.deye_battery_capacity') | float(0)) > 0 }}
-          state: >-
-            {% set ah = state_attr('sensor.deye_battery', 'Corrected Capacity') | float(0) %}
-            {% set ah = ah if ah > 0 else states('number.deye_battery_capacity') | float(0) %}
-            {% set v = state_attr('sensor.deye_battery', 'Nominal Voltage') | float(0) %}
-            {# 48 V is de nominale spanning van dit 16s-pakket; de gemeten
-               klemspanning (52 V) zou de capaciteit ~9% te hoog maken. #}
-            {% set v = v if v > 0 else 48 %}
-            {{ (ah * v / 1000) | round(1) }}
+          # 30,72 kWh = 600 Ah x 51,2 V, zoals het BMS hem via MarkeDroid
+          # meldt. Tot 22 september stond hier 28,8: dezelfde 600 Ah maar
+          # gerekend met 48 V, de "Nominal Voltage" die Solarman opgaf. 51,2 V
+          # is de nominale spanning van een 16-cels LFP-pakket, dus MarkeDroid
+          # heeft gelijk.
+          availability: "{{ states('sensor.markedroid_accu_capaciteit') | float(0) > 0 }}"
+          state: "{{ states('sensor.markedroid_accu_capaciteit') | float(0) | round(1) }}"
           attributes:
+            # AFSLAG- EN HERSTARTPUNT STAAN HIER VAST, en niet meer gelezen.
+            # Het zijn registers in de Deye (`battery_shutdown_soc` en
+            # `battery_restart_soc`) en MarkeDroid stuurt ze niet door. Deze
+            # waarden zijn op 21 september via Solarman afgelezen. Verandert
+            # de installateur of ModuSun ze, dan moet het hier ook - en alleen
+            # hier: de noodstroomsommen en de kaarten lezen deze attributen.
+            afslag_procent: "10"
+            herstart_procent: "50"
             # Wat je er echt uit kunt halen: de omvormer stopt bij zijn eigen
-            # afslagpunt en niet bij nul. Zonder dit getal lees je 28,8 kWh en
-            # reken je met 3 kWh die er nooit uitkomt.
+            # afslagpunt en niet bij nul.
             bruikbaar: >-
-              {# Zelfde som als de state hierboven, en bewust niet
-                 `states('sensor.accu_capaciteit')`: een attribuut dat de eigen
-                 state leest loopt een ronde achter en is een lus. #}
-              {% set ah = state_attr('sensor.deye_battery', 'Corrected Capacity') | float(0) %}
-              {% set ah = ah if ah > 0 else states('number.deye_battery_capacity') | float(0) %}
-              {% set v = state_attr('sensor.deye_battery', 'Nominal Voltage') | float(0) %}
-              {% set cap = ah * (v if v > 0 else 48) / 1000 %}
-              {% set vloer = states('number.deye_battery_shutdown_soc') | float(10) %}
-              {{ (cap * (100 - vloer) / 100) | round(1) }}
+              {{ (states('sensor.markedroid_accu_capaciteit') | float(0) * (100 - 10) / 100) | round(1) }}
 
         - name: "Accu inhoud"
           unique_id: accu_inhoud
@@ -272,11 +248,11 @@ battery_package:
     ##########################################################################
     # De grendel. Vijf minuten als vangnet naast de state-trigger: gaat de
     # opgeslagen stand ooit verloren terwijl het net er gewoon is, dan komt er
-    # geen overgang naar `on` meer langs en zou hij anders `unknown` blijven.
+    # geen overgang meer langs en zou hij anders `unknown` blijven.
     - triggers:
         - trigger: state
-          entity_id: binary_sensor.deye_grid
-          to: "on"
+          entity_id: binary_sensor.markedroid_net_uitgevallen
+          to: "off"
         - trigger: homeassistant
           event: start
         - trigger: time_pattern
@@ -286,19 +262,17 @@ battery_package:
           unique_id: accu_geinstalleerd
           default_entity_id: binary_sensor.accu_geinstalleerd
           icon: mdi:transmission-tower-import
-          # Eenmaal aan, altijd aan. Er is bewust geen weg terug: een Deye die
-          # later geen net ziet is precies het geval dat we willen melden.
-          state: "{{ this.state == 'on' or is_state('binary_sensor.deye_grid', 'on') }}"
+          # Eenmaal aan, altijd aan. Er is bewust geen weg terug: een omvormer
+          # die later geen net ziet is precies het geval dat we willen melden.
+          state: "{{ this.state == 'on' or is_state('binary_sensor.markedroid_net_uitgevallen', 'off') }}"
 
-    # Om de tien seconden opnieuw, naast de statuswissels: de P1-meter die
-    # stilvalt is geen statuswissel, die houdt gewoon op. Zonder deze tik zou
-    # `oorzaak` tot een minuut lang "omvormer" zeggen tijdens een echte storing.
-    # Kost niets in de database: zolang stand en attributen gelijk blijven
-    # schrijft HA geen nieuwe rij.
+    # Om de tien seconden opnieuw, naast de statuswissels: een meter die
+    # stilvalt is geen statuswissel, die houdt gewoon op. Kost niets in de
+    # database: zolang stand en attributen gelijk blijven schrijft HA niets.
     - triggers:
         - trigger: state
           entity_id:
-            - binary_sensor.deye_grid
+            - binary_sensor.markedroid_net_uitgevallen
             - binary_sensor.accu_geinstalleerd
         - trigger: time_pattern
           seconds: "/10"
@@ -309,23 +283,24 @@ battery_package:
           unique_id: huis_op_accu
           default_entity_id: binary_sensor.huis_op_accu
           icon: >-
-            {{ 'mdi:home-battery' if is_state('binary_sensor.deye_grid', 'off')
+            {{ 'mdi:home-battery' if is_state('binary_sensor.markedroid_net_uitgevallen', 'on')
                else 'mdi:transmission-tower' }}
-          # Weet HA niet of de Deye net ziet, dan weet hij ook niet of het huis
-          # op de accu draait - en "nee" zeggen zou een storing kunnen
-          # verzwijgen.
-          availability: "{{ has_value('binary_sensor.deye_grid') }}"
+          # Zie de kop: MarkeDroid zegt "0 V" -> weg. Zegt MarkeDroid niets
+          # (stil, dus `unavailable`), dan alleen als de P1-meter óók stil is.
+          # `last_reported` en niet `last_updated`: die tweede verspringt alleen
+          # als het getal verandert, en een vlakke meting is geen stille meter.
           state: >-
+            {% set p1 = 'sensor.meterkast_slimhuys_zonneplan_netto_vermogen' %}
+            {% set p1_stil = not has_value(p1)
+               or (now() - states[p1].last_reported).total_seconds() > 60 %}
+            {% set md = states('binary_sensor.markedroid_net_uitgevallen') %}
             {{ is_state('binary_sensor.accu_geinstalleerd', 'on')
-               and is_state('binary_sensor.deye_grid', 'off') }}
+               and (md == 'on' or (md in ['unavailable', 'unknown'] and p1_stil)) }}
           # Een spanningsdip is geen storing. De meter telde er tientallen per
-          # fase; de Deye schakelt binnen milliseconden om en weer terug, en
-          # zonder deze vertraging knippert de pil op het wandpaneel.
+          # fase; zonder deze vertraging knippert de pil op het wandpaneel.
           delay_on: "00:00:30"
           attributes:
-            # `stroomstoring` | `omvormer` - zie de kop. `last_reported` en niet
-            # `last_updated`: die tweede verspringt alleen als het getal
-            # verandert, en een vlakke meting is geen stille meter.
+            # `stroomstoring` | `omvormer` - zie de kop.
             oorzaak: >-
               {% set p1 = 'sensor.meterkast_slimhuys_zonneplan_netto_vermogen' %}
               {% set stil = not has_value(p1)
@@ -333,14 +308,29 @@ battery_package:
               {{ 'stroomstoring' if stil else 'omvormer' }}
 
     - sensor:
+        # Wat er bij een storing aan de accu blijft hangen: het huis min de
+        # laadpaal (die zit aan de netkant). Wat verder aan de netkant hangt
+        # (~100-200 W, zie de MARKEDROID-kop) zit hier nog in; dat maakt de
+        # schatting iets aan de voorzichtige kant, en dat is de goede kant.
+        - name: "Noodstroom huislast"
+          unique_id: noodstroom_huislast
+          default_entity_id: sensor.noodstroom_huislast
+          unit_of_measurement: "W"
+          device_class: power
+          state_class: measurement
+          icon: mdi:home-lightning-bolt
+          availability: "{{ has_value('sensor.huis_verbruik') }}"
+          state: >-
+            {% set huis = states('sensor.huis_verbruik') | float(0) * 1000 %}
+            {% set laadpaal = states('sensor.charging_station_active_power') | float(0) %}
+            {{ [huis - laadpaal, 0] | max | round(0) }}
+
         - name: "Noodstroom resterend"
           unique_id: noodstroom_resterend
           default_entity_id: sensor.noodstroom_resterend
           unit_of_measurement: "h"
           state_class: measurement
           icon: mdi:timer-sand
-          # Zonder installatie is er geen noodstroom om over te rekenen: de Deye
-          # voedt dan alleen zichzelf (66 W), en dat leverde "95 uur" op.
           availability: >-
             {{ is_state('binary_sensor.accu_geinstalleerd', 'on')
                and has_value('sensor.accu_lading') and has_value('sensor.accu_capaciteit') }}
@@ -349,7 +339,7 @@ battery_package:
           # hand is staat in het attribuut `stand`.
           state: >-
             {% set cap = states('sensor.accu_capaciteit') | float(0) %}
-            {% set vloer = states('number.deye_battery_shutdown_soc') | float(10) %}
+            {% set vloer = state_attr('sensor.accu_capaciteit', 'afslag_procent') | float(10) %}
             {% set bruikbaar = [(states('sensor.accu_lading') | float(0) - vloer) / 100 * cap, 0] | max %}
             {% if is_state('binary_sensor.huis_op_accu', 'on') %}
               {% set last = 0 - states('sensor.noodstroom_accu_kwartiergemiddelde') | float(0) %}
@@ -362,7 +352,7 @@ battery_package:
             # niet ieder hun eigen versie van deze som bijhouden.
             bruikbaar_kwh: >-
               {% set cap = states('sensor.accu_capaciteit') | float(0) %}
-              {% set vloer = states('number.deye_battery_shutdown_soc') | float(10) %}
+              {% set vloer = state_attr('sensor.accu_capaciteit', 'afslag_procent') | float(10) %}
               {{ ([(states('sensor.accu_lading') | float(0) - vloer) / 100 * cap, 0] | max) | round(1) }}
             last_w: >-
               {% if is_state('binary_sensor.huis_op_accu', 'on') %}
@@ -382,8 +372,8 @@ battery_package:
               {% else %}
                 {{ 'loopt_leeg' if states('sensor.noodstroom_huislast_uurgemiddelde') | float(0) >= 50 else 'geen_last' }}
               {% endif %}
-            afslag_procent: "{{ states('number.deye_battery_shutdown_soc') | int(10) }}"
-            herstart_procent: "{{ states('number.deye_battery_restart_soc') | int(50) }}"
+            afslag_procent: "{{ state_attr('sensor.accu_capaciteit', 'afslag_procent') | int(10) }}"
+            herstart_procent: "{{ state_attr('sensor.accu_capaciteit', 'herstart_procent') | int(50) }}"
 
     ##########################################################################
     ## MarkeDroid energietellers - zie de MARKEDROID-kop hieronder
@@ -493,26 +483,23 @@ battery_package:
   ## berichten komen hier dus binnen via een BRUG in die Mosquitto
   ## (`topic public/realtimedata/+ in 0`), niet via een tweede integratie.
   ##
-  ## TWEE SOORTEN ENTITEITEN
-  ##   * Wat NIEMAND anders weet: `sensor.markedroid_regie` (in welke stand
-  ##     MarkeDroid de accu heeft gezet), `sensor.markedroid_exportbegrenzer`
-  ##     en `binary_sensor.markedroid_verbinding`. Daar mag een automatisering
-  ##     op sturen.
-  ##   * DE REST VAN DE FEED (`sensor.markedroid_zon_*`, `_last_*`, `_accu_*`,
-  ##     `_net_*` en de energietellers): wat MarkeDroid zelf ziet, om naast de
-  ##     Deye en de P1 te leggen als er iets niet klopt. NIET de bron voor de
-  ##     rest van het huis - dat blijven `sensor.accu_*` hierboven en de P1
-  ##     ([[slimhuys-p1-bron]]). Twee kopieën van hetzelfde getal met een
-  ##     andere vertraging is een uitnodiging om ze door elkaar te gebruiken.
+  ## SINDS 22 SEPTEMBER DE ENIGE BRON VOOR DE ACCU. `sensor.accu_lading`,
+  ## `accu_vermogen` en `accu_capaciteit` bovenaan lezen hieruit, en de
+  ## noodstroomdetectie leest `binary_sensor.markedroid_net_uitgevallen`.
+  ## Waarom Solarman eruit ging staat in de kop van dit bestand.
+  ##
+  ## Lees in de rest van het huis nog steeds `sensor.accu_*` en niet
+  ## `sensor.markedroid_*` rechtstreeks: bij een volgende bronwissel is het dan
+  ## weer alleen dit bestand. Uitzondering: regie, exportbegrenzer en
+  ## verbinding - die heeft alleen MarkeDroid, daar valt niets te abstraheren.
   ##
   ## TWEE DINGEN UIT DE LIVE BERICHTEN DIE NIET IN DE HANDLEIDING STAAN
   ##   * HET TEKEN VAN `battery.W` IS HIER OMGEKEERD T.O.V. DE DOCUMENTATIE.
   ##     De handleiding zegt "negatief = laden". Op 21 september 17:07 gaf
   ##     MarkeDroid -697 W terwijl `TotWhDisChaInc` opliep, `TotWhChaInc` op 0
   ##     stond, `DCI` negatief was en de Deye zelf +716 W ONTladen meldde.
-  ##     Bij ons is het dus positief = laden, gelijk aan `sensor.accu_vermogen`.
-  ##     Wie hier ooit een vermogen van overneemt: vertrouw de handleiding niet,
-  ##     vertrouw de `Inc`-tellers.
+  ##     Bij ons is het dus positief = laden. `markedroid_accu_vermogen` leest
+  ##     de richting daarom uit de `Inc`-tellers en niet uit het teken.
   ##   * `meter.W` IS NIET DE P1-METER maar wat de externe stroomklemmen van
   ##     de Deye zien - die twee liepen op 21 september gelijk rond 0 W terwijl
   ##     de P1 ~100-200 W hoger stond. Voor het net blijft de P1 de bron.
@@ -610,14 +597,24 @@ battery_package:
         device_class: power
         state_class: measurement
         expire_after: 60
-      # Doorgegeven zoals MarkeDroid het stuurt, en dat is bij ons POSITIEF =
-      # LADEN, tegen de handleiding in (zie de kop). Zet ModuSun dat ooit
-      # recht, dan draait dit getal om en `sensor.accu_vermogen` niet.
+      # POSITIEF = LADEN, en dat staat hier vast, wat MarkeDroid ook stuurt.
+      # Het teken van `W` is bij ons het omgekeerde van de handleiding (zie de
+      # kop), en zet ModuSun dat ooit recht, dan zou het hele huis met de
+      # verkeerde kant op rekenen. Daarom komt de RICHTING uit de Wh-tellers in
+      # hetzelfde bericht: die zeggen ondubbelzinnig of er iets in of uit ging.
+      # Alleen als ze allebei nul zijn (rust, of een bericht zonder tellers)
+      # valt het terug op het teken zoals het binnenkomt.
       - name: "MarkeDroid accu vermogen"
         unique_id: markedroid_accu_vermogen
         default_entity_id: sensor.markedroid_accu_vermogen
         state_topic: "public/realtimedata/battery"
-        value_template: "{{ value_json.W }}"
+        value_template: >-
+          {% set w = value_json.W | float(0) %}
+          {% set erin = value_json.TotWhChaInc | float(0) if value_json.TotWhChaInc is defined else 0 %}
+          {% set eruit = value_json.TotWhDisChaInc | float(0) if value_json.TotWhDisChaInc is defined else 0 %}
+          {% if erin > eruit %}{{ w | abs | round(0) }}
+          {% elif eruit > erin %}{{ 0 - (w | abs | round(0)) }}
+          {% else %}{{ w | round(0) }}{% endif %}
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
@@ -628,7 +625,9 @@ battery_package:
         state_topic: "public/realtimedata/battery"
         value_template: "{{ value_json.SoC }}"
         unit_of_measurement: "%"
-        device_class: battery
+        # Bewust GEEN device_class battery: dan telt hij mee als "bijna lege
+        # batterij" in Dashboard Context.yaml, en de thuisaccu staat elke
+        # nacht laag. `sensor.accu_lading` hieronder draagt hem wel.
         state_class: measurement
         expire_after: 60
       # 30,72 kWh = 600 Ah x 51,2 V; `sensor.accu_capaciteit` rekent met 48 V.

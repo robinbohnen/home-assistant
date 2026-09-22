@@ -1141,6 +1141,10 @@ kamer_onderhoud_lijst:
 #   d    optioneel: maximaal aantal decimalen (standaard 1)
 #   min  optioneel: minimaal aantal decimalen (50,00 Hz i.p.v. 50 Hz)
 #   m    optioneel: vertaaltabel voor tekststanden, {charging: laden}
+#   (variables.titel: kop boven de tabel. Staat die in de tabel zelf en niet
+#   in een losse ov_title, dan verdwijnt hij mee: bestaat GEEN ENKELE entiteit
+#   uit de tabel meer - een integratie die eruit is gehaald - dan klapt de hele
+#   kaart dicht in plaats van een rij "bestaat niet" te tonen.)
 #   tag  optioneel: kort label achter de naam voor een valkuil ("teken
 #        omgekeerd", "niet het huis"); `tk` kiest de kleur (warn|info|bad)
 #
@@ -1158,11 +1162,18 @@ ov_uitlegtabel:
     action: none
   variables:
     rijen: []
+    titel: ""
   styles:
     grid:
       - grid-template-areas: '"tabel"'
       - grid-template-columns: minmax(0, 1fr)
     card:
+      - display: |
+          [[[
+            var er = (variables.rijen || []).some(function(r){
+              return (Array.isArray(r.e) ? r.e : [r.e]).some(function(id){ return !!states[id]; }); });
+            return er ? 'block' : 'none';
+          ]]]
       - background: none
       - border: none
       - box-shadow: none
@@ -1216,7 +1227,11 @@ ov_uitlegtabel:
           if(gelijk) return w.map(function(x){ return x.t; }).join(grijs(' · ')) + (ehs.length ? ' ' + ehs[0] : '');
           return w.map(function(x){ return x.t + (x.eh ? ' ' + x.eh : ''); }).join(grijs(' · '));
         };
-        var html = '';
+        // Zelfde opmaak als ov_title, zodat een tabel met eigen kop er niet
+        // anders uitziet dan een losse titelkaart erboven.
+        var html = variables.titel
+          ? '<div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55);padding:2px 0 10px 0">' + variables.titel + '</div>'
+          : '';
         (variables.rijen || []).forEach(function(r, i){
           var eerste = Array.isArray(r.e) ? r.e[0] : r.e;
           html += '<div onclick="this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + eerste + '\'},bubbles:true,composed:true}))"'
