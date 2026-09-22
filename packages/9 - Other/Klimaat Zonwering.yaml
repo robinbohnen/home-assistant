@@ -617,10 +617,21 @@ klimaat_zonwering_package:
               - variables:
                   # Covers zonder tussenstand (de screengroep) kennen geen
                   # current_position; die vertalen we naar 100 of 0.
+                  #
+                  # -1 ALS ER GEEN COVER IS. Bij elke herlaadbeurt en herstart
+                  # staan alle adviessensoren even op `unavailable`, en dan is
+                  # `cover` leeg. `state_attr(None, ...)` en `is_state(None,
+                  # ...)` gooien dan `'NoneType' object has no attribute
+                  # 'lower'`, en die fout brak niet alleen deze zone af maar de
+                  # hele ronde - alle zones pas een kwartier later bijgestuurd.
+                  # Gezien op 21 september; de controle op `cover` in de
+                  # if hieronder kwam te laat, die draait pas na deze stap.
                   huidig: >-
-                    {% set p = state_attr(cover, 'current_position') %}
-                    {{ p | int(0) if p is not none
-                       else (100 if is_state(cover, 'open') else 0) }}
+                    {% if cover is string and '.' in cover %}
+                      {% set p = state_attr(cover, 'current_position') %}
+                      {{ p | int(0) if p is not none
+                         else (100 if is_state(cover, 'open') else 0) }}
+                    {% else %}-1{% endif %}
                   # RUSTPAUZE - minstens een kwartier tussen twee bewegingen
                   #
                   # Het advies volgt de wolken, en de covers volgden het advies
@@ -647,7 +658,7 @@ klimaat_zonwering_package:
               - if:
                   - condition: template
                     value_template: >-
-                      {{ mag and not vraagt and doel >= 0
+                      {{ mag and not vraagt and doel >= 0 and huidig >= 0
                          and cover not in [none, 'None']
                          and (huidig - doel) | abs > 5
                          and mag_nu_bewegen }}
