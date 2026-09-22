@@ -390,7 +390,10 @@ battery_package:
     ## Een trigger-sensor onthoudt zijn stand over een herstart. Wat MarkeDroid
     ## publiceert terwijl HA plat ligt is weg - een gat, geen sprong. Een
     ## negatief increment (zou niet moeten kunnen) telt als nul, anders ziet
-    ## `total_increasing` een meterwissel.
+    ## `total_increasing` een meterwissel. Een bericht ZONDER het veld telt ook
+    ## als nul (`default(0)`): op 21 september 18:28 kwam er één zo binnen,
+    ## vermoedelijk bij een herstart van MarkeDroid, en toen gaven drie tellers
+    ## een renderfout.
     ##########################################################################
     - triggers:
         - trigger: mqtt
@@ -404,7 +407,7 @@ battery_package:
           state_class: total_increasing
           icon: mdi:solar-power
           state: >-
-            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhInc | float(0), 0] | max)) | round(2) }}
+            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhInc | default(0) | float(0), 0] | max)) | round(2) }}
     - triggers:
         - trigger: mqtt
           topic: "public/realtimedata/load"
@@ -417,7 +420,7 @@ battery_package:
           state_class: total_increasing
           icon: mdi:home-lightning-bolt
           state: >-
-            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhInc | float(0), 0] | max)) | round(2) }}
+            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhInc | default(0) | float(0), 0] | max)) | round(2) }}
     - triggers:
         - trigger: mqtt
           topic: "public/realtimedata/battery"
@@ -430,7 +433,7 @@ battery_package:
           state_class: total_increasing
           icon: mdi:battery-arrow-up
           state: >-
-            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhChaInc | float(0), 0] | max)) | round(2) }}
+            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhChaInc | default(0) | float(0), 0] | max)) | round(2) }}
     - triggers:
         - trigger: mqtt
           topic: "public/realtimedata/battery"
@@ -443,7 +446,7 @@ battery_package:
           state_class: total_increasing
           icon: mdi:battery-arrow-down
           state: >-
-            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhDisChaInc | float(0), 0] | max)) | round(2) }}
+            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhDisChaInc | default(0) | float(0), 0] | max)) | round(2) }}
     - triggers:
         - trigger: mqtt
           topic: "public/realtimedata/meter"
@@ -456,7 +459,7 @@ battery_package:
           state_class: total_increasing
           icon: mdi:transmission-tower-import
           state: >-
-            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhImpInc | float(0), 0] | max)) | round(2) }}
+            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhImpInc | default(0) | float(0), 0] | max)) | round(2) }}
     - triggers:
         - trigger: mqtt
           topic: "public/realtimedata/meter"
@@ -469,7 +472,7 @@ battery_package:
           state_class: total_increasing
           icon: mdi:transmission-tower-export
           state: >-
-            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhExpInc | float(0), 0] | max)) | round(2) }}
+            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhExpInc | default(0) | float(0), 0] | max)) | round(2) }}
 
   ############################################################################
   ## MARKEDROID - WAT DE REGISSEUR ZELF ZEGT (21 september 2026)
