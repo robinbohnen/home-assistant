@@ -274,6 +274,37 @@ cards:
             navigation_path: "#ov-klimaat"
           variables:
             title: KLIMAAT
+        # Vaillant-warmtepomp (myVAILLANT, sinds september 2026). Bovenaan
+        # omdat dit de verwarming van het hele huis is; de airco's zijn per
+        # kamer. Tikken = more-info met de volledige thermostaat, de
+        # mushroom-bediening staat bovenaan in #ov-klimaat.
+        #
+        # Eigen subregel om twee redenen: (1) myVAILLANT geeft `temperature`
+        # 0,0 als er geen warmtevraag is (buiten boven de stookgrens), en de
+        # template zou dan "doel 0,0°" tonen; (2) de boiler hangt aan dezelfde
+        # warmtepomp, dus de tanktemperatuur hoort op deze regel.
+        - type: custom:button-card
+          template: ov_climate
+          entity: climate.kroon_18_zone_1_circuit_0_climate
+          name: Warmtepomp
+          triggers_update:
+            - climate.kroon_18_zone_1_circuit_0_climate
+            - sensor.robin_bohnen_nl_kroon_18_domestic_hot_water_0_tank_temperature
+          custom_fields:
+            sub: |
+              [[[
+                if(!entity || entity.state === 'unavailable') return 'niet beschikbaar';
+                var f = function(v){ return Number(v).toFixed(1).replace('.',',') + '°'; };
+                var d = [];
+                var cur = entity.attributes.current_temperature;
+                if(cur != null) d.push(f(cur));
+                var tgt = Number(entity.attributes.temperature);
+                if(entity.state !== 'off' && tgt > 0) d.push('doel ' + f(tgt));
+                if(entity.state === 'off') d.push('uit');
+                var ww = states['sensor.robin_bohnen_nl_kroon_18_domestic_hot_water_0_tank_temperature'];
+                if(ww && !isNaN(Number(ww.state)) && ww.state !== '') d.push('boiler ' + f(ww.state));
+                return d.join(' · ');
+              ]]]
         - type: custom:button-card
           template: ov_climate
           entity: climate.airco_woonkamer
