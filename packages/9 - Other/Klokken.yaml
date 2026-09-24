@@ -6,8 +6,11 @@
 ##                         packages/0 - Ground Floor/Kitchen/Clock Display.yaml
 ##   clock_2  woonkamer
 ##   clock_3  garage      - staat alleen aan als er beweging is, zie onderaan
-## De laatste twee tonen bewust maar twee dingen: wat de panelen doen en hoe de
-## thuisaccu ervoor staat. Daarnaast branden hun twee bovenste indicatoren:
+## De laatste twee tonen bewust maar een paar dingen: wat de panelen doen, hoe
+## de thuisaccu ervoor staat en wat de dag tot nu toe kost. Zodra de panelen
+## niets meer leveren komt het huisverbruik erbij, anders bleef er 's avonds
+## alleen de accu over. De keukenklok had die laatste twee al in zijn eigen
+## rotatie. Daarnaast branden hun twee bovenste indicatoren:
 ##   indicator 1  stroomprijs nu, een kleur per tariefniveau:
 ##                blauw spotgoedkoop / groen goedkoop / oranje midden /
 ##                diep oranje duur / rood spotduur
@@ -203,6 +206,15 @@ klokken_package:
           example: "[clock_2, clock_3]"
           selector:
             object:
+        met_verbruik_en_kosten:
+          name: Ook verbruik en dagkosten
+          description: >-
+            Zet ook het huisverbruik (alleen zonder zon) en de dagkosten op de
+            klok. Uit voor de keuken: die heeft beide al als eigen app in zijn
+            rotatie, en dan stonden ze er twee keer in.
+          default: false
+          selector:
+            boolean:
       sequence:
         - alias: Beide frames een keer uitrekenen
           variables:
@@ -353,6 +365,77 @@ klokken_package:
               {%- if laadt or ontlaadt %}, {"df": [0, 7, {{ lengte }}, 1, "{{ '#32D74B' if laadt else '#FF9F0A' }}"]}{% endif %}
               ], "duration": 8, "lifetime": 300, "lifetimeMode": 0}
               {%- endif -%}
+        # Een eigen stap en niet in het blok hierboven: het verbruiksframe
+        # leest `zon_payload`, en die moet dan al uitgerekend zijn.
+        - alias: Verbruik en dagkosten uitrekenen
+          variables:
+            # HUISVERBRUIK, ALLEEN ALS DE ZON NIETS MEER DOET
+            # Een bliksemschicht links en het verbruik rechts, net als de zon.
+            # Zolang er opwek is staat dit getal niet op de klok: dan zegt het
+            # zonneframe genoeg en wordt de rotatie alleen maar langer. De
+            # voorwaarde is precies die van het zonneframe (lege payload), zodat
+            # er nooit een moment is met allebei of geen van beide.
+            #
+            # `huis_verbruik` EN NIET HET NETTO OP DE METER
+            # 's Avonds dekt de accu vaak het hele huis en staat de meter op
+            # ~0 W. Het getal dat je wil zien is wat het huis gebruikt, en dat
+            # is net + zon - accu (packages/9 - Other/Electricity.yaml). De
+            # keukenklok toont wel het netto; daar is dat een bewuste keuze.
+            verbruik_payload: >-
+              {%- if zon_payload | trim == '' and has_value('sensor.huis_verbruik') -%}
+              {%- set w = states('sensor.huis_verbruik') | float(0) * 1000 -%}
+              {%- if w < 10000 -%}
+              {%- set label = (w | round(0) | int) | string ~ 'W' -%}
+              {%- else -%}
+              {%- set label = '%.1f' | format(w / 1000) ~ 'kW' -%}
+              {%- endif -%}
+              {#- Zelfde opgemeten tekenbreedtes en rechter rand (x=29) als
+                  het zonneframe; zie daar. -#}
+              {%- set tekenbreedte = {'.': 2, 'W': 6} -%}
+              {%- set b = namespace(px=0) -%}
+              {%- for teken in label -%}
+              {%- set b.px = b.px + tekenbreedte.get(teken, 4) -%}
+              {%- endfor -%}
+              {%- set tx = 31 - b.px -%}
+              {"draw": [
+              {"df": [3, 0, 2, 1, "#FFD60A"]},
+              {"df": [2, 1, 2, 1, "#FFD60A"]},
+              {"df": [1, 2, 2, 1, "#FFD60A"]},
+              {"df": [0, 3, 5, 1, "#FFD60A"]},
+              {"df": [2, 4, 2, 1, "#FFD60A"]},
+              {"df": [1, 5, 2, 1, "#FFD60A"]},
+              {"df": [1, 6, 1, 1, "#FFD60A"]},
+              {"dt": [{{ tx }}, 0, "{{ label }}", "#FFFFFF"]}
+              ], "duration": 8, "lifetime": 300, "lifetimeMode": 0}
+              {%- endif -%}
+            # DAGKOSTEN, ALTIJD
+            # Een met de hand getekend euroteken: de firmware-iconen en `draw`
+            # gaan niet samen (zie de BRW-app in Clock Display.yaml), en of het
+            # lettertype van de klok een `€` kent is niet nagegaan. Groen als
+            # we vandaag netto verdiend hebben, zoals op de keukenklok.
+            # Bron en afronding zijn die van de keuken-app: twee decimalen uit
+            # `total_costs_today_calculated`.
+            kosten_payload: >-
+              {%- if has_value('sensor.total_costs_today_calculated') -%}
+              {%- set eur = states('sensor.total_costs_today_calculated') | float(0) -%}
+              {%- set label = '{:.2f}'.format(eur) -%}
+              {%- set b = namespace(px=0) -%}
+              {%- for teken in label -%}
+              {%- set b.px = b.px + (2 if teken == '.' else 4) -%}
+              {%- endfor -%}
+              {%- set tx = 31 - b.px -%}
+              {%- set kleur = '#32D74B' if eur < 0 else '#FFFFFF' -%}
+              {"draw": [
+              {"df": [2, 0, 3, 1, "#FFD60A"]},
+              {"df": [1, 1, 1, 1, "#FFD60A"]},
+              {"df": [0, 2, 4, 1, "#FFD60A"]},
+              {"df": [1, 3, 1, 1, "#FFD60A"]},
+              {"df": [0, 4, 4, 1, "#FFD60A"]},
+              {"df": [1, 5, 1, 1, "#FFD60A"]},
+              {"df": [2, 6, 3, 1, "#FFD60A"]},
+              {"dt": [{{ tx }}, 0, "{{ label }}", "{{ kleur }}"]}
+              ], "duration": 8, "lifetime": 300, "lifetimeMode": 0}
+              {%- endif -%}
         - alias: Beide frames naar elke klok sturen
           repeat:
             for_each: "{{ klokken }}"
@@ -371,12 +454,29 @@ klokken_package:
                   retain: true
                   topic: "{{ repeat.item }}/custom/battery"
                   payload: "{{ accu_payload }}"
+              - alias: Verbruik en dagkosten
+                if: "{{ met_verbruik_en_kosten | default(false) }}"
+                then:
+                  - alias: Huisverbruik (leeg zolang de zon schijnt)
+                    action: mqtt.publish
+                    data:
+                      qos: 0
+                      retain: true
+                      topic: "{{ repeat.item }}/custom/verbruik"
+                      payload: "{{ verbruik_payload }}"
+                  - alias: Dagkosten
+                    action: mqtt.publish
+                    data:
+                      qos: 0
+                      retain: true
+                      topic: "{{ repeat.item }}/custom/kosten"
+                      payload: "{{ kosten_payload }}"
 
   automation:
     - id: klokken_zon_accu_woonkamer_garage
       alias: Klokken - Zon en accu woonkamer en garage
       description: >-
-        Houdt de twee apps op de woonkamer- en garageklok bij. Deze twee tonen
+        Houdt de apps op de woonkamer- en garageklok bij. Deze twee tonen
         verder niets, dus er zit hier bewust geen aan/uit-check op de matrix
         voor: dan zou de app na vijf minuten (`lifetime: 300`) van het scherm
         vallen terwijl de klok gewoon aan is.
@@ -394,6 +494,7 @@ klokken_package:
             klokken:
               - clock_2
               - clock_3
+            met_verbruik_en_kosten: true
 
     - id: klokken_indicatoren_woonkamer_garage
       alias: Klokken - Indicatoren stroomprijs en bezetting
