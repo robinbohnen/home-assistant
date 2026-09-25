@@ -103,7 +103,7 @@ veelgebruikers_package:
               sensor.overloop_zolder_overloop_zolder_stopcontact_airco_vermogen: Airco zolder
               sensor.overloop_zolder_overloop_zolder_warmtepomp_kast_stopcontact_cv_vermogen: CV-ketel
               sensor.overloop_zolder_overloop_zolder_warmtepomp_kast_stopcontact_luchtbox_vermogen: Luchtbox
-              sensor.overloop_zolder_overloop_zolder_warmtepomp_stopcontact_cube_vermogen: Warmtepomp cube
+              sensor.overloop_zolder_overloop_zolder_warmtepomp_kast_stopcontact_heater_vermogen: Heater warmtepompkast
               sensor.achtertuin_achtertuin_overkapping_stopcontact_box_vermogen: Overkapping box
               sensor.achtertuin_achtertuin_overkapping_stopcontact_mini_spots_vermogen: Overkapping spots
               sensor.achtertuin_achtertuin_schuur_stopcontact_raspberry_pi_vermogen: Raspberry Pi
@@ -141,6 +141,13 @@ veelgebruikers_package:
               # `sensor.keba_p40_36462996_vermogen`, waardoor de laadpaal hier
               # een tijd stil ontbrak.
               sensor.charging_station_active_power: Laadpaal
+              # Sinds 25 september 2026: de Vaillant aroTHERM plus. Geen
+              # meting maar een UURGEMIDDELDE, afgeleid uit de energietellers
+              # van myVAILLANT - zie de drie sensoren onderaan dit bestand.
+              # Hij loopt dus tot een uur achter op de rest van de lijst.
+              sensor.warmtepomp_vermogen_verwarmen: Warmtepomp verwarmen
+              sensor.warmtepomp_vermogen_warm_water: Warmtepomp warm water
+              sensor.warmtepomp_vermogen_koelen: Warmtepomp koelen
         - variables:
             # LET OP DE AFSLUITENDE `from_json` - DIE HOORT HIER EN NIET IN DE
             # SENSOR. Hij stond eerst alleen op `to_json` en de sensor deed het
@@ -184,3 +191,98 @@ veelgebruikers_package:
             actief: "{{ gemeten | selectattr('watt', '>', 0) | list | count }}"
             meldend: "{{ gemeten | count }}"
             stekkers: "{{ stekkers | count }}"
+
+    # WARMTEPOMP: VAN ENERGIETELLER NAAR VERMOGEN
+    # myVAILLANT levert voor de aroTHERM plus geen vermogen, alleen dagtellers
+    # in Wh (verwarmen, warm water, koelen), in stappen van 100 Wh, en die
+    # worden maar eens per ophaalronde van de integratie bijgewerkt (ongeveer
+    # per uur). Om hem toch in de lijst hierboven te krijgen, rekenen we per
+    # sprong van de teller het gemiddelde vermogen over die ronde uit:
+    #
+    #   W = (nieuwe stand - oude stand) / (tijd sinds de vorige ophaalronde)
+    #
+    # "De vorige ophaalronde" is `from_state.last_reported`: HA werkt die bij
+    # telkens als de integratie de teller opnieuw meldt, ook zonder
+    # verandering. `last_changed` zou fout zijn - na vijf uur stilstand zou
+    # een uur stoken dan over vijf uur uitgesmeerd worden.
+    #
+    # Terug naar 0 zodra er een ophaalronde voorbijkomt zónder sprong (dan
+    # is `last_reported` duidelijk later dan `last_changed`): minder dan
+    # 100 Wh in een ronde telt als stil. Om middernacht begint de teller
+    # opnieuw bij 0; dan is de nieuwe stand zelf het verbruik sinds 00:00.
+    #
+    # Dit is een schatting achteraf, geen meting van nu - zie
+    # [[powercalc-is-geen-meting]] voor waarom dat onderscheid ertoe doet.
+    - trigger:
+        - trigger: state
+          entity_id: sensor.kroon_18_device_1_arotherm_plus_consumed_electrical_energy_heating
+          id: teller
+        - trigger: time_pattern
+          minutes: "/1"
+      action:
+        - variables:
+            bron: sensor.kroon_18_device_1_arotherm_plus_consumed_electrical_energy_heating
+      sensor:
+        - name: Warmtepomp vermogen verwarmen
+          unique_id: warmtepomp_vermogen_verwarmen
+          icon: mdi:heat-pump
+          device_class: power
+          state_class: measurement
+          unit_of_measurement: W
+          state: &warmtepomp_vermogen >-
+            {% set vorig = this.state | float(0) %}
+            {% if trigger.id == 'teller' %}
+              {% set a = trigger.from_state.state | float(none) if trigger.from_state else none %}
+              {% set b = trigger.to_state.state | float(none) if trigger.to_state else none %}
+              {% if a is none or b is none %}
+                {{ vorig }}
+              {% else %}
+                {% set wh = b - a if b >= a else b %}
+                {% set t0 = trigger.from_state.last_reported if b >= a else today_at() %}
+                {% set uren = (trigger.to_state.last_changed - t0).total_seconds() / 3600 %}
+                {{ (wh / uren) | round(0) if uren > 0.05 else vorig }}
+              {% endif %}
+            {% else %}
+              {% set s = states[bron] %}
+              {% if not has_value(bron) %}
+                0
+              {% elif (s.last_reported - s.last_changed).total_seconds() > 60 %}
+                0
+              {% else %}
+                {{ vorig }}
+              {% endif %}
+            {% endif %}
+    - trigger:
+        - trigger: state
+          entity_id: sensor.kroon_18_device_1_arotherm_plus_consumed_electrical_energy_domestic_hot_water
+          id: teller
+        - trigger: time_pattern
+          minutes: "/1"
+      action:
+        - variables:
+            bron: sensor.kroon_18_device_1_arotherm_plus_consumed_electrical_energy_domestic_hot_water
+      sensor:
+        - name: Warmtepomp vermogen warm water
+          unique_id: warmtepomp_vermogen_warm_water
+          icon: mdi:water-boiler
+          device_class: power
+          state_class: measurement
+          unit_of_measurement: W
+          state: *warmtepomp_vermogen
+    - trigger:
+        - trigger: state
+          entity_id: sensor.kroon_18_device_1_arotherm_plus_consumed_electrical_energy_cooling
+          id: teller
+        - trigger: time_pattern
+          minutes: "/1"
+      action:
+        - variables:
+            bron: sensor.kroon_18_device_1_arotherm_plus_consumed_electrical_energy_cooling
+      sensor:
+        - name: Warmtepomp vermogen koelen
+          unique_id: warmtepomp_vermogen_koelen
+          icon: mdi:snowflake
+          device_class: power
+          state_class: measurement
+          unit_of_measurement: W
+          state: *warmtepomp_vermogen
