@@ -54,7 +54,27 @@ music_package:
             - light.woonkamer_spots
           to: "on"
           id: lights_on
+        # Thuiskomst met het licht al aan. Op 2026-09-29 deed Logan om 14:27
+        # de woonkamer aan terwijl er geen volwassene thuis was (conditie
+        # hieronder faalt), en toen wij om 15:51 binnenkwamen brandde het al -
+        # er ging dus niets meer "aan" en de radio bleef uit. `not_from` houdt
+        # de herstart-overgang buiten de deur.
+        - trigger: state
+          entity_id: group.all_adults
+          to: home
+          not_from:
+            - unknown
+            - unavailable
+          id: thuiskomst
       conditions:
+        - alias: Bij thuiskomst alleen als het licht al aan is en de tv uit
+          condition: template
+          value_template: >-
+            {{ (trigger | default({})).get('id', '') != 'thuiskomst'
+               or ((is_state('light.woonkamer_lampen', 'on')
+                    or is_state('light.woonkamer_spots', 'on'))
+                   and not is_state('media_player.woonkamer_77_oled_3', 'on')
+                   and not is_state('media_player.playstation_5', 'playing')) }}
         - condition: state
           entity_id: group.all_adults
           state: home
