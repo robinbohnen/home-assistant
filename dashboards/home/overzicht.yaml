@@ -2974,11 +2974,12 @@ cards:
           # ----- 1. Temperatuur -----
           # De zolder zelf heeft geen thermometer; de airco hieronder meet wel,
           # maar dat is de aanzuigtemperatuur van het apparaat en geen
-          # kamermeting, dus die staat hier niet als kamerkaart.
+          # kamermeting, dus die staat hier niet als kamerkaart. De
+          # warmtepompkast is een eigen ruimte met een eigen sensor.
           - type: custom:mushroom-title-card
             subtitle: Temperatuur
           - type: grid
-            columns: 1
+            columns: 2
             square: false
             cards:
               - type: custom:mushroom-template-card
@@ -2990,6 +2991,18 @@ cards:
                 icon: mdi:bed-single-outline
                 icon_color: >-
                   {% set t = states('sensor.slaapkamer_emma_slaapkamer_mini_temperatuur_temperatuur') | float(none) %}
+                  {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
+                tap_action:
+                  action: more-info
+              - type: custom:mushroom-template-card
+                entity: sensor.overloop_zolder_zolder_warmtepomp_kast_temperatuur_temperatuur
+                primary: Warmtepompkast
+                secondary: >-
+                  {% set t = states('sensor.overloop_zolder_zolder_warmtepomp_kast_temperatuur_temperatuur') | float(none) %}
+                  {{ (t | round(1) | string | replace('.', ',') ~ ' °C') if t is not none else 'Geen meting' }}
+                icon: mdi:heat-pump-outline
+                icon_color: >-
+                  {% set t = states('sensor.overloop_zolder_zolder_warmtepomp_kast_temperatuur_temperatuur') | float(none) %}
                   {{ 'grey' if t is none else 'blue' if t < 18 else 'green' if t < 23 else 'orange' if t < 26 else 'red' }}
                 tap_action:
                   action: more-info
