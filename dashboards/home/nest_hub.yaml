@@ -494,7 +494,7 @@ cards:
               strook: |
                 [[[
                   // Compacte prijsstrook voor de komende 12 uur: dezelfde
-                  // bandindeling per kalenderdag als op het grote dashboard.
+                  // SlimHuys-niveaus en kleuren als op het grote dashboard.
                   var nu = Date.now();
                   var start = nu - 3600000, eind = nu + 11 * 3600000;
                   var pct = function(t){ return (t - start) / (eind - start) * 100; };
@@ -508,16 +508,14 @@ cards:
                     .concat(blok('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow'));
                   var slots = raw.map(function(e){
                     var d = new Date(e.start), p = Number(e.value);
-                    return (isNaN(d.getTime()) || isNaN(p)) ? null : {t: d.getTime(), p: p};
+                    return (isNaN(d.getTime()) || isNaN(p)) ? null : {t: d.getTime(), p: p, l: e.level};
                   }).filter(Boolean).sort(function(a,b){ return a.t - b.t; });
                   if(slots.length < 2) return `<span style="font-size:2.1vh;color:var(--ov-ink-35)">geen prijsvoorspelling</span>`;
                   var stap = slots[1].t - slots[0].t;
-                  var perDag = {};
-                  slots.forEach(function(s){
-                    var k = new Date(s.t).toDateString();
-                    if(!perDag[k]) perDag[k] = {min: s.p, max: s.p};
-                    else { perDag[k].min = Math.min(perDag[k].min, s.p); perDag[k].max = Math.max(perDag[k].max, s.p); }
-                  });
+                  // Kleur per blok = SlimHuys-niveau (`level`), dezelfde kleuren als
+                  // de stroomprijsgrafiek en slimhuys.nl. very_high is door peak
+                  // vervangen; een onbekend niveau valt op gemiddeld.
+                  var NIVEAUKLEUR = {very_low:'#9FE1CB', low:'#5DCAA5', medium:'#FAC775', high:'#EF9F27', very_high:'#D85A30', peak:'#D85A30'};
                   var klok = function(x){ var d = new Date(x); return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); };
                   var euro = function(p){ return p.toFixed(2).replace('.', ','); };
 
@@ -542,10 +540,7 @@ cards:
                   var blokken = [];
                   slots.forEach(function(s){
                     if(s.t + stap < start || s.t > eind) return;
-                    var d = perDag[new Date(s.t).toDateString()];
-                    var spreiding = d.max - d.min;
-                    var r = spreiding < 0.02 ? 0.5 : (s.p - d.min) / spreiding;
-                    var kleur = r <= 0.33 ? 'var(--ov-ok)' : (r >= 0.66 ? 'var(--ov-bad)' : 'var(--ov-warn)');
+                    var kleur = NIVEAUKLEUR[s.l] || NIVEAUKLEUR.medium;
                     var a = klem(pct(s.t)), b = klem(pct(s.t + stap));
                     if(b - a <= 0.05) return;
                     // Prijs in het blok: op een wandpaneel is er geen hover, dus

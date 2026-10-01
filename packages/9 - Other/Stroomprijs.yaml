@@ -27,9 +27,13 @@
 ##   woord staat in het `level`-attribuut van
 ##   sensor.slimhuys_zonneplan_huidige_prijs. Reken er niet op dat deze lijst
 ##   compleet blijft - de integratie heeft de namen al een keer veranderd.
-##   De sensor hieronder ("niveau volgend uur") is bewust een DRIEDELING, want
-##   die hoort bij de drie balkkleuren van de STROOMPRIJS-kaart en bij de
-##   mapping in dashboards/home/dashboard.yaml.
+##   Sinds integratie v1.14.0 heeft ook elk blok in raw_today/raw_tomorrow
+##   zo'n `level`, afgezet tegen het gemiddelde van gisteren t/m morgen (net
+##   als de kleuren op slimhuys.nl). De STROOMPRIJS-kaart, de tijdlijn en de
+##   Nest Hub kleuren daarop.
+##   De sensor hieronder ("niveau volgend uur") is bewust een DRIEDELING
+##   (low/medium/high), want die hoort bij de mapping in
+##   dashboards/home/dashboard.yaml, de header-pil en Voice.yaml.
 ##   Wie op tariefniveau_nu filtert moet dus altijd de uiteinden afvangen (een
 ##   test op alleen 'low'/'high' mist juist het goedkoopste en het duurste
 ##   tarief, en 'peak' bevat het woord 'high' niet - daar zijn de
@@ -70,20 +74,30 @@ stroomprijs_package:
           unique_id: stroomprijs_niveau_volgend_uur
           icon: mdi:trending-up
           availability: >
-            {{ has_value('sensor.stroomprijs_volgend_uur')
-               and has_value('sensor.slimhuys_zonneplan_laagste_vandaag')
-               and has_value('sensor.slimhuys_zonneplan_hoogste_vandaag') }}
+            {{ has_value('sensor.slimhuys_zonneplan_prijzen_vandaag') }}
           state: >
-            {# Dezelfde driedeling als de balken in de STROOMPRIJS-kaart:
-               onderste derde van het dagbereik is goedkoop, bovenste derde
-               duur. Een vlakke dag (< 2 ct verschil) is nooit extreem. #}
-            {% set p = states('sensor.stroomprijs_volgend_uur') | float(none) %}
-            {% set mn = states('sensor.slimhuys_zonneplan_laagste_vandaag') | float(none) %}
-            {% set mx = states('sensor.slimhuys_zonneplan_hoogste_vandaag') | float(none) %}
-            {% set spread = (mx - mn) if (mn is not none and mx is not none) else none %}
-            {% set r = 0.5 if (p is none or spread is none or spread < 0.02)
-                       else [[(p - mn) / spread, 0] | max, 1] | min %}
-            {{ 'low' if r <= 0.33 else ('high' if r >= 0.66 else 'medium') }}
+            {# Het SlimHuys-niveau (`level` per blok, sinds v1.14.0) van de
+               blokken die binnen het komende uur beginnen, teruggebracht tot
+               de driedeling low/medium/high: zeer laag en laag tellen als
+               low, hoog en piek als high. Bij kwartierprijzen wordt over de
+               vier blokken gemiddeld en afgerond.
+               Tot 1 oktober 2026 kwam dit uit de spreiding van één dag; dan
+               is het onderste derde altijd "goedkoop", ook op een dure dag. #}
+            {% set score = {'very_low': 0, 'low': 0, 'medium': 1, 'high': 2, 'very_high': 2, 'peak': 2} %}
+            {% set kw = state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier', 'raw_today') %}
+            {% set vandaag = kw if kw else (state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today') or []) %}
+            {% set morgen = state_attr('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow') or [] %}
+            {% set ns = namespace(som=0, n=0) %}
+            {% for b in (vandaag + morgen) %}
+              {% set s = b.start | as_datetime %}
+              {% if s is not none and s > now() and s <= now() + timedelta(hours=1)
+                    and b.level in score %}
+                {% set ns.som = ns.som + score[b.level] %}
+                {% set ns.n = ns.n + 1 %}
+              {% endif %}
+            {% endfor %}
+            {% set r = (ns.som / ns.n) | round(0) | int if ns.n > 0 else 1 %}
+            {{ ['low', 'medium', 'high'][r] }}
 
     # -------------------------------------------------------------------------
     # GOEDKOOPSTE LAADVENSTER - één berekening voor alle kaarten

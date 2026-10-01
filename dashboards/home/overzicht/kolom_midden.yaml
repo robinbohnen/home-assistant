@@ -550,12 +550,12 @@ cards:
                 var p = states['sensor.slimhuys_zonneplan_huidige_prijs'];
                 var nu = p && !isNaN(Number(p.state)) ? Number(p.state) : null;
                 // Het tariefniveau komt uit SlimHuys zelf, zodat deze stip
-                // hetzelfde zegt als de pil in de header en waar de batterij
-                // op schakelt.
+                // hetzelfde zegt als de pil in de header. Kleuren van
+                // slimhuys.nl, gelijk aan de balken hieronder.
                 var g = states['sensor.slimhuys_zonneplan_tariefniveau_nu'];
-                var col = {very_low:'var(--ov-ok)', low:'var(--ov-ok)', medium:'var(--ov-warn)',
-                           high:'var(--ov-bad)', very_high:'var(--ov-bad)',
-                           peak:'var(--ov-bad)'}[g ? g.state : ''] || 'var(--ov-ink-60)';
+                var col = {very_low:'#9FE1CB', low:'#5DCAA5', medium:'#FAC775',
+                           high:'#EF9F27', very_high:'#D85A30',
+                           peak:'#D85A30'}[g ? g.state : ''] || 'var(--ov-ink-60)';
                 // Kwartierblokken als de integratie ze levert, anders de uurblokken.
                 var blok = function(eid){ var e = states[eid]; return (e && e.attributes && e.attributes.raw_today) || []; };
                 var kw = blok('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier');
@@ -659,18 +659,25 @@ cards:
                 # Vrijwel dicht tegen elkaar leest het als een prijsverloop.
                 columnWidth: 96%
           series:
-            # Drie series over dezelfde tijdstippen: per prijsblok vult er precies
-            # een, de andere twee zijn null. Gestapeld levert dat een balk per blok
-            # in de kleur van de prijsklasse (t.o.v. de rest van die dag).
+            # Vijf series over dezelfde tijdstippen: per prijsblok vult er precies
+            # een, de andere vier zijn null. Gestapeld levert dat een balk per blok
+            # in de kleur van zijn SlimHuys-niveau (`level` per blok, sinds
+            # integratie v1.14.0). Dat niveau zet elk blok af tegen het gemiddelde
+            # van gisteren t/m morgen, met dezelfde kleuren als slimhuys.nl.
+            #
+            # Tot 1 oktober 2026 rekende deze kaart zelf een driedeling uit over
+            # de spreiding van één dag. Dan is het goedkoopste derde altijd groen,
+            # ook op een dure dag: op 1 oktober stond € 0,312 groen terwijl dat
+            # duurder was dan 82% van de uren van het afgelopen jaar.
             - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
-              name: goedkoop
+              name: zeer laag
               type: column
-              color: "var(--ov-ok)"
+              color: "#9FE1CB"
               opacity: 1
               stroke_width: 1
               float_precision: 3
               data_generator: |
-                const BAND = 0;
+                const NIVEAU = 'very_low';
                 // SlimHuys geeft per blok een start EN een end, dus de blokbreedte
                 // hoeft niet uit de onderlinge afstand geraden te worden. Daarmee
                 // werkt dit voor kwartieren net zo goed als voor uren, en zelfs
@@ -680,7 +687,14 @@ cards:
                 const vandaag = blokken(entity, 'raw_today').length
                   ? blokken(entity, 'raw_today')
                   : blokken(st['sensor.slimhuys_zonneplan_prijzen_vandaag'], 'raw_today');
-                const pts = vandaag
+                // very_high is door peak vervangen maar kan nog langskomen; een
+                // blok zonder (bekend) niveau valt op gemiddeld in plaats van
+                // als gat in de grafiek.
+                const BEKEND = ['very_low', 'low', 'medium', 'high', 'peak'];
+                const niveau = (l) => l === 'very_high' ? 'peak' : (BEKEND.indexOf(l) >= 0 ? l : 'medium');
+                // Ook de null-punten blijven staan: bij een gestapelde grafiek
+                // moeten alle series exact dezelfde x-waarden hebben.
+                return vandaag
                   .concat(blokken(st['sensor.slimhuys_zonneplan_prijzen_morgen'], 'raw_tomorrow'))
                   .map((e) => {
                     const s = new Date(e.start).getTime();
@@ -689,36 +703,59 @@ cards:
                     // ApexCharts centreert een kolom op zijn timestamp; plotten op
                     // het midden van [start, end) laat de balk exact zijn eigen
                     // blok dekken in plaats van een half blok ernaast.
-                    return { x: isFinite(t) ? (s + t) / 2 : s, dag: new Date(s).toDateString(), p: isNaN(p) ? null : p };
+                    const x = isFinite(t) ? (s + t) / 2 : s;
+                    return [x, (!isNaN(p) && niveau(e.level) === NIVEAU) ? p : null];
                   })
-                  .filter((o) => isFinite(o.x))
-                  .sort((a, b) => a.x - b.x);
-                const stats = {};
-                pts.forEach((o) => {
-                  if (o.p === null) return;
-                  const st2 = stats[o.dag] || (stats[o.dag] = { min: o.p, max: o.p });
-                  st2.min = Math.min(st2.min, o.p); st2.max = Math.max(st2.max, o.p);
-                });
+                  .filter((d) => isFinite(d[0]))
+                  .sort((a, b) => a[0] - b[0]);
+            - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
+              name: laag
+              type: column
+              color: "#5DCAA5"
+              opacity: 1
+              stroke_width: 1
+              float_precision: 3
+              data_generator: |
+                const NIVEAU = 'low';
+                // SlimHuys geeft per blok een start EN een end, dus de blokbreedte
+                // hoeft niet uit de onderlinge afstand geraden te worden. Daarmee
+                // werkt dit voor kwartieren net zo goed als voor uren, en zelfs
+                // voor de dag waarop het overschakelt.
+                const blokken = (ent, key) => (ent && ent.attributes && ent.attributes[key]) || [];
+                const st = (typeof hass !== 'undefined' && hass.states) ? hass.states : {};
+                const vandaag = blokken(entity, 'raw_today').length
+                  ? blokken(entity, 'raw_today')
+                  : blokken(st['sensor.slimhuys_zonneplan_prijzen_vandaag'], 'raw_today');
+                // very_high is door peak vervangen maar kan nog langskomen; een
+                // blok zonder (bekend) niveau valt op gemiddeld in plaats van
+                // als gat in de grafiek.
+                const BEKEND = ['very_low', 'low', 'medium', 'high', 'peak'];
+                const niveau = (l) => l === 'very_high' ? 'peak' : (BEKEND.indexOf(l) >= 0 ? l : 'medium');
                 // Ook de null-punten blijven staan: bij een gestapelde grafiek
                 // moeten alle series exact dezelfde x-waarden hebben.
-                return pts.map((o) => {
-                  if (o.p === null) return [o.x, null];
-                  const d = stats[o.dag];
-                  const spread = d.max - d.min;
-                  // vlakke dag (< 2 ct verschil): niets is echt goedkoop of duur
-                  const r = (spread < 0.02) ? 0.5 : (o.p - d.min) / spread;
-                  const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
-                  return [o.x, band === BAND ? o.p : null];
-                });
+                return vandaag
+                  .concat(blokken(st['sensor.slimhuys_zonneplan_prijzen_morgen'], 'raw_tomorrow'))
+                  .map((e) => {
+                    const s = new Date(e.start).getTime();
+                    const t = new Date(e.end).getTime();
+                    const p = Number(e.value);
+                    // ApexCharts centreert een kolom op zijn timestamp; plotten op
+                    // het midden van [start, end) laat de balk exact zijn eigen
+                    // blok dekken in plaats van een half blok ernaast.
+                    const x = isFinite(t) ? (s + t) / 2 : s;
+                    return [x, (!isNaN(p) && niveau(e.level) === NIVEAU) ? p : null];
+                  })
+                  .filter((d) => isFinite(d[0]))
+                  .sort((a, b) => a[0] - b[0]);
             - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
               name: gemiddeld
               type: column
-              color: "var(--ov-warn)"
+              color: "#FAC775"
               opacity: 1
               stroke_width: 1
               float_precision: 3
               data_generator: |
-                const BAND = 1;
+                const NIVEAU = 'medium';
                 // SlimHuys geeft per blok een start EN een end, dus de blokbreedte
                 // hoeft niet uit de onderlinge afstand geraden te worden. Daarmee
                 // werkt dit voor kwartieren net zo goed als voor uren, en zelfs
@@ -728,7 +765,14 @@ cards:
                 const vandaag = blokken(entity, 'raw_today').length
                   ? blokken(entity, 'raw_today')
                   : blokken(st['sensor.slimhuys_zonneplan_prijzen_vandaag'], 'raw_today');
-                const pts = vandaag
+                // very_high is door peak vervangen maar kan nog langskomen; een
+                // blok zonder (bekend) niveau valt op gemiddeld in plaats van
+                // als gat in de grafiek.
+                const BEKEND = ['very_low', 'low', 'medium', 'high', 'peak'];
+                const niveau = (l) => l === 'very_high' ? 'peak' : (BEKEND.indexOf(l) >= 0 ? l : 'medium');
+                // Ook de null-punten blijven staan: bij een gestapelde grafiek
+                // moeten alle series exact dezelfde x-waarden hebben.
+                return vandaag
                   .concat(blokken(st['sensor.slimhuys_zonneplan_prijzen_morgen'], 'raw_tomorrow'))
                   .map((e) => {
                     const s = new Date(e.start).getTime();
@@ -737,36 +781,20 @@ cards:
                     // ApexCharts centreert een kolom op zijn timestamp; plotten op
                     // het midden van [start, end) laat de balk exact zijn eigen
                     // blok dekken in plaats van een half blok ernaast.
-                    return { x: isFinite(t) ? (s + t) / 2 : s, dag: new Date(s).toDateString(), p: isNaN(p) ? null : p };
+                    const x = isFinite(t) ? (s + t) / 2 : s;
+                    return [x, (!isNaN(p) && niveau(e.level) === NIVEAU) ? p : null];
                   })
-                  .filter((o) => isFinite(o.x))
-                  .sort((a, b) => a.x - b.x);
-                const stats = {};
-                pts.forEach((o) => {
-                  if (o.p === null) return;
-                  const st2 = stats[o.dag] || (stats[o.dag] = { min: o.p, max: o.p });
-                  st2.min = Math.min(st2.min, o.p); st2.max = Math.max(st2.max, o.p);
-                });
-                // Ook de null-punten blijven staan: bij een gestapelde grafiek
-                // moeten alle series exact dezelfde x-waarden hebben.
-                return pts.map((o) => {
-                  if (o.p === null) return [o.x, null];
-                  const d = stats[o.dag];
-                  const spread = d.max - d.min;
-                  // vlakke dag (< 2 ct verschil): niets is echt goedkoop of duur
-                  const r = (spread < 0.02) ? 0.5 : (o.p - d.min) / spread;
-                  const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
-                  return [o.x, band === BAND ? o.p : null];
-                });
+                  .filter((d) => isFinite(d[0]))
+                  .sort((a, b) => a[0] - b[0]);
             - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
-              name: duur
+              name: hoog
               type: column
-              color: "var(--ov-bad)"
+              color: "#EF9F27"
               opacity: 1
               stroke_width: 1
               float_precision: 3
               data_generator: |
-                const BAND = 2;
+                const NIVEAU = 'high';
                 // SlimHuys geeft per blok een start EN een end, dus de blokbreedte
                 // hoeft niet uit de onderlinge afstand geraden te worden. Daarmee
                 // werkt dit voor kwartieren net zo goed als voor uren, en zelfs
@@ -776,7 +804,14 @@ cards:
                 const vandaag = blokken(entity, 'raw_today').length
                   ? blokken(entity, 'raw_today')
                   : blokken(st['sensor.slimhuys_zonneplan_prijzen_vandaag'], 'raw_today');
-                const pts = vandaag
+                // very_high is door peak vervangen maar kan nog langskomen; een
+                // blok zonder (bekend) niveau valt op gemiddeld in plaats van
+                // als gat in de grafiek.
+                const BEKEND = ['very_low', 'low', 'medium', 'high', 'peak'];
+                const niveau = (l) => l === 'very_high' ? 'peak' : (BEKEND.indexOf(l) >= 0 ? l : 'medium');
+                // Ook de null-punten blijven staan: bij een gestapelde grafiek
+                // moeten alle series exact dezelfde x-waarden hebben.
+                return vandaag
                   .concat(blokken(st['sensor.slimhuys_zonneplan_prijzen_morgen'], 'raw_tomorrow'))
                   .map((e) => {
                     const s = new Date(e.start).getTime();
@@ -785,27 +820,50 @@ cards:
                     // ApexCharts centreert een kolom op zijn timestamp; plotten op
                     // het midden van [start, end) laat de balk exact zijn eigen
                     // blok dekken in plaats van een half blok ernaast.
-                    return { x: isFinite(t) ? (s + t) / 2 : s, dag: new Date(s).toDateString(), p: isNaN(p) ? null : p };
+                    const x = isFinite(t) ? (s + t) / 2 : s;
+                    return [x, (!isNaN(p) && niveau(e.level) === NIVEAU) ? p : null];
                   })
-                  .filter((o) => isFinite(o.x))
-                  .sort((a, b) => a.x - b.x);
-                const stats = {};
-                pts.forEach((o) => {
-                  if (o.p === null) return;
-                  const st2 = stats[o.dag] || (stats[o.dag] = { min: o.p, max: o.p });
-                  st2.min = Math.min(st2.min, o.p); st2.max = Math.max(st2.max, o.p);
-                });
+                  .filter((d) => isFinite(d[0]))
+                  .sort((a, b) => a[0] - b[0]);
+            - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
+              name: piek
+              type: column
+              color: "#D85A30"
+              opacity: 1
+              stroke_width: 1
+              float_precision: 3
+              data_generator: |
+                const NIVEAU = 'peak';
+                // SlimHuys geeft per blok een start EN een end, dus de blokbreedte
+                // hoeft niet uit de onderlinge afstand geraden te worden. Daarmee
+                // werkt dit voor kwartieren net zo goed als voor uren, en zelfs
+                // voor de dag waarop het overschakelt.
+                const blokken = (ent, key) => (ent && ent.attributes && ent.attributes[key]) || [];
+                const st = (typeof hass !== 'undefined' && hass.states) ? hass.states : {};
+                const vandaag = blokken(entity, 'raw_today').length
+                  ? blokken(entity, 'raw_today')
+                  : blokken(st['sensor.slimhuys_zonneplan_prijzen_vandaag'], 'raw_today');
+                // very_high is door peak vervangen maar kan nog langskomen; een
+                // blok zonder (bekend) niveau valt op gemiddeld in plaats van
+                // als gat in de grafiek.
+                const BEKEND = ['very_low', 'low', 'medium', 'high', 'peak'];
+                const niveau = (l) => l === 'very_high' ? 'peak' : (BEKEND.indexOf(l) >= 0 ? l : 'medium');
                 // Ook de null-punten blijven staan: bij een gestapelde grafiek
                 // moeten alle series exact dezelfde x-waarden hebben.
-                return pts.map((o) => {
-                  if (o.p === null) return [o.x, null];
-                  const d = stats[o.dag];
-                  const spread = d.max - d.min;
-                  // vlakke dag (< 2 ct verschil): niets is echt goedkoop of duur
-                  const r = (spread < 0.02) ? 0.5 : (o.p - d.min) / spread;
-                  const band = r <= 0.33 ? 0 : (r >= 0.66 ? 2 : 1);
-                  return [o.x, band === BAND ? o.p : null];
-                });
+                return vandaag
+                  .concat(blokken(st['sensor.slimhuys_zonneplan_prijzen_morgen'], 'raw_tomorrow'))
+                  .map((e) => {
+                    const s = new Date(e.start).getTime();
+                    const t = new Date(e.end).getTime();
+                    const p = Number(e.value);
+                    // ApexCharts centreert een kolom op zijn timestamp; plotten op
+                    // het midden van [start, end) laat de balk exact zijn eigen
+                    // blok dekken in plaats van een half blok ernaast.
+                    const x = isFinite(t) ? (s + t) / 2 : s;
+                    return [x, (!isNaN(p) && niveau(e.level) === NIVEAU) ? p : null];
+                  })
+                  .filter((d) => isFinite(d[0]))
+                  .sort((a, b) => a[0] - b[0]);
         # samenvatting laagste / hoogste per dag + kleurlegenda
         #
         # Eén custom_field in plaats van twee kolommen (dagen | legenda): een
@@ -875,7 +933,9 @@ cards:
                 var morgen = extremen('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow');
                 var dagen = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 34px;font-size:12.5px">${deel('vandaag', vandaag)}${deel('morgen', morgen)}</span>`;
                 var dot = function(c, lbl){ return `<span style="display:inline-flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${lbl}</span>`; };
-                var legenda = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;font-size:11.5px;color:var(--ov-ink-52)">${dot('var(--ov-ok)','goedkoop')}${dot('var(--ov-warn)','gemiddeld')}${dot('var(--ov-bad)','duur')}</span>`;
+                // De niveaus en kleuren van slimhuys.nl: elk blok afgezet tegen
+                // het gemiddelde van gisteren t/m morgen.
+                var legenda = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;font-size:11.5px;color:var(--ov-ink-52)">${dot('#9FE1CB','zeer laag')}${dot('#5DCAA5','laag')}${dot('#FAC775','gemiddeld')}${dot('#EF9F27','hoog')}${dot('#D85A30','piek')}</span>`;
                 // space-between en niet margin-left:auto: zodra de legenda naar
                 // een eigen regel zakt, hoort hij daar links te beginnen.
                 return `<span style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 24px;width:100%">${dagen}${legenda}</span>`;
