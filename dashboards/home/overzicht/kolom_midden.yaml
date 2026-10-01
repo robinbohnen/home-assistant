@@ -927,16 +927,39 @@ cards:
                 };
                 // nowrap per dagdeel, zodat een regel hoogstens tussen "vandaag"
                 // en "morgen" breekt en niet middenin een prijs.
-                var deel = function(lbl, x){
+                // Is de dag als geheel duur? SlimHuys zet het daggemiddelde af
+                // tegen de mediaan van de afgelopen 30 dagen (dagniveau, sinds
+                // integratie v1.15.0). Laag/hoog hiernaast zeggen alleen wanneer
+                // het binnen die dag het goedkoopst is; op een dure dag is ook
+                // dat moment duur. Zelfde niveaus en kleuren als de balken.
+                var DAG = {very_low:['zeer goedkope dag','#9FE1CB'], low:['goedkope dag','#5DCAA5'],
+                           medium:['gemiddelde dag','#FAC775'], high:['dure dag','#EF9F27'],
+                           very_high:['zeer dure dag','#D85A30'], peak:['zeer dure dag','#D85A30']};
+                var dagniveau = function(eid){
+                  var s = states[eid], d = s ? DAG[s.state] : null;
+                  if(!d) return '';
+                  var gem = s.attributes ? Number(s.attributes.average_eur_per_kwh) : NaN;
+                  var med = s.attributes ? Number(s.attributes.reference_median_eur_per_kwh) : NaN;
+                  var tip = (isFinite(gem) && isFinite(med))
+                    ? ` title="gemiddeld € ${gem.toFixed(3).replace('.',',')} · mediaan 30 dagen € ${med.toFixed(3).replace('.',',')}"` : '';
+                  return `<span${tip} style="display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:11px;color:var(--ov-ink-65)"><span style="width:7px;height:7px;border-radius:50%;background:${d[1]}"></span>${d[0]}</span>`;
+                };
+                var deel = function(lbl, x, niveau){
                   var kop = `<span style="color:var(--ov-ink-45);font-size:11px;letter-spacing:0.3px">${lbl}</span>`;
                   var inhoud = x
-                    ? `${kop}${f(x.lo,'var(--ov-ok)','▼')}${f(x.hi,'var(--ov-bad)','▲')}`
+                    ? `${kop}${niveau}${f(x.lo,'var(--ov-ok)','▼')}${f(x.hi,'var(--ov-bad)','▲')}`
                     : `${kop}<span style="color:var(--ov-ink-30)">nog niet bekend</span>`;
-                  return `<span style="display:inline-flex;align-items:baseline;gap:14px;white-space:nowrap">${inhoud}</span>`;
+                  // Met het dagniveau erbij is een dag te breed voor een
+                  // telefoon; hij mag dan breken, maar alleen tussen de delen
+                  // (die zijn elk nowrap), nooit midden in een prijs.
+                  return `<span style="display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px;white-space:nowrap">${inhoud}</span>`;
                 };
                 var vandaag = extremen('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today');
                 var morgen = extremen('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow');
-                var dagen = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 34px;font-size:12.5px">${deel('vandaag', vandaag)}${deel('morgen', morgen)}</span>`;
+                var dagen = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:6px 34px;font-size:12.5px">`
+                  + deel('vandaag', vandaag, dagniveau('sensor.meterkast_slimhuys_zonneplan_dagniveau_vandaag'))
+                  + deel('morgen', morgen, dagniveau('sensor.meterkast_slimhuys_zonneplan_dagniveau_morgen'))
+                  + `</span>`;
                 var dot = function(c, lbl){ return `<span style="display:inline-flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${lbl}</span>`; };
                 // De niveaus en kleuren van slimhuys.nl: elk blok afgezet tegen
                 // de afgelopen 30 dagen.
