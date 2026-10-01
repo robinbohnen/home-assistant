@@ -28,9 +28,10 @@
 ##   sensor.slimhuys_zonneplan_huidige_prijs. Reken er niet op dat deze lijst
 ##   compleet blijft - de integratie heeft de namen al een keer veranderd.
 ##   Sinds integratie v1.14.0 heeft ook elk blok in raw_today/raw_tomorrow
-##   zo'n `level`, afgezet tegen het gemiddelde van gisteren t/m morgen (net
-##   als de kleuren op slimhuys.nl). De STROOMPRIJS-kaart, de tijdlijn en de
-##   Nest Hub kleuren daarop.
+##   zo'n `level`. Sinds 1 oktober 2026 rekent de API dat (en tariefniveau_nu)
+##   t.o.v. de afgelopen 30 dagen, net als de kleuren op slimhuys.nl; de oude
+##   indeling t.o.v. gisteren t/m morgen staat nog in `levels_relative`.
+##   De STROOMPRIJS-kaart, de tijdlijn en de Nest Hub kleuren op `level`.
 ##   De sensor hieronder ("niveau volgend uur") is bewust een DRIEDELING
 ##   (low/medium/high), want die hoort bij de mapping in
 ##   dashboards/home/dashboard.yaml, de header-pil en Voice.yaml.
@@ -81,8 +82,9 @@ stroomprijs_package:
                de driedeling low/medium/high: zeer laag en laag tellen als
                low, hoog en piek als high. Bij kwartierprijzen wordt over de
                vier blokken gemiddeld en afgerond.
-               Tot 1 oktober 2026 kwam dit uit de spreiding van één dag; dan
-               is het onderste derde altijd "goedkoop", ook op een dure dag. #}
+               Het niveau is t.o.v. de afgelopen 30 dagen. Tot 1 oktober 2026
+               kwam dit uit de spreiding van één dag; dan is het onderste derde
+               altijd "goedkoop", ook op een dure dag. #}
             {% set score = {'very_low': 0, 'low': 0, 'medium': 1, 'high': 2, 'very_high': 2, 'peak': 2} %}
             {% set kw = state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier', 'raw_today') %}
             {% set vandaag = kw if kw else (state_attr('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today') or []) %}
