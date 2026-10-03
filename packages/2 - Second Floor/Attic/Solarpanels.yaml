@@ -176,8 +176,21 @@ solar_panels_package:
           unit_of_measurement: "kWh"
           device_class: energy
           state_class: measurement
+          # EEN DAGTELLER BOVEN DE 72 KWH IS GEEN DAGTELLER (3 oktober 2026)
+          # `sensor.attic_solar_total_today` is een helper uit de UI die de
+          # dagproductie afleidt uit de totaalstand van de omvormer. Op 29
+          # september om 10:54 raakte hij zijn beginstand kwijt en gaf hij de
+          # hele totaalstand door: van 1,3 naar 21.754,5 kWh, en dat bleef zo
+          # tot de nacht van 30 september op 1 oktober. Twee dagen stond er
+          # "vandaag opgewekt · 21.7xx kWh" op het paneel.
+          # 72 kWh is 3 kW (het vermogen van deze array) maal 24 uur: daarboven
+          # kan het natuurkundig geen dagproductie zijn. De sensor gaat dan op
+          # unavailable in plaats van het getal door te geven; de som hieronder
+          # telt dan alleen de zuidwest en zet `volledig` op false.
           availability: >-
-            {{ trigger.id in ['waarde', 'dagwissel'] or is_number(states('sensor.attic_solar_total_today')) }}
+            {% set v = trigger.to_state.state if trigger.id == 'waarde'
+               else states('sensor.attic_solar_total_today') %}
+            {{ trigger.id == 'dagwissel' or (is_number(v) and v | float <= 72) }}
           state: >-
             {% if trigger.id == 'waarde' %}{{ trigger.to_state.state | float(0) | round(2) }}
             {% elif trigger.id == 'dagwissel' %}0

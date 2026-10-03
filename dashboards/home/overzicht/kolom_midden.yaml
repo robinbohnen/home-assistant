@@ -120,6 +120,9 @@ cards:
         # achtertuin (sensor heet `overkapping`), O = zolder; plafonds uit de
         # capaciteitssensoren, terugval 5/3 kW.
         #
+        # BALKEN VAN 14 PX (waren 10): van een paar meter afstand las je alleen
+        # het grote getal; de verdeling moet ook dan nog te zien zijn.
+        #
         # ACCU: EEN EIGEN REGEL, EN DAT IS EEN METER, GEEN VERDELING
         # De accu was één grijs woord onder "gaat naar" ("accu standby ·
         # 100%"). Op 3 oktober laadde hij een uur lang met 13-15 kW uit het
@@ -130,7 +133,10 @@ cards:
         # lang het huis het bij stroomuitval nog uithoudt
         # (`sensor.noodstroom_resterend`; die is `unknown` als er niets af
         # gaat, en dan staat het er niet). Anders dan de drie balken erboven
-        # is deze niet zijn eigen 100%: de lege rest is echt leeg.
+        # is deze niet zijn eigen 100%: de lege rest is echt leeg. In rust is
+        # de vulling licht en pas donker als hij laadt of ontlaadt - een volle
+        # zwarte balk voor "standby 100%" was het zwaarste element op de kaart
+        # voor het minste nieuws.
         # Het woord laadt/ontlaadt/standby komt uit `sensor.accu_status`
         # (packages/9 - Other/Battery.yaml), zodat deze kaart, de nest hub en
         # de klokdisplay hetzelfde zeggen. In "komt van"/"gaat naar" staat
@@ -235,9 +241,9 @@ cards:
                 // geen flex-rij, want die centreert button-card zelf.
                 var balk = function(delen){
                   var aan = delen.filter(function(d){ return d.w > 0; });
-                  if(!aan.length) return `<div style="height:10px;border-radius:5px;background:${LEEG}"></div>`;
+                  if(!aan.length) return `<div style="height:14px;border-radius:7px;background:${LEEG}"></div>`;
                   var kolommen = aan.map(function(d){ return `minmax(3px,${Math.max(1, Math.round(d.w))}fr)`; }).join(' ');
-                  return `<div style="display:grid;grid-template-columns:${kolommen};column-gap:2px;height:10px;border-radius:5px;overflow:hidden">`
+                  return `<div style="display:grid;grid-template-columns:${kolommen};column-gap:2px;height:14px;border-radius:7px;overflow:hidden">`
                     + aan.map(function(d){ return `<div style="background:${d.bg};opacity:${d.op || 1}"></div>`; }).join('')
                     + `</div>`;
                 };
@@ -262,7 +268,7 @@ cards:
                 // "huis · verbruik" heen - bij 12 px paste hij toevallig net.
                 var rij = function(label, delen, eigenBalk){
                   var namen = delen.filter(function(d){ return d.naam; });
-                  return `<div style="font-size:12.5px;line-height:10px;color:${GRIJS};white-space:nowrap">${label}</div>`
+                  return `<div style="font-size:12.5px;line-height:14px;color:${GRIJS};white-space:nowrap">${label}</div>`
                     + `<div style="min-width:0">${eigenBalk || balk(delen)}`
                     + (namen.length ? `<div style="font-size:13px;line-height:1.5;padding-top:3px;text-align:left;white-space:normal">${namen.map(item).join('')}</div>` : '')
                     + `</div>`;
@@ -316,12 +322,13 @@ cards:
                 if(!huisRij.length) huisRij.push({naam: stekW === null ? 'stekkers: nog geen meting' : 'geen stekker meldt zich', dof: true});
 
                 // ---------- accu ----------
-                var accuRij = [], meter = `<div style="height:10px;border-radius:5px;background:${LEEG}"></div>`;
+                var accuRij = [], meter = `<div style="height:14px;border-radius:7px;background:${LEEG}"></div>`;
                 if(soc === null) accuRij.push({naam: 'accu', waarde: '—', dof: true});
                 else {
                   var afslag = Number(((states['sensor.accu_capaciteit'] || {}).attributes || {}).afslag_procent);
-                  var vul = (!isNaN(afslag) && soc <= afslag) ? 'var(--ov-bad)' : ACCU;
-                  meter = `<div style="height:10px;border-radius:5px;background:${LEEG};overflow:hidden"><div style="width:${Math.max(0, Math.min(100, soc))}%;height:100%;border-radius:5px;background:${vul}"></div></div>`;
+                  var actief = accuMode === 'laadt' || accuMode === 'ontlaadt';
+                  var vul = (!isNaN(afslag) && soc <= afslag) ? 'var(--ov-bad)' : (actief ? ACCU : 'var(--ov-ink-30)');
+                  meter = `<div style="height:14px;border-radius:7px;background:${LEEG};overflow:hidden"><div style="width:${Math.max(0, Math.min(100, soc))}%;height:100%;border-radius:7px;background:${vul}"></div></div>`;
                   accuRij.push({bg: vul, naam: accuMode || 'lading', waarde: Math.round(soc) + '%'});
                   // De dagtellers staan in Wh (utility_meter in Battery.yaml).
                   // Kort gehouden ("+ erin / − eruit") zodat de regel op de
@@ -364,6 +371,15 @@ cards:
         # de strook 0-5-10 bij een piek van 4,9 en lag de lijn in de onderste
         # helft; afronden op hele kW (de eerste versie) gaf nog 0-5 bij data
         # rond de 3 met één piek net boven de 4.
+        #
+        # ÉÉN SCHAAL VOOR ALLEBEI. Ze tonen hetzelfde huisverbruik, en met elk
+        # een eigen bovengrens (links 3,4 kW, rechts 2,2) leek dezelfde lijn
+        # rechts anderhalf keer zo hoog. De twee `max`-functies leggen elk hun
+        # eigen piek in `window.__ovEnergieAs` en nemen de hoogste van de twee.
+        # Wie het eerst tekent kent de ander nog niet; dat trekt bij bij de
+        # volgende verversing (strook 5 s, grote grafiek 60 s).
+        # Prijs: op een zonnige dag bepaalt de zon de schaal en ligt de strook
+        # lager in beeld dan toen hij zijn eigen as had.
         # De flex-basis laat de strook op een smal scherm (telefoon, één
         # kolom) onder de grote grafiek vallen in plaats van onleesbaar
         # smal te worden.
@@ -415,7 +431,7 @@ cards:
                     show: false
                   apex_config:
                     chart:
-                      height: 180
+                      height: 205
                       toolbar:
                         show: false
                     grid:
@@ -431,7 +447,7 @@ cards:
                       show: true
                       min: 0
                       max: |
-                        EVAL:function(max) { return Math.max(1, Math.ceil(Math.round(max * 500) / 100) / 5); }
+                        EVAL:function(max) { var g = window.__ovEnergieAs = window.__ovEnergieAs || {}; g.links = max; var m = Math.max(max, g.rechts || 0); return Math.max(1, Math.ceil(Math.round(m * 500) / 100) / 5); }
                       tickAmount: 2
                       labels:
                         style:
@@ -580,7 +596,7 @@ cards:
                     show: false
                   apex_config:
                     chart:
-                      height: 180
+                      height: 205
                       toolbar:
                         show: false
                     grid:
@@ -599,7 +615,7 @@ cards:
                       # 100 W ruis een berglandschap.
                       min: 0
                       max: |
-                        EVAL:function(max) { return Math.max(1, Math.ceil(Math.round(max * 500) / 100) / 5); }
+                        EVAL:function(max) { var g = window.__ovEnergieAs = window.__ovEnergieAs || {}; g.rechts = max; var m = Math.max(max, g.links || 0); return Math.max(1, Math.ceil(Math.round(m * 500) / 100) / 5); }
                       tickAmount: 2
                       labels:
                         style:
@@ -722,6 +738,14 @@ cards:
                 var blok = function(eid){ var e = states[eid]; return (e && e.attributes && e.attributes.raw_today) || []; };
                 var kw = blok('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier');
                 var raw = kw.length ? kw : blok('sensor.slimhuys_zonneplan_prijzen_vandaag');
+                // MORGEN TELT MEE (3 oktober 2026). De tip keek alleen naar
+                // vandaag. Op een middag waarop de prijs de rest van de dag
+                // stijgt wees hij dan het lopende kwartier aan ("laagste
+                // 16:00" om 16:10), terwijl het echte dal in de grafiek
+                // eronder morgen 14:00 was. Zelfde bron voor morgen als de
+                // grafiek en de samenvatting eronder.
+                var em = states['sensor.slimhuys_zonneplan_prijzen_morgen'];
+                raw = raw.concat((em && em.attributes && em.attributes.raw_tomorrow) || []);
                 // Goedkoopste blok dat nog komt, inclusief het blok dat nu loopt.
                 var now = new Date();
                 var best = null;
@@ -733,7 +757,13 @@ cards:
                 });
                 var nuTxt = nu !== null ? '€ ' + nu.toFixed(3).replace('.',',') : '—';
                 var klok = function(d){ return ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2); };
-                var tip = best ? ` · laagste ${klok(best.d)}` : '';
+                // Loopt het goedkoopste blok nu, dan is een tijdstip geen tip
+                // maar een herhaling van "nu"; een andere dag krijgt zijn woord.
+                var tip = '';
+                if(best){
+                  if(best.d <= now) tip = ' · lager wordt het niet';
+                  else tip = ` · laagste ${best.d.getDate() !== now.getDate() ? 'morgen ' : ''}${klok(best.d)} € ${best.p.toFixed(3).replace('.',',')}`;
+                }
                 // KOSTEN VANDAAG, MET DE AFNAME ERBIJ (3 oktober 2026)
                 // Stond als losse pil onder de energiegrafieken, zonder iets
                 // om het aan af te meten. Het bedrag is afname - teruglevering
@@ -774,7 +804,7 @@ cards:
               # Was 155. Sinds het veelgebruikerspaneel onder deze kaart weg is
               # eindigde de middenkolom ruim boven de andere twee; de hoogte
               # gaat naar de grafiek waar je kwartieren in wilt vergelijken.
-              height: 240
+              height: 275
               toolbar:
                 show: false
             grid:
@@ -1102,10 +1132,10 @@ cards:
                   }
                   var lo = null, hi = null;
                   raw.forEach(function(e){
-                    var d = new Date(e.start), v = Number(e.value);
+                    var d = new Date(e.start), t = new Date(e.end), v = Number(e.value);
                     if(isNaN(d.getTime()) || isNaN(v)) return;
-                    if(lo === null || v < lo.p) lo = {p: v, d: d};
-                    if(hi === null || v > hi.p) hi = {p: v, d: d};
+                    if(lo === null || v < lo.p) lo = {p: v, d: d, t: t};
+                    if(hi === null || v > hi.p) hi = {p: v, d: d, t: t};
                   });
                   return lo === null ? null : {lo: lo, hi: hi};
                 };
@@ -1116,7 +1146,14 @@ cards:
                 // getrapt - tijd hoort bij zijn prijs (4px), laag en hoog staan
                 // los (14px), vandaag en morgen het verst uit elkaar (34px) -
                 // en een pijltje zegt wat eerst alleen de kleur zei.
+                // WAT VOORBIJ IS WORDT GRIJS. "▼ € 0,203 13:30" stond om 16:10
+                // nog groen te zijn: een dal waar je niets meer mee kunt, in de
+                // kleur van een tip. De regel hieronder leest de huidige prijs
+                // alleen om deze kaart elk kwartier opnieuw te laten tekenen -
+                // de prijslijsten zelf veranderen maar één keer per dag.
+                var tik = states['sensor.slimhuys_zonneplan_huidige_prijs'];
                 var f = function(x, col, pijl){
+                  if(x.t && !isNaN(x.t.getTime()) && x.t <= new Date()) col = 'var(--ov-ink-38)';
                   return `<span style="display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap">`
                     + `<span style="color:${col};font-size:10px;opacity:0.85">${pijl}</span>`
                     + `<span style="color:${col};font-weight:600">€ ${x.p.toFixed(3).replace('.',',')}</span>`
@@ -1160,7 +1197,25 @@ cards:
                 var dot = function(c, lbl){ return `<span style="display:inline-flex;align-items:center;gap:5px;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:${c}"></span>${lbl}</span>`; };
                 // De niveaus en kleuren van slimhuys.nl: elk blok afgezet tegen
                 // de afgelopen 30 dagen.
-                var legenda = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;font-size:11.5px;color:var(--ov-ink-52)">${dot('#9FE1CB','zeer laag')}${dot('#5DCAA5','laag')}${dot('#FAC775','gemiddeld')}${dot('#EF9F27','hoog')}${dot('#D85A30','piek')}</span>`;
+                //
+                // ALLEEN WAT ER IN DE GRAFIEK STAAT. Er stonden altijd vijf
+                // stippen, ook als er maar drie kleuren te zien waren. Zelfde
+                // venster als de grafiek (3 uur terug) en dezelfde vertaling
+                // van niveaus als de data_generator daar.
+                var NIVEAUS = [['very_low','#9FE1CB','zeer laag'], ['low','#5DCAA5','laag'], ['medium','#FAC775','gemiddeld'],
+                               ['high','#EF9F27','hoog'], ['peak','#D85A30','piek']];
+                var kwv = blok('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier', 'raw_today');
+                var alle = (kwv.length ? kwv : blok('sensor.slimhuys_zonneplan_prijzen_vandaag', 'raw_today'))
+                  .concat(blok('sensor.slimhuys_zonneplan_prijzen_morgen', 'raw_tomorrow'));
+                var vanaf = Date.now() - 3 * 3600000, aanwezig = {};
+                alle.forEach(function(e){
+                  if(new Date(e.end).getTime() <= vanaf) return;
+                  var l = e.level === 'very_high' ? 'peak' : e.level;
+                  aanwezig[NIVEAUS.some(function(n){ return n[0] === l; }) ? l : 'medium'] = true;
+                });
+                var stippen = NIVEAUS.filter(function(n){ return aanwezig[n[0]]; });
+                if(!stippen.length) stippen = NIVEAUS;
+                var legenda = `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;font-size:11.5px;color:var(--ov-ink-52)">${stippen.map(function(n){ return dot(n[1], n[2]); }).join('')}</span>`;
                 // space-between en niet margin-left:auto: zodra de legenda naar
                 // een eigen regel zakt, hoort hij daar links te beginnen.
                 return `<span style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 24px;width:100%">${dagen}${legenda}</span>`;
