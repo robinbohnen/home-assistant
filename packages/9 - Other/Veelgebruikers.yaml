@@ -27,7 +27,9 @@
 ## `top` en de state: de balk "in huis" op de energiekaart
 ## (dashboards/home/overzicht/kolom_midden.yaml) en de rijen per stekker in de
 ## popup #ov-energie (dashboards/home/overzicht.yaml). Sinds 3 oktober 2026
-## schalen beide op het huisverbruik in plaats van op de zwaarste stekker.
+## schalen beide op het huisverbruik in plaats van op de zwaarste stekker, en
+## lezen ze `sensor.veelgebruikers_gemiddeld` (tweede sensor hieronder, zelfde
+## lijst over ~2 minuten uitgesmeerd) met deze sensor als terugval.
 ##
 ## De state is het totaal van álle stekkers hieronder, niet alleen de top vijf:
 ## zo is het een bruikbare grafiek in more-info ("wat trekt het klein spul bij
@@ -176,6 +178,38 @@ veelgebruikers_package:
                 {% endif %}
               {% endfor %}
               {{ (ns.l | sort(attribute='watt', reverse=true) | list | to_json) | from_json }}
+        - variables:
+            # DEZELFDE LIJST, MAAR UITGESMEERD OVER ~2 MINUTEN (3 oktober 2026)
+            # Het huisgetal op de energiekaart is een gemiddelde over 120 s
+            # (`sensor.huis_verbruik_gemiddeld`, Electricity.yaml). De balk
+            # "in huis" zette daar de stekkers van dít moment tegenover, en dat
+            # klopte niet zodra iets pulseert: het koffiezetapparaat trekt
+            # 1,36 kW gedurende 5-15 s en daarna een minuut niets (gemiddeld
+            # 200-400 W). Op het paneel stond toen 1751 W aan stekkers onder
+            # een huis van 998 W, en de balk sprong elke paar seconden om.
+            #
+            # Per stekker een voortschrijdend gemiddelde: nieuw = oud + a *
+            # (nu - oud), met a = 0,08 per ronde van 5 s. Dat is een
+            # tijdconstante van ~60 s en loopt daarmee even ver achter als een
+            # venster van 120 s (allebei gemiddeld een minuut). Een venster
+            # zelf zou 24 metingen per stekker moeten onthouden; dit maar één.
+            #
+            # Het geheugen is het attribuut `ema` van de sensor hieronder,
+            # gelezen met `state_attr` omdat `this` in dit actieblok niet
+            # bestaat. Bestaat dat attribuut nog niet (eerste ronde na het
+            # aanmaken), dan begint elke stekker op zijn huidige waarde. Daarna
+            # telt een stekker die er niet in staat als 0: `ema` bewaart alleen
+            # wat minstens een halve watt doet, anders gaan er elke 5 s 45
+            # regels over de lijn waarvan de helft nul is.
+            gemiddeld: >-
+              {% set vorig = state_attr('sensor.veelgebruikers_gemiddeld', 'ema') %}
+              {% set bekend = vorig is mapping %}
+              {% set ns = namespace(l=[]) %}
+              {% for r in gemeten %}
+                {% set oud = vorig.get(r.id, 0) | float(0) if bekend else r.watt %}
+                {% set ns.l = ns.l + [{'naam': r.naam, 'watt': (oud + 0.08 * (r.watt - oud)) | round(1), 'id': r.id}] %}
+              {% endfor %}
+              {{ (ns.l | sort(attribute='watt', reverse=true) | list | to_json) | from_json }}
       sensor:
         - name: Veelgebruikers
           unique_id: veelgebruikers
@@ -196,6 +230,33 @@ veelgebruikers_package:
             actief: "{{ gemeten | selectattr('watt', '>', 0) | list | count }}"
             meldend: "{{ gemeten | count }}"
             stekkers: "{{ stekkers | count }}"
+
+        # Wat de twee kaarten lezen: zelfde vorm als de sensor hierboven (state
+        # = som, `top` = zes zwaarste), maar dan uit `gemiddeld`. De ruwe
+        # sensor blijft bestaan voor de grafiek in more-info; deze staat op de
+        # exclude-lijst van de recorder (configuration.yaml), want hij
+        # verandert elke 5 s en alleen het nu telt.
+        - name: Veelgebruikers gemiddeld
+          unique_id: veelgebruikers_gemiddeld
+          default_entity_id: sensor.veelgebruikers_gemiddeld
+          icon: mdi:power-plug-outline
+          device_class: power
+          state_class: measurement
+          unit_of_measurement: W
+          state: "{{ gemiddeld | map(attribute='watt') | sum | round(0) | int }}"
+          attributes:
+            top: >-
+              {% set ns = namespace(l=[]) %}
+              {% for r in gemiddeld[:6] %}
+                {% set ns.l = ns.l + [{'naam': r.naam, 'watt': r.watt | round(0) | int, 'id': r.id}] %}
+              {% endfor %}
+              {{ ns.l }}
+            ema: >-
+              {% set ns = namespace(d={}) %}
+              {% for r in gemiddeld if r.watt >= 0.5 %}
+                {% set ns.d = dict(ns.d, **{r.id: r.watt}) %}
+              {% endfor %}
+              {{ ns.d }}
 
     # WARMTEPOMP: VAN ENERGIETELLER NAAR VERMOGEN
     # myVAILLANT levert voor de aroTHERM plus geen vermogen, alleen dagtellers

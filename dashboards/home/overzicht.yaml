@@ -557,15 +557,20 @@ cards:
           # GESCHAALD OP HET HUIS, NIET OP DE ZWAARSTE
           # De balkjes schaalden op `top[0]`: een koelkast van 89 W vulde dan
           # de hele breedte en zei niets over hoeveel van het verbruik hij was.
-          # Nu is de volle breedte wat het huis trekt (het minuutgemiddelde,
-          # zelfde getal als op de energiekaart), dus een balk is een aandeel.
-          # Loopt de stekkersom even voor op dat gemiddelde, dan is de som de
-          # schaal en blijft "niet gemeten" op 0.
-          # Tik erop voor de grafiek van alle stekkers bij elkaar.
+          # Nu is de volle breedte wat het huis trekt (het gemiddelde over
+          # twee minuten, zelfde getal als op de energiekaart), dus een balk is
+          # een aandeel. De stekkers komen om dezelfde reden uit
+          # `sensor.veelgebruikers_gemiddeld`: een pulserend koffiezetapparaat
+          # stond anders met 1,36 kW boven een huis van 1 kW. Loopt de
+          # stekkersom toch even voor, dan is de som de schaal en blijft "niet
+          # gemeten" op 0.
+          # De entity blijft de ruwe sensor: tik erop voor de grafiek van alle
+          # stekkers bij elkaar (de gemiddelde heeft geen historie).
           - type: custom:button-card
             entity: sensor.veelgebruikers
             triggers_update:
               - sensor.huis_verbruik_gemiddeld
+              - sensor.veelgebruikers_gemiddeld
             show_icon: false
             show_name: false
             show_state: false
@@ -594,8 +599,10 @@ cards:
                       <span style="text-align:left;font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">VEELGEBRUIKERS</span>
                       <span style="text-align:right;font-size:11.5px;color:var(--ov-ink-45);white-space:nowrap">${rechts}</span></div>`;
                   };
-                  var top = (entity && entity.attributes && entity.attributes.top) || [];
-                  var stekW = (entity && !isNaN(Number(entity.state))) ? Number(entity.state) : null;
+                  var vg = states['sensor.veelgebruikers_gemiddeld'];
+                  if(!vg || isNaN(Number(vg.state))) vg = entity;
+                  var top = (vg && vg.attributes && vg.attributes.top) || [];
+                  var stekW = (vg && !isNaN(Number(vg.state))) ? Number(vg.state) : null;
                   if(!top.length || stekW === null){
                     // Twee heel verschillende oorzaken, dus twee teksten: staat de
                     // sensor zelf op unknown/unavailable dan is er iets mis met de

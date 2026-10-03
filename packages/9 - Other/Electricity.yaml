@@ -1,6 +1,6 @@
 electricity_package:
 
-  # HET HUISGETAL OP HET PANEEL: EEN MINUUT GEMIDDELD (3 oktober 2026)
+  # HET HUISGETAL OP HET PANEEL: TWEE MINUTEN GEMIDDELD (3 oktober 2026)
   # `sensor.huis_verbruik` hieronder telt om de 5 s drie bronnen op die niet
   # gelijk lopen: de P1 komt ~16 s te laat binnen en de accu meldt zich om de
   # ~11 s. Verandert de last rustig, dan merk je daar niets van. Op 3 oktober
@@ -10,9 +10,15 @@ electricity_package:
   #
   # Nagerekend op dat kwartier: de accuwaarde in de tijd verschuiven helpt
   # niet (spreiding 1270 W zonder, 1036 W bij de beste verschuiving - de accu
-  # wordt te traag bemonsterd voor een pendel van 50 s). Middelen over 60 s
-  # wel: spreiding 524 W, gelijk aan het rustige kwartier ervoor (495 W), en
-  # nooit onder de 393 W.
+  # wordt te traag bemonsterd voor een pendel van 50 s). Middelen wel.
+  #
+  # 120 S EN NIET 60: het venster moet een hele pendelperiode dekken. De accu
+  # wisselt om de ~50 s van richting, dus een periode is ~100 s. Met 60 s (de
+  # eerste versie, een uur live geweest) bleef er over een halfuur pendelen
+  # nog ~500 W spreiding over en stond er 998 W en een minuut later 1406 W op
+  # het paneel; met 120 s ~370 W (rustig halfuur: 280 resp. 220 W). Prijs:
+  # een waterkoker zit pas na twee minuten volledig in het getal - de
+  # live-strook is de plek om die eerder te zien.
   #
   # Tijdgewogen (`average_step`), zelfde keuze en reden als de noodstroom-
   # gemiddelden in Battery.yaml. Alleen het grote getal en de balken op de
@@ -25,13 +31,13 @@ electricity_package:
       unique_id: huis_verbruik_gemiddeld
       entity_id: sensor.huis_verbruik
       state_characteristic: average_step
-      # Om de vijf seconden een meting, dus ~12 per minuut; ruim erboven zodat
+      # Om de vijf seconden een meting, dus ~24 per venster; ruim erboven zodat
       # het venster door de tijd wordt begrensd en niet door de buffer.
-      sampling_size: 50
+      sampling_size: 60
       max_age:
-        seconds: 60
+        seconds: 120
       # Zonder deze regel valt het gemiddelde op `unknown` zodra het verbruik
-      # een minuut lang precies gelijk blijft.
+      # twee minuten lang precies gelijk blijft.
       keep_last_sample: true
       precision: 3
 
@@ -80,7 +86,7 @@ electricity_package:
     #
     # Dit is sinds 3 oktober 2026 de ENIGE plek waar die som staat: de
     # energiekaart op het Overzicht (dashboards/home/overzicht/kolom_midden.yaml)
-    # rekende hem zelf nog eens uit en leest nu het minuutgemiddelde hierboven.
+    # rekende hem zelf nog eens uit en leest nu het gemiddelde hierboven.
     #
     # `sensor.accu_vermogen` EN NIET DE OMVORMER ZELF (20 september 2026). Hier
     # stond de Marstek-sensor; die accu gaat eruit en de Deye komt ervoor in de

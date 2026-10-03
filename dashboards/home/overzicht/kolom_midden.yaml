@@ -69,16 +69,17 @@ cards:
         # en kostten 106 px voor drie streepjes. In een balk is de lengte het
         # aandeel: je ziet de verdeling zonder voortekens of richting te lezen.
         #
-        # HET HUISGETAL KOMT UIT DE SENSOR EN IS EEN MINUUTGEMIDDELDE
+        # HET HUISGETAL KOMT UIT DE SENSOR EN IS EEN GEMIDDELDE OVER 2 MINUTEN
         # De kaart rekende net + zon - accu zelf nog eens uit, op het moment
         # van tekenen. Op 3 oktober stond er daardoor 0 W terwijl het huis
         # ~1,5 kW trok: de accu pendelde elke ~50 s tussen laden en ontladen,
         # meldt zich om de ~11 s, en de P1 komt 16 s te laat binnen - elke
         # losse som combineert dan waarden van verschillende momenten (2372
         # zon - 1662 terug - 963 accu = -253, afgekapt op 0). Nu leest de
-        # kaart `sensor.huis_verbruik_gemiddeld` (Electricity.yaml, 60 s), met
-        # `sensor.huis_verbruik` als terugval zolang die nog niet bestaat.
-        # Prijs: een waterkoker staat na ~30 s in het getal in plaats van na 5.
+        # kaart `sensor.huis_verbruik_gemiddeld` (Electricity.yaml, 120 s -
+        # zie daar waarom 60 s te kort bleek), met `sensor.huis_verbruik` als
+        # terugval zolang die nog niet bestaat. Prijs: een waterkoker zit pas
+        # na twee minuten volledig in het getal; de live-strook is sneller.
         #
         # ELKE BALK IS ZIJN EIGEN 100%
         # Zon, net en accu zijn momentopnames en het huis is dat gemiddelde;
@@ -97,12 +98,19 @@ cards:
         # IN HUIS: DE STEKKERS ALS DEEL VAN HET HUISGETAL
         # Verving het losse VEELGEBRUIKERS-paneel, waar de balkjes schaalden
         # op de zwaarste van het moment - een koelkast van 89 W vulde de hele
-        # breedte. Hier is de balk het huisverbruik: de zwaarste stekkers uit
-        # `sensor.veelgebruikers` (hoogstens vijf, en alleen wie minstens 1,5%
-        # van de balk is), dan "andere stekkers" (de rest van die lijst) en
-        # "niet gemeten" (huis min alle stekkers: kookplaat, verlichting, alles
-        # zonder stekker). De blauwtint loopt af met de rangorde; namen in
-        # dezelfde volgorde eronder. De rijen per stekker staan in #ov-energie.
+        # breedte. Hier is de balk het huisverbruik: de zwaarste stekkers
+        # (hoogstens vijf, en alleen wie minstens 1,5% van de balk is), dan
+        # "andere stekkers" (de rest van die lijst) en "niet gemeten" (huis
+        # min alle stekkers: kookplaat, verlichting, alles zonder stekker). De
+        # blauwtint loopt af met de rangorde; namen in dezelfde volgorde
+        # eronder. De rijen per stekker staan in #ov-energie.
+        #
+        # De stekkers komen uit `sensor.veelgebruikers_gemiddeld` (packages/
+        # 9 - Other/Veelgebruikers.yaml) en niet uit de ruwe sensor: een
+        # gemiddeld huis naast stekkers van dít moment telde niet op. Het
+        # koffiezetapparaat pulseert 1,36 kW voor een paar seconden, en dan
+        # stond er 1751 W aan stekkers onder een huis van 998 W. De ruwe
+        # sensor is de terugval zolang de gemiddelde nog niet bestaat.
         #
         # PER SET, NIET SAMEN (ZW/O-percentages, overgenomen van de oude
         # productietegel): één percentage over beide omvormers haalt nooit
@@ -117,6 +125,10 @@ cards:
         # hetzelfde woord gebruiken. In rust heeft de accu geen segment, maar
         # de lading blijft wel in de regel onder "gaat naar" staan.
         #
+        # HET HUIS STAAT NIET IN DIE REGEL: het blauwe segment is het grote
+        # getal rechts (het huis-icoon daar draagt dezelfde kleur). "huis
+        # 998 W" stond er anders twee keer, op een handbreedte van elkaar.
+        #
         # button-card rendert alleen opnieuw als zijn entity verandert; de
         # triggers_update-lijst dekt de andere bronnen. De entity is bewust
         # niet meer de P1 (~2 meldingen per seconde, dus ook zo vaak tekenen)
@@ -130,6 +142,7 @@ cards:
             - sensor.accu_lading
             - sensor.accu_status
             - sensor.veelgebruikers
+            - sensor.veelgebruikers_gemiddeld
           show_icon: false
           show_name: false
           show_state: false
@@ -223,10 +236,14 @@ cards:
                     + (d.waarde ? ` <span style="font-weight:600;color:${d.dof ? GRIJS : INKT}">${d.waarde}</span>` : '')
                     + (d.extra || '') + `</span>`;
                 };
+                // Een deel zonder naam krijgt wel een segment maar geen regel
+                // eronder (het huis: dat is het grote getal rechts).
                 var rij = function(label, delen){
+                  var namen = delen.filter(function(d){ return d.naam; });
                   return `<div style="font-size:11.5px;line-height:10px;color:${GRIJS};white-space:nowrap">${label}</div>`
                     + `<div style="min-width:0">${balk(delen)}`
-                    + `<div style="font-size:12px;line-height:1.5;padding-top:3px;text-align:left">${delen.map(item).join('')}</div></div>`;
+                    + (namen.length ? `<div style="font-size:12px;line-height:1.5;padding-top:3px;text-align:left">${namen.map(item).join('')}</div>` : '')
+                    + `</div>`;
                 };
 
                 // ---------- komt van / gaat naar ----------
@@ -249,14 +266,15 @@ cards:
                 else if(nettoW > 0) van.push(netDeel);
 
                 if(huisW === null) naar.push({naam: 'huis', waarde: '—', dof: true});
-                else naar.push({bg: HUIS, w: huisW, naam: 'huis', waarde: vtekst(huisW)});
+                else naar.push({bg: HUIS, w: huisW});
                 if(accuMode === 'laadt') naar.push(accuDeel);
                 else if(accuMode === 'standby') naar.push({naam: 'accu standby', extra: socTxt, dof: true});
                 else if(accuW === null) naar.push({naam: 'accu', waarde: '—', dof: true});
                 if(nettoW !== null && nettoW < 0) naar.push(netDeel);
 
                 // ---------- in huis ----------
-                var vg = states['sensor.veelgebruikers'];
+                var vg = states['sensor.veelgebruikers_gemiddeld'];
+                if(!vg || isNaN(Number(vg.state))) vg = states['sensor.veelgebruikers'];
                 var top = (vg && vg.attributes && vg.attributes.top) || [];
                 var stekW = (vg && !isNaN(Number(vg.state))) ? Number(vg.state) : null;
                 var huisRij = [];
@@ -470,12 +488,19 @@ cards:
             # strook toont `sensor.huis_verbruik` (Electricity.yaml, zelfde
             # optelsom net + zon - accu, gesampled op 5 s) over het laatste
             # halfuur, dus een waterkoker is binnen een paar seconden
-            # zichtbaar. Bewust de ruwe sensor en niet het minuutgemiddelde
-            # van het huisgetal hierboven: pendelt de accu, dan zie je dat
-            # hier als een kam, en dat is dan ook wat er gebeurt. Eén serie,
-            # dus geen legenda: de kopregel benoemt hem, met de blauwe stip
-            # als koppeling naar de lijnkleur (blauw = verbruik, overal op
-            # deze kaart).
+            # zichtbaar. Eén serie, dus geen legenda: de kopregel benoemt
+            # hem, met de blauwe stip als koppeling naar de lijnkleur (blauw
+            # = verbruik, overal op deze kaart).
+            #
+            # PER 30 S GEMIDDELD (3 oktober 2026). De strook tekende elke
+            # sample van 5 s. Zolang de accu pendelt (die middag ruim een
+            # halfuur aan één stuk) is elke losse sample een som van waarden
+            # van verschillende momenten en werd de strook een kam van 0 tot
+            # 5 kW. Blokjes van 30 s halveren die ruis (spreiding 990 -> 540 W
+            # over dat halfuur) en een waterkoker staat er nog steeds binnen
+            # een halve minuut. Rustig wordt hij er tijdens het pendelen niet
+            # van; daarvoor is het venster van het huisgetal (120 s) nodig, en
+            # dan is dit geen live-strook meer. Robin wil de strook houden.
             - type: vertical-stack
               cards:
                 - type: custom:button-card
@@ -570,6 +595,9 @@ cards:
                       transform: >-
                         var v = Number(x);
                         return (x === null || x === undefined || isNaN(v)) ? null : v;
+                      group_by:
+                        duration: 30s
+                        func: avg
         # chips row
         - type: horizontal-stack
           card_mod:
@@ -717,7 +745,17 @@ cards:
               show: false
             yaxis:
               show: true
-              tickAmount: 3
+              # De as liep tot € 0,60 bij een hoogste prijs van € 0,43: een
+              # derde van de hoogte leeg, en de verschillen tussen de
+              # kwartieren navenant platter. Nu de hoogste prijs, naar boven
+              # afgerond op 2 cent - een even aantal centen, zodat de ene
+              # tussenstreep ook op hele centen valt. De vloer blijft 0 en
+              # zakt alleen mee als een prijs negatief is.
+              min: |
+                EVAL:function(min) { return Math.min(0, Math.floor(min * 50) / 50); }
+              max: |
+                EVAL:function(max) { return Math.ceil(max * 50) / 50; }
+              tickAmount: 2
               labels:
                 style:
                   colors: "var(--ov-ink-50)"
