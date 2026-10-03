@@ -1,4 +1,40 @@
 electricity_package:
+
+  # HET HUISGETAL OP HET PANEEL: EEN MINUUT GEMIDDELD (3 oktober 2026)
+  # `sensor.huis_verbruik` hieronder telt om de 5 s drie bronnen op die niet
+  # gelijk lopen: de P1 komt ~16 s te laat binnen en de accu meldt zich om de
+  # ~11 s. Verandert de last rustig, dan merk je daar niets van. Op 3 oktober
+  # pendelde de accu (op 100%) elke ~50 s tussen -1,4 en +3,0 kW en toen was
+  # elke losse som onzin: het paneel toonde 0 W terwijl het huis ~1,5 kW trok,
+  # en de live-strook werd een kam van 0 tot 5 kW.
+  #
+  # Nagerekend op dat kwartier: de accuwaarde in de tijd verschuiven helpt
+  # niet (spreiding 1270 W zonder, 1036 W bij de beste verschuiving - de accu
+  # wordt te traag bemonsterd voor een pendel van 50 s). Middelen over 60 s
+  # wel: spreiding 524 W, gelijk aan het rustige kwartier ervoor (495 W), en
+  # nooit onder de 393 W.
+  #
+  # Tijdgewogen (`average_step`), zelfde keuze en reden als de noodstroom-
+  # gemiddelden in Battery.yaml. Alleen het grote getal en de balken op de
+  # energiekaart lezen dit; de live-strook, de klokken en de noodstroom-
+  # schatting blijven op de ruwe sensor. Staat op de exclude-lijst van de
+  # recorder (configuration.yaml): alleen het nu telt.
+  sensor:
+    - platform: statistics
+      name: "Huis verbruik gemiddeld"
+      unique_id: huis_verbruik_gemiddeld
+      entity_id: sensor.huis_verbruik
+      state_characteristic: average_step
+      # Om de vijf seconden een meting, dus ~12 per minuut; ruim erboven zodat
+      # het venster door de tijd wordt begrensd en niet door de buffer.
+      sampling_size: 50
+      max_age:
+        seconds: 60
+      # Zonder deze regel valt het gemiddelde op `unknown` zodra het verbruik
+      # een minuut lang precies gelijk blijft.
+      keep_last_sample: true
+      precision: 3
+
   template:
     - switch:
         - name: Live Energieverbruik Totaal Negatief
@@ -37,13 +73,14 @@ electricity_package:
           device_class: "power"
           state_class: "measurement"
     # WAT HET HUIS ZELF TREKT - NIET DE METERSTAND
-    # Zelfde optelsom als de energieflow op het Overzicht-paneel (dashboards/
-    # home/overzicht/kolom_midden.yaml, custom_field `flow` - wijzigt de formule
-    # daar, dan ook hier): net + zon, min wat de accu wegzet. De accu telt
-    # positief bij laden, dus aftrekken; valt de accusensor langer dan twee
-    # minuten weg dan rekenen we met 0, net als de flow-kaart (korter: zie de
-    # state hieronder). Onder nul komt in de praktijk alleen
-    # meetruis voor, dus dat wordt op 0 afgekapt.
+    # Net + zon, min wat de accu wegzet. De accu telt positief bij laden, dus
+    # aftrekken; valt de accusensor langer dan twee minuten weg dan rekenen we
+    # met 0 (korter: zie de state hieronder). Onder nul komt alleen voor als
+    # de bronnen niet gelijk lopen, dus dat wordt op 0 afgekapt.
+    #
+    # Dit is sinds 3 oktober 2026 de ENIGE plek waar die som staat: de
+    # energiekaart op het Overzicht (dashboards/home/overzicht/kolom_midden.yaml)
+    # rekende hem zelf nog eens uit en leest nu het minuutgemiddelde hierboven.
     #
     # `sensor.accu_vermogen` EN NIET DE OMVORMER ZELF (20 september 2026). Hier
     # stond de Marstek-sensor; die accu gaat eruit en de Deye komt ervoor in de

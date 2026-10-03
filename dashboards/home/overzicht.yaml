@@ -546,6 +546,87 @@ cards:
                 group_by:
                   duration: 5m
                   func: avg
+          # VEELGEBRUIKERS: DE RIJEN PER STEKKER (3 oktober 2026)
+          # Stond als eigen paneel in de middenkolom; daar is het nu één balk
+          # ("in huis") op de energiekaart en staat de lijst hier. Zes rijen
+          # uit `sensor.veelgebruikers` (packages/9 - Other/Veelgebruikers.yaml
+          # - expliciete stekkerlijst, zie de kop daar voor waarom geen
+          # auto-entities), dan wat de overige stekkers samen doen en wat het
+          # huis trekt zonder dat een stekker het meet.
+          #
+          # GESCHAALD OP HET HUIS, NIET OP DE ZWAARSTE
+          # De balkjes schaalden op `top[0]`: een koelkast van 89 W vulde dan
+          # de hele breedte en zei niets over hoeveel van het verbruik hij was.
+          # Nu is de volle breedte wat het huis trekt (het minuutgemiddelde,
+          # zelfde getal als op de energiekaart), dus een balk is een aandeel.
+          # Loopt de stekkersom even voor op dat gemiddelde, dan is de som de
+          # schaal en blijft "niet gemeten" op 0.
+          # Tik erop voor de grafiek van alle stekkers bij elkaar.
+          - type: custom:button-card
+            entity: sensor.veelgebruikers
+            triggers_update:
+              - sensor.huis_verbruik_gemiddeld
+            show_icon: false
+            show_name: false
+            show_state: false
+            tap_action:
+              action: more-info
+            styles:
+              card:
+                - background: none
+                - border: none
+                - box-shadow: none
+                - padding: 6px 6px 2px 6px
+              grid:
+                - grid-template-areas: '"rijen"'
+              custom_fields:
+                # Zonder deze breedte krijgt het veld de breedte van zijn inhoud
+                # en lopen de balken niet door tot de rand.
+                rijen:
+                  - width: 100%
+            custom_fields:
+              rijen: |
+                [[[
+                  var num = function(id){ var s = states[id];
+                    return (s && !isNaN(Number(s.state))) ? Number(s.state) : null; };
+                  var kop = function(rechts){
+                    return `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:8px;align-items:baseline;padding:0 2px 6px 2px">
+                      <span style="text-align:left;font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">VEELGEBRUIKERS</span>
+                      <span style="text-align:right;font-size:11.5px;color:var(--ov-ink-45);white-space:nowrap">${rechts}</span></div>`;
+                  };
+                  var top = (entity && entity.attributes && entity.attributes.top) || [];
+                  var stekW = (entity && !isNaN(Number(entity.state))) ? Number(entity.state) : null;
+                  if(!top.length || stekW === null){
+                    // Twee heel verschillende oorzaken, dus twee teksten: staat de
+                    // sensor zelf op unknown/unavailable dan is er iets mis met de
+                    // sensor (dat was op 18 augustus 2026 een sjabloonfout, zie de
+                    // kop van packages/9 - Other/Veelgebruikers.yaml); is de lijst
+                    // leeg dan meldt geen enkele stekker zich.
+                    return kop('') + `<div style="padding:7px 2px;font-size:13.5px;text-align:left;color:var(--ov-ink-45)">${stekW === null ? 'nog geen meting' : 'geen stekker meldt zich'}</div>`;
+                  }
+                  var huisKw = num('sensor.huis_verbruik_gemiddeld');
+                  if(huisKw === null) huisKw = num('sensor.huis_verbruik');
+                  var huisW = huisKw === null ? null : Math.max(0, huisKw * 1000);
+                  var schaal = Math.max(10, stekW, huisW === null ? 0 : huisW);
+                  var benoemd = top.reduce(function(t, r){ return t + r.watt; }, 0);
+                  var rijen = top.map(function(r){ return {naam: r.naam, watt: r.watt, kleur: 'var(--ov-info-strong)'}; });
+                  rijen.push({naam: 'Andere stekkers', watt: Math.max(0, stekW - benoemd), kleur: 'var(--ov-info-strong)', rest: true});
+                  if(huisW !== null) rijen.push({naam: 'Niet gemeten', watt: Math.round(Math.max(0, huisW - stekW)), kleur: 'var(--ov-ink-35)', rest: true});
+                  var w = function(v){ return v < 10000 ? Math.round(v) + ' W' : (v / 1000).toFixed(1).replace('.',',') + ' kW'; };
+                  return kop(huisW === null ? '' : `aandeel van de ${w(huisW)} die het huis trekt`) + rijen.map(function(r){
+                    var pct = r.watt ? Math.max(1, Math.min(100, r.watt / schaal * 100)) : 0;
+                    // Een stekker die niets trekt hoort wel te zien te zijn maar
+                    // mag niet even hard schreeuwen als een koffiemachine.
+                    var uit = !r.watt;
+                    // 205px is de gewenste naambreedte, geen harde eis: op een
+                    // smal scherm mag de naam inleveren en afkappen in plaats
+                    // van de balk en het wattage de kaart uit te duwen.
+                    return `<div style="display:grid;grid-template-columns:minmax(0,205px) minmax(0,1fr) 72px;column-gap:14px;align-items:center;padding:7px 2px">
+                      <span style="text-align:left;font-size:14px;${r.rest ? 'font-style:italic;' : ''}color:var(--ov-ink-${uit ? '50' : '85'});white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.naam}</span>
+                      <div style="width:100%;height:6px;background:var(--ov-ink-7);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${r.kleur};border-radius:3px"></div></div>
+                      <span style="font-size:14px;font-weight:600;color:${uit ? 'var(--ov-ink-45)' : 'var(--primary-text-color)'};text-align:right">${w(r.watt)}</span></div>`;
+                  }).join('');
+                ]]]
           - type: grid
             columns: 2
             square: false
@@ -556,10 +637,13 @@ cards:
                 secondary: "{{ (states('sensor.zon_opgewekt_vandaag') ~ ' kWh') if has_value('sensor.zon_opgewekt_vandaag') else '—' }}"
                 icon: mdi:solar-power-variant
                 icon_color: amber
+              # De rest van vandaag en niet het dagtotaal: "verwacht 13,5" naast
+              # "opgewekt 19,6" las als een tegenspraak. Zelfde keuze als de
+              # pil op de energiekaart (kolom_midden.yaml).
               - type: custom:mushroom-template-card
-                entity: sensor.forecast_solar_production_today
-                primary: Verwacht
-                secondary: "{{ (states('sensor.forecast_solar_production_today') ~ ' kWh') if has_value('sensor.forecast_solar_production_today') else '—' }}"
+                entity: sensor.forecast_solar_production_today_remaining
+                primary: Nog verwacht vandaag
+                secondary: "{{ (states('sensor.forecast_solar_production_today_remaining') | float(0) | round(1) ~ ' kWh') if has_value('sensor.forecast_solar_production_today_remaining') else '—' }}"
                 icon: mdi:weather-sunny
                 icon_color: amber
               - type: custom:mushroom-template-card

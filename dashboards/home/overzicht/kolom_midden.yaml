@@ -1,4 +1,4 @@
-# Middenkolom: energie nu, stroomprijs, veelgebruikers.
+# Middenkolom: energie nu (met de veelgebruikers als deel van het huis) en stroomprijs.
 type: vertical-stack
 card_mod:
   style: |
@@ -58,31 +58,51 @@ cards:
                 }
                 return `<span style="display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:${col}"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span>${txt}</span>`;
               ]]]
-        # Energiestroom: zon, net en accu links, het huis rechts, met
-        # geanimeerde lijnen die laten zien wat er nú loopt en welke kant op.
-        # Verving op 2026-08-16 de rij van vier losse getallen; alle vier de
-        # waarden staan er nog (zon/net/accu links, verbruik bij het huis),
-        # maar de richting hoef je niet meer uit voortekens af te leiden.
+        # Energiebalans: twee gestapelde balken (waar de stroom vandaan komt
+        # en waar hij heen gaat), een derde die het huisdeel uitsplitst naar
+        # de stekkers die nu het meest trekken, en rechts het huisgetal.
         #
-        # VASTE TEKST, REKBARE LIJNEN
-        # Eerste versie was één SVG met de tekst erin; die schaalde alles mee
-        # met de kolombreedte en op het wandpaneel werden de cijfers dan
-        # groter dan de rest van het paneel ("verhoudingen zoek", Robin
-        # 16-08-2026). Nu is het een grid van drie kolommen: tekst links en
-        # rechts in gewone pixels (zelfde maten als de andere panelen), en
-        # alleen het lijnenveld ertussen is SVG met preserveAspectRatio=none -
-        # dat mag uitrekken, want het bevat niets dan de drie paden.
-        # vector-effect=non-scaling-stroke houdt de lijndikte daarbij op 2px.
-        # De dash-animatie is SMIL (<animate>), geen CSS: die werkt ook binnen
-        # de shadow-DOM van button-card zonder <style>-tag.
+        # WAAROM GEEN STROOMLIJNEN MEER (3 oktober 2026)
+        # Hier stond sinds 16-08 een flow met drie geanimeerde lijnen van
+        # zon/net/accu naar het huis. Die liepen altijd naar het huis toe, ook
+        # op een middag waarop de zon voor twee derde naar net en accu ging,
+        # en kostten 106 px voor drie streepjes. In een balk is de lengte het
+        # aandeel: je ziet de verdeling zonder voortekens of richting te lezen.
         #
-        # KLEUR VOLGT DE BRON, RICHTING VOLGT DE ANIMATIE
-        # zon groen, net blauw (de verbruikskleur van de grafiek eronder),
-        # accu wit. Bij teruglevering blijft de netlijn dus blauw en loopt de
-        # animatie naar het net toe; alleen het getal kleurt groen, net als op
-        # de oude tegel. Gecontroleerd met de dataviz-validator: CVD- en
-        # normaalzicht-afstanden en contrast op deze achtergrond zijn ruim
-        # voldoende, en elke lijn heeft zijn eigen tekstlabel.
+        # HET HUISGETAL KOMT UIT DE SENSOR EN IS EEN MINUUTGEMIDDELDE
+        # De kaart rekende net + zon - accu zelf nog eens uit, op het moment
+        # van tekenen. Op 3 oktober stond er daardoor 0 W terwijl het huis
+        # ~1,5 kW trok: de accu pendelde elke ~50 s tussen laden en ontladen,
+        # meldt zich om de ~11 s, en de P1 komt 16 s te laat binnen - elke
+        # losse som combineert dan waarden van verschillende momenten (2372
+        # zon - 1662 terug - 963 accu = -253, afgekapt op 0). Nu leest de
+        # kaart `sensor.huis_verbruik_gemiddeld` (Electricity.yaml, 60 s), met
+        # `sensor.huis_verbruik` als terugval zolang die nog niet bestaat.
+        # Prijs: een waterkoker staat na ~30 s in het getal in plaats van na 5.
+        #
+        # ELKE BALK IS ZIJN EIGEN 100%
+        # Zon, net en accu zijn momentopnames en het huis is dat gemiddelde;
+        # "komt van" en "gaat naar" tellen dus niet op de watt gelijk op. Elke
+        # balk verdeelt daarom zijn eigen som in plaats van een gedeelde schaal.
+        #
+        # KLEUR VOLGT DE PARTIJ
+        # zon groen, huis blauw (de verbruikskleur van de grafieken eronder),
+        # accu effen grijs, net gearceerd grijs. Accu en net staan in beide
+        # balken en hebben daarom geen eigen tint: paars naast het huisblauw
+        # viel door de kleurenblind-check van de dataviz-validator (deutan
+        # ΔE 0,3), en oranje/rood zijn op dit dashboard status. De arcering
+        # houdt de twee grijzen ook zonder kleur uit elkaar, en elk segment
+        # heeft zijn naam en getal in de regel eronder, in dezelfde volgorde.
+        #
+        # IN HUIS: DE STEKKERS ALS DEEL VAN HET HUISGETAL
+        # Verving het losse VEELGEBRUIKERS-paneel, waar de balkjes schaalden
+        # op de zwaarste van het moment - een koelkast van 89 W vulde de hele
+        # breedte. Hier is de balk het huisverbruik: de zwaarste stekkers uit
+        # `sensor.veelgebruikers` (hoogstens vijf, en alleen wie minstens 1,5%
+        # van de balk is), dan "andere stekkers" (de rest van die lijst) en
+        # "niet gemeten" (huis min alle stekkers: kookplaat, verlichting, alles
+        # zonder stekker). De blauwtint loopt af met de rangorde; namen in
+        # dezelfde volgorde eronder. De rijen per stekker staan in #ov-energie.
         #
         # PER SET, NIET SAMEN (ZW/O-percentages, overgenomen van de oude
         # productietegel): één percentage over beide omvormers haalt nooit
@@ -92,24 +112,24 @@ cards:
         # achtertuin (sensor heet `overkapping`), O = zolder; plafonds uit de
         # capaciteitssensoren, terugval 5/3 kW.
         #
-        # ACCU: "STANDBY" KOMT NIET MEER UIT DEZE KAART (20 september 2026)
-        # Hier stond een eigen grens van 15 W, gemeten aan de ruststroom van de
-        # Marstek (band 15-16 aug 2026: 65% van alle metingen zat op 0-15 W).
-        # Zonder die grens leek de accu twee derde van de dag leeg te lopen.
-        # Die grens staat nu één keer, in `sensor.accu_status`
-        # (packages/9 - Other/Battery.yaml), zodat deze kaart, de nest hub en
-        # de klokdisplay hetzelfde woord gebruiken. Ze liepen uit elkaar zodra
-        # er één werd bijgesteld.
+        # ACCU: "STANDBY" KOMT UIT `sensor.accu_status` (packages/9 - Other/
+        # Battery.yaml), zodat deze kaart, de nest hub en de klokdisplay
+        # hetzelfde woord gebruiken. In rust heeft de accu geen segment, maar
+        # de lading blijft wel in de regel onder "gaat naar" staan.
         #
         # button-card rendert alleen opnieuw als zijn entity verandert; de
-        # triggers_update-lijst dekt de andere bronnen.
+        # triggers_update-lijst dekt de andere bronnen. De entity is bewust
+        # niet meer de P1 (~2 meldingen per seconde, dus ook zo vaak tekenen)
+        # maar het huisverbruik, dat om de 5 s komt.
         - type: custom:button-card
-          entity: sensor.live_energieverbruik_totaal
+          entity: sensor.huis_verbruik
           triggers_update:
+            - sensor.huis_verbruik_gemiddeld
             - sensor.zon_vermogen_nu
             - sensor.accu_vermogen
             - sensor.accu_lading
             - sensor.accu_status
+            - sensor.veelgebruikers
           show_icon: false
           show_name: false
           show_state: false
@@ -130,45 +150,33 @@ cards:
           custom_fields:
             flow: |
               [[[
-                // ---------- waarden (zelfde regels als de oude vier tegels) ----------
+                // ---------- waarden, alles in W ----------
                 var num = function(id){ var s = states[id];
                   return (s && !isNaN(Number(s.state))) ? Number(s.state) : null; };
                 // zon: sensor staat in W tenzij hij expliciet kW zegt
                 var zonS = states['sensor.zon_vermogen_nu'];
-                var zonKw = null;
+                var zonW = null;
                 if(zonS && !isNaN(Number(zonS.state))){
                   var zu = zonS.attributes.unit_of_measurement || '';
-                  zonKw = (zu === 'kW') ? Number(zonS.state) : Number(zonS.state) / 1000;
+                  zonW = Number(zonS.state) * (zu === 'kW' ? 1000 : 1);
                 }
-                // netto: negatief = teruglevering; ruis rond nul plat slaan
+                // netto (kW): negatief = teruglevering; ruis rond nul plat slaan
                 var netto = num('sensor.live_energieverbruik_totaal');
-                if(netto !== null && Math.abs(netto) < 0.005) netto = 0;
+                var nettoW = netto === null ? null : (Math.abs(netto) < 0.005 ? 0 : netto * 1000);
                 var accuW = num('sensor.accu_vermogen');
-                // VERBRUIK VAN HET HUIS ZELF - NIET DE METERSTAND
-                // Hier stond `sensor.electricity_meter_energieverbruik` (DSMR,
-                // weg sinds 04-09-2026), en dat is de netafname: exact dezelfde
-                // bron als de netknoop hierboven.
-                // Op 18 augustus 2026 stond er daardoor twee keer 0,49 kW op één
-                // kaart terwijl de zon 0,25 kW leverde en het huis dus 0,74 kW
-                // trok. Bij teruglevering is het erger: dan wijst de huisknoop 0
-                // aan terwijl de vaatwasser draait.
-                // Het huis is wat er binnenkomt: net + zon, min wat de accu
-                // wegzet (laden is positief, ontladen negatief, dus aftrekken).
-                var verbruik = (netto === null || zonKw === null) ? null
-                             : Math.max(0, netto + zonKw - (accuW === null ? 0 : accuW / 1000));
-                var accuPv = accuW === null ? null : Math.round(accuW);
+                var huisKw = num('sensor.huis_verbruik_gemiddeld');
+                if(huisKw === null) huisKw = num('sensor.huis_verbruik');
+                var huisW = huisKw === null ? null : Math.max(0, huisKw * 1000);
                 var soc = num('sensor.accu_lading');
                 // Het woord komt uit de sensor en wordt hier alleen vertaald
                 // naar de werkwoordsvorm die op deze kaart staat.
                 var accuSt = states['sensor.accu_status'];
-                var accuMode = (!accuSt || accuPv === null) ? ''
+                var accuMode = (!accuSt || accuW === null) ? ''
                              : ({laden: 'laadt', ontladen: 'ontlaadt', rust: 'standby'}[accuSt.state] || '');
-                // De percentages lazen tot 27-08-2026 de ruwe omvormersensoren en
-                // verdwenen daardoor bij elke hik van de integratie (elf keer op
-                // die dag). Ze komen nu uit de attributen `zw`/`o` van
+                // De percentages komen uit de attributen `zw`/`o` van
                 // sensor.zon_vermogen_nu, die een uitval tot tien minuten
                 // vasthoudt - zie packages/2 - Second Floor/Attic/Solarpanels.yaml.
-                var zonAttr = (states['sensor.zon_vermogen_nu'] || {}).attributes || {};
+                var zonAttr = (zonS || {}).attributes || {};
                 var pct = function(vermogen, capId, terugval){
                   var p = (vermogen === undefined || vermogen === null || isNaN(Number(vermogen)))
                         ? null : Number(vermogen);
@@ -178,69 +186,108 @@ cards:
                 };
                 var zw = pct(zonAttr.zw, 'sensor.inverter_kroon_18_achtertuin_capacity', 5);
                 var oo = pct(zonAttr.o, 'sensor.inverter_kroon_18_zolder_capacity', 3);
-                // Alles in W, pas vanaf 10 kW in kW: de accu stond al in W en
-                // de rest in kW, waardoor "0,14 kW" en "2654 W" onder elkaar
-                // stonden. Invoer in kW, uitvoer [getal, eenheid] zodat de
-                // huisknoop de eenheid kleiner kan zetten.
-                var vermogen = function(v){
-                  if(v === null) return ['—', ''];
-                  var w = Math.round(Math.abs(v * 1000));
+                // Alles in W, pas vanaf 10 kW in kW: "0,14 kW" en "2654 W"
+                // onder elkaar las niet. Uitvoer [getal, eenheid] zodat het
+                // huisgetal de eenheid kleiner kan zetten.
+                var vermogen = function(w){
+                  if(w === null) return ['—', ''];
+                  w = Math.round(Math.abs(w));
                   return w < 10000 ? [String(w), 'W']
                                    : [(w / 1000).toFixed(1).replace('.',','), 'kW'];
                 };
-                var vtekst = function(v){ var f = vermogen(v); return f[1] ? f[0] + ' ' + f[1] : f[0]; };
+                var vtekst = function(w){ var f = vermogen(w); return f[1] ? f[0] + ' ' + f[1] : f[0]; };
 
-                // ---------- teksten ----------
-                var GROEN = 'var(--ov-ok)', BLAUW = 'var(--ov-info-strong)', GEEL = 'var(--ov-clip)';
-                var WIT = 'var(--ov-ink-85)', GRIJS = 'var(--ov-ink-55)';
-                var zonActief = zonKw !== null && zonKw * 1000 > 50;
+                // ---------- bouwstenen ----------
+                var INKT = 'var(--primary-text-color)', GRIJS = 'var(--ov-ink-55)', GEEL = 'var(--ov-clip)';
+                var ZON = 'var(--ov-ok)', HUIS = 'var(--ov-info-strong)', ACCU = 'var(--ov-ink-70)';
+                var NET = 'repeating-linear-gradient(135deg, var(--ov-ink-50) 0 2px, var(--ov-ink-14) 2px 5px)';
+                var LEEG = 'var(--ov-ink-7)';
+                // Kolommen in fr die samen de hele breedte vullen: een grid en
+                // geen flex-rij, want die centreert button-card zelf.
+                var balk = function(delen){
+                  var aan = delen.filter(function(d){ return d.w > 0; });
+                  if(!aan.length) return `<div style="height:10px;border-radius:5px;background:${LEEG}"></div>`;
+                  var kolommen = aan.map(function(d){ return `minmax(3px,${Math.max(1, Math.round(d.w))}fr)`; }).join(' ');
+                  return `<div style="display:grid;grid-template-columns:${kolommen};column-gap:2px;height:10px;border-radius:5px;overflow:hidden">`
+                    + aan.map(function(d){ return `<div style="background:${d.bg};opacity:${d.op || 1}"></div>`; }).join('')
+                    + `</div>`;
+                };
+                // Eén naam + getal onder de balk. Tekst in inkt, het blokje
+                // draagt de kleur; `dof` is voor wat er wel is maar niet loopt.
+                var item = function(d){
+                  var blok = d.bg
+                    ? `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${d.bg};opacity:${d.op || 1};margin-right:5px"></span>`
+                    : `<span style="display:inline-block;width:6px;height:6px;border-radius:2px;border:1px solid var(--ov-ink-35);margin-right:5px"></span>`;
+                  return `<span style="display:inline-block;white-space:nowrap;margin-right:14px">${blok}`
+                    + `<span style="color:${GRIJS}">${d.naam}</span>`
+                    + (d.waarde ? ` <span style="font-weight:600;color:${d.dof ? GRIJS : INKT}">${d.waarde}</span>` : '')
+                    + (d.extra || '') + `</span>`;
+                };
+                var rij = function(label, delen){
+                  return `<div style="font-size:11.5px;line-height:10px;color:${GRIJS};white-space:nowrap">${label}</div>`
+                    + `<div style="min-width:0">${balk(delen)}`
+                    + `<div style="font-size:12px;line-height:1.5;padding-top:3px;text-align:left">${delen.map(item).join('')}</div></div>`;
+                };
+
+                // ---------- komt van / gaat naar ----------
                 var deel = function(naam, p){
                   if(p === null) return '';
-                  return ` · <span style="color:${p >= 98 ? GEEL : GRIJS}">${naam} ${p}%</span>`;
+                  return ` <span style="color:${p >= 98 ? GEEL : GRIJS}">· ${naam} ${p}%</span>`;
                 };
-                var zonLabel = 'zon' + deel('ZW', zw) + deel('O', oo);
-                var terug = netto !== null && netto < 0;
-                var netActief = netto !== null && netto !== 0;
-                var netWaarde = vtekst(netto);
-                var netLabel = 'net' + (netto === null ? '' : (terug ? ' · teruglevering' : (netto === 0 ? '' : ' · afname')));
-                var accuActief = accuMode === 'laadt' || accuMode === 'ontlaadt';
-                var accuWaarde = vtekst(accuPv === null ? null : accuPv / 1000);
-                var accuLabel = 'accu' + (accuMode ? ' · ' + accuMode : '') + (soc === null ? '' : ' · ' + Math.round(soc) + '%');
+                var socTxt = soc === null ? '' : ` <span style="color:${GRIJS}">· ${Math.round(soc)}%</span>`;
+                var accuDeel = {bg: ACCU, w: accuW === null ? 0 : Math.abs(accuW), naam: 'accu',
+                                waarde: vtekst(accuW), extra: socTxt};
+                var netDeel = {bg: NET, w: nettoW === null ? 0 : Math.abs(nettoW), naam: 'net', waarde: vtekst(nettoW)};
+                var van = [], naar = [];
+                // Onder 50 W is de zon geen bron maar schemerlicht; een bron
+                // die zich niet meldt blijft als streepje zichtbaar.
+                if(zonW === null) van.push({naam: 'zon', waarde: '—', dof: true});
+                else if(zonW > 50) van.push({bg: ZON, w: zonW, naam: 'zon', waarde: vtekst(zonW),
+                                             extra: deel('ZW', zw) + deel('O', oo)});
+                if(accuMode === 'ontlaadt') van.push(accuDeel);
+                if(nettoW === null) van.push({naam: 'net', waarde: '—', dof: true});
+                else if(nettoW > 0) van.push(netDeel);
 
-                // Bron-knoop links: vaste hoogte 34px zodat de middens exact op
-                // y = 17/53/89 van het lijnenveld liggen (3×34 + 2×2 gap = 106).
-                var knoop = function(waarde, waardeKleur, label){
-                  return `<div style="height:34px;display:flex;flex-direction:column;justify-content:center">`
-                    + `<div style="font-size:17px;font-weight:700;line-height:1.15;color:${waardeKleur};white-space:nowrap">${waarde}</div>`
-                    + `<div style="font-size:11.5px;color:${GRIJS};white-space:nowrap">${label}</div></div>`;
-                };
+                if(huisW === null) naar.push({naam: 'huis', waarde: '—', dof: true});
+                else naar.push({bg: HUIS, w: huisW, naam: 'huis', waarde: vtekst(huisW)});
+                if(accuMode === 'laadt') naar.push(accuDeel);
+                else if(accuMode === 'standby') naar.push({naam: 'accu standby', extra: socTxt, dof: true});
+                else if(accuW === null) naar.push({naam: 'accu', waarde: '—', dof: true});
+                if(nettoW !== null && nettoW < 0) naar.push(netDeel);
 
-                // ---------- lijnenveld ----------
-                // Alleen paden, dus dit mag horizontaal uitrekken
-                // (preserveAspectRatio=none); non-scaling-stroke houdt ze 2px.
-                var LIJN_UIT = 'var(--ov-ink-10)';
-                var lijn = function(d, kleur, actief, richting){
-                  var basis = `<path d="${d}" fill="none" stroke="${LIJN_UIT}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
-                  if(!actief) return basis;
-                  var van = richting === -1 ? 0 : 28, naar = richting === -1 ? 28 : 0;
-                  return basis + `<path d="${d}" fill="none" stroke="${kleur}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-dasharray="4 10" opacity="0.9">`
-                    + `<animate attributeName="stroke-dashoffset" from="${van}" to="${naar}" dur="1.6s" repeatCount="indefinite"/></path>`;
-                };
+                // ---------- in huis ----------
+                var vg = states['sensor.veelgebruikers'];
+                var top = (vg && vg.attributes && vg.attributes.top) || [];
+                var stekW = (vg && !isNaN(Number(vg.state))) ? Number(vg.state) : null;
+                var huisRij = [];
+                if(stekW !== null){
+                  // Loopt de stekkersom even voor op het huisgemiddelde, dan
+                  // is de som de schaal en blijft "niet gemeten" leeg.
+                  var schaal = Math.max(huisW === null ? 0 : huisW, stekW);
+                  var drempel = Math.max(5, schaal * 0.015);
+                  var TINT = [1, 0.82, 0.66, 0.52, 0.4];
+                  var benoemd = 0;
+                  top.filter(function(r){ return r.watt >= drempel; }).slice(0, 5).forEach(function(r, i){
+                    benoemd += r.watt;
+                    huisRij.push({bg: HUIS, op: TINT[i], w: r.watt, naam: r.naam, waarde: vtekst(r.watt)});
+                  });
+                  var andere = Math.max(0, stekW - benoemd);
+                  if(andere >= 1) huisRij.push({bg: HUIS, op: 0.22, w: andere, naam: 'andere stekkers', waarde: vtekst(andere)});
+                  var onbekend = huisW === null ? 0 : Math.max(0, huisW - stekW);
+                  if(onbekend >= 1) huisRij.push({bg: 'var(--ov-ink-18)', w: onbekend, naam: 'niet gemeten', waarde: vtekst(onbekend)});
+                }
+                if(!huisRij.length) huisRij.push({naam: stekW === null ? 'stekkers: nog geen meting' : 'geen stekker meldt zich', dof: true});
 
-                return `<div style="display:grid;grid-template-columns:auto minmax(60px,1fr) auto;align-items:center;column-gap:14px;width:100%">
-                  <div style="display:flex;flex-direction:column;gap:2px">
-                    ${knoop(vtekst(zonKw), GROEN, zonLabel)}
-                    ${knoop(netWaarde, terug ? GROEN : 'var(--primary-text-color)', netLabel)}
-                    ${knoop(accuWaarde, 'var(--primary-text-color)', accuLabel)}
+                var huis = vermogen(huisW);
+                return `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:22px;width:100%;text-align:left">
+                  <div style="display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:12px;row-gap:9px;align-items:start;min-width:0">
+                    ${rij('komt van', van)}
+                    ${rij('gaat naar', naar)}
+                    ${rij('in huis', huisRij)}
                   </div>
-                  <svg viewBox="0 0 300 106" preserveAspectRatio="none" style="display:block;width:100%;height:106px">
-                    ${lijn('M2,17 C 120,17 180,45 298,45', GROEN, zonActief, 1)}
-                    ${lijn('M2,53 L298,53', BLAUW, netActief, terug ? -1 : 1)}
-                    ${lijn('M2,89 C 120,89 180,61 298,61', WIT, accuActief, accuMode === 'ontlaadt' ? 1 : -1)}
-                  </svg>
-                  <div style="display:flex;flex-direction:column;justify-content:center">
-                    <div style="line-height:1;white-space:nowrap"><span style="font-size:30px;font-weight:700;color:var(--primary-text-color)">${vermogen(verbruik)[0]}</span> <span style="font-size:13px;color:${GRIJS}">${vermogen(verbruik)[1]}</span></div>
-                    <div style="font-size:11.5px;line-height:1.35;color:${GRIJS};padding-top:3px;white-space:nowrap"><ha-icon icon="mdi:home-lightning-bolt-outline" style="--mdc-icon-size:13px;width:13px;height:13px;vertical-align:middle;color:${GRIJS}"></ha-icon> huis · verbruik</div>
+                  <div style="text-align:left">
+                    <div style="line-height:1;white-space:nowrap"><span style="font-size:30px;font-weight:700;color:${INKT}">${huis[0]}</span> <span style="font-size:13px;color:${GRIJS}">${huis[1]}</span></div>
+                    <div style="font-size:11.5px;line-height:1.35;color:${GRIJS};padding-top:3px;white-space:nowrap"><ha-icon icon="mdi:home-lightning-bolt-outline" style="--mdc-icon-size:13px;width:13px;height:13px;vertical-align:middle;color:${HUIS}"></ha-icon> huis · verbruik</div>
                   </div>
                 </div>`;
               ]]]
@@ -249,8 +296,16 @@ cards:
         # erboven en groeide het paneel bijna 100 px ("neemt veel in de
         # hoogte", Robin 24-08-2026); naast elkaar kost het samen niet meer
         # hoogte dan de grote grafiek alleen. Beide tonen sinds 24-08 dezelfde
-        # blauwe grootheid (sensor.huis_verbruik) op twee zoomniveaus; de
-        # kopregel van de strook benoemt hem voor allebei.
+        # blauwe grootheid (sensor.huis_verbruik) op twee zoomniveaus.
+        #
+        # ALLEBEI EEN KOPREGEL, ALLEBEI EEN VLOER OP 0 (3 oktober 2026)
+        # De linkergrafiek had geen legenda (de blauwe stip stond alleen boven
+        # de strook) en een as die op 1,0 kW begon onder een gevuld vlak:
+        # zon en verbruik leken daardoor veel dichter bij elkaar dan ze waren.
+        # De bovengrens is nu de piek, afgerond naar boven op hele kW, met de
+        # helft als enige tussenstreep. Zonder die regel koos ApexCharts voor
+        # de strook 0-5-10 bij een piek van 4,9 en lag de lijn in de
+        # onderste helft.
         # De flex-basis laat de strook op een smal scherm (telefoon, één
         # kolom) onder de grote grafiek vallen in plaats van onleesbaar
         # smal te worden.
@@ -262,132 +317,165 @@ cards:
               #root > :last-child { flex: 1 1 210px !important; }
           cards:
             # 2 uur productie tegen huisverbruik
-            - type: custom:apexcharts-card
-              # Twee uur productie tegen verbruik: bij tien minuten netto
-              # verbruik zag je vooral ruis rond nul. Nu zie je de vorm van
-              # de ochtend: wanneer de zon aankwam, wanneer de batterij laadt.
-              graph_span: 2h
-              update_interval: 60s
-              card_mod:
-                style: |
-                  ha-card { background: none !important; box-shadow: none !important; border: none !important; }
-              header:
-                show: false
-              apex_config:
-                chart:
-                  height: 150
-                  toolbar:
+            - type: vertical-stack
+              cards:
+                - type: custom:button-card
+                  tap_action:
+                    action: navigate
+                    navigation_path: "#ov-energie"
+                  styles:
+                    card:
+                      - background: none
+                      - border: none
+                      - box-shadow: none
+                      - padding: 0 2px
+                    grid:
+                      - grid-template-areas: '"regel"'
+                    custom_fields:
+                      regel:
+                        - width: 100%
+                  custom_fields:
+                    regel: |
+                      [[[
+                        var stip = function(kleur, tekst){
+                          return `<span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:${kleur}"></span>${tekst}</span>`;
+                        };
+                        return `<span style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;font-size:11.5px;color:var(--ov-ink-52)">
+                          <span style="display:inline-flex;align-items:center;gap:12px">${stip('var(--ov-ok)', 'zon')}${stip('var(--ov-info-strong)', 'huis')}</span>
+                          <span style="color:var(--ov-ink-38);white-space:nowrap">laatste 2 uur</span></span>`;
+                      ]]]
+                - type: custom:apexcharts-card
+                  # Twee uur productie tegen verbruik: bij tien minuten netto
+                  # verbruik zag je vooral ruis rond nul. Nu zie je de vorm van
+                  # de ochtend: wanneer de zon aankwam, wanneer de batterij laadt.
+                  graph_span: 2h
+                  update_interval: 60s
+                  card_mod:
+                    style: |
+                      ha-card { background: none !important; box-shadow: none !important; border: none !important; }
+                  header:
                     show: false
-                grid:
-                  show: false
-                  padding:
-                    left: 14
-                    right: 4
-                    top: -8
-                    bottom: 0
-                legend:
-                  show: false
-                yaxis:
-                  show: true
-                  tickAmount: 3
-                  labels:
-                    style:
-                      colors: "var(--ov-ink-50)"
-                      fontSize: "10px"
-                    formatter: |
-                      EVAL:function(v) { return (v === null || v === undefined) ? '' : Number(v).toFixed(1).replace('.', ',') + ' kW'; }
-                xaxis:
-                  axisBorder:
-                    show: false
-                  axisTicks:
-                    show: false
-                  tooltip:
-                    enabled: false
-                  labels:
-                    show: true
-                    style:
-                      colors: "var(--ov-ink-50)"
-                      fontSize: "10px"
-                    datetimeFormatter:
-                      hour: "HH:mm"
-                      minute: "HH:mm"
-                tooltip:
-                  enabled: true
-                  shared: true
-                  x:
-                    format: "HH:mm"
-              series:
-                - entity: sensor.zon_vermogen_nu
-                  name: productie
-                  type: area
-                  color: "var(--ov-ok)"
-                  curve: smooth
-                  stroke_width: 2
-                  opacity: 0.22
-                  float_precision: 2
-                  # Deze sensor staat in W, verbruik in kW; hier gelijktrekken.
-                  #
-                  # WAAROM DIT ZO OMSLACHTIG STAAT
-                  # Hier stond `unit === 'W' ? x / 1000 : x`. Dat gaat mis zodra een
-                  # punt geen getal is: op 2026-08-06 stond deze sensor drie keer
-                  # even op `unavailable` (de omvormers vielen weg tijdens de
-                  # Zigbee-storing), en één zo'n punt kwam ongedeeld in de grafiek.
-                  # Gevolg: de y-as sprong naar 3000 en de echte curve van 4-6 kW lag
-                  # plat tegen de bodem - de grafiek leek stuk terwijl de data klopte.
-                  #
-                  # Twee dingen daartegen: niet-numerieke punten worden `null` (die
-                  # tekent apexcharts gewoon niet), en de deling gebeurt TENZIJ de
-                  # eenheid expliciet kW is. Ontbreekt het attribuut - historische
-                  # punten dragen het niet altijd mee - dan delen we dus, en dat is
-                  # hier de goede gok: dit is de som van twee omvormers die
-                  # allebei in W meten.
-                  #
-                  # Sinds 27-08-2026 is dat `sensor.zon_vermogen_nu` en niet meer
-                  # de min_max-som: die gaf `unknown` zodra één omvormer wegviel,
-                  # en dat waren de gaten in deze grafiek.
-                  transform: >-
-                    var s = hass.states['sensor.zon_vermogen_nu'];
-                    var u = (s && s.attributes) ? s.attributes.unit_of_measurement : null;
-                    var v = Number(x);
-                    return (x === null || x === undefined || isNaN(v))
-                      ? null : (u === 'kW' ? v : v / 1000);
-                  group_by:
-                    duration: 2m
-                    func: avg
-                # Tot 24-08-2026 stond hier `sensor.electricity_meter_energie-
-                # verbruik` (DSMR, weg sinds 04-09-2026) onder de naam
-                # "verbruik", maar dat is de NETAFNAME:
-                # die zakt naar 0 zodra de zon je verbruik dekt, ook met een
-                # draaiende vaatwasser. Nu dus hetzelfde huisverbruik als de
-                # live-strook hiernaast (net + zon - accu). De sensor bestaat
-                # pas sinds die datum, dus ouder dan zijn eerste meting begint
-                # de lijn gewoon later in de grafiek.
-                - entity: sensor.huis_verbruik
-                  name: huis
-                  type: line
-                  color: "var(--ov-info-strong)"
-                  curve: smooth
-                  stroke_width: 2
-                  opacity: 1
-                  float_precision: 2
-                  # Sensor staat al in kW; alleen niet-numerieke punten naar
-                  # null, zodat een weggevallen bron de as niet kan opblazen -
-                  # zelfde les als bij de productielijn hierboven.
-                  transform: >-
-                    var v = Number(x);
-                    return (x === null || x === undefined || isNaN(v)) ? null : v;
-                  group_by:
-                    duration: 2m
-                    func: avg
-            # LIVE-STROOK: het huis-getal van de flow als verloop. De grote
+                  apex_config:
+                    chart:
+                      height: 140
+                      toolbar:
+                        show: false
+                    grid:
+                      show: false
+                      padding:
+                        left: 14
+                        right: 4
+                        top: -8
+                        bottom: 0
+                    legend:
+                      show: false
+                    yaxis:
+                      show: true
+                      min: 0
+                      max: |
+                        EVAL:function(max) { return Math.max(1, Math.ceil(max)); }
+                      tickAmount: 2
+                      labels:
+                        style:
+                          colors: "var(--ov-ink-50)"
+                          fontSize: "10px"
+                        formatter: |
+                          EVAL:function(v) { return (v === null || v === undefined) ? '' : Number(v).toFixed(1).replace('.', ',') + ' kW'; }
+                    xaxis:
+                      axisBorder:
+                        show: false
+                      axisTicks:
+                        show: false
+                      tooltip:
+                        enabled: false
+                      labels:
+                        show: true
+                        style:
+                          colors: "var(--ov-ink-50)"
+                          fontSize: "10px"
+                        datetimeFormatter:
+                          hour: "HH:mm"
+                          minute: "HH:mm"
+                    tooltip:
+                      enabled: true
+                      shared: true
+                      x:
+                        format: "HH:mm"
+                  series:
+                    - entity: sensor.zon_vermogen_nu
+                      name: productie
+                      type: area
+                      color: "var(--ov-ok)"
+                      curve: smooth
+                      stroke_width: 2
+                      opacity: 0.22
+                      float_precision: 2
+                      # Deze sensor staat in W, verbruik in kW; hier gelijktrekken.
+                      #
+                      # WAAROM DIT ZO OMSLACHTIG STAAT
+                      # Hier stond `unit === 'W' ? x / 1000 : x`. Dat gaat mis zodra een
+                      # punt geen getal is: op 2026-08-06 stond deze sensor drie keer
+                      # even op `unavailable` (de omvormers vielen weg tijdens de
+                      # Zigbee-storing), en één zo'n punt kwam ongedeeld in de grafiek.
+                      # Gevolg: de y-as sprong naar 3000 en de echte curve van 4-6 kW lag
+                      # plat tegen de bodem - de grafiek leek stuk terwijl de data klopte.
+                      #
+                      # Twee dingen daartegen: niet-numerieke punten worden `null` (die
+                      # tekent apexcharts gewoon niet), en de deling gebeurt TENZIJ de
+                      # eenheid expliciet kW is. Ontbreekt het attribuut - historische
+                      # punten dragen het niet altijd mee - dan delen we dus, en dat is
+                      # hier de goede gok: dit is de som van twee omvormers die
+                      # allebei in W meten.
+                      #
+                      # Sinds 27-08-2026 is dat `sensor.zon_vermogen_nu` en niet meer
+                      # de min_max-som: die gaf `unknown` zodra één omvormer wegviel,
+                      # en dat waren de gaten in deze grafiek.
+                      transform: >-
+                        var s = hass.states['sensor.zon_vermogen_nu'];
+                        var u = (s && s.attributes) ? s.attributes.unit_of_measurement : null;
+                        var v = Number(x);
+                        return (x === null || x === undefined || isNaN(v))
+                          ? null : (u === 'kW' ? v : v / 1000);
+                      group_by:
+                        duration: 2m
+                        func: avg
+                    # Tot 24-08-2026 stond hier `sensor.electricity_meter_energie-
+                    # verbruik` (DSMR, weg sinds 04-09-2026) onder de naam
+                    # "verbruik", maar dat is de NETAFNAME:
+                    # die zakt naar 0 zodra de zon je verbruik dekt, ook met een
+                    # draaiende vaatwasser. Nu dus hetzelfde huisverbruik als de
+                    # live-strook hiernaast (net + zon - accu). De sensor bestaat
+                    # pas sinds die datum, dus ouder dan zijn eerste meting begint
+                    # de lijn gewoon later in de grafiek.
+                    - entity: sensor.huis_verbruik
+                      name: huis
+                      type: line
+                      color: "var(--ov-info-strong)"
+                      curve: smooth
+                      stroke_width: 2
+                      opacity: 1
+                      float_precision: 2
+                      # Sensor staat al in kW; alleen niet-numerieke punten naar
+                      # null, zodat een weggevallen bron de as niet kan opblazen -
+                      # zelfde les als bij de productielijn hierboven.
+                      transform: >-
+                        var v = Number(x);
+                        return (x === null || x === undefined || isNaN(v)) ? null : v;
+                      group_by:
+                        duration: 2m
+                        func: avg
+            # LIVE-STROOK: het huisverbruik per 5 s als verloop. De grote
             # grafiek hiernaast middelt per 2 minuten over 2 uur; wat je NU
             # aanzet zie je daar pas minuten later als een bobbeltje. Deze
             # strook toont `sensor.huis_verbruik` (Electricity.yaml, zelfde
-            # optelsom net + zon - accu als de flow, gesampled op 5 s) over
-            # het laatste halfuur, dus een waterkoker is binnen een paar
-            # seconden zichtbaar. Eén serie, dus geen legenda: de kopregel
-            # benoemt hem, met de blauwe stip als koppeling naar de lijnkleur
-            # (blauw = verbruik, overal op deze kaart).
+            # optelsom net + zon - accu, gesampled op 5 s) over het laatste
+            # halfuur, dus een waterkoker is binnen een paar seconden
+            # zichtbaar. Bewust de ruwe sensor en niet het minuutgemiddelde
+            # van het huisgetal hierboven: pendelt de accu, dan zie je dat
+            # hier als een kam, en dat is dan ook wat er gebeurt. Eén serie,
+            # dus geen legenda: de kopregel benoemt hem, met de blauwe stip
+            # als koppeling naar de lijnkleur (blauw = verbruik, overal op
+            # deze kaart).
             - type: vertical-stack
               cards:
                 - type: custom:button-card
@@ -409,16 +497,15 @@ cards:
                     regel: |
                       [[[
                         return `<span style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;font-size:11.5px;color:var(--ov-ink-52)">
-                          <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:var(--ov-info-strong)"></span>live · wat het huis trekt</span>
+                          <span style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap"><span style="width:7px;height:7px;border-radius:50%;background:var(--ov-info-strong)"></span>huis · live</span>
                           <span style="color:var(--ov-ink-38);white-space:nowrap">laatste 30 min</span></span>`;
                       ]]]
                 - type: custom:apexcharts-card
                   # Geen x-as: de kopregel zegt al "laatste 30 min" en de as
                   # van de 2-uursgrafiek ernaast zou er een tweede, nét andere
                   # tijdschaal naast zetten. De tooltip geeft het exacte
-                  # tijdstip. Hoogte: 126 + kopregel ≈ de 150 van de grote
-                  # grafiek, zodat de onderkanten gelijk lopen (align-items
-                  # flex-end op de rij).
+                  # tijdstip. Zelfde hoogte en kopregel als de grafiek links,
+                  # zodat boven- en onderkanten gelijk lopen.
                   graph_span: 30min
                   update_interval: 5s
                   card_mod:
@@ -428,7 +515,7 @@ cards:
                     show: false
                   apex_config:
                     chart:
-                      height: 126
+                      height: 140
                       toolbar:
                         show: false
                     grid:
@@ -446,6 +533,8 @@ cards:
                       # ApexCharts op het bereik van het halfuur in en wordt
                       # 100 W ruis een berglandschap.
                       min: 0
+                      max: |
+                        EVAL:function(max) { return Math.max(1, Math.ceil(max)); }
                       tickAmount: 2
                       labels:
                         style:
@@ -499,29 +588,34 @@ cards:
                     var g = states['sensor.zon_opgewekt_vandaag'];
                     return `<span style="color:var(--ov-ink-80)">vandaag opgewekt · ${g && !isNaN(Number(g.state)) ? Number(g.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
                   ]]]
+            # WAT ER NOG KOMT, NIET HET DAGTOTAAL (3 oktober 2026)
+            # Hier stond "verwacht · 13,5 kWh" (de voorspelling voor de hele
+            # dag) naast "opgewekt · 19,6 kWh": dat leest als een tegenspraak
+            # zodra de dag beter loopt dan voorspeld. De rest van vandaag en
+            # morgen zijn de twee getallen waar je iets mee plant. Alle drie
+            # de sensoren tellen beide arrays op (Backyard/Solarpanels.yaml).
+            # "Kosten vandaag" verhuisde naar de kop van STROOMPRIJS.
             - type: custom:button-card
               template: ov_pill
-              entity: sensor.forecast_solar_production_today
+              entity: sensor.forecast_solar_production_today_remaining
               tap_action:
                 action: more-info
               custom_fields:
                 c: |
                   [[[
-                    var f = states['sensor.forecast_solar_production_today'];
-                    return `<span style="color:var(--ov-ink-80)">verwacht · ${f && !isNaN(Number(f.state)) ? Number(f.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
+                    var f = states['sensor.forecast_solar_production_today_remaining'];
+                    return `<span style="color:var(--ov-ink-80)">nog verwacht · ${f && !isNaN(Number(f.state)) ? Number(f.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
                   ]]]
             - type: custom:button-card
               template: ov_pill
-              entity: sensor.total_costs_today_calculated
+              entity: sensor.forecast_solar_production_tomorrow
               tap_action:
                 action: more-info
               custom_fields:
                 c: |
                   [[[
-                    var k = states['sensor.total_costs_today_calculated'];
-                    var v = k && !isNaN(Number(k.state)) ? Number(k.state) : 0;
-                    var col = v < 0 ? 'var(--ov-ok)' : 'var(--ov-ink-85)';
-                    return `<span style="color:${col};font-weight:600">kosten vandaag · € ${v.toFixed(2).replace('.',',')}</span>`;
+                    var f = states['sensor.forecast_solar_production_tomorrow'];
+                    return `<span style="color:var(--ov-ink-80)">morgen · ${f && !isNaN(Number(f.state)) ? Number(f.state).toFixed(1).replace('.',',') : '—'} kWh</span>`;
                   ]]]
   # STROOMPRIJS (vandaag + morgen)
   - type: custom:mod-card
@@ -572,7 +666,21 @@ cards:
                 var nuTxt = nu !== null ? '€ ' + nu.toFixed(3).replace('.',',') : '—';
                 var klok = function(d){ return ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2); };
                 var tip = best ? ` · laagste ${klok(best.d)}` : '';
-                return `<span style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ov-ink-65)"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span><span style="color:var(--primary-text-color);font-weight:600">nu ${nuTxt}</span>${tip}</span>`;
+                // KOSTEN VANDAAG, MET DE AFNAME ERBIJ (3 oktober 2026)
+                // Stond als losse pil onder de energiegrafieken, zonder iets
+                // om het aan af te meten. Het bedrag is afname - teruglevering
+                // + gas (Electricity.yaml); de kWh ernaast is alleen de
+                // stroomafname van het net, vandaar het woord erbij. Groen
+                // als de dag geld oplevert, zoals de pil dat deed.
+                var k = states['sensor.total_costs_today_calculated'];
+                var a = states['sensor.meterkast_slimhuys_zonneplan_verbruik_vandaag'];
+                var kosten = '';
+                if(k && !isNaN(Number(k.state))){
+                  var kv = Number(k.state);
+                  var kwh = (a && !isNaN(Number(a.state))) ? ` · ${Number(a.state).toFixed(1).replace('.',',')} kWh afname` : '';
+                  kosten = `<span style="white-space:nowrap"> · vandaag <span style="font-weight:600;color:${kv < 0 ? 'var(--ov-ok)' : 'var(--primary-text-color)'}">€ ${kv.toFixed(2).replace('.',',')}</span>${kwh}</span>`;
+                }
+                return `<span style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ov-ink-65)"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span><span style="color:var(--primary-text-color);font-weight:600">nu ${nuTxt}</span><span>${tip}${kosten}</span></span>`;
               ]]]
         - type: custom:apexcharts-card
           # Meeschuivend venster: 3 uur terug tot 27 uur vooruit. Een vast
@@ -1064,85 +1172,4 @@ cards:
                 }
                 if(!tips && !gran) return '';
                 return `<span style="display:flex;flex-wrap:wrap;align-items:center;gap:2px 12px;width:100%">${tips}${gran}</span>`;
-              ]]]
-  # VEELGEBRUIKERS
-  - type: custom:mod-card
-    card_mod:
-      style: |
-        ha-card {
-          background: var(--ov-panel-bg) !important;
-          border: var(--ov-panel-border) !important;
-          border-radius: var(--ov-panel-radius) !important;
-          box-shadow: none !important;
-          padding: var(--ov-panel-padding) !important;
-        }
-    card:
-      type: vertical-stack
-      cards:
-        - type: custom:button-card
-          template: ov_title
-          variables:
-            title: VEELGEBRUIKERS
-        # De top vijf komt uit sensor.veelgebruikers (packages/9 - Other/
-        # Veelgebruikers.yaml) en niet meer uit een `auto-entities`-filter op
-        # naam. Twee redenen, allebei nagemeten op 18 augustus 2026 en
-        # uitgeschreven in de kop van dat package: `*Vermogen*` pakte ook de
-        # VA- en var-sensoren van elke stekker (drie van de vijf rijen geen
-        # verbruik, en de tv-kast twee keer), en auto-entities hersorteert niet
-        # als een waarde bínnen de lijst verandert - de koffiemachine sprong van
-        # 8 naar 189 W en bleef onderaan staan.
-        #
-        # Eén kaart met vijf rijen in plaats van vijf kaarten: de rijen komen
-        # uit één attribuut, dus er is ook maar één entity om op te hertekenen.
-        # Tik erop voor de grafiek van alle stekkers bij elkaar.
-        - type: custom:button-card
-          entity: sensor.veelgebruikers
-          show_icon: false
-          show_name: false
-          show_state: false
-          tap_action:
-            action: more-info
-          styles:
-            card:
-              - background: none
-              - border: none
-              - box-shadow: none
-              - padding: 0
-            grid:
-              - grid-template-areas: '"rijen"'
-            custom_fields:
-              # Zonder deze breedte krijgt het veld de breedte van zijn inhoud
-              # en lopen de balken niet door tot de rand van de kolom.
-              rijen:
-                - width: 100%
-          custom_fields:
-            rijen: |
-              [[[
-                var top = (entity && entity.attributes && entity.attributes.top) || [];
-                if(!top.length){
-                  // Twee heel verschillende oorzaken, dus twee teksten: staat de
-                  // sensor zelf op unknown/unavailable dan is er iets mis met de
-                  // sensor (dat was op 18 augustus 2026 een sjabloonfout, zie de
-                  // kop van packages/9 - Other/Veelgebruikers.yaml); is de lijst
-                  // leeg dan meldt geen enkele stekker zich.
-                  var stil = !entity || entity.state === 'unavailable' || entity.state === 'unknown';
-                  return `<div style="padding:7px 2px;font-size:13.5px;color:var(--ov-ink-45)">${stil ? 'nog geen meting' : 'geen stekker meldt zich'}</div>`;
-                }
-                // Schaal op de zwaarste van dit moment, anders zijn alle balkjes
-                // even kort zodra er niets groots aanstaat. Ondergrens 10 W.
-                var max = Math.max(10, top[0].watt);
-                return top.map(function(r){
-                  var pct = Math.max(2, Math.min(100, r.watt / max * 100));
-                  // Zes regels staan er altijd; een stekker die niets trekt hoort
-                  // wel te zien te zijn maar mag niet even hard schreeuwen als
-                  // een koffiemachine van 1200 W.
-                  var uit = !r.watt;
-                  // 205px is de gewenste naambreedte, geen harde eis: op een
-                  // smallere kolom mag de naam inleveren en afkappen in plaats
-                  // van de balk en het wattage de kaart uit te duwen.
-                  return `<div style="display:grid;grid-template-columns:minmax(0,205px) minmax(0,1fr) 72px;column-gap:14px;align-items:center;padding:7px 2px">
-                    <span style="font-size:14px;color:var(--ov-ink-${uit ? '50' : '85'});white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.naam}</span>
-                    <div style="width:100%;height:6px;background:var(--ov-ink-7);border-radius:3px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${uit ? 'var(--ov-ink-12)' : 'var(--ov-info-strong)'};border-radius:3px"></div></div>
-                    <span style="font-size:14px;font-weight:600;color:${uit ? 'var(--ov-ink-45)' : 'var(--primary-text-color)'};text-align:right">${r.watt} W</span></div>`;
-                }).join('');
               ]]]

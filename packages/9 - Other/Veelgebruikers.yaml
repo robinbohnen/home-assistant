@@ -23,8 +23,11 @@
 ##
 ## Vandaar deze sensor: een expliciete lijst stekkers (zie
 ## [[expliciet-koppelen]] - aanwijzen wat er wél in hoort, niet scannen en
-## uitsluiten), elke minuut opnieuw gesorteerd. De kaart in
-## dashboards/home/overzicht/kolom_midden.yaml leest alleen nog `top`.
+## uitsluiten), elke vijf seconden opnieuw gesorteerd. Twee kaarten lezen
+## `top` en de state: de balk "in huis" op de energiekaart
+## (dashboards/home/overzicht/kolom_midden.yaml) en de rijen per stekker in de
+## popup #ov-energie (dashboards/home/overzicht.yaml). Sinds 3 oktober 2026
+## schalen beide op het huisverbruik in plaats van op de zwaarste stekker.
 ##
 ## De state is het totaal van álle stekkers hieronder, niet alleen de top vijf:
 ## zo is het een bruikbare grafiek in more-info ("wat trekt het klein spul bij
@@ -33,7 +36,7 @@
 ## als de auto niet laadt - zie de opmerking bij die regel onderaan.
 ##
 ## Nieuwe stekker erbij? Eén regel in `stekkers`. De naam links is wat er op
-## het paneel komt te staan; hou hem kort, de kolom is 205px.
+## het paneel komt te staan; hou hem kort, de kolom in de popup is 205px.
 ##############################################################################
 
 veelgebruikers_package:
@@ -124,9 +127,10 @@ veelgebruikers_package:
               # deden (zwaarste: de koffiemachine, 1.283 W). Twee
               # gevolgen, allebei bewust geaccepteerd:
               #
-              # 1. Zolang de auto laadt schaalt hij in zijn eentje alle balkjes
-              #    plat, want de kaart schaalt op `top[0]`. Dat klopt ook - hij
-              #    ís op dat moment de veelgebruiker.
+              # 1. Zolang de auto laadt drukt hij in zijn eentje alle andere
+              #    balkjes plat, want de kaarten schalen op het huisverbruik
+              #    en dat is dan vooral de auto. Dat klopt ook - hij ís op dat
+              #    moment de veelgebruiker.
               # 2. De state (het totaal) is dan grotendeels de auto en niet meer
               #    het klein spul. Wil je die grafiek ooit weer over het klein
               #    spul laten gaan, dan moet de laadpaal uit de som blijven en
@@ -159,7 +163,7 @@ veelgebruikers_package:
             # klap wegvielen. Nu is `gemeten` gewoon een lijst en leest de sensor
             # hem rechtstreeks, net als `adviezen` in Klimaat Zonwering.yaml.
             #
-            # Geen ondergrens in watt: het paneel toont altijd zes regels, ook
+            # Geen ondergrens in watt: de popup toont altijd zes regels, ook
             # als er weinig aanstaat (zo blijft de kaart even hoog en zie je wat
             # er sluimert). Een stekker die niets zegt (`unavailable`, of net
             # weg) levert -1 op en valt wél buiten de lijst.
@@ -181,7 +185,8 @@ veelgebruikers_package:
           unit_of_measurement: W
           state: "{{ gemeten | map(attribute='watt') | sum }}"
           attributes:
-            # Zes, want dat is wat er op het paneel hoort te staan.
+            # Zes, want dat is wat er in de popup hoort te staan (de balk op
+            # de energiekaart pakt er hoogstens vijf van).
             top: "{{ gemeten[:6] }}"
             # Drie tellers voor als het paneel er raar uitziet: hoeveel
             # stekkers er nu écht iets trekken, hoeveel er zich melden, en
