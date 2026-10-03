@@ -120,10 +120,21 @@ cards:
         # achtertuin (sensor heet `overkapping`), O = zolder; plafonds uit de
         # capaciteitssensoren, terugval 5/3 kW.
         #
-        # ACCU: "STANDBY" KOMT UIT `sensor.accu_status` (packages/9 - Other/
-        # Battery.yaml), zodat deze kaart, de nest hub en de klokdisplay
-        # hetzelfde woord gebruiken. In rust heeft de accu geen segment, maar
-        # de lading blijft wel in de regel onder "gaat naar" staan.
+        # ACCU: EEN EIGEN REGEL, EN DAT IS EEN METER, GEEN VERDELING
+        # De accu was één grijs woord onder "gaat naar" ("accu standby ·
+        # 100%"). Op 3 oktober laadde hij een uur lang met 13-15 kW uit het
+        # net - het grootste deel van de 62,5 kWh afname van die dag - en
+        # nergens op het overzicht was dat terug te zien. De vierde regel
+        # toont de lading als balk (0-100%, rood op of onder het afslagpunt
+        # uit `sensor.accu_capaciteit`), wat er vandaag in en uit ging, en hoe
+        # lang het huis het bij stroomuitval nog uithoudt
+        # (`sensor.noodstroom_resterend`; die is `unknown` als er niets af
+        # gaat, en dan staat het er niet). Anders dan de drie balken erboven
+        # is deze niet zijn eigen 100%: de lege rest is echt leeg.
+        # Het woord laadt/ontlaadt/standby komt uit `sensor.accu_status`
+        # (packages/9 - Other/Battery.yaml), zodat deze kaart, de nest hub en
+        # de klokdisplay hetzelfde zeggen. In "komt van"/"gaat naar" staat
+        # bij de accu alleen nog het vermogen; de lading staat hier.
         #
         # HET HUIS STAAT NIET IN DIE REGEL: het blauwe segment is het grote
         # getal rechts (het huis-icoon daar draagt dezelfde kleur). "huis
@@ -141,6 +152,9 @@ cards:
             - sensor.accu_vermogen
             - sensor.accu_lading
             - sensor.accu_status
+            - sensor.accu_geladen_vandaag
+            - sensor.accu_ontladen_vandaag
+            - sensor.noodstroom_resterend
             - sensor.veelgebruikers
             - sensor.veelgebruikers_gemiddeld
           show_icon: false
@@ -226,9 +240,10 @@ cards:
                     + `</div>`;
                 };
                 // Eén naam + getal onder de balk. Tekst in inkt, het blokje
-                // draagt de kleur; `dof` is voor wat er wel is maar niet loopt.
+                // draagt de kleur; `dof` is voor wat er wel is maar niet loopt,
+                // `kaal` voor een getal dat bij geen segment hoort.
                 var item = function(d){
-                  var blok = d.bg
+                  var blok = d.kaal ? '' : d.bg
                     ? `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${d.bg};opacity:${d.op || 1};margin-right:5px"></span>`
                     : `<span style="display:inline-block;width:6px;height:6px;border-radius:2px;border:1px solid var(--ov-ink-35);margin-right:5px"></span>`;
                   return `<span style="display:inline-block;white-space:nowrap;margin-right:14px">${blok}`
@@ -238,11 +253,14 @@ cards:
                 };
                 // Een deel zonder naam krijgt wel een segment maar geen regel
                 // eronder (het huis: dat is het grote getal rechts).
-                var rij = function(label, delen){
+                // 13 px en niet 12: dit was de kleinste tekst op het paneel, en
+                // het hangt aan de muur. "in huis" breekt daardoor eerder af
+                // naar een tweede regel; die ruimte is er.
+                var rij = function(label, delen, eigenBalk){
                   var namen = delen.filter(function(d){ return d.naam; });
-                  return `<div style="font-size:11.5px;line-height:10px;color:${GRIJS};white-space:nowrap">${label}</div>`
-                    + `<div style="min-width:0">${balk(delen)}`
-                    + (namen.length ? `<div style="font-size:12px;line-height:1.5;padding-top:3px;text-align:left">${namen.map(item).join('')}</div>` : '')
+                  return `<div style="font-size:12.5px;line-height:10px;color:${GRIJS};white-space:nowrap">${label}</div>`
+                    + `<div style="min-width:0">${eigenBalk || balk(delen)}`
+                    + (namen.length ? `<div style="font-size:13px;line-height:1.5;padding-top:3px;text-align:left">${namen.map(item).join('')}</div>` : '')
                     + `</div>`;
                 };
 
@@ -251,9 +269,8 @@ cards:
                   if(p === null) return '';
                   return ` <span style="color:${p >= 98 ? GEEL : GRIJS}">· ${naam} ${p}%</span>`;
                 };
-                var socTxt = soc === null ? '' : ` <span style="color:${GRIJS}">· ${Math.round(soc)}%</span>`;
                 var accuDeel = {bg: ACCU, w: accuW === null ? 0 : Math.abs(accuW), naam: 'accu',
-                                waarde: vtekst(accuW), extra: socTxt};
+                                waarde: vtekst(accuW)};
                 var netDeel = {bg: NET, w: nettoW === null ? 0 : Math.abs(nettoW), naam: 'net', waarde: vtekst(nettoW)};
                 var van = [], naar = [];
                 // Onder 50 W is de zon geen bron maar schemerlicht; een bron
@@ -268,8 +285,6 @@ cards:
                 if(huisW === null) naar.push({naam: 'huis', waarde: '—', dof: true});
                 else naar.push({bg: HUIS, w: huisW});
                 if(accuMode === 'laadt') naar.push(accuDeel);
-                else if(accuMode === 'standby') naar.push({naam: 'accu standby', extra: socTxt, dof: true});
-                else if(accuW === null) naar.push({naam: 'accu', waarde: '—', dof: true});
                 if(nettoW !== null && nettoW < 0) naar.push(netDeel);
 
                 // ---------- in huis ----------
@@ -296,12 +311,31 @@ cards:
                 }
                 if(!huisRij.length) huisRij.push({naam: stekW === null ? 'stekkers: nog geen meting' : 'geen stekker meldt zich', dof: true});
 
+                // ---------- accu ----------
+                var accuRij = [], meter = `<div style="height:10px;border-radius:5px;background:${LEEG}"></div>`;
+                if(soc === null) accuRij.push({naam: 'accu', waarde: '—', dof: true});
+                else {
+                  var afslag = Number(((states['sensor.accu_capaciteit'] || {}).attributes || {}).afslag_procent);
+                  var vul = (!isNaN(afslag) && soc <= afslag) ? 'var(--ov-bad)' : ACCU;
+                  meter = `<div style="height:10px;border-radius:5px;background:${LEEG};overflow:hidden"><div style="width:${Math.max(0, Math.min(100, soc))}%;height:100%;border-radius:5px;background:${vul}"></div></div>`;
+                  accuRij.push({bg: vul, naam: accuMode || 'lading', waarde: Math.round(soc) + '%'});
+                  // De dagtellers staan in Wh (utility_meter in Battery.yaml).
+                  // Kort gehouden ("+ erin / − eruit") zodat de regel op de
+                  // kolombreedte van het wandpaneel op één regel blijft.
+                  var kwh = function(id){ var v = num(id); return v === null ? null : (v / 1000).toFixed(1).replace('.',','); };
+                  var erin = kwh('sensor.accu_geladen_vandaag'), eruit = kwh('sensor.accu_ontladen_vandaag');
+                  if(erin !== null && eruit !== null) accuRij.push({kaal: true, naam: 'vandaag', waarde: `+${erin} / −${eruit} kWh`});
+                  var nood = num('sensor.noodstroom_resterend');
+                  if(nood !== null) accuRij.push({kaal: true, naam: 'noodstroom', waarde: '~' + (nood < 10 ? nood.toFixed(1).replace('.',',') : String(Math.round(nood))) + ' u'});
+                }
+
                 var huis = vermogen(huisW);
                 return `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:22px;width:100%;text-align:left">
                   <div style="display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:12px;row-gap:9px;align-items:start;min-width:0">
                     ${rij('komt van', van)}
                     ${rij('gaat naar', naar)}
                     ${rij('in huis', huisRij)}
+                    ${rij('accu', accuRij, meter)}
                   </div>
                   <div style="text-align:left">
                     <div style="line-height:1;white-space:nowrap"><span style="font-size:30px;font-weight:700;color:${INKT}">${huis[0]}</span> <span style="font-size:13px;color:${GRIJS}">${huis[1]}</span></div>
@@ -320,10 +354,12 @@ cards:
         # De linkergrafiek had geen legenda (de blauwe stip stond alleen boven
         # de strook) en een as die op 1,0 kW begon onder een gevuld vlak:
         # zon en verbruik leken daardoor veel dichter bij elkaar dan ze waren.
-        # De bovengrens is nu de piek, afgerond naar boven op hele kW, met de
-        # helft als enige tussenstreep. Zonder die regel koos ApexCharts voor
-        # de strook 0-5-10 bij een piek van 4,9 en lag de lijn in de
-        # onderste helft.
+        # De bovengrens is nu de piek, afgerond naar boven op 0,2 kW, met de
+        # helft als enige tussenstreep (een veelvoud van 0,2 gedeeld door twee
+        # heeft altijd één decimaal). Zonder die regel koos ApexCharts voor
+        # de strook 0-5-10 bij een piek van 4,9 en lag de lijn in de onderste
+        # helft; afronden op hele kW (de eerste versie) gaf nog 0-5 bij data
+        # rond de 3 met één piek net boven de 4.
         # De flex-basis laat de strook op een smal scherm (telefoon, één
         # kolom) onder de grote grafiek vallen in plaats van onleesbaar
         # smal te worden.
@@ -375,7 +411,7 @@ cards:
                     show: false
                   apex_config:
                     chart:
-                      height: 140
+                      height: 160
                       toolbar:
                         show: false
                     grid:
@@ -391,7 +427,7 @@ cards:
                       show: true
                       min: 0
                       max: |
-                        EVAL:function(max) { return Math.max(1, Math.ceil(max)); }
+                        EVAL:function(max) { return Math.max(1, Math.ceil(Math.round(max * 500) / 100) / 5); }
                       tickAmount: 2
                       labels:
                         style:
@@ -540,7 +576,7 @@ cards:
                     show: false
                   apex_config:
                     chart:
-                      height: 140
+                      height: 160
                       toolbar:
                         show: false
                     grid:
@@ -559,7 +595,7 @@ cards:
                       # 100 W ruis een berglandschap.
                       min: 0
                       max: |
-                        EVAL:function(max) { return Math.max(1, Math.ceil(max)); }
+                        EVAL:function(max) { return Math.max(1, Math.ceil(Math.round(max * 500) / 100) / 5); }
                       tickAmount: 2
                       labels:
                         style:
@@ -731,7 +767,10 @@ cards:
             show: false
           apex_config:
             chart:
-              height: 155
+              # Was 155. Sinds het veelgebruikerspaneel onder deze kaart weg is
+              # eindigde de middenkolom ruim boven de andere twee; de hoogte
+              # gaat naar de grafiek waar je kwartieren in wilt vergelijken.
+              height: 210
               toolbar:
                 show: false
             grid:
@@ -751,10 +790,12 @@ cards:
               # afgerond op 2 cent - een even aantal centen, zodat de ene
               # tussenstreep ook op hele centen valt. De vloer blijft 0 en
               # zakt alleen mee als een prijs negatief is.
+              # (Eerst afronden op honderdsten van een cent: 0,44 * 50 is in
+              # drijvende komma net geen 22 en zou anders naar 0,46 springen.)
               min: |
-                EVAL:function(min) { return Math.min(0, Math.floor(min * 50) / 50); }
+                EVAL:function(min) { return Math.min(0, Math.floor(Math.round(min * 5000) / 100) / 50); }
               max: |
-                EVAL:function(max) { return Math.ceil(max * 50) / 50; }
+                EVAL:function(max) { return Math.ceil(Math.round(max * 5000) / 100) / 50; }
               tickAmount: 2
               labels:
                 style:
@@ -776,9 +817,15 @@ cards:
                 style:
                   colors: "var(--ov-ink-50)"
                   fontSize: "10px"
+                # ALLEEN HET UUR, ZONDER ":00". Dertig labels "12:00 13:00 ..."
+                # naast elkaar was een regel ruis onder de grafiek. Om het
+                # uur overslaan kan ApexCharts op een tijdas niet gericht: het
+                # laat alleen labels vallen die overlappen, te beginnen bij
+                # het eerste - dan verspringt elk uur welke uren er staan en
+                # valt het datumlabel van middernacht de helft van de tijd weg.
                 datetimeFormatter:
                   minute: "HH:mm"
-                  hour: "HH:mm"
+                  hour: "HH"
                   day: "dd/MM"
             tooltip:
               enabled: true
