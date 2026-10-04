@@ -411,6 +411,62 @@ cards:
             co2: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide
             pm25: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5
             rv: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtvochtigheid
+        # Garage en meterkast (UniFi UP Air Quality, oktober 2026) delen één
+        # regel: KLIMAAT is al de langste kaart in deze kolom en twee volle
+        # regels erbij was er een te veel. Elke helft is een eigen ov_lucht
+        # met een eigen popup, dus tikken op "garage" opent de garage. In de
+        # smalle helft valt het vochtgetal weg zolang het binnen 30-70% blijft
+        # (`kort`), en `entity` is de luchtkwaliteitsindex: ov_lucht zet dat
+        # getal om in dezelfde badge als bij de woonkamer.
+        - type: horizontal-stack
+          card_mod:
+            style: |
+              #root {
+                display: grid !important;
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+                column-gap: 0 !important;
+              }
+              #root > * { min-width: 0 !important; margin: 0 !important; }
+              #root > *:nth-child(2) {
+                border-left: 1px solid var(--ov-ink-6) !important;
+                padding-left: 12px !important;
+              }
+              #root > *:nth-child(1) { padding-right: 12px !important; }
+          cards:
+            - type: custom:button-card
+              template: ov_lucht
+              entity: sensor.up_air_quality_garage_luchtkwaliteitsindex
+              tap_action:
+                action: navigate
+                navigation_path: "#ov-lucht-garage"
+              triggers_update:
+                - sensor.up_air_quality_garage_luchtkwaliteitsindex
+                - sensor.up_air_quality_garage_kooldioxide
+                - sensor.up_air_quality_garage_pm2_5
+                - sensor.up_air_quality_garage_luchtvochtigheid
+              variables:
+                naam: Lucht garage
+                kort: true
+                co2: sensor.up_air_quality_garage_kooldioxide
+                pm25: sensor.up_air_quality_garage_pm2_5
+                rv: sensor.up_air_quality_garage_luchtvochtigheid
+            - type: custom:button-card
+              template: ov_lucht
+              entity: sensor.up_air_quality_meterkast_luchtkwaliteitsindex
+              tap_action:
+                action: navigate
+                navigation_path: "#ov-lucht-meterkast"
+              triggers_update:
+                - sensor.up_air_quality_meterkast_luchtkwaliteitsindex
+                - sensor.up_air_quality_meterkast_kooldioxide
+                - sensor.up_air_quality_meterkast_pm2_5
+                - sensor.up_air_quality_meterkast_luchtvochtigheid
+              variables:
+                naam: Lucht meterkast
+                kort: true
+                co2: sensor.up_air_quality_meterkast_kooldioxide
+                pm25: sensor.up_air_quality_meterkast_pm2_5
+                rv: sensor.up_air_quality_meterkast_luchtvochtigheid
         # De zonnescherm-regel met knoppen die hier stond is 2026-08-16
         # vervallen: de status staat al op de Buiten-regel in RUIMTES en de
         # bediening (knoppen + positie) in de #ov-outside-popup. Twee plekken
