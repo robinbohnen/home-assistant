@@ -19,7 +19,7 @@ cards:
       type: vertical-stack
       card_mod:
         style: |
-          #root > *:nth-child(n+2) { border-top: 1px solid var(--ov-ink-6) !important; }
+          #root > *:nth-child(n+2) > * { border-top: 1px solid var(--ov-ink-6) !important; }
       cards:
         - type: custom:button-card
           template: ov_title
@@ -263,9 +263,22 @@ cards:
         }
     card:
       type: vertical-stack
+      # DRIE GROEPEN (4 oktober 2026): temperatuur in huis (2-4), lucht (5-7),
+      # techniek & buiten (8-9). Geen kopjes - die kosten per groep een regel
+      # in een kolom die al vol zit - maar een ruimere tussenruimte met een
+      # donkerdere lijn waar een nieuwe groep begint. Schuif je regels, pas
+      # dan de nth-child-nummers hieronder mee aan.
+      # `> *` omdat HA elke kaart in een `hui-card` met `display: contents`
+      # zet: een rand op dat omhulsel wordt nooit getekend.
       card_mod:
         style: |
-          #root > *:nth-child(n+2) { border-top: 1px solid var(--ov-ink-6) !important; }
+          #root > *:nth-child(n+2) > * { border-top: 1px solid var(--ov-ink-6) !important; }
+          #root > *:nth-child(5) > *,
+          #root > *:nth-child(8) > * {
+            border-top-color: var(--ov-ink-14) !important;
+            margin-top: 6px !important;
+            padding-top: 6px !important;
+          }
       cards:
         - type: custom:button-card
           template: ov_title
@@ -320,64 +333,6 @@ cards:
           template: ov_climate
           entity: climate.airco_zolder
           name: Airco zolder
-        # De jacuzzi staat 's winters in de schuur. Dan valt deze regel weg in
-        # plaats van een half jaar op `unavailable` te staan; hij komt vanzelf
-        # terug zodra de spa weer een waarde geeft. Zie de toelichting bij
-        # binary_sensor.backyard_spa_aanwezig in
-        # packages/3 - Outside/Backyard/Spa.yaml.
-        - type: custom:button-card
-          template: ov_climate
-          entity: climate.intex_purespa
-          name: Intex PureSpa
-          visibility:
-            - condition: state
-              entity: binary_sensor.backyard_spa_aanwezig
-              state: "on"
-        # Serverrack in de garage: geen climate-entiteit maar een thermometer
-        # plus een stekker met ventilatoren, die packages/9 - Other/
-        # Ventilation.yaml schakelt. Zelfde regel-opmaak als de airco's; de
-        # subregel en de badge zijn hier overschreven. `entity` is de
-        # ventilatorstekker (die bepaalt de badge), tikken geeft de
-        # temperatuurgrafiek van het rack.
-        - type: custom:button-card
-          template: ov_climate
-          entity: switch.garage_garage_stopcontact_serverrack_ventilatoren
-          name: Serverrack
-          tap_action:
-            action: more-info
-            entity: sensor.garage_serverrack_temperatuur_temperature
-          # Vasthouden = handbediening: ventilatoren om en de automatisering
-          # twee uur op pauze. De uitgebreide knop met de aftellende pauze
-          # staat in #ov-garage; dit is de snelle route vanaf het paneel.
-          hold_action:
-            action: perform-action
-            perform_action: script.ventilation_serverrack_handbediening
-          triggers_update:
-            - switch.garage_garage_stopcontact_serverrack_ventilatoren
-            - sensor.garage_serverrack_temperatuur_temperature
-            - input_datetime.ventilation_serverrack_handbediening_tot
-          custom_fields:
-            sub: |
-              [[[
-                var t = states['sensor.garage_serverrack_temperatuur_temperature'];
-                if(!t || isNaN(Number(t.state)) || t.state === '') return 'geen meting';
-                return Number(t.state).toFixed(1).replace('.',',') + '°';
-              ]]]
-            badge: |
-              [[[
-                if(!entity || entity.state === 'unavailable' || entity.state === 'unknown') return '';
-                var m = entity.state === 'on'
-                      ? ['ventileert','var(--ov-ink-60)','var(--ov-ink-8)']
-                      : ['uit','var(--ov-ink-50)','var(--ov-ink-6)'];
-                // Loopt er een handbediening, dan zegt de badge dat: anders
-                // lijkt "uit" op een keuze van het huis terwijl jij hem zelf
-                // hebt uitgezet en het huis er niet bij mag.
-                var h = states['input_datetime.ventilation_serverrack_handbediening_tot'];
-                if(h && h.attributes && h.attributes.timestamp * 1000 > Date.now())
-                  m = [entity.state === 'on' ? 'hand · aan' : 'hand · uit',
-                       'var(--ov-info)','var(--ov-info-15)'];
-                return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:${m[1]};background:${m[2]}">${m[0]}</span>`;
-              ]]]
         # Lucht per kamer: CO2, fijnstof en vocht op één regel, met de
         # luchtkwaliteitsklasse als badge. De opmaak en de drempels staan in
         # `ov_lucht` in overzicht_templates.yaml, want sinds 4 september 2026
@@ -469,6 +424,68 @@ cards:
                 co2: sensor.up_air_quality_meterkast_kooldioxide
                 pm25: sensor.up_air_quality_meterkast_pm2_5
                 rv: sensor.up_air_quality_meterkast_luchtvochtigheid
+        # ---- groep 3: techniek & buiten ----
+        # Serverrack en spa staan onderaan: het zijn apparaten, geen ruimtes
+        # waar iemand zit, en de spa verdwijnt 's winters - onderaan verspringt
+        # er dan niets in het midden van de kaart.
+        # Serverrack in de garage: geen climate-entiteit maar een thermometer
+        # plus een stekker met ventilatoren, die packages/9 - Other/
+        # Ventilation.yaml schakelt. Zelfde regel-opmaak als de airco's; de
+        # subregel en de badge zijn hier overschreven. `entity` is de
+        # ventilatorstekker (die bepaalt de badge), tikken geeft de
+        # temperatuurgrafiek van het rack.
+        - type: custom:button-card
+          template: ov_climate
+          entity: switch.garage_garage_stopcontact_serverrack_ventilatoren
+          name: Serverrack
+          tap_action:
+            action: more-info
+            entity: sensor.garage_serverrack_temperatuur_temperature
+          # Vasthouden = handbediening: ventilatoren om en de automatisering
+          # twee uur op pauze. De uitgebreide knop met de aftellende pauze
+          # staat in #ov-garage; dit is de snelle route vanaf het paneel.
+          hold_action:
+            action: perform-action
+            perform_action: script.ventilation_serverrack_handbediening
+          triggers_update:
+            - switch.garage_garage_stopcontact_serverrack_ventilatoren
+            - sensor.garage_serverrack_temperatuur_temperature
+            - input_datetime.ventilation_serverrack_handbediening_tot
+          custom_fields:
+            sub: |
+              [[[
+                var t = states['sensor.garage_serverrack_temperatuur_temperature'];
+                if(!t || isNaN(Number(t.state)) || t.state === '') return 'geen meting';
+                return Number(t.state).toFixed(1).replace('.',',') + '°';
+              ]]]
+            badge: |
+              [[[
+                if(!entity || entity.state === 'unavailable' || entity.state === 'unknown') return '';
+                var m = entity.state === 'on'
+                      ? ['ventileert','var(--ov-ink-60)','var(--ov-ink-8)']
+                      : ['uit','var(--ov-ink-50)','var(--ov-ink-6)'];
+                // Loopt er een handbediening, dan zegt de badge dat: anders
+                // lijkt "uit" op een keuze van het huis terwijl jij hem zelf
+                // hebt uitgezet en het huis er niet bij mag.
+                var h = states['input_datetime.ventilation_serverrack_handbediening_tot'];
+                if(h && h.attributes && h.attributes.timestamp * 1000 > Date.now())
+                  m = [entity.state === 'on' ? 'hand · aan' : 'hand · uit',
+                       'var(--ov-info)','var(--ov-info-15)'];
+                return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:${m[1]};background:${m[2]}">${m[0]}</span>`;
+              ]]]
+        # De jacuzzi staat 's winters in de schuur. Dan valt deze regel weg in
+        # plaats van een half jaar op `unavailable` te staan; hij komt vanzelf
+        # terug zodra de spa weer een waarde geeft. Zie de toelichting bij
+        # binary_sensor.backyard_spa_aanwezig in
+        # packages/3 - Outside/Backyard/Spa.yaml.
+        - type: custom:button-card
+          template: ov_climate
+          entity: climate.intex_purespa
+          name: Intex PureSpa
+          visibility:
+            - condition: state
+              entity: binary_sensor.backyard_spa_aanwezig
+              state: "on"
         # De zonnescherm-regel met knoppen die hier stond is 2026-08-16
         # vervallen: de status staat al op de Buiten-regel in RUIMTES en de
         # bediening (knoppen + positie) in de #ov-outside-popup. Twee plekken
