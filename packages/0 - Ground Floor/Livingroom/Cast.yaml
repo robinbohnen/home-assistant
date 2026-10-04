@@ -1,15 +1,61 @@
 livingroom_cast_package:
   automation:
+    ###########################################################################
+    ## NEST HUB: MINI-DASHBOARD ALTIJD IN BEELD
+    ##
+    ## Zolang er iemand thuis is en het huis wakker is, hoort de Hub het
+    ## mini-dashboard te tonen. "Wakker" is hier: huis_slaapt uit, OF er brandt
+    ## licht in de woonkamer. Alleen huis_slaapt is te traag: die blijft 's
+    ## ochtends aan tot de slaapkamerknop of 10:00, terwijl beneden het ontbijt
+    ## al op tafel staat (4 oktober 2026: om 09:27 nog 'on').
+    ##
+    ## WAAROM SOMS EERST UIT: een cast-sessie overleeft een HA-herstart niet.
+    ## De receiver op de Hub verliest zijn verbinding, maar HA ziet hem na de
+    ## start gewoon terug als "playing / Home Assistant Lovelace". Een kale
+    ## show_lovelace_view gaat dan naar die dode sessie en doet niets - zo
+    ## stond de Hub op 4 oktober 2026 na de herstart van 08:42 stil, ook nadat
+    ## de lampen om 08:44 deze automation hadden laten lopen. Bij de
+    ## "verse start"-triggers (HA-start, lampen aan, wakker, thuiskomst) wordt
+    ## de sessie daarom eerst afgesloten en opnieuw opgebouwd. Een knipper van
+    ## een paar seconden op momenten dat je net binnenloopt.
+    ##
+    ## De vijfminutencheck vangt wat de state-triggers missen, maar grijpt
+    ## alleen in als er NIETS speelt. Ander mediagebruik (YouTube, Spotify via
+    ## de Hub) wordt nooit overgenomen, ook niet door de verse-start-triggers;
+    ## pas als dat stopt (idle/off) komt het dashboard terug.
+    ##
+    ## Is iedereen tien minuten weg, dan gaat de cast uit en valt de Hub terug
+    ## op zijn eigen fotolijst/klok.
+    ###########################################################################
     - id: livingroom_always_cast_nest_hub
       alias: Livingroom - Always cast on Nest Hub
-      description: Keep casting dashboard on Nest Hub - recast when idle, off or paused
+      description: >-
+        Mini-dashboard op de Nest Hub zolang er iemand thuis en wakker is;
+        verse sessie na HA-start, lampen aan, wakker en thuiskomst.
       mode: single
+      max_exceeded: silent
       triggers:
         - trigger: state
-          entity_id:
-            - media_player.woonkamer
+          entity_id: media_player.woonkamer
           to: idle
           id: idle
+        - trigger: state
+          entity_id: media_player.woonkamer
+          to: "off"
+          id: "off"
+        - trigger: state
+          entity_id: media_player.woonkamer
+          to: paused
+          for:
+            minutes: 1
+          id: paused
+        - trigger: time_pattern
+          minutes: /5
+          id: periodiek
+        # Verse start: de sessie kan dood zijn zonder dat HA het ziet.
+        - trigger: homeassistant
+          event: start
+          id: ha_start
         # Allebei de woonkamergroepen: de spots zitten sinds de Matter-omzetting
         # niet meer in `light.woonkamer_lampen`. Zie de kop van Lights.yaml.
         - trigger: state
@@ -17,48 +63,90 @@ livingroom_cast_package:
             - light.woonkamer_lampen
             - light.woonkamer_spots
           to: "on"
-          id: lights_on
+          id: vers
         - trigger: state
-          entity_id:
-            - media_player.woonkamer
+          entity_id: binary_sensor.huis_slaapt
+          from: "on"
           to: "off"
-          id: "off"
-        - trigger: state
-          entity_id:
-            - media_player.woonkamer
-          to: paused
+          id: vers
+        - trigger: numeric_state
+          entity_id: zone.home
+          above: 0
+          id: vers
+        - trigger: numeric_state
+          entity_id: zone.home
+          below: 1
           for:
-            minutes: 1
-          id: paused
+            minutes: 10
+          id: leeg
       conditions: []
       actions:
-        - if:
-            - condition: state
-              entity_id: media_player.woonkamer
-              state: "off"
-          then:
-            - action: media_player.turn_on
-              data: {}
-              target:
-                entity_id: media_player.woonkamer
-            - delay:
-                seconds: 5
-        - if:
-            - condition: state
-              entity_id: media_player.woonkamer
-              state: paused
-          then:
-            - action: media_player.turn_off
-              data: {}
-              target:
-                entity_id: media_player.woonkamer
-            - delay:
-                seconds: 5
-        - action: cast.show_lovelace_view
-          data:
-            entity_id: media_player.woonkamer
-            # Het YAML-dashboard (ui-lovelace.yaml); daar staat de herbouwde
-            # mini-dashboard-view. 'dashboard-dev' was een storage-dashboard
-            # dat buiten deze config om via de UI is aangemaakt.
-            dashboard_path: lovelace
-            view_path: mini-dashboard
+        - variables:
+            hub: media_player.woonkamer
+            stond_uit: "{{ is_state('media_player.woonkamer', 'off') }}"
+            toont_dashboard: >-
+              {{ is_state(hub, 'playing')
+                 and state_attr(hub, 'app_name') == 'Home Assistant Lovelace' }}
+            speelt_iets_anders: >-
+              {{ states(hub) in ['playing', 'buffering']
+                 and state_attr(hub, 'app_name') != 'Home Assistant Lovelace' }}
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id: leeg
+              sequence:
+                - condition: template
+                  value_template: "{{ toont_dashboard }}"
+                - action: media_player.turn_off
+                  target:
+                    entity_id: "{{ hub }}"
+          default:
+            - condition: template
+              value_template: >-
+                {{ states('zone.home') | int(0) > 0
+                   and (not is_state('binary_sensor.huis_slaapt', 'on')
+                        or is_state('light.woonkamer_lampen', 'on')
+                        or is_state('light.woonkamer_spots', 'on')) }}
+            - condition: template
+              value_template: "{{ not speelt_iets_anders }}"
+            # De periodieke check laat een lopend dashboard met rust; alleen
+            # een verse-start-trigger bouwt een sessie die er goed uitziet
+            # opnieuw op.
+            - condition: template
+              value_template: >-
+                {{ not (trigger.id == 'periodiek' and toont_dashboard) }}
+            - if:
+                - condition: trigger
+                  id: ha_start
+              then:
+                # Cast-integratie en frontend eerst laten opstarten.
+                - delay:
+                    seconds: 60
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ trigger.id in ['ha_start', 'vers'] and toont_dashboard
+                       or is_state(hub, 'paused') }}
+              then:
+                - action: media_player.turn_off
+                  target:
+                    entity_id: "{{ hub }}"
+                - delay:
+                    seconds: 5
+            - if:
+                - condition: template
+                  value_template: "{{ stond_uit }}"
+              then:
+                - action: media_player.turn_on
+                  target:
+                    entity_id: "{{ hub }}"
+                - delay:
+                    seconds: 5
+            - action: cast.show_lovelace_view
+              data:
+                entity_id: "{{ hub }}"
+                # Het YAML-dashboard (ui-lovelace.yaml); daar staat de herbouwde
+                # mini-dashboard-view. 'dashboard-dev' was een storage-dashboard
+                # dat buiten deze config om via de UI is aangemaakt.
+                dashboard_path: lovelace
+                view_path: mini-dashboard
