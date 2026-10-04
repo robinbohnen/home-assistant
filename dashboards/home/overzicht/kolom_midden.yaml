@@ -341,18 +341,35 @@ cards:
                 }
 
                 var huis = vermogen(huisW);
-                return `<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:22px;width:100%;text-align:left">
+                // OP EEN TELEFOON KOMT HET GROTE GETAL BOVENAAN (4 oktober 2026)
+                // Naast de balken nam het een eigen kolom van ~110 px in, en
+                // op 330 px kaartbreedte bleef er voor de balken en de namen
+                // eronder zo weinig over dat elke stekker op zijn eigen regel
+                // kwam. Een container query en geen media query: het gaat om
+                // de breedte van deze kaart, en die is op het wandpaneel
+                // (drie kolommen, `--ov-zoom`) iets heel anders dan die van
+                // het venster. De <style> mag hier: hij staat in de shadow
+                // root van deze button-card en raakt dus niets anders.
+                return `<style>
+                    .ovf-c { container-type: inline-size; width: 100%; }
+                    .ovf { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; column-gap:22px; text-align:left; }
+                    @container (max-width: 440px) {
+                      .ovf { grid-template-columns:minmax(0,1fr); row-gap:14px; }
+                      .ovf-huis { order:-1; display:flex; align-items:baseline; gap:10px; }
+                    }
+                  </style>
+                  <div class="ovf-c"><div class="ovf">
                   <div style="display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:12px;row-gap:9px;align-items:start;min-width:0">
                     ${rij('komt van', van)}
                     ${rij('gaat naar', naar)}
                     ${rij('in huis', huisRij)}
                     ${rij('accu', accuRij, meter)}
                   </div>
-                  <div style="text-align:left">
+                  <div class="ovf-huis" style="text-align:left">
                     <div style="line-height:1;white-space:nowrap"><span style="font-size:30px;font-weight:700;color:${INKT}">${huis[0]}</span> <span style="font-size:13px;color:${GRIJS}">${huis[1]}</span></div>
                     <div style="font-size:11.5px;line-height:1.35;color:${GRIJS};padding-top:3px;white-space:nowrap"><ha-icon icon="mdi:home-lightning-bolt-outline" style="--mdc-icon-size:13px;width:13px;height:13px;vertical-align:middle;color:${HUIS}"></ha-icon> huis · verbruik</div>
                   </div>
-                </div>`;
+                </div></div>`;
               ]]]
         # GRAFIEKEN NAAST ELKAAR: links 2 uur productie tegen huisverbruik,
         # rechts de live-strook van het laatste halfuur. Eerst stond de strook
@@ -383,12 +400,19 @@ cards:
         # De flex-basis laat de strook op een smal scherm (telefoon, één
         # kolom) onder de grote grafiek vallen in plaats van onleesbaar
         # smal te worden.
+        # LET OP DE `> *` (4 oktober 2026): HA zet elke kaart in een stack in
+        # een `hui-card` met `display: contents`. Een flex-regel op
+        # `#root > :first-child` landt op dat onzichtbare omhulsel en doet
+        # niets; het flex-item is het kind daarvan. Zonder die extra stap
+        # brak de rij op een telefoon nooit af, kregen beide grafieken 158 px
+        # en tekende ApexCharts op zijn standaard 300 px, afgekapt: de
+        # 2-uursas liep tot 07:50 terwijl het 09:09 was.
         - type: horizontal-stack
           card_mod:
             style: |
               #root { gap: 2px 16px !important; flex-wrap: wrap !important; align-items: flex-end !important; }
-              #root > :first-child { flex: 1.7 1 320px !important; }
-              #root > :last-child { flex: 1 1 210px !important; }
+              #root > :first-child > * { flex: 1.7 1 320px !important; }
+              #root > :last-child > * { flex: 1 1 210px !important; }
           cards:
             # 2 uur productie tegen huisverbruik
             - type: vertical-stack
@@ -659,7 +683,7 @@ cards:
           card_mod:
             style: |
               #root { gap: 10px !important; flex-wrap: wrap !important; }
-              #root > * { flex: 0 0 auto !important; white-space: nowrap !important; }
+              #root > *, #root > * > * { flex: 0 0 auto !important; white-space: nowrap !important; }
           cards:
             - type: custom:button-card
               template: ov_pill
@@ -722,6 +746,20 @@ cards:
             navigation_path: "#ov-energie"
           variables:
             title: STROOMPRIJS
+          # Deze kop draagt een hele zin ("nu € 0,19 · laagste 14:00 € 0,185 ·
+          # vandaag € 5,98 · 17,3 kWh afname"). In ov_title is de badgekolom
+          # `auto`, dus op een telefoon werd hij breder dan de kaart en liep
+          # hij dwars door "STROOMPRIJS". Hier omgedraaid: de titel houdt zijn
+          # breedte, de zin krijgt de rest en breekt rechts uitgelijnd af.
+          styles:
+            grid:
+              - grid-template-columns: auto minmax(0, 1fr)
+              - align-items: start
+            custom_fields:
+              b:
+                - min-width: 0
+                - white-space: normal
+                - text-align: right
           custom_fields:
             b: |
               [[[
@@ -778,7 +816,7 @@ cards:
                   var kwh = (a && !isNaN(Number(a.state))) ? ` · ${Number(a.state).toFixed(1).replace('.',',')} kWh afname` : '';
                   kosten = `<span style="white-space:nowrap"> · vandaag <span style="font-weight:600;color:${kv < 0 ? 'var(--ov-ok)' : 'var(--primary-text-color)'}">€ ${kv.toFixed(2).replace('.',',')}</span>${kwh}</span>`;
                 }
-                return `<span style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ov-ink-65)"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span><span style="color:var(--primary-text-color);font-weight:600">nu ${nuTxt}</span><span>${tip}${kosten}</span></span>`;
+                return `<span style="display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:2px 8px;font-size:12.5px;line-height:1.5;color:var(--ov-ink-65)"><span style="display:inline-flex;align-items:center;gap:8px;white-space:nowrap"><span style="width:8px;height:8px;border-radius:50%;background:${col}"></span><span style="color:var(--primary-text-color);font-weight:600">nu ${nuTxt}</span></span>${tip ? `<span style="white-space:nowrap">${tip}</span>` : ''}${kosten}</span>`;
               ]]]
         - type: custom:apexcharts-card
           # Meeschuivend venster: 3 uur terug tot 27 uur vooruit. Een vast
