@@ -280,6 +280,22 @@ scenario("koeldag, geen zon, kamer koel", "10:00",
             "input_number.klimaat_verwachte_max": "24"})
 check("koeldag, schaduwzijde koel", "kantoor_rechts", "open")
 
+# --- neutrale dag: zon en warmte elk op zich genoeg ------------------------
+# Op 5 oktober 2026 stond de zon vanaf 09:00 op het kantoor, maar ging het
+# rolluik pas om 14:25 op de kier: de oude regel wachtte tot de kamer 22° was.
+zon_zij = {"binary_sensor.zon_op_zijgevel": "on",
+           "binary_sensor.zon_richting_zijgevel": "on"}
+scenario("neutraal: zon, kamer koel", "11:00", **zon_zij)
+check("neutraal: zon, niet warm -> kier", "kantoor_links", "kier")
+scenario("neutraal: zon, kamer warm", "11:00",
+         **dict(zon_zij, **{"sensor.kantoor_kantoor_temperatuur_temperatuur": "22.5"}))
+check("neutraal: zon en warm -> dicht", "kantoor_links", "dicht")
+scenario("neutraal: geen zon, kamer warm", "11:00",
+         **{"sensor.kantoor_kantoor_temperatuur_temperatuur": "22.5"})
+check("neutraal: geen zon, wel warm -> dicht", "kantoor_links", "dicht")
+scenario("neutraal: geen zon, kamer koel", "11:00")
+check("neutraal: geen zon, niet warm -> open", "kantoor_links", "open")
+
 # --- winter ----------------------------------------------------------------
 scenario("winterdag met zon", "12:00",
          **{"input_select.klimaat_regime": "Verwarmen",

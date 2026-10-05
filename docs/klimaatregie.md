@@ -187,7 +187,8 @@ De beslistabel, van hoog naar laag:
      kier. Anders open.
    - *Verwarmen*: zon → open (gratis warmte), tenzij de kamer al te warm is.
      Anders open voor het daglicht.
-   - *Neutraal*: open, tenzij zon én een warme kamer.
+   - *Neutraal*: kamer boven de comfortgrens → dicht (met of zonder zon).
+     Zon op de gevel maar kamer nog koel → kier. Geen zon en koel → open.
 5. **Airco koelt** in die zone → geen open rolluik; anders koel je de straat.
    Wel pas als hij het vijf minuten volhoudt (`AIRCO_KIER_NA` in
    `klimaat.jinja`). Op 19 augustus 2026 viel de zolderairco steeds na een
