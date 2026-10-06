@@ -16,6 +16,37 @@
 ##############################################################################
 
 kitchen_clock_display_package:
+  ###########################################################################
+  ## Wanneer stond "<naam> komt thuis" voor het laatst op de klok
+  ###########################################################################
+  # Eén attribuut per persoon (partner/robin/maxi/mini, de trigger-id's van de
+  # automatisering hieronder), gezet door het event dat die automatisering
+  # afvuurt nadat de melding op de klok staat. Bestaat voor de rem van vijf
+  # minuten per persoon; zie daar waarom.
+  #
+  # Een trigger-sensor en geen vier input_datetime-helpers: het is één ding
+  # (wanneer piepte de klok voor wie), en een trigger-sensor onthoudt zijn
+  # attributen over een herstart heen. Tot het eerste event staat een
+  # attribuut er niet - de automatisering leest dat als "lang geleden".
+  template:
+    - triggers:
+        - trigger: event
+          event_type: klok_thuiskomst_getoond
+      sensor:
+        - name: Klok thuiskomst laatst getoond
+          unique_id: klok_thuiskomst_laatst_getoond
+          icon: mdi:home-clock-outline
+          state: "{{ trigger.event.data.wie }}"
+          attributes:
+            partner: >-
+              {{ now().isoformat() if trigger.event.data.wie == 'partner' else this.attributes.get('partner') }}
+            robin: >-
+              {{ now().isoformat() if trigger.event.data.wie == 'robin' else this.attributes.get('robin') }}
+            maxi: >-
+              {{ now().isoformat() if trigger.event.data.wie == 'maxi' else this.attributes.get('maxi') }}
+            mini: >-
+              {{ now().isoformat() if trigger.event.data.wie == 'mini' else this.attributes.get('mini') }}
+
   automation:
     - id: kitchen_clock_display_partner_home
       alias: Kitchen - Clock Locations Family
@@ -48,7 +79,26 @@ kitchen_clock_display_package:
           zone: zone.home
           event: enter
           id: mini
-      conditions: []
+      # HOOGUIT ÉÉN KEER PER VIJF MINUTEN PER PERSOON (Robin, 2026-10-06)
+      # Op 6 oktober sprong de iPhone van Samantha een kwartier lang tussen
+      # thuis en de Plus, 300 meter verderop, soms binnen een seconde - iOS gaf
+      # afwisselend een echte en een nep-positie. Elke sprong naar thuis gaf
+      # hier een "komt thuis" met piep: twaalf keer in twintig minuten.
+      #
+      # Bewust GEEN `for:` op de trigger: de melding moet komen op het moment
+      # dat iemand thuiskomt, niet een minuut later. De eerste melding gaat dus
+      # direct; alleen de herhalingen binnen vijf minuten vallen weg.
+      #
+      # Per persoon en niet voor de hele automatisering, want Robin en Samantha
+      # komen vaak samen thuis - en de stotterende telefoon van de een mag de
+      # melding van de ander niet opslokken. `as_timestamp(..., 0)` vangt het
+      # attribuut dat er nog niet is (nog nooit gemeld) als "heel lang geleden".
+      conditions:
+        - alias: Voor deze persoon niet al gemeld in de laatste 5 minuten
+          condition: template
+          value_template: >-
+            {% set laatst = state_attr('sensor.klok_thuiskomst_laatst_getoond', trigger.id) %}
+            {{ as_timestamp(now()) - as_timestamp(laatst, 0) > 300 }}
       actions:
         # De namen van het gezin staan in `input_text`-velden (zie
         # packages/9 - Other/Persons.yaml); alleen Robin staat hier letterlijk,
@@ -76,6 +126,11 @@ kitchen_clock_display_package:
               { "icon": 22078, "color":"FFFFFF", "sound": "notify", "repeat":
               2, "text": {{ (naam ~ " komt thuis") | to_json }}, "stack": false,
               "scrollSpeed": 75 }
+        # Pas NA het publiceren: een melding die niet uitging (geen naam) zet
+        # de rem ook niet aan.
+        - event: klok_thuiskomst_getoond
+          event_data:
+            wie: "{{ trigger.id }}"
 
     - id: kitchen_clock_display_traveltime
       alias: Kitchen - Clock Time to Travel Work Robin
