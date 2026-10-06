@@ -79,8 +79,39 @@ pc_logan_package:
            else today_at('05:00') - timedelta(days=1) }}
       end: "{{ now() }}"
 
+    ##########################################################################
+    ## Pc en PlayStation samen
+    ##
+    ## Telt de tijd dat de pc OF de PlayStation in de speelkamer aanstaat
+    ## (packages/0 - Ground Floor/Playroom/Playstation.yaml). Niet de twee
+    ## minutentellers bij elkaar opgeteld: staan ze tegelijk aan - Logan op
+    ## de pc, iemand anders op de PlayStation - dan telt dat kwartier hier
+    ## één keer en niet twee keer.
+    ##
+    ## Het porren hieronder kijkt nog steeds alleen naar de pc.
+    ##########################################################################
+    - platform: history_stats
+      name: gametijd_logan_vandaag_uren
+      unique_id: gametijd_logan_vandaag_uren
+      entity_id: binary_sensor.gamen_logan
+      state: "on"
+      type: time
+      start: >-
+        {{ today_at('05:00') if now() >= today_at('05:00')
+           else today_at('05:00') - timedelta(days=1) }}
+      end: "{{ now() }}"
+
   template:
     - binary_sensor:
+        # Geen eigen `delay_on`/`delay_off`: de twee sensoren hebben die al.
+        - name: gamen_logan
+          unique_id: gamen_logan
+          icon: mdi:controller
+          device_class: running
+          state: >
+            {{ is_state('binary_sensor.pc_logan_aan', 'on')
+               or is_state('binary_sensor.playstation_speelkamer_aan', 'on') }}
+
         # `delay_on` van twee minuten: een pc die opstart trekt meteen stroom,
         # maar een stofzuiger of een föhn in datzelfde stopcontact ook. Twee
         # minuten is te lang voor die twee en te kort om van een echte sessie
@@ -143,6 +174,19 @@ pc_logan_package:
             over_limiet: >
               {{ states('sensor.pc_logan_gametijd_vandaag_uren') | float(0) * 60
                  > states('input_number.pc_logan_gametijd_limiet') | float(90) }}
+
+        # Pc en PlayStation samen, in minuten. Dit is wat de pil op het
+        # overzicht laat zien en tegen de limiet afzet.
+        - name: gametijd_logan
+          unique_id: gametijd_logan
+          icon: mdi:controller
+          unit_of_measurement: min
+          device_class: duration
+          state_class: measurement
+          availability: "{{ has_value('sensor.gametijd_logan_vandaag_uren') }}"
+          state: >
+            {{ (states('sensor.gametijd_logan_vandaag_uren') | float(0) * 60)
+               | round(0) | int }}
 
   script:
     ##########################################################################

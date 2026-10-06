@@ -1,0 +1,70 @@
+##############################################################################
+## DE PLAYSTATION IN DE SPEELKAMER
+##
+## Net als bij de pc van Logan (packages/1 - First Floor/Bedroom Maxi/PC.yaml)
+## is het vermogen van de stekker het enige wat je ziet:
+## `sensor.speelkamer_stopcontact_apparatuur_power`. De media_player van de
+## PS5 is geen alternatief: het hele `media_player`-domein staat buiten de
+## recorder, dus een history_stats erop telt niets.
+##
+## Gemeten over 22 september - 6 oktober 2026, in minuten per vermogensband:
+##
+##     rust      :   0 -  20 W   (vrijwel altijd)
+##     rustmodus :  20 -  73 W   (elke nacht ~4 minuten updates, en op
+##                                2 oktober 45 minuten rond 50 W - een
+##                                download of controllers laden)
+##     menu      :  95 - 155 W   (na een spel, ~13 minuten op 5 oktober)
+##     spelen    : 200 - 370 W   (zwaartepunt 330-360 W)
+##
+## De drempel staat op 90 W: boven alles wat de rustmodus ooit deed (73 W), en
+## onder het menu. Dat het menu meetelt is een keuze - wie in het menu van
+## de PlayStation zit, zit achter de PlayStation.
+##
+## Telling, dag van 05:00 tot 05:00 en de `delay_on`/`delay_off` zijn
+## hetzelfde als bij de pc; zie de uitleg daar.
+##############################################################################
+
+playstation_speelkamer_package:
+
+  sensor:
+    - platform: history_stats
+      name: playstation_speelkamer_speeltijd_vandaag_uren
+      unique_id: playstation_speelkamer_speeltijd_vandaag_uren
+      entity_id: binary_sensor.playstation_speelkamer_aan
+      state: "on"
+      type: time
+      start: >-
+        {{ today_at('05:00') if now() >= today_at('05:00')
+           else today_at('05:00') - timedelta(days=1) }}
+      end: "{{ now() }}"
+
+  template:
+    - binary_sensor:
+        - name: playstation_speelkamer_aan
+          unique_id: playstation_speelkamer_aan
+          icon: mdi:sony-playstation
+          device_class: running
+          delay_on: "00:02:00"
+          delay_off: "00:03:00"
+          state: >
+            {{ states('sensor.speelkamer_stopcontact_apparatuur_power')
+               | float(-1) >= 90 }}
+          attributes:
+            watt: >
+              {{ states('sensor.speelkamer_stopcontact_apparatuur_power')
+                 | float(-1) | round(0) | int }}
+            drempel: 90
+
+    - sensor:
+        # In minuten, net als `sensor.pc_logan_gametijd`, zodat het dashboard
+        # en `sensor.gametijd_logan` (PC.yaml) met dezelfde eenheid rekenen.
+        - name: playstation_speelkamer_speeltijd
+          unique_id: playstation_speelkamer_speeltijd
+          icon: mdi:sony-playstation
+          unit_of_measurement: min
+          device_class: duration
+          state_class: measurement
+          availability: "{{ has_value('sensor.playstation_speelkamer_speeltijd_vandaag_uren') }}"
+          state: >
+            {{ (states('sensor.playstation_speelkamer_speeltijd_vandaag_uren') | float(0) * 60)
+               | round(0) | int }}
