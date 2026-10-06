@@ -475,6 +475,13 @@ cards:
                       # closestInArray krijgen hun x en y gedeeld door de gemeten
                       # schaal (zichtbare breedte / layoutbreedte van de grafiek).
                       # De randtoetsen blijven in schermpixels, waar ze kloppen.
+                      # TOOLTIP RECHTS AFGEKAPT. Zelfde fout, andere plek: voorbij
+                      # het midden klapt ApexCharts de tooltip naar links, en schuift
+                      # hem daarvoor zijn eigen breedte op. Die breedte meet hij met
+                      # getBoundingClientRect, dus 70% te kort, en de tooltip viel
+                      # over de rechterrand. `tooltipRect` wordt maar op één plek
+                      # gezet (seriesHoverByContext); een setter op het prototype
+                      # deelt breedte en hoogte daar door dezelfde schaal.
                       # Gepatcht op het prototype, één keer per pagina: ApexCharts
                       # maakt bij een update nieuwe tooltip-objecten aan, en het
                       # prototype blijft. Zonder zoom is de schaal 1 en verandert er
@@ -484,16 +491,30 @@ cards:
                         mounted: &ov_zoom_muis |
                           EVAL:function(ctx) {
                             var tt = ctx && ctx.w && ctx.w.globals.tooltip || ctx && ctx.tooltip;
-                            var u = tt && tt.tooltipUtil;
-                            var proto = u && Object.getPrototypeOf(u);
-                            if (!proto || proto.__ovZoomMuis || typeof proto.closestInMultiArray !== 'function') return;
-                            proto.__ovZoomMuis = true;
                             var schaal = function(w) {
                               var el = w && w.globals && w.globals.dom && w.globals.dom.baseEl;
                               if (!el || !el.offsetWidth) return 1;
                               var z = el.getBoundingClientRect().width / el.offsetWidth;
                               return (z > 0 && Math.abs(z - 1) >= 0.01) ? z : 1;
                             };
+                            var ttProto = tt && Object.getPrototypeOf(tt);
+                            if (ttProto && !ttProto.__ovZoomRect) {
+                              ttProto.__ovZoomRect = true;
+                              Object.defineProperty(ttProto, 'tooltipRect', {
+                                configurable: true,
+                                get: function() { return this.__ovRect; },
+                                set: function(r) {
+                                  var z = schaal(this.w);
+                                  this.__ovRect = (r && z !== 1)
+                                    ? Object.assign({}, r, { ttWidth: r.ttWidth / z, ttHeight: r.ttHeight / z })
+                                    : r;
+                                }
+                              });
+                            }
+                            var u = tt && tt.tooltipUtil;
+                            var proto = u && Object.getPrototypeOf(u);
+                            if (!proto || proto.__ovZoomMuis || typeof proto.closestInMultiArray !== 'function') return;
+                            proto.__ovZoomMuis = true;
                             var multi = proto.closestInMultiArray;
                             proto.closestInMultiArray = function(x, y, xs, ys) {
                               var z = schaal(this.w);
