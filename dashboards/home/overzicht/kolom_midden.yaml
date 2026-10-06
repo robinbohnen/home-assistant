@@ -475,13 +475,18 @@ cards:
                       # closestInArray krijgen hun x en y gedeeld door de gemeten
                       # schaal (zichtbare breedte / layoutbreedte van de grafiek).
                       # De randtoetsen blijven in schermpixels, waar ze kloppen.
-                      # TOOLTIP RECHTS AFGEKAPT. Zelfde fout, andere plek: voorbij
-                      # het midden klapt ApexCharts de tooltip naar links, en schuift
-                      # hem daarvoor zijn eigen breedte op. Die breedte meet hij met
-                      # getBoundingClientRect, dus 70% te kort, en de tooltip viel
-                      # over de rechterrand. `tooltipRect` wordt maar op één plek
-                      # gezet (seriesHoverByContext); een setter op het prototype
-                      # deelt breedte en hoogte daar door dezelfde schaal.
+                      # TOOLTIP VALT OVER DE STREEP. Zelfde fout bij het plaatsen:
+                      # voorbij het midden zet ApexCharts de tooltip links van de
+                      # streep en schuift hem daarvoor zijn breedte op, gemeten met
+                      # getBoundingClientRect, dus 70% te kort. Rechts viel hij over
+                      # de rand, in het midden over de lijn heen. Die breedte bij
+                      # `tooltipRect` corrigeren (eerste poging) hielp niet: in
+                      # headless Chrome nagemeten kwam de oude waarde er gewoon
+                      # weer in terecht. Daarom zetten moveTooltip (lijnen) en
+                      # handleBarTooltip (stroomprijs-staafjes) de tooltip na
+                      # afloop opnieuw neer, met dezelfde regels maar met
+                      # offsetWidth/-Height: de layoutmaat, waar zoom niet aan zit.
+                      # Nagemeten op 0,70: rechterrand 3 px links van de streep.
                       # Gepatcht op het prototype, één keer per pagina: ApexCharts
                       # maakt bij een update nieuwe tooltip-objecten aan, en het
                       # prototype blijft. Zonder zoom is de schaal 1 en verandert er
@@ -491,39 +496,63 @@ cards:
                         mounted: &ov_zoom_muis |
                           EVAL:function(ctx) {
                             var tt = ctx && ctx.w && ctx.w.globals.tooltip || ctx && ctx.tooltip;
+                            if (!tt) return;
                             var schaal = function(w) {
                               var el = w && w.globals && w.globals.dom && w.globals.dom.baseEl;
                               if (!el || !el.offsetWidth) return 1;
                               var z = el.getBoundingClientRect().width / el.offsetWidth;
                               return (z > 0 && Math.abs(z - 1) >= 0.01) ? z : 1;
                             };
-                            var ttProto = tt && Object.getPrototypeOf(tt);
-                            if (ttProto && !ttProto.__ovZoomRect) {
-                              ttProto.__ovZoomRect = true;
-                              Object.defineProperty(ttProto, 'tooltipRect', {
-                                configurable: true,
-                                get: function() { return this.__ovRect; },
-                                set: function(r) {
-                                  var z = schaal(this.w);
-                                  this.__ovRect = (r && z !== 1)
-                                    ? Object.assign({}, r, { ttWidth: r.ttWidth / z, ttHeight: r.ttHeight / z })
-                                    : r;
-                                }
-                              });
+                            var u = tt.tooltipUtil && Object.getPrototypeOf(tt.tooltipUtil);
+                            if (u && !u.__ovZoom && typeof u.closestInMultiArray === 'function') {
+                              u.__ovZoom = true;
+                              var multi = u.closestInMultiArray;
+                              u.closestInMultiArray = function(x, y, xs, ys) {
+                                var z = schaal(this.w);
+                                return multi.call(this, x / z, y / z, xs, ys);
+                              };
+                              var enkel = u.closestInArray;
+                              if (typeof enkel === 'function') {
+                                u.closestInArray = function(x, xs) { return enkel.call(this, x / schaal(this.w), xs); };
+                              }
                             }
-                            var u = tt && tt.tooltipUtil;
-                            var proto = u && Object.getPrototypeOf(u);
-                            if (!proto || proto.__ovZoomMuis || typeof proto.closestInMultiArray !== 'function') return;
-                            proto.__ovZoomMuis = true;
-                            var multi = proto.closestInMultiArray;
-                            proto.closestInMultiArray = function(x, y, xs, ys) {
-                              var z = schaal(this.w);
-                              return multi.call(this, x / z, y / z, xs, ys);
-                            };
-                            var enkel = proto.closestInArray;
-                            if (typeof enkel === 'function') {
-                              proto.closestInArray = function(x, xs) {
-                                return enkel.call(this, x / schaal(this.w), xs);
+                            var pos = tt.tooltipPosition && Object.getPrototypeOf(tt.tooltipPosition);
+                            if (pos && !pos.__ovZoom && typeof pos.moveTooltip === 'function') {
+                              pos.__ovZoom = true;
+                              var move = pos.moveTooltip;
+                              pos.moveTooltip = function(x, y, s) {
+                                move.apply(this, arguments);
+                                var w = this.w, t = this.ttCtx, el = t && t.getElTooltip();
+                                if (!el || !el.offsetWidth || t.fixedTooltip || w.config.tooltip.followCursor || schaal(w) === 1) return;
+                                var g = w.globals, tw = el.offsetWidth, th = el.offsetHeight;
+                                var m = (s !== null && s !== undefined) ? parseFloat(s) : 1;
+                                var p = parseFloat(x) + m + 5, q = parseFloat(y) + m / 2;
+                                if (p > g.gridWidth / 2) p = p - tw - m - 10;
+                                if (p > g.gridWidth - tw - 10) p = g.gridWidth - tw;
+                                if (p < -20) p = -20;
+                                if (!g.isBarHorizontal && th / 2 + q > g.gridHeight) q = g.gridHeight - th + g.translateY;
+                                if (isNaN(p)) return;
+                                el.style.left = (p + g.translateX) + 'px';
+                                el.style.top = q + 'px';
+                              };
+                            }
+                            var isec = tt.intersect && Object.getPrototypeOf(tt.intersect);
+                            if (isec && !isec.__ovZoom && typeof isec.handleBarTooltip === 'function') {
+                              isec.__ovZoom = true;
+                              var bar = isec.handleBarTooltip;
+                              isec.handleBarTooltip = function() {
+                                bar.apply(this, arguments);
+                                var w = this.w, t = this.ttCtx, el = t && t.getElTooltip();
+                                if (!el || !el.offsetWidth || t.fixedTooltip || w.config.tooltip.shared || w.config.tooltip.followCursor || schaal(w) === 1) return;
+                                var g = w.globals, kruis = w.globals.dom.baseEl.querySelector('.apexcharts-xcrosshairs');
+                                var cx = kruis ? parseFloat(kruis.getAttribute('x')) : NaN;
+                                if (isNaN(cx)) return;
+                                var tw = el.offsetWidth, b = cx;
+                                if (b + tw > g.gridWidth) b -= tw;
+                                if (b < 0) b = 0;
+                                el.style.left = (b + g.translateX) + 'px';
+                                var r = t.tooltipRect, top = parseFloat(el.style.top);
+                                if (r && !isNaN(top)) el.style.top = (top + r.ttHeight / 2 - el.offsetHeight / 2) + 'px';
                               };
                             }
                           }
