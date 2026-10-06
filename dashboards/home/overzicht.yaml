@@ -4075,6 +4075,92 @@ cards:
 
           # ----- 4. Klimaat: bestaat hier niet, blok valt weg -----
 
+      # --------- Gametijd Logan ---------
+      # De gametijd-pil in de kopbalk opent deze popup. De pil zegt alleen het
+      # totaal; hier staan pc en PlayStation los, elk tegen dezelfde limiet -
+      # zo wordt er ook omgeroepen (per apparaat, zie de kop van
+      # packages/1 - First Floor/Bedroom Maxi/PC.yaml). Pc + PlayStation kan
+      # meer zijn dan het totaal: tijd waarin ze allebei aanstonden telt daar
+      # maar één keer.
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#ov-gametijd"
+        name: Gametijd Logan
+        icon: mdi:controller
+        width_desktop: *ov_popup_width
+        styles: *ov_popup
+        cards:
+          - type: grid
+            columns: 3
+            square: false
+            cards:
+              - type: custom:mushroom-template-card
+                entity: sensor.gametijd_logan
+                primary: Samen
+                secondary: &gametijd_tekst >-
+                  {%- set m = states(entity) | float(none) -%}
+                  {%- set lim = states('input_number.pc_logan_gametijd_limiet') | float(90) | int -%}
+                  {%- macro kort(x) -%}
+                    {{- (x // 60) ~ 'u' ~ '%02d' | format(x % 60) if x >= 60 else x ~ ' min' -}}
+                  {%- endmacro -%}
+                  {%- if m is none -%}
+                    nog niet bekend
+                  {%- else -%}
+                    {{ kort(m | round(0) | int) }} van {{ kort(lim) }}
+                  {%- endif -%}
+                icon: mdi:controller
+                icon_color: >-
+                  {{ 'red' if states(entity) | float(0)
+                     > states('input_number.pc_logan_gametijd_limiet') | float(90)
+                     else 'blue' }}
+                # Alleen op het dashboard, er wordt niet op omgeroepen.
+                badge_icon: mdi:volume-off
+                badge_color: grey
+              - type: custom:mushroom-template-card
+                entity: sensor.pc_logan_gametijd
+                primary: >-
+                  Pc{{ ' · aan sinds ' ~ (states.binary_sensor.pc_logan_aan.last_changed
+                       | as_local).strftime('%H:%M')
+                       if is_state('binary_sensor.pc_logan_aan', 'on') else '' }}
+                secondary: *gametijd_tekst
+                icon: mdi:desktop-tower-monitor
+                icon_color: >-
+                  {{ 'red' if states(entity) | float(0)
+                     > states('input_number.pc_logan_gametijd_limiet') | float(90)
+                     else 'blue' if is_state('binary_sensor.pc_logan_aan', 'on')
+                     else 'grey' }}
+              - type: custom:mushroom-template-card
+                entity: sensor.playstation_speelkamer_speeltijd
+                primary: >-
+                  PlayStation{{ ' · aan sinds ' ~ (states.binary_sensor.playstation_speelkamer_aan.last_changed
+                       | as_local).strftime('%H:%M')
+                       if is_state('binary_sensor.playstation_speelkamer_aan', 'on') else '' }}
+                secondary: *gametijd_tekst
+                icon: mdi:sony-playstation
+                icon_color: >-
+                  {{ 'red' if states(entity) | float(0)
+                     > states('input_number.pc_logan_gametijd_limiet') | float(90)
+                     else 'blue' if is_state('binary_sensor.playstation_speelkamer_aan', 'on')
+                     else 'grey' }}
+          # Dezelfde helper als in de package; schuiven hier geldt meteen
+          # voor de pil, de pc en de PlayStation.
+          - type: custom:mushroom-number-card
+            entity: input_number.pc_logan_gametijd_limiet
+            name: Limiet per apparaat
+            icon: mdi:timer-cog-outline
+            icon_color: blue
+            display_mode: slider
+          # Wanneer er vandaag gespeeld is. Een tijdlijn van de twee
+          # aan/uit-sensoren, niet van de tellers: een oplopende lijn zegt
+          # hoeveel, maar dit zegt wanneer - en "hoeveel" staat hierboven al.
+          - type: history-graph
+            hours_to_show: 16
+            entities:
+              - entity: binary_sensor.pc_logan_aan
+                name: Pc
+              - entity: binary_sensor.playstation_speelkamer_aan
+                name: PlayStation
+
       # --------- Media / multiroom popup ---------
       - type: custom:bubble-card
         card_type: pop-up
