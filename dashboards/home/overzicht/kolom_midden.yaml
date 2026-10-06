@@ -460,42 +460,51 @@ cards:
                         show: false
                       # MUIS EN TOOLTIP UIT ELKAAR ONDER `zoom` (6 oktober 2026)
                       # De kolommen staan onder `zoom: var(--ov-zoom)`. ApexCharts
-                      # 3.x trekt de muis-x in schermpixels af van de gridrand
-                      # (getBoundingClientRect, al geschaald) en zoekt daarmee het
-                      # dichtstbijzijnde punt in zijn eigen, ongeschaalde pixels.
-                      # Op 0,70 kwam de tooltip zo op 70% van de muisafstand tot de
+                      # 3.x (de versie in apexcharts-card 2.1.2) neemt de muis-x in
+                      # schermpixels (al geschaald) en zoekt daarmee het dichtst-
+                      # bijzijnde punt in zijn eigen, ongeschaalde pixels. Op 0,70
+                      # kwam de tooltip zo op 70% van de muisafstand tot de
                       # linkerrand: links bijna goed, rechts een halfuur ernaast
                       # (muis op 07:05, tooltip op 06:32).
-                      # Dit vangt de muis af vóór ApexCharts hem ziet en deelt de
-                      # x-afstand tot de gridrand door de gemeten schaal (zichtbare
-                      # breedte / layoutbreedte; 1 zonder zoom, dan doet het niets).
-                      # Alleen x: y gebruikt ApexCharts om te checken of je nog
-                      # boven de grafiek bent, tegen de geschaalde hoogte, en die
-                      # check zou onderin anders de tooltip wegklikken.
+                      # NIET DE MUIS VERSCHUIVEN. De eerste fix deelde de muis-x zelf
+                      # door de schaal. Dan klopte het punt, maar handleStickyTooltip
+                      # toetst diezelfde x ook tegen de GESCHAALDE gridbreedte en
+                      # sloot de tooltip zodra je voorbij 70% kwam: rechts van 06:39
+                      # deed de grafiek niets meer.
+                      # Daarom alleen de zoekstap: closestInMultiArray en
+                      # closestInArray krijgen hun x en y gedeeld door de gemeten
+                      # schaal (zichtbare breedte / layoutbreedte van de grafiek).
+                      # De randtoetsen blijven in schermpixels, waar ze kloppen.
+                      # Gepatcht op het prototype, één keer per pagina: ApexCharts
+                      # maakt bij een update nieuwe tooltip-objecten aan, en het
+                      # prototype blijft. Zonder zoom is de schaal 1 en verandert er
+                      # niets, dus de grafieken in de pop-ups merken er niets van.
                       # Staat via het anker ook op de andere twee grafieken hier.
                       events:
                         mounted: &ov_zoom_muis |
                           EVAL:function(ctx) {
-                            var el = ctx && ctx.el;
-                            if (!el || el.__ovZoomMuis) return;
-                            el.__ovZoomMuis = true;
-                            var fix = function(e) {
-                              var grid = el.querySelector('.apexcharts-grid');
-                              if (!grid || !el.offsetWidth) return;
+                            var tt = ctx && ctx.w && ctx.w.globals.tooltip || ctx && ctx.tooltip;
+                            var u = tt && tt.tooltipUtil;
+                            var proto = u && Object.getPrototypeOf(u);
+                            if (!proto || proto.__ovZoomMuis || typeof proto.closestInMultiArray !== 'function') return;
+                            proto.__ovZoomMuis = true;
+                            var schaal = function(w) {
+                              var el = w && w.globals && w.globals.dom && w.globals.dom.baseEl;
+                              if (!el || !el.offsetWidth) return 1;
                               var z = el.getBoundingClientRect().width / el.offsetWidth;
-                              if (!z || Math.abs(z - 1) < 0.01) return;
-                              var left = grid.getBoundingClientRect().left;
-                              var x = function(cx) { return left + (cx - left) / z; };
-                              if (e.touches && e.touches.length) {
-                                var t = Array.prototype.map.call(e.touches, function(p) {
-                                  return { clientX: x(p.clientX), clientY: p.clientY, pageX: p.pageX, pageY: p.pageY, identifier: p.identifier, target: p.target };
-                                });
-                                Object.defineProperty(e, 'touches', { value: t, configurable: true });
-                              } else if (typeof e.clientX === 'number') {
-                                Object.defineProperty(e, 'clientX', { value: x(e.clientX), configurable: true });
-                              }
+                              return (z > 0 && Math.abs(z - 1) >= 0.01) ? z : 1;
                             };
-                            ['mousemove', 'mouseup', 'touchmove'].forEach(function(t) { el.addEventListener(t, fix, true); });
+                            var multi = proto.closestInMultiArray;
+                            proto.closestInMultiArray = function(x, y, xs, ys) {
+                              var z = schaal(this.w);
+                              return multi.call(this, x / z, y / z, xs, ys);
+                            };
+                            var enkel = proto.closestInArray;
+                            if (typeof enkel === 'function') {
+                              proto.closestInArray = function(x, xs) {
+                                return enkel.call(this, x / schaal(this.w), xs);
+                              };
+                            }
                           }
                     grid:
                       show: false
