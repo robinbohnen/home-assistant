@@ -25,7 +25,10 @@
 ## dan immers nog steeds boven de limiet.
 ##
 ## DE LIMIET IS EEN HELPER
-## `input_number.pc_logan_gametijd_limiet` (in minuten, standaard 90). Draaien
+## `input_number.pc_logan_gametijd_limiet` (in minuten, standaard 90). Hij
+## geldt per apparaat - de PlayStation in de speelkamer gebruikt dezelfde,
+## zie packages/0 - Ground Floor/Playroom/Playstation.yaml - en op het
+## dashboard voor pc en PlayStation samen (`sensor.gametijd_logan`). Draaien
 ## kan gewoon in de UI, zonder deze file aan te raken; vakantie ruimer, week
 ## voor een toets krapper. Alle teksten hieronder rekenen het getal zelf om
 ## naar "1 uur en 30 minuten", dus er staat nergens nog "anderhalf uur".
@@ -88,7 +91,13 @@ pc_logan_package:
     ## de pc, iemand anders op de PlayStation - dan telt dat kwartier hier
     ## één keer en niet twee keer.
     ##
-    ## Het porren hieronder kijkt nog steeds alleen naar de pc.
+    ## DE LIMIET GELDT HIER ALLEEN OP HET DASHBOARD
+    ## De pil op het overzicht zet dit totaal af tegen
+    ## `input_number.pc_logan_gametijd_limiet` en wordt rood als het erover
+    ## is. Omgeroepen wordt er niet op het totaal maar per apparaat, met
+    ## dezelfde limiet: de automatisering hieronder voor de pc, die in
+    ## Playstation.yaml voor de PlayStation (keuze van Robin, 6 oktober 2026).
+    ## Een uur pc en een uur PlayStation is dus een rode pil, maar stil.
     ##########################################################################
     - platform: history_stats
       name: gametijd_logan_vandaag_uren
@@ -197,16 +206,21 @@ pc_logan_package:
     ## er twee keer in staan - en dan is het een kwestie van tijd tot iemand
     ## er één van bijwerkt.
     ##########################################################################
+    # De id blijft `pc_logan_omroepen`, ook nu de PlayStation-automatisering
+    # in Playstation.yaml hem ook gebruikt (met de Sonos van de speelkamer):
+    # hernoemen laat een wees in het entiteitenregister achter.
     pc_logan_omroepen:
-      alias: PC Logan - Omroepen op zijn Sonos
+      alias: Gametijd - Omroepen op een Sonos
       description: >-
-        Zegt een zin op de Sonos van Logan, ook als die gemute is en ook als
-        er muziek op staat. Zet mute daarna terug zoals hij hem aantrof.
+        Zegt een zin op een Sonos (standaard die van Logan), ook als die
+        gemute is en ook als er muziek op staat. Zet mute daarna terug zoals
+        hij hem aantrof.
       icon: mdi:bullhorn
-      # `single`: er is één aanroeper (de automatisering hieronder) en die
-      # roept netjes na elkaar aan. Zou er ooit een tweede bij komen, maak er
-      # dan `queued` van - `single` laat de tweede omroep stilletjes vallen.
-      mode: single
+      # `queued` sinds er twee aanroepers zijn (pc en PlayStation): die kunnen
+      # tegelijk porren, en `single` liet de tweede omroep stilletjes vallen.
+      # Achter elkaar is hooguit een seconde of tien wachten.
+      mode: queued
+      max: 4
       fields:
         bericht:
           name: Bericht
@@ -215,7 +229,17 @@ pc_logan_package:
           example: Logan, je gametijd voor vandaag is op.
           selector:
             text:
+        speaker:
+          name: Speaker
+          description: Waarop; leeg is de Sonos van Logan
+          required: false
+          example: media_player.speelkamer_sonos
+          selector:
+            entity:
+              domain: media_player
       sequence:
+        - variables:
+            speaker: "{{ speaker | default('media_player.slaapkamer_maxi_sonos', true) }}"
         # DE SPEAKER KAN GEMUTE ZIJN, EN STAAT VAAK ZACHT
         # `announce: true` speelt een audioclip met een eigen volume (`extra`),
         # los van het speakervolume - dat staat hier op 5%, dus zonder die clip
@@ -226,7 +250,7 @@ pc_logan_package:
         # daarna terug - dat kost twee commando's en haalt de twijfel weg.
         - variables:
             was_gemute: >-
-              {{ state_attr('media_player.slaapkamer_maxi_sonos',
+              {{ state_attr(speaker,
                             'is_volume_muted') | bool(false) }}
         - if:
             - condition: template
@@ -235,19 +259,19 @@ pc_logan_package:
             - action: media_player.volume_mute
               continue_on_error: true
               target:
-                entity_id: media_player.slaapkamer_maxi_sonos
+                entity_id: "{{ speaker }}"
               data:
                 is_volume_muted: false
             # Even lucht tussen ontdempen en de clip: Sonos neemt het commando
             # aan voordat hij het uitgevoerd heeft.
             - delay: "00:00:01"
-        - alias: Omroepen op de Sonos van Logan
+        - alias: Omroepen op de gekozen Sonos
           action: media_player.play_media
           # Een speaker die net van het net is mag de rest van deze run niet
           # afbreken - dan blijft de mute hieronder namelijk uit staan.
           continue_on_error: true
           target:
-            entity_id: media_player.slaapkamer_maxi_sonos
+            entity_id: "{{ speaker }}"
           data:
             announce: true
             extra:
@@ -267,7 +291,7 @@ pc_logan_package:
             - action: media_player.volume_mute
               continue_on_error: true
               target:
-                entity_id: media_player.slaapkamer_maxi_sonos
+                entity_id: "{{ speaker }}"
               data:
                 is_volume_muted: true
 

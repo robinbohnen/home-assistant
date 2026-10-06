@@ -22,6 +22,17 @@
 ##
 ## Telling, dag van 05:00 tot 05:00 en de `delay_on`/`delay_off` zijn
 ## hetzelfde als bij de pc; zie de uitleg daar.
+##
+## OMROEPEN OP DE SPEELKAMER-SONOS
+## Gaat de PlayStation-tijd van vandaag over dezelfde limiet als de pc
+## (`input_number.pc_logan_gametijd_limiet`), dan wordt er omgeroepen op
+## `media_player.speelkamer_sonos` en elke twee minuten herhaald zolang hij
+## aan blijft - hetzelfde als bij de pc, maar zonder knipperend licht: de
+## speelkamer is een gedeelde ruimte en daar is alleen om omroepen gevraagd.
+## Pc en PlayStation porren elk op hun eigen teller; het totaal van de twee
+## staat alleen op het dashboard (keuze van Robin, 6 oktober 2026).
+##
+## De omroep zegt geen naam: de stekker weet niet wie er speelt.
 ##############################################################################
 
 playstation_speelkamer_package:
@@ -68,3 +79,162 @@ playstation_speelkamer_package:
           state: >
             {{ (states('sensor.playstation_speelkamer_speeltijd_vandaag_uren') | float(0) * 60)
                | round(0) | int }}
+
+  automation:
+    ##########################################################################
+    ## De PlayStation-tijd van vandaag is op
+    ##
+    ## Dezelfde opbouw als `bedroom_maxi_pc_anderhalf_uur` in PC.yaml - lees
+    ## daar de uitleg bij de twee triggers, de `from_state`-guard en de
+    ## porlus. YAML-ankers werken niet tussen bestanden, dus de teksten en
+    ## het omroepvenster staan hier opnieuw.
+    ##########################################################################
+    - id: playroom_playstation_speeltijd_op
+      alias: Playroom - Speeltijd PlayStation is op
+      description: >-
+        Roept op de Sonos van de speelkamer om zodra de PlayStation-tijd van
+        vandaag over de limiet uit `input_number.pc_logan_gametijd_limiet`
+        gaat, en herhaalt dat elke twee minuten zolang hij aan blijft. Gaat
+        hij uit en weer aan terwijl de tijd al op is, dan begint het opnieuw.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - id: limiet_bereikt
+          trigger: numeric_state
+          entity_id: sensor.playstation_speelkamer_speeltijd
+          above: input_number.pc_logan_gametijd_limiet
+        # 89.9 en niet 90: zelfde grens als de `>= 90` van de sensor.
+        - id: weer_aan
+          trigger: numeric_state
+          entity_id: sensor.speelkamer_stopcontact_apparatuur_power
+          above: 89.9
+          for: "00:02:00"
+      conditions:
+        - alias: Niet als de sensor alleen maar terugkomt
+          condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.from_state.state not in ['unknown', 'unavailable'] }}
+        - alias: Hij staat nu echt aan
+          condition: template
+          value_template: >-
+            {{ states('sensor.speelkamer_stopcontact_apparatuur_power') | float(-1)
+               >= state_attr('binary_sensor.playstation_speelkamer_aan', 'drempel') | int(90) }}
+        - alias: De tijd is op
+          condition: template
+          value_template: >-
+            {{ states('sensor.playstation_speelkamer_speeltijd') | float(0)
+               > states('input_number.pc_logan_gametijd_limiet') | float(90) }}
+      variables:
+        limiet_tekst: &ps_limiettekst >-
+          {% set m = states('input_number.pc_logan_gametijd_limiet')
+                     | float(90) | round(0) | int %}
+          {% set u = m // 60 %}{% set r = m % 60 %}
+          {{ (u ~ ' uur') if u else '' }}{{ ' en ' if u and r else ''
+          }}{{ (r ~ (' minuut' if r == 1 else ' minuten')) if r or not u else '' }}
+        gebruikt_tekst: &ps_gebruikttekst >-
+          {% set m = states('sensor.playstation_speelkamer_speeltijd') | float(0) | round(0) | int %}
+          {% set u = m // 60 %}{% set r = m % 60 %}
+          {{ (u ~ ' uur') if u else '' }}{{ ' en ' if u and r else ''
+          }}{{ (r ~ (' minuut' if r == 1 else ' minuten')) if r or not u else '' }}
+        # Zelfde venster als bij de pc: 07:00 tot Logans bedtijd.
+        omroepen: &ps_omroepvenster >-
+          {% set helper = 'input_datetime.bedtime_maxi_weekend'
+                          if now().weekday() in [4, 5]
+                          else 'input_datetime.bedtime_maxi' %}
+          {% set bed = states(helper) %}
+          {% set bed = bed if ':' in bed else '21:30:00' %}
+          {{ now() >= today_at('07:00') and now() < today_at(bed) }}
+        herhalingen: 15
+      actions:
+        - alias: Bericht aan de ouders
+          action: notify.mobile_devices_adults
+          data:
+            title: >-
+              {{ 'Speeltijd PlayStation - weer aan' if trigger.id == 'weer_aan'
+                 else 'Speeltijd PlayStation - tijd is op' }}
+            message: >-
+              {% if trigger.id == 'weer_aan' %}
+              De PlayStation in de speelkamer is weer aangezet terwijl de
+              speeltijd op is.{% endif %}
+              Vandaag staat hij {{ gebruikt_tekst }} aan; de limiet is
+              {{ limiet_tekst }}.
+              {{ 'Het is net omgeroepen in de speelkamer.' if omroepen
+                 else 'Het is buiten de omroeptijden, dus er is niets omgeroepen.' }}
+            data: &ps_meldingdata
+              tag: playstation-speelkamer-speeltijd
+              notification_icon: mdi:sony-playstation
+        - alias: Omroepen, maar niet 's nachts
+          if:
+            - condition: template
+              value_template: "{{ omroepen }}"
+          then:
+            - action: script.pc_logan_omroepen
+              data:
+                speaker: media_player.speelkamer_sonos
+                bericht: >-
+                  {% if trigger.id == 'weer_aan' %}
+                  De speeltijd op de PlayStation is voor vandaag al op. Zet hem uit.
+                  {% else %}
+                  De PlayStation staat vandaag al {{ gebruikt_tekst }} aan. De
+                  speeltijd van {{ limiet_tekst }} is op.
+                  {% endif %}
+
+        - alias: Blijft hij aan, dan elke twee minuten opnieuw
+          repeat:
+            sequence:
+              - alias: Twee minuten wachten, tenzij hij eerder uitgaat
+                wait_template: >-
+                  {{ states('sensor.speelkamer_stopcontact_apparatuur_power') | float(-1)
+                     < state_attr('binary_sensor.playstation_speelkamer_aan', 'drempel') | int(90) }}
+                timeout: "00:02:00"
+                continue_on_timeout: true
+              - alias: PlayStation is uit - klaar
+                if:
+                  - condition: template
+                    value_template: "{{ wait.completed }}"
+                then:
+                  - stop: "De PlayStation is uit"
+
+              - variables:
+                  omroepen: *ps_omroepvenster
+                  limiet_tekst: *ps_limiettekst
+                  gebruikt_tekst: *ps_gebruikttekst
+
+              - alias: Bericht aan de ouders
+                action: notify.mobile_devices_adults
+                data:
+                  title: Speeltijd PlayStation - staat nog aan
+                  message: >-
+                    De PlayStation in de speelkamer staat nog steeds aan.
+                    Vandaag is dat {{ gebruikt_tekst }}, bij een limiet van
+                    {{ limiet_tekst }}.
+                    {{ 'Het wordt opnieuw omgeroepen.' if omroepen
+                       else 'Het is buiten de omroeptijden, dus er klinkt niets.' }}
+                  data: *ps_meldingdata
+
+              - alias: Omroepen, maar niet 's nachts
+                if:
+                  - condition: template
+                    value_template: "{{ omroepen }}"
+                then:
+                  - action: script.pc_logan_omroepen
+                    data:
+                      speaker: media_player.speelkamer_sonos
+                      bericht: >-
+                        De PlayStation staat nog steeds aan. Zet hem uit.
+            until:
+              - condition: template
+                value_template: "{{ repeat.index >= herhalingen | int(15) }}"
+
+        # Alleen bereikbaar als het half uur op is; zie PC.yaml.
+        - alias: We houden op met porren
+          action: notify.mobile_devices_adults
+          data:
+            title: Speeltijd PlayStation - er wordt niet meer gepord
+            message: >-
+              De PlayStation in de speelkamer stond na een half uur porren nog
+              steeds aan; vandaag staat er {{ gebruikt_tekst }} op. Vanaf nu is
+              het stil tot hij uitgaat. Gaat hij uit en weer aan, dan begint
+              het porren opnieuw.
+            data: *ps_meldingdata
