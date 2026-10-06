@@ -46,16 +46,18 @@ cards:
   # bel de volgende schooldag. `now()` in het template zorgt dat Home Assistant
   # hem elke minuut opnieuw rendert.
   #
-  # De studie ("Brugklas HAVO/VWO1") staat eronder in plaats van als badge op
-  # de kop: in de sensor is `studie` geen attribuut maar een veld binnen de
-  # lijst `aanmeldingen`, en daar kan `state_content` niet bij.
+  # Studie en klas ("Brugklas HAVO/VWO1 · klas UHV1D") staan eronder in plaats
+  # van als badge op de kop: de studie is geen attribuut maar een veld binnen
+  # de lijst `aanmeldingen`, en daar kan `state_content` niet bij. Klas en
+  # profiel zijn er sinds magister_school v2.1.0; het profiel verschijnt pas
+  # als het iets toevoegt aan de studienaam (zie `klas()` in school.jinja).
   - type: markdown
     content: |-
-      {%- from 'school.jinja' import nu, studie -%}
+      {%- from 'school.jinja' import nu, klas -%}
       {%- set kind = 'sensor.magister_logan_veen' -%}
       {{ nu(kind) }}
 
-      *{{ studie(kind) }}*
+      *{{ klas(kind) }}*
 
   #############################################################################
   ## Het rooster
@@ -143,6 +145,18 @@ cards:
     content: |-
       {%- from 'school.jinja' import cijfers -%}
       {{ cijfers('sensor.magister_logan_veen', 10) }}
+
+  # Per vak over het hele schooljaar, gewogen (voortgangscijfers, v2.1.0). De
+  # kaart erboven is "wat kwam er net binnen", deze "hoe staat hij ervoor".
+  # Zelfde voorwaarde als de kop: zonder recente cijfers zijn er ook geen
+  # voortgangscijfers, en er bestaat geen telsensor voor deze lijst.
+  - type: markdown
+    visibility: *heeft_cijfers
+    content: |-
+      {%- from 'school.jinja' import voortgang -%}
+      **Per vak dit schooljaar**
+
+      {{ voortgang('sensor.magister_logan_veen') }}
 
   #############################################################################
   ## Absenties

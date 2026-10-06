@@ -47,9 +47,23 @@
 
   Wat een "les" is: een afspraak die niet vervallen is en niet om 00:00 begint
   - dat laatste zijn dagvullende mededelingen en losse huiswerkregels, die
-  zouden de schooldag anders om middernacht laten beginnen. Bewust NIET op
+  zouden de schooldag anders om middernacht laten beginnen. Sinds v2.1.0 is er
+  ook `duurt_hele_dag`; die wordt er als extra vangnet bij weggefilterd, maar
+  de 00:00-regel blijft staan omdat hij ook zonder die vlag werkt. Bewust NIET op
   `is_huiswerk` gefilterd, anders dan de integratie zelf doet: die vlag zit
   ook op een gewone les waarin huiswerk is opgegeven.
+
+  ---------------------------------------------------------------------------
+  WAT magister_school v2.1.0 ERBIJ GAF (oktober 2026)
+  ---------------------------------------------------------------------------
+    - `klas` en `profiel` op de hoofdsensor              -> `klas()`
+    - `voortgangscijfers`: alle cijfers van dit jaar     -> `voortgang()`
+    - absenties met `geoorloofd`, `code`, `lesuur`       -> `absenties()`
+    - per afspraak `opmerking`, `is_online`,             -> `rooster()`, `nu()`
+      `duurt_hele_dag`, `docentcode`, `vak_id`
+    - per afspraak `is_afgerond` (niet in de release-    -> `werk()`,
+      notes, wel in de code): het afgevinkt-vinkje          `melding_morgen()`
+    - `vak_code` is weg (was altijd leeg); hier nooit gebruikt.
 
   ---------------------------------------------------------------------------
   MARKDOWN, GEEN LOSSE REGELS
@@ -129,7 +143,7 @@
       rooster, wél in de kalender). Huiswerk zonder les is altijd een
       dagitem van 00:00 en valt al af op de regex hieronder. -#}
   {{- afspraken_json(kind) | from_json
-        | rejectattr('is_uitval')
+        | rejectattr('is_uitval') | rejectattr('duurt_hele_dag')
         | selectattr('start', 'match', d ~ ' (?!00:00)')
         | sort(attribute='start') | list | to_json -}}
 {%- endmacro -%}
@@ -141,7 +155,7 @@
       anders telt een geschrapt dagitem (vervallen huiswerk) mee als een
       vervallen lesuur. -#}
   {{- afspraken_json(kind) | from_json
-        | selectattr('is_uitval')
+        | selectattr('is_uitval') | rejectattr('duurt_hele_dag')
         | selectattr('start', 'match', d ~ ' (?!00:00)')
         | sort(attribute='start') | list | to_json -}}
 {%- endmacro -%}
@@ -154,7 +168,7 @@
       'list' object is unsafe"), dus de datum wordt er met een regex afgeknipt
       in plaats van in een lus verzameld. -#}
   {{- afspraken_json(kind) | from_json
-        | rejectattr('is_uitval')
+        | rejectattr('is_uitval') | rejectattr('duurt_hele_dag')
         | rejectattr('start', 'search', ' 00:00')
         | map(attribute='start') | map('regex_replace', ' .*$', '')
         | unique | sort | list | to_json -}}
@@ -189,6 +203,48 @@
   {%- set lopend = alle | selectattr('start', 'le', nu_d ~ ' 23:59:59')
                         | selectattr('einde', 'ge', nu_d) | list -%}
   {{- ((lopend | last if lopend else alle | last).studie if alle else '') | default('', true) -}}
+{%- endmacro -%}
+
+
+{%- macro klas(kind) -%}
+  {#- "Brugklas HAVO/VWO1 · klas UHV1D" (sinds magister_school v2.1.0 staan
+      `klas` en `profiel` als attribuut op de hoofdsensor). Het profiel komt er
+      alleen bij als het iets toevoegt: in de onderbouw is het "Havo/ VWO" en
+      dat staat al in de studienaam. In de bovenbouw wordt het iets als "NT" of
+      "EM", en dán staat het er. Vergeleken op alleen de letters, zodat
+      "Havo/ VWO" en "HAVO/VWO1" als hetzelfde tellen. -#}
+  {%- set st = studie(kind) -%}
+  {%- set kl = state_attr(kind, 'klas') | default('', true) | string | trim -%}
+  {%- set pr = state_attr(kind, 'profiel') | default('', true) | string | trim -%}
+  {%- set pr_kaal = pr | lower | regex_replace('[^a-z]', '') -%}
+  {%- set st_kaal = st | lower | regex_replace('[^a-z]', '') -%}
+  {%- set delen = [st, ('klas ' ~ kl | upper) if kl else '',
+                   pr if pr_kaal and pr_kaal not in st_kaal else ''] -%}
+  {{- delen | reject('eq', '') | join(' · ') -}}
+{%- endmacro -%}
+
+
+{%- macro docent(l) -%}
+  {#- Bij roosterwijzigingen laat Magister de naam soms leeg en staat alleen de
+      docentcode er nog; beter een code dan niets. -#}
+  {{- l.docent if l.docent else (l.docentcode | default('', true)) -}}
+{%- endmacro -%}
+
+
+{%- macro waar(l) -%}
+  {#- Lokaal, of "online" als de les online gevolgd wordt (`is_online`, v2.1.0).
+      Een online les heeft vaak nog wel een lokaal staan; dat is dan het lokaal
+      van de docent en voor het kind niet de plek. -#}
+  {{- '💻 online' if l.is_online else lokaal(l.lokaal) -}}
+{%- endmacro -%}
+
+
+{%- macro gewijzigd(l) -%}
+  {#- Een les die afwijkt van het vaste rooster: `status` "Gewijzigd", of
+      `was_afwijkend`, dat de integratie onthoudt ook als Magister de status
+      later weer op "Geroosterd" zet. WAT er veranderd is zegt de API niet - dat
+      moet je zelf afleiden uit tijd, lokaal en docent. -#}
+  {{- 'ja' if (l.was_afwijkend or 'Gewijzigd' in (l.status | default('', true))) else '' -}}
 {%- endmacro -%}
 
 
@@ -232,19 +288,19 @@ eerste uur {{ vaknaam((vles | first).vak) }}, uit om {{ (vles | last).einde[11:1
 {%- if nu_str < eerste.start -%}
 ### Begint om {{ eerste.start[11:16] }}
 
-Eerste uur **{{ vaknaam(eerste.vak) }}**{% if lokaal(eerste.lokaal) %} in {{ lokaal(eerste.lokaal) }}{% endif %}.
+Eerste uur **{{ vaknaam(eerste.vak) }}**{% if waar(eerste) %} in {{ waar(eerste) }}{% endif %}.{% if eerste.opmerking %} *{{ eerste.opmerking }}*{% endif %}
 {{ les | count }} {{ 'uur' if les | count == 1 else 'uren' }}, uit om **{{ laatste.einde[11:16] }}**.
 {%- elif bezig | count > 0 -%}
 {%- set b = bezig | first -%}
 ### Nu: {{ vaknaam(b.vak) }}
 
-{{ b.start[11:16] }} - {{ b.einde[11:16] }}{% if lokaal(b.lokaal) %} · lokaal {{ lokaal(b.lokaal) }}{% endif %}{% if b.docent %} · {{ b.docent }}{% endif %}.
+{{ b.start[11:16] }} - {{ b.einde[11:16] }}{% if b.is_online %} · 💻 online{% elif lokaal(b.lokaal) %} · lokaal {{ lokaal(b.lokaal) }}{% endif %}{% if docent(b) %} · {{ docent(b) }}{% endif %}.{% if b.opmerking %} *{{ b.opmerking }}*{% endif %}
 {% if hierna | count > 0 %}Hierna **{{ vaknaam((hierna | first).vak) }}** om {{ (hierna | first).start[11:16] }}, uit om {{ laatste.einde[11:16] }}.{% else %}Daarna klaar.{% endif %}
 {%- elif hierna | count > 0 -%}
 {%- set h = hierna | first -%}
 ### Tussenuur tot {{ h.start[11:16] }}
 
-Daarna **{{ vaknaam(h.vak) }}**{% if lokaal(h.lokaal) %} in {{ lokaal(h.lokaal) }}{% endif %}, uit om **{{ laatste.einde[11:16] }}**.
+Daarna **{{ vaknaam(h.vak) }}**{% if waar(h) %} in {{ waar(h) }}{% endif %}, uit om **{{ laatste.einde[11:16] }}**.
 {%- else -%}
 ### Klaar sinds {{ laatste.einde[11:16] }}
 {%- set vd = volgende_schooldag(kind) %}
@@ -275,6 +331,11 @@ Volgende schooldag **{{ dagnaam(vd) }}** om **{{ (vles | first).start[11:16] }}*
     `d` is een datum als '2026-08-31', of het woord 'vandaag' of 'volgende'.
     Vervallen uren blijven staan maar worden doorgestreept: weghalen maakt een
     gat in de lesuren waarvan je niet ziet waar het vandaan komt.
+
+    Sinds v2.1.0 ook: ✏️ achter een les die afwijkt van het vaste rooster
+    (zie `gewijzigd`), de `opmerking` van de docent cursief onder het vak, en
+    "online" in de lokaalkolom. Een `|` in een opmerking wordt een `/`, anders
+    breekt hij de tabel.
 -#}
 
 {%- macro rooster(kind, d='vandaag') -%}
@@ -292,7 +353,7 @@ _Geen lessen {{ dagnaam(dag) }}._
 |--:|:--|:--|:--|
 {% for l in alles -%}
 {%- set naam = vaknaam(l.vak if l.vak else (l.omschrijving | default('les', true))) -%}
-| {{ l.lesuurstart if l.lesuurstart else '' }} | {{ l.start[11:16] }}-{{ l.einde[11:16] }} | {% if l.is_uitval %}~~{{ naam }}~~ vervalt{% else %}**{{ naam }}**{% if l.docent %}<br>{{ l.docent }}{% endif %}{% endif %} | {{ lokaal(l.lokaal) }} |
+| {{ l.lesuurstart if l.lesuurstart else '' }} | {{ l.start[11:16] }}-{{ l.einde[11:16] }} | {% if l.is_uitval %}~~{{ naam }}~~ vervalt{% else %}**{{ naam }}**{% if gewijzigd(l) %} ✏️{% endif %}{% if docent(l) %}<br>{{ docent(l) }}{% endif %}{% endif %}{% if l.opmerking %}<br>*{{ l.opmerking | replace('\n', ' ') | replace('|', '/') | truncate(80, true, '…') }}*{% endif %} | {{ waar(l) }} |
 {% endfor -%}
 {%- endif -%}
 {%- endif -%}
@@ -304,6 +365,10 @@ _Geen lessen {{ dagnaam(dag) }}._
     ==========================================================================
     Eén lijst, want zo kijk je er ook naar: "wat moet er af, en wanneer".
     Toetsen staan er zwaarder in dan huiswerk omdat ze dat zijn.
+
+    Huiswerk dat het kind in Magister heeft afgevinkt (`is_afgerond`, sinds
+    v2.1.0) blijft staan met een ✅: het is af, maar je wilt nog zien dat het
+    er was. Op een toets zegt die vlag niets, dus daar wordt hij genegeerd.
 -#}
 
 {%- macro werk_json(kind, dagen=14) -%}
@@ -331,7 +396,7 @@ _Niets ingevoerd voor de komende {{ dagen }} dagen._
 {% endif %}**{{ dagnaam(w.start[:10]) | capitalize }}**
 
 {% endif -%}
-- {% if w.type != 'Huiswerk' %}🔴 **{{ w.type }}** {% else %}📖 {% endif %}{{ vaknaam(w.vak if w.vak else w.omschrijving) }}{% if w.inhoud %} — *{{ w.inhoud | replace('\n', ' ') | truncate(150, true, '…') }}*{% endif %}
+- {% if w.type != 'Huiswerk' %}🔴 **{{ w.type }}** {% elif w.is_afgerond %}✅ {% else %}📖 {% endif %}{{ vaknaam(w.vak if w.vak else w.omschrijving) }}{% if w.is_afgerond %} *(afgevinkt)*{% endif %}{% if w.inhoud %} — *{{ w.inhoud | replace('\n', ' ') | truncate(150, true, '…') }}*{% endif %}
 {% endfor -%}
 {%- endif -%}
 {%- endmacro -%}
@@ -393,16 +458,109 @@ Gemiddeld **{{ getallen | average | round(1) }}** over {{ getallen | count }} {{
 
 
 {#- ==========================================================================
+    VOORTGANG - gemiddelde per vak over het hele schooljaar
+    ==========================================================================
+    `cijfers()` hierboven toont de LAATSTE cijfers, door elkaar. Dit is de
+    andere vraag: hoe staat hij er per vak voor. Komt uit `voortgangscijfers`
+    op de hoofdsensor (nieuw in magister_school v2.1.0): alle cijfers van de
+    lopende aanmelding, met weegfactor en de vlaggen `telt_mee`,
+    `vrijstelling` en `moet_inhalen`.
+
+    Het gemiddelde is GEWOGEN met de weegfactor van de kolom, over de cijfers
+    die meetellen. Dat komt dichter bij het rapport dan het ongewogen getal in
+    `cijfers()`, maar is het nog steeds niet: Magister kan per periode
+    rekenen en de school kan kolommen anders laten optellen. Lees het als
+    "zo loopt het", en kijk in Magister voor de eindstand.
+
+    `vak` is hier de kleine afkorting uit de kolomnaam ("ne101" -> "ne"). De
+    leesbare naam wordt gezocht in het rooster via `vak_id`; staat dat vak de
+    komende twee weken niet in het rooster, dan blijft de afkorting staan.
+
+    Nog NIET gezien met echte cijfers (begin oktober 2026 was de lijst leeg).
+    De veldnamen komen uit de broncode van v2.1.0, niet uit een waarneming.
+-#}
+
+{%- macro voortgang(kind) -%}
+{%- set alles = state_attr(kind, 'voortgangscijfers') or [] -%}
+{%- set tellen = alles | selectattr('telt_mee') | rejectattr('vrijstelling')
+                       | rejectattr('cijfer', 'none') | list -%}
+{%- if tellen | count == 0 -%}
+_Nog geen cijfers dit schooljaar._
+{%- else -%}
+{%- set rooster_af = state_attr(kind, 'afspraken') or [] -%}
+| Vak | Gemiddeld | Cijfers |
+|:--|:--:|:--:|
+{% for v in tellen | map(attribute='vak') | unique | sort -%}
+{%- set rij = tellen | selectattr('vak', 'eq', v) | list -%}
+{%- set ns = namespace(som=0, gewicht=0) -%}
+{%- for c in rij -%}
+{%- set w = c.weegfactor | float(1) -%}
+{%- if w > 0 -%}
+{%- set ns.som = ns.som + (c.cijfer | float(0)) * w -%}
+{%- set ns.gewicht = ns.gewicht + w -%}
+{%- endif -%}
+{%- endfor -%}
+{%- set vid = (rij | first).vak_id | string -%}
+{%- set naam = (rooster_af | selectattr('vak_id', 'eq', vid) | map(attribute='vak') | first) | default(v | upper, true) -%}
+{%- if ns.gewicht > 0 -%}
+{%- set gem = ns.som / ns.gewicht -%}
+| {{ vaknaam(naam) }} | {{ '🟢' if gem >= 6.5 else ('🟠' if gem >= 5.5 else '🔴') }} **{{ '%.1f' | format(gem) | replace('.', ',') }}** | {{ rij | count }} |
+{% endif -%}
+{% endfor -%}
+{%- set inhalen = alles | selectattr('moet_inhalen') | list -%}
+{%- if inhalen | count > 0 %}
+
+⚠️ **Nog in te halen:** {% for c in inhalen %}{{ c.vak | upper }}{% if c.omschrijving %} ({{ c.omschrijving | truncate(30, true, '…') }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}
+{%- endif -%}
+{%- endif -%}
+{%- endmacro -%}
+
+
+{#- ==========================================================================
     ABSENTIES
-    ========================================================================== -#}
+    ==========================================================================
+    Sinds v2.1.0 met `geoorloofd`, `code` en `lesuur`. Daarmee wordt dit van
+    een lijst "er was iets" een lijst die zegt of je er iets mee moet:
+
+    - Bovenaan een telling van wat NIET geoorloofd is, per soort. "3× materiaal
+      vergeten" is het gesprek aan tafel; "begeleiding intern" is dat niet.
+    - Meldingen op dezelfde dag met dezelfde reden en hetzelfde vak worden één
+      regel met hun lesuren erachter. Magister registreert per lesuur, dus een
+      blokuur beeldende vorming zonder spullen waren twee identieke regels.
+    - `afspraak` is de roostercode ("BV - khem - uhv1d"); alleen de vakcode
+      ervan zegt iets.
+
+    `aantal` telt REGELS na het samenvoegen, niet de ruwe meldingen.
+-#}
 
 {%- macro absenties(kind, aantal=6) -%}
 {%- set alles = state_attr(kind ~ '_absenties', 'absenties') or [] -%}
 {%- if alles | count == 0 -%}
 _Geen absenties geregistreerd._
 {%- else -%}
-{% for a in (alles | sort(attribute='start', reverse=true))[:aantal] -%}
-- **{{ dagnaam(a.start) | capitalize }}** — {{ a.omschrijving | default('absent', true) }}{% if a.afspraak %} ({{ a.afspraak }}){% endif %}
+{%- set fout = alles | rejectattr('geoorloofd') | list -%}
+{%- if fout | count > 0 -%}
+{%- set soorten = fout | map(attribute='omschrijving') | map('default', 'absent', true) | unique | list -%}
+**{{ fout | count }} niet geoorloofd** · {% for o in soorten %}{{ fout | selectattr('omschrijving', 'eq', o) | list | count }}× {{ o | lower }}{{ ', ' if not loop.last }}{% endfor %}
+
+{% else -%}
+Alles geoorloofd.
+
+{% endif -%}
+{#- Sleutel per regel: datum + reden + vakcode. `list.append` mag niet in de
+    sandbox, maar een lijst opnieuw toekennen in een namespace wel. Eerst de
+    sleutels uniek maken, dan per sleutel de meldingen er weer bij zoeken. -#}
+{%- set ns = namespace(regels=[]) -%}
+{%- for a in alles | sort(attribute='start', reverse=true) -%}
+{%- set k = a.start[:10] ~ '|' ~ (a.omschrijving | default('', true)) ~ '|' ~ ((a.afspraak | default('', true)).split(' - ') | first) -%}
+{%- if k not in ns.regels -%}{%- set ns.regels = ns.regels + [k] -%}{%- endif -%}
+{%- endfor -%}
+{% for k in ns.regels[:aantal] -%}
+{%- set d, reden, vak = k.split('|') -%}
+{%- set groep = alles | selectattr('start', 'match', d) | selectattr('omschrijving', 'eq', reden)
+                      | selectattr('afspraak', 'match', (vak ~ '( - |$)') if vak else '') | list -%}
+{%- set uren = groep | map(attribute='lesuur') | reject('none') | unique | sort | list -%}
+- {{ '✔️' if (groep | first).geoorloofd else '⚠️' }} **{{ dagnaam(d) | capitalize }}** — {{ reden | default('absent', true) }}{% if vak %} · {{ vak }}{% endif %}{% if uren %} · {{ uren | map('string') | map('regex_replace', '$', 'e') | join(' en ') }} uur{% endif %}
 {% endfor -%}
 {%- endif -%}
 {%- endmacro -%}
@@ -420,16 +578,14 @@ _Geen absenties geregistreerd._
     - `opdrachten` hebben een veld `ingeleverd_op`. Staat daar geen datum in,
       dan is de opdracht aantoonbaar nog niet ingeleverd. Dat mag dus hard
       gezegd worden.
-    - Bij HUISWERK weet Home Assistant het niet. De Magister-API kent per
-      afspraak wel een afgerond-vlag, maar de integratie leest die niet uit
-      (magister_school v2.0.1 leest per afspraak alleen start/einde/status/
-      soort/type/lokaal/omschrijving/inhoud/vak/docent/lesuur). Wat hier over
-      huiswerk en toetsen staat is daarom een OPSOMMING van wat er voor morgen
-      staat, geen bewering dat het niet af is. De woorden zijn met opzet zo
-      gekozen: "nog niet ingeleverd" tegenover "staat voor morgen".
-
-    Wordt de integratie ooit bijgewerkt zodat `afgerond` wél doorkomt, dan is
-    dit de enige plek die aangepast hoeft te worden.
+    - Bij HUISWERK is het zachter. Sinds magister_school v2.1.0 komt de
+      afgerond-vlag van de API door (`is_afgerond`), en afgevinkt huiswerk
+      valt hieronder weg. Maar dat vinkje zet het KIND zelf in de app, of
+      niet: een leeg vinkje bewijst niet dat het niet af is. De woorden blijven
+      daarom met opzet "huiswerk" (wat er staat) tegenover "nog niet
+      ingeleverd" (wat vaststaat). Staat alles afgevinkt, dan komt er voor
+      huiswerk geen regel meer - toetsen blijven altijd staan, want die
+      vinkt niemand af.
 
     Waarom LETTERLIJK morgen en niet "de eerstvolgende schooldag": op vrijdag om
     16:00 een lijstje voor maandag sturen en dat zaterdag en zondag herhalen is
@@ -441,7 +597,7 @@ _Geen absenties geregistreerd._
   {%- set morgen = (now() + timedelta(days=1)).strftime('%Y-%m-%d') -%}
   {%- set af = afspraken_json(kind) | from_json | rejectattr('is_uitval')
                | selectattr('start', 'match', morgen) | list -%}
-  {%- set huiswerk = af | selectattr('type', 'eq', 'Huiswerk') | list -%}
+  {%- set huiswerk = af | selectattr('type', 'eq', 'Huiswerk') | rejectattr('is_afgerond') | list -%}
   {%- set toetsen = af | selectattr('type', 'in', ['Proefwerk', 'Tentamen',
                           'Schriftelijke Overhoring', 'Mondelinge Overhoring']) | list -%}
   {%- set open_opdr = (state_attr(kind ~ '_opdrachten', 'opdrachten') or [])
@@ -487,11 +643,11 @@ _Nog geen kinderen opgehaald uit Magister._
     niet uit een sensor per kind. Wijzigt daar de definitie van "een les", dan
     ook hier. -#}
 {%- set les = k.afspraken | default([], true)
-              | rejectattr('is_uitval')
+              | rejectattr('is_uitval') | rejectattr('duurt_hele_dag')
               | selectattr('start', 'match', vandaag ~ ' (?!00:00)')
               | sort(attribute='start') | list -%}
 {%- set weg = k.afspraken | default([], true) | selectattr('is_uitval')
-              | selectattr('start', 'match', vandaag ~ ' (?!00:00)') | list -%}
+              | rejectattr('duurt_hele_dag') | selectattr('start', 'match', vandaag ~ ' (?!00:00)') | list -%}
 {%- set bezig = les | selectattr('start', 'le', nu_str) | selectattr('einde', 'gt', nu_str) | list -%}
 - **{{ naam.split(' ') | first }}** — {% if les | count == 0 %}vrij vandaag
 {%- elif nu_str < (les | first).start %}school {{ (les | first).start[11:16] }} tot {{ (les | last).einde[11:16] }}
