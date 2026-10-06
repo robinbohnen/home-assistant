@@ -193,9 +193,19 @@ pc_logan_package:
           device_class: duration
           state_class: measurement
           availability: "{{ has_value('sensor.gametijd_logan_vandaag_uren') }}"
+          # NOOIT MINDER DAN ÉÉN VAN DE TWEE DELEN
+          # Pc óf PlayStation is per definitie minstens zo lang als elk van de
+          # twee los, dus deze `max` kan het getal nooit opblazen. Hij vangt
+          # wél het geval waarin `binary_sensor.gamen_logan` minder historie
+          # heeft dan de pc-sensor: op 6 oktober 2026, de dag dat hij erbij
+          # kwam, stond het totaal op 0 terwijl de pc al 37 minuten had - en
+          # dan blijft de pil op het overzicht weg. Hetzelfde na een recorder
+          # die een stuk kwijt is.
           state: >
-            {{ (states('sensor.gametijd_logan_vandaag_uren') | float(0) * 60)
-               | round(0) | int }}
+            {{ [ states('sensor.gametijd_logan_vandaag_uren') | float(0) * 60,
+                 states('sensor.pc_logan_gametijd') | float(0),
+                 states('sensor.playstation_speelkamer_speeltijd') | float(0) ]
+               | max | round(0) | int }}
 
   script:
     ##########################################################################
