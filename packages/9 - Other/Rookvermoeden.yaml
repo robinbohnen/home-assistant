@@ -1,0 +1,159 @@
+rookvermoeden_package:
+
+  #############################################################################
+  ## Rookvermoeden garage en meterkast
+  ##
+  ## Een vroege waarschuwing uit de UniFi UP Air Quality-sensoren, voordat een
+  ## rookmelder iets merkt. In de garage staan droger, wasmachine, boiler en
+  ## het serverrack; in de meterkast zit alle elektra én de Zigbee-coordinator.
+  ## De garage heeft daarnaast een Nest Protect (Firealarm.yaml), de meterkast
+  ## niet - daar is dit de enige rookwaarneming.
+  ##
+  ## WAAROM VERGELEKEN MET DE WOONKAMER EN NIET EEN VASTE DREMPEL
+  ## Op zondag 5 oktober 2026 om 16:45 schoot de garage naar PM2.5 114 en de
+  ## meterkast een kwartier later naar 55. Dat was koken: de woonkamer stond op
+  ## precies hetzelfde moment op 128, en het zakte weg toen de achterdeur van
+  ## de garage openging. Een vaste drempel had daar gealarmeerd. Rook die in
+  ## de garage of meterkast ontstaat is juist LOKAAL: daar veel hoger dan in
+  ## de rest van het huis. Dus: minstens 35 µg/m³ én minstens twee keer de
+  ## woonkamer plus 10, twee minuten aan één stuk.
+  ##
+  ## Getoetst tegen alle data van 4 t/m 6 oktober 2026 (per 30 s): nul
+  ## meldingen, de dichtste nadering was 67% van de drempel. Dat is nog maar
+  ## 2,5 dag; gaat hij vals af bij iets onschuldigs, kijk dan eerst naar wat
+  ## de woonkamer op dat moment deed.
+  ##
+  ## Valt de woonkamersensor weg, dan is er geen vergelijking meer en geldt
+  ## een vaste, hogere grens van 100 - liever een melding bij twijfel dan
+  ## stilte omdat de referentie kwijt is.
+  #############################################################################
+
+  template:
+    - binary_sensor:
+        - name: Rookvermoeden garage
+          unique_id: rookvermoeden_garage
+          icon: >-
+            {{ 'mdi:smoke' if this.state == 'on' else 'mdi:smoke-detector-variant' }}
+          # delay_on: één uitschieter van de sensor is geen rook.
+          # delay_off: niet aan-uit-aan laten flapperen als het rond de grens
+          # hangt; elke "aan" is een melding.
+          delay_on: "00:02:00"
+          delay_off: "00:10:00"
+          state: >-
+            {% set pm = states('sensor.up_air_quality_garage_pm2_5') | float(none) %}
+            {% set ref = states('sensor.woonkamer_woonkamer_multisensor_pm2_5') | float(none) %}
+            {% if pm is none %}false
+            {% elif ref is none %}{{ pm >= 100 }}
+            {% else %}{{ pm >= 35 and pm >= 2 * ref + 10 }}{% endif %}
+          attributes:
+            pm25: "{{ states('sensor.up_air_quality_garage_pm2_5') | float(none) }}"
+            woonkamer_pm25: "{{ states('sensor.woonkamer_woonkamer_multisensor_pm2_5') | float(none) }}"
+
+        - name: Rookvermoeden meterkast
+          unique_id: rookvermoeden_meterkast
+          icon: >-
+            {{ 'mdi:smoke' if this.state == 'on' else 'mdi:smoke-detector-variant' }}
+          delay_on: "00:02:00"
+          delay_off: "00:10:00"
+          state: >-
+            {% set pm = states('sensor.up_air_quality_meterkast_pm2_5') | float(none) %}
+            {% set ref = states('sensor.woonkamer_woonkamer_multisensor_pm2_5') | float(none) %}
+            {% if pm is none %}false
+            {% elif ref is none %}{{ pm >= 100 }}
+            {% else %}{{ pm >= 35 and pm >= 2 * ref + 10 }}{% endif %}
+          attributes:
+            pm25: "{{ states('sensor.up_air_quality_meterkast_pm2_5') | float(none) }}"
+            woonkamer_pm25: "{{ states('sensor.woonkamer_woonkamer_multisensor_pm2_5') | float(none) }}"
+
+  automation:
+    - id: rookvermoeden_melding
+      alias: Rookvermoeden - melding garage/meterkast
+      description: >-
+        Meldt aan de volwassenen als het fijnstof in de garage of meterkast
+        lokaal oploopt, met een knop naar de camera's. Vervangt de melding door
+        een "weer normaal" zodra het voorbij is.
+      # Garage en meterkast kunnen tegelijk afgaan (de meterkast ligt aan de
+      # gang, rook verspreidt zich); dan wil je ze allebei zien.
+      mode: queued
+      triggers:
+        - trigger: state
+          entity_id:
+            - binary_sensor.rookvermoeden_garage
+            - binary_sensor.rookvermoeden_meterkast
+          from: "off"
+          to: "on"
+          id: aan
+        - trigger: state
+          entity_id:
+            - binary_sensor.rookvermoeden_garage
+            - binary_sensor.rookvermoeden_meterkast
+          from: "on"
+          to: "off"
+          id: uit
+      actions:
+        - variables:
+            ruimte: "{{ trigger.entity_id.split('_')[-1] }}"
+            sensor: "sensor.up_air_quality_{{ ruimte }}"
+            pm: "{{ states(sensor ~ '_pm2_5') | float(0) | round(0) | int }}"
+            ref: "{{ states('sensor.woonkamer_woonkamer_multisensor_pm2_5') | float(none) }}"
+            temp: "{{ states(sensor ~ '_temperatuur') | float(none) }}"
+            co2: "{{ states(sensor ~ '_kooldioxide') | float(none) }}"
+            # Per ruimte één melding op het scherm: "aan" en "weer normaal"
+            # vervangen elkaar in plaats van zich op te stapelen.
+            tag: "rookvermoeden-{{ ruimte }}"
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id: aan
+              sequence:
+                # Time-sensitive en niet critical: dit is een vermoeden, geen
+                # alarm. Het komt door een focusmodus heen maar niet door de
+                # stille modus. Echte rook in de garage is het werk van de
+                # Nest Protect en het brandalarm in Firealarm.yaml, en dat
+                # gaat wél critical.
+                - action: notify.mobile_devices_adults
+                  data:
+                    title: "Rookvermoeden {{ ruimte }}"
+                    message: >-
+                      Fijnstof in de {{ ruimte }} loopt op: PM2.5 {{ pm }}{% if ref is not none %},
+                      woonkamer {{ ref | round(0) | int }}{% endif %}. Het komt dus niet van
+                      koken in huis.{% if temp is not none %} Temperatuur {{ temp | round(1) | string | replace('.', ',') }} °C{% endif %}{% if co2 is not none %},
+                      CO₂ {{ co2 | round(0) | int }} ppm{% endif %}. Check de camera's.
+                    data:
+                      tag: "{{ tag }}"
+                      group: rookvermoeden
+                      notification_icon: mdi:smoke
+                      color: "#ef4444"
+                      importance: high
+                      push:
+                        interruption-level: time-sensitive
+                        sound: default
+                      # Er hangt geen camera in de garage of de meterkast;
+                      # de knop opent de camerapagina met alle beelden.
+                      url: /lovelace/camera-s
+                      clickAction: /lovelace/camera-s
+                      actions:
+                        - action: URI
+                          title: Camera's
+                          uri: /lovelace/camera-s
+                        - action: URI
+                          title: Luchtgrafiek
+                          uri: "/lovelace/overzicht#ov-lucht-{{ ruimte }}"
+            - conditions:
+                - condition: trigger
+                  id: uit
+              sequence:
+                - action: notify.mobile_devices_adults
+                  data:
+                    title: "{{ ruimte | capitalize }}: weer normaal"
+                    message: >-
+                      Het fijnstof in de {{ ruimte }} is weer gezakt (PM2.5 {{ pm }}).
+                    data:
+                      tag: "{{ tag }}"
+                      group: rookvermoeden
+                      notification_icon: mdi:smoke-detector-variant
+                      push:
+                        interruption-level: passive
+                        sound: none
+                      url: "/lovelace/overzicht#ov-lucht-{{ ruimte }}"
+                      clickAction: "/lovelace/overzicht#ov-lucht-{{ ruimte }}"
