@@ -1674,3 +1674,55 @@ brandweer_package:
                     - action: URI
                       title: Bezetting
                       uri: /lovelace/overzicht#ov-brandweer
+
+    # DE PIXELWALL GAAT AAN BIJ EEN MELDING, OOK ALS HIJ UIT STOND
+    # Normaal volgt hij de keuken- en woonkamerklok (zie packages/9 - Other/
+    # Klokken.yaml): uit zodra het alarm erop staat en de woonkamer donker is.
+    # Bij een melding wil je hem juist zien, dus gaat hij hier aan.
+    #
+    # TERUG VIA DE HUISREGEL, NIET VIA EEN MOMENTOPNAME
+    # Na vijf minuten vraagt hij `script.klok_keuken_woonkamer_stand` wat de
+    # stand moet zijn. Dat klopt ook als er intussen iets veranderd is: het
+    # alarm dat bij een nachtelijke uitruk eraf ging en weer terugkwam, of
+    # iemand die beneden het licht aandeed. Een momentopname zou hem dan op de
+    # stand van vijf minuten geleden zetten.
+    #
+    # EEN EIGEN AUTOMATISERING
+    # In `brandweer_webhook_main_automations` zou de wachttijd van vijf minuten
+    # die run (mode: single) bezet houden, en dan valt een na-alarmering in dat
+    # venster weg. Hier hindert die wachttijd niemand; een tweede melding
+    # binnen die vijf minuten vindt de pixelwall al aan en laat de lopende
+    # run gewoon uitlopen.
+    - id: brandweer_pixelwall_aan
+      alias: Brandweer - Pixelwall woonkamer aan bij melding
+      description: >-
+        Zet de pixelwall in de woonkamer aan bij een nieuwe brandweermelding en
+        geeft hem na vijf minuten terug aan de klokkenregel.
+      mode: restart
+      triggers:
+        - trigger: state
+          entity_id:
+            - input_text.brandweer_laatste_melding
+      conditions:
+        # Een reload herschrijft de melding met dezelfde tekst; zie de
+        # toelichting bij `brandweer_tts_nesthub`.
+        - alias: Alleen bij een echt nieuwe melding
+          condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.to_state is not none
+               and trigger.from_state.state != trigger.to_state.state }}
+        # Brandt hij al, dan is er niets aan te zetten en ook niets terug te
+        # geven; zijn helderheid tijdens een film regelt het media-script.
+        - condition: state
+          entity_id: light.pixelwall_woonkamer
+          state: "off"
+      actions:
+        - action: light.turn_on
+          target:
+            entity_id: light.pixelwall_woonkamer
+          data:
+            brightness_pct: 50
+        - delay:
+            minutes: 5
+        - action: script.klok_keuken_woonkamer_stand
