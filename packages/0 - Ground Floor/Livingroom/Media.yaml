@@ -653,3 +653,63 @@ livingroom_media_package:
         - action: input_boolean.turn_off
           target:
             entity_id: input_boolean.changed_tv_volume
+
+    ###########################################################################
+    ## Qmusic op de pixelwall alleen als Qmusic ook echt speelt
+    ###########################################################################
+    # De pixelwall heeft een Qmusic-app die het huidige nummer toont. Speelt
+    # de woonkamer-Sonos iets anders, of niets, dan staat daar een nummer dat
+    # niemand hoort; dan haalt deze automatisering de app uit de rotatie, en
+    # zet hem terug zodra Qmusic weer speelt.
+    #
+    # Alleen media_player.woonkamer_sonos telt: dat is de enige speaker in de
+    # woonkamer, en ook als de keuken de groep leidt staat hij gewoon op
+    # `playing` met dezelfde zender. Qmusic herkennen we aan `media_channel`
+    # en, als vangnet, aan de stream-URL - die blijft ook tijdens de reclame
+    # staan, dus een reclameblok haalt de app niet weg.
+    #
+    # Uitzetten pas na twee minuten: een zenderwissel of een korte
+    # `transitioning` mag de rotatie niet laten heen en weer springen. Aanzetten
+    # gaat direct. De pixelwall zelf en HA-starts staan erbij als trigger, zodat
+    # de schakelaar na een reboot van de wall weer gelijk getrokken wordt.
+    - id: livingroom_pixelwall_qmusic_rotatie
+      alias: Livingroom - Pixelwall Qmusic volgt de Sonos
+      description: >-
+        Zet de Qmusic-app op de pixelwall alleen in de rotatie als de
+        woonkamer-Sonos Qmusic speelt.
+      mode: restart
+      triggers:
+        - trigger: template
+          value_template: &qmusic_speelt >-
+            {{ is_state('media_player.woonkamer_sonos', 'playing')
+               and ('qmusic' in (state_attr('media_player.woonkamer_sonos', 'media_channel') or '') | lower
+                    or 'qmusic' in (state_attr('media_player.woonkamer_sonos', 'media_content_id') or '') | lower) }}
+        - trigger: template
+          value_template: >-
+            {{ not (is_state('media_player.woonkamer_sonos', 'playing')
+               and ('qmusic' in (state_attr('media_player.woonkamer_sonos', 'media_channel') or '') | lower
+                    or 'qmusic' in (state_attr('media_player.woonkamer_sonos', 'media_content_id') or '') | lower)) }}
+          for: "00:02:00"
+        - trigger: state
+          entity_id: switch.woonkamer_pixelwall_g4hvh8_qmusic_in_rotatie
+          from: unavailable
+        - trigger: homeassistant
+          event: start
+      conditions:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: switch.woonkamer_pixelwall_g4hvh8_qmusic_in_rotatie
+              state: unavailable
+      actions:
+        - variables:
+            gewenst: *qmusic_speelt
+        - if:
+            - condition: template
+              value_template: >-
+                {{ gewenst | bool
+                   != is_state('switch.woonkamer_pixelwall_g4hvh8_qmusic_in_rotatie', 'on') }}
+          then:
+            - action: "switch.turn_{{ 'on' if gewenst | bool else 'off' }}"
+              target:
+                entity_id: switch.woonkamer_pixelwall_g4hvh8_qmusic_in_rotatie
