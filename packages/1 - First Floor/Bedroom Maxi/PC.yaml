@@ -94,10 +94,11 @@ pc_logan_package:
     ## DE LIMIET GELDT HIER ALLEEN OP HET DASHBOARD
     ## De pil op het overzicht zet dit totaal af tegen
     ## `input_number.pc_logan_gametijd_limiet` en wordt rood als het erover
-    ## is. Omgeroepen wordt er niet op het totaal maar per apparaat, met
-    ## dezelfde limiet: de automatisering hieronder voor de pc, die in
-    ## Playstation.yaml voor de PlayStation (keuze van Robin, 6 oktober 2026).
-    ## Een uur pc en een uur PlayStation is dus een rode pil, maar stil.
+    ## is. Gepord wordt er per apparaat, met dezelfde limiet: de
+    ## automatisering hieronder voor de pc, die in Playstation.yaml voor de
+    ## PlayStation (keuze van Robin, 6 oktober 2026). Gaat alleen het totaal
+    ## erover, dan klinkt het één keer en krijgen de ouders een bericht - zie
+    ## `gametijd_logan_totaal_op` onderaan (10 oktober 2026).
     ##########################################################################
     - platform: history_stats
       name: gametijd_logan_vandaag_uren
@@ -622,6 +623,122 @@ pc_logan_package:
               hier gebeurt niets meer tot hij hem uitzet. Zet hij hem uit en
               weer aan, dan begint het porren opnieuw.
             data: *meldingdata
+
+    ##########################################################################
+    ## Pc en PlayStation samen over de limiet
+    ##
+    ## Op 10 oktober 2026 stond het totaal op 100 minuten (pc 61, PlayStation
+    ## 43) en klonk er niets: elk apparaat bleef op zijn eigen teller onder de
+    ## 90. Daarom deze erbij (keuze van Robin, 10 oktober 2026):
+    ##
+    ## - Gaat het totaal over de limiet, dan wordt er ÉÉN keer omgeroepen, in
+    ##   de kamer van het apparaat dat op dat moment aanstaat, en gaat er één
+    ##   bericht naar de ouders. Geen porlus en geen knipperlicht.
+    ## - Haalt één apparaat de limiet in zijn eentje, dan nemen de
+    ##   automatiseringen per apparaat het over en wordt er wél gepord.
+    ##
+    ## NIET DUBBEL ALS ÉÉN APPARAAT ALLES DEED
+    ## Wordt er vandaag maar op één apparaat gespeeld, dan passeren het totaal
+    ## en die ene teller de limiet tegelijk, en roept de automatisering per
+    ## apparaat al om. Dan doet deze niets. "Eén apparaat deed alles" is hier:
+    ## de grootste losse teller zit binnen 2 minuten van het totaal. Dat is
+    ## ruimte voor de paar seconden dat de history_stats-sensoren uit de pas
+    ## lopen; een echte sessie op het andere apparaat telt door de `delay_off`
+    ## van drie minuten altijd langer mee.
+    ##
+    ## WELKE KAMER
+    ## Die van de binary_sensor die aanstaat, niet die van het vermogen. Het
+    ## totaal telt na het uitzetten nog drie minuten door (`delay_off`), en
+    ## passeert het de grens in dat staartje, dan hoort hij het toch: dit is
+    ## de enige keer dat het gezegd wordt. Staan ze allebei aan, dan in beide
+    ## kamers.
+    ##
+    ## Eén keer per dag vanzelf: het totaal kan de grens maar één keer
+    ## passeren. Behalve als iemand de limiet onder het huidige totaal draait;
+    ## dan is dat een nieuwe grens en klinkt het opnieuw.
+    ##########################################################################
+    - id: gametijd_logan_totaal_op
+      alias: Gametijd - Pc en PlayStation samen over de limiet
+      description: >-
+        Roept één keer om in de kamer van het apparaat dat aanstaat zodra pc en
+        PlayStation samen over de limiet uit `input_number.pc_logan_gametijd_limiet`
+        gaan, en stuurt de ouders een bericht. Doet niets als één apparaat de
+        limiet in zijn eentje haalt; dan porren de automatiseringen per
+        apparaat.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: numeric_state
+          entity_id: sensor.gametijd_logan
+          above: input_number.pc_logan_gametijd_limiet
+      conditions:
+        # Zie "EEN SENSOR DIE TERUGKOMT" bij de automatisering hierboven.
+        - alias: Niet als de sensor alleen maar terugkomt
+          condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.from_state.state not in ['unknown', 'unavailable'] }}
+        - alias: Niet als één apparaat alles deed
+          condition: template
+          value_template: >-
+            {{ [ states('sensor.pc_logan_gametijd') | float(0),
+                 states('sensor.playstation_speelkamer_speeltijd') | float(0) ]
+               | max < states('sensor.gametijd_logan') | float(0) - 2 }}
+      variables:
+        limiet_tekst: *limiettekst
+        gebruikt_tekst: >-
+          {% set m = states('sensor.gametijd_logan') | float(0) | round(0) | int %}
+          {% set u = m // 60 %}{% set r = m % 60 %}
+          {{ (u ~ ' uur') if u else '' }}{{ ' en ' if u and r else ''
+          }}{{ (r ~ (' minuut' if r == 1 else ' minuten')) if r or not u else '' }}
+        pc_aan: "{{ is_state('binary_sensor.pc_logan_aan', 'on') }}"
+        ps_aan: "{{ is_state('binary_sensor.playstation_speelkamer_aan', 'on') }}"
+        omroepen: *omroepvenster
+      actions:
+        - alias: Bericht aan de ouders
+          action: notify.mobile_devices_adults
+          data:
+            title: Gametijd Logan - samen over de limiet
+            message: >-
+              Pc en PlayStation staan vandaag samen op {{ gebruikt_tekst }}; de
+              limiet is {{ limiet_tekst }}. Pc
+              {{ states('sensor.pc_logan_gametijd') | int(0) }} min, PlayStation
+              {{ states('sensor.playstation_speelkamer_speeltijd') | int(0) }} min.
+              {% if not omroepen %}Het is buiten de omroeptijden, dus er is niets
+              omgeroepen.{% elif pc_aan or ps_aan %}Het is één keer omgeroepen
+              {{- ' op zijn kamer' if pc_aan else '' }}{{ ' en' if pc_aan and ps_aan else '' }}
+              {{- ' in de speelkamer' if ps_aan else '' }}; daarna wordt er niet gepord.{%
+              else %}Er stond niets meer aan, dus er is niets omgeroepen.{% endif %}
+            data:
+              tag: gametijd-logan-totaal
+              notification_icon: mdi:controller
+        - alias: Eén keer omroepen, maar niet 's nachts
+          if:
+            - condition: template
+              value_template: "{{ omroepen }}"
+          then:
+            - parallel:
+                - if:
+                    - condition: template
+                      value_template: "{{ pc_aan }}"
+                  then:
+                    - action: script.pc_logan_omroepen
+                      data:
+                        bericht: >-
+                          Logan, je hebt vandaag op je computer en de PlayStation
+                          samen {{ gebruikt_tekst }} gegamed. Je gametijd van
+                          {{ limiet_tekst }} is op.
+                # Geen naam, net als de andere omroepen in de speelkamer.
+                - if:
+                    - condition: template
+                      value_template: "{{ ps_aan }}"
+                  then:
+                    - action: script.pc_logan_omroepen
+                      data:
+                        speaker: media_player.speelkamer_sonos
+                        bericht: >-
+                          De gametijd voor vandaag is op. Computer en PlayStation
+                          samen staan al op {{ gebruikt_tekst }}.
 
     ##########################################################################
     ## De limiet eenmalig vullen
