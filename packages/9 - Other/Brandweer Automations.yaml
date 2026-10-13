@@ -526,6 +526,26 @@ brandweer_package:
               - sensor.r_bohnen_vrbn_nl_status
           action: ms365_teams.update_user_preferred_status
 
+    # Haalt de Live Activity van `brandweer_webhook_main_calendar` weg. Hangt
+    # aan de vlag en niet aan `brandweer_back_at_station`, zodat hij ook
+    # verdwijnt als de vlag met de hand op het dashboard wordt uitgezet.
+    # `clear_notification` op dezelfde tag is de enige manier om een Live
+    # Activity te beëindigen; er bestaat geen aparte eind-actie.
+    - id: brandweer_uitruk_live_activity_einde
+      alias: Brandweer - Live Activity weg na uitruk
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: input_boolean.brandweer_uitgerukt
+          from: "on"
+          to: "off"
+      actions:
+        - action: notify.mobile_devices_all
+          data:
+            message: clear_notification
+            data:
+              tag: brandweer-uitruk
+
     - id: brandweer_send_message_uden
       alias: Brandweer - Webhook MAIN - Send messages
       description: "Send message when input text changes"
@@ -1242,13 +1262,30 @@ brandweer_package:
                           state: "on"
                       alias: Kijk of er nog geen melding in de agenda staat
                   then:
-                    - metadata: {}
+                    # Live Activity in plaats van een gewone push: hij blijft
+                    # op het vergrendelscherm (en in het Dynamic Island) staan
+                    # tot ik terug ben. `brandweer_uitruk_live_activity_einde`
+                    # haalt hem weg zodra de uitgerukt-vlag uitgaat. iOS ruimt
+                    # hem zelf op na 8 uur, mocht dat einde gemist worden.
+                    # `critical_text` is de incidentengroep uit de melding
+                    # ("P 1 BOB-02 Brandgerucht ..."), want dat is het enige
+                    # wat in het compacte eiland past.
+                    - alias: Live Activity naar alle telefoons
+                      action: notify.mobile_devices_all
                       data:
                         title: Robin is uitgerukt
-                        message: >-
-                          Naar deze melding; {{
-                          states.input_text.brandweer_laatste_melding.state }}
-                      action: notify.mobile_devices_all
+                        message: "{{ states('input_text.brandweer_laatste_melding') }}"
+                        data:
+                          tag: brandweer-uitruk
+                          live_update: true
+                          critical_text: >-
+                            {{ states('input_text.brandweer_laatste_melding')
+                               | regex_findall('BOB-[0-9]+') | first | default('Uitruk', true) }}
+                          notification_icon: mdi:fire-alert
+                          notification_icon_color: "#ffffff"
+                          color: "#9a0002"
+                          background_color: "#9a0002"
+                          text_color: "#ffffff"
                     - metadata: {}
                       data: {}
                       target:
@@ -1354,13 +1391,30 @@ brandweer_package:
                           state: "on"
                       alias: Kijk of er nog geen melding in de agenda staat
                   then:
-                    - metadata: {}
+                    # Live Activity in plaats van een gewone push: hij blijft
+                    # op het vergrendelscherm (en in het Dynamic Island) staan
+                    # tot ik terug ben. `brandweer_uitruk_live_activity_einde`
+                    # haalt hem weg zodra de uitgerukt-vlag uitgaat. iOS ruimt
+                    # hem zelf op na 8 uur, mocht dat einde gemist worden.
+                    # `critical_text` is de incidentengroep uit de melding
+                    # ("P 1 BOB-02 Brandgerucht ..."), want dat is het enige
+                    # wat in het compacte eiland past.
+                    - alias: Live Activity naar alle telefoons
+                      action: notify.mobile_devices_all
                       data:
                         title: Robin is uitgerukt
-                        message: >-
-                          Naar deze melding; {{
-                          states.input_text.brandweer_laatste_melding.state }}
-                      action: notify.mobile_devices_all
+                        message: "{{ states('input_text.brandweer_laatste_melding') }}"
+                        data:
+                          tag: brandweer-uitruk
+                          live_update: true
+                          critical_text: >-
+                            {{ states('input_text.brandweer_laatste_melding')
+                               | regex_findall('BOB-[0-9]+') | first | default('Uitruk', true) }}
+                          notification_icon: mdi:fire-alert
+                          notification_icon_color: "#ffffff"
+                          color: "#9a0002"
+                          background_color: "#9a0002"
+                          text_color: "#ffffff"
                     - metadata: {}
                       data: {}
                       target:
