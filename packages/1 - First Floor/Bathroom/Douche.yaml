@@ -346,6 +346,14 @@ bathroom_shower_package:
             {{ m is not none
                and m.state not in ['unknown', 'unavailable']
                and (now() - m.last_changed).total_seconds() < 45 }}
+        # Zelfde avondgrens als de douchetimer, zie de toelichting daar (Robin,
+        # 13 oktober 2026).
+        - alias: Niet als beide kinderen hun bedtijd voorbij zijn
+          condition: template
+          value_template: >-
+            {{ not (now().hour >= 12
+                    and is_state('binary_sensor.slaapkamer_maxi_slaaptijd', 'on')
+                    and is_state('binary_sensor.slaapkamer_mini_slaaptijd', 'on')) }}
       variables:
         # Automatiseringsvariabelen worden bij het afgaan van de trigger
         # gerenderd, dus dit is de meterstand van het moment dat de kraan
