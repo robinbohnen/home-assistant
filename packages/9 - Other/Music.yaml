@@ -198,14 +198,17 @@ music_package:
           data:
             volume_level: 0.05
           target:
+            # `has_value`: een onbereikbare speaker laat de hele actie falen,
+            # en dan krijgt ook de rest zijn volume niet. Zie de join hieronder.
             entity_id: >-
-              {{ ['media_player.badkamer_sonos',
+              {{ (['media_player.badkamer_sonos',
                   'media_player.garage_sonos',
                   'media_player.keuken_sonos',
                   'media_player.keuken_sonos_2',
                   'media_player.kantoor_sonos',
                   'media_player.speelkamer_sonos',
-                  'media_player.woonkamer_sonos'] + kinderkamers }}
+                  'media_player.woonkamer_sonos'] + kinderkamers)
+                 | select('has_value') | list }}
         # Eerst groeperen, dan pas afspelen. Andersom was het jarenlang de
         # oorzaak van "de radio staat maar in de helft van het huis aan".
         #
@@ -237,12 +240,17 @@ music_package:
             # groepsleider (het `target` hieronder), niet iemand die zich bij
             # zichzelf aansluit. `kinderkamers` is leeg zolang het huis niet
             # wakker gemeld is - zie de toelichting bij `variables` hierboven.
+            #
+            # `has_value` om dezelfde reden: één onbereikbare speaker in de
+            # lijst ("is not a known Sonos speaker") en de join faalt voor
+            # iedereen. In oktober 2026 was keuken_sonos_2 een tijd offline.
             group_members: >-
-              {{ ['media_player.garage_sonos',
+              {{ (['media_player.garage_sonos',
                   'media_player.speelkamer_sonos',
                   'media_player.kantoor_sonos',
                   'media_player.keuken_sonos',
-                  'media_player.keuken_sonos_2'] + kinderkamers }}
+                  'media_player.keuken_sonos_2'] + kinderkamers)
+                 | select('has_value') | list }}
           target:
             entity_id: media_player.woonkamer_sonos
         - action: media_player.play_media

@@ -30,8 +30,13 @@ kitchen_media_package:
             - action: media_player.join
               metadata: {}
               data:
-                group_members:
-                  - media_player.keuken_sonos
-                  - media_player.keuken_sonos_2
+                # Alleen wie bereikbaar is. Er staan twee Moves in de keuken,
+                # en een join met één onbereikbare speaker erin faalt HELEMAAL
+                # ("is not a known Sonos speaker") - dan bleef ook de Move die
+                # het wél deed stil. Zo ging het in oktober 2026 een tijd lang,
+                # toen keuken_sonos_2 offline was.
+                group_members: >-
+                  {{ ['media_player.keuken_sonos', 'media_player.keuken_sonos_2']
+                     | select('has_value') | list }}
               target:
                 entity_id: media_player.woonkamer_sonos

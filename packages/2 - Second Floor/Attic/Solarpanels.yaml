@@ -224,11 +224,27 @@ solar_panels_package:
           default_entity_id: sensor.zon_opgewekt_vandaag
           unit_of_measurement: "kWh"
           device_class: energy
-          state_class: measurement
+          # Een dagteller die om middernacht naar 0 gaat: `total_increasing`.
+          # Stond op `measurement`, wat bij device_class energy niet mag (HA
+          # waarschuwde, en de langetermijnstatistiek was onbruikbaar).
+          #
+          # Maar `total_increasing` leest elke daling als een nieuwe dag. En
+          # de twee omvormers vallen los van elkaar weg (beide ~6x in 3 dagen,
+          # oktober 2026); de oude som telde de ontbrekende dan als 0. Dat gaf
+          # een dip - "reset" - en daarna een sprong terug die er in de
+          # statistiek bovenop kwam. Daarom: alleen optellen als ze er allebei
+          # zijn, en anders de vorige stand vasthouden. Bij een herstart is er
+          # geen vorige stand; dan de halve som, want stijgen mag altijd.
+          state_class: total_increasing
           availability: >-
             {{ has_value('sensor.zon_vandaag_zw') or has_value('sensor.zon_vandaag_o') }}
           state: >-
-            {{ (states('sensor.zon_vandaag_zw') | float(0)
-                + states('sensor.zon_vandaag_o') | float(0)) | round(2) }}
+            {% set som = (states('sensor.zon_vandaag_zw') | float(0)
+                          + states('sensor.zon_vandaag_o') | float(0)) | round(2) %}
+            {% if has_value('sensor.zon_vandaag_zw') and has_value('sensor.zon_vandaag_o') %}
+              {{ som }}
+            {% else %}
+              {{ this.state | float(som) }}
+            {% endif %}
           attributes:
             volledig: "{{ has_value('sensor.zon_vandaag_zw') and has_value('sensor.zon_vandaag_o') }}"
