@@ -168,3 +168,67 @@ school_meldingen_package:
                       title: Voor morgen
                       message: "{{ tekst }}"
                       data: *melding_opties
+
+    ###########################################################################
+    ## Nieuw cijfer in Magister -> pushbericht naar de ouders
+    ###########################################################################
+    #
+    # Vuurt als de lijst `cijfers` op de cijfersensor van een kind verandert,
+    # dus hooguit eens per kwartier (zo vaak ververst de integratie). Welke
+    # cijfers er écht nieuw zijn bepaalt `melding_nieuwe_cijfers()` in
+    # school.jinja, door de lijst van vóór en na de update te vergelijken - zie
+    # daar waarom tellen niet werkt en waarom zes-of-meer tegelijk wordt
+    # genegeerd.
+    #
+    # Alleen naar de ouders, niet naar het kind: die ziet het cijfer zelf al in
+    # de Magister-app.
+    #
+    # Komt de sensor uit `unavailable`/`unknown` (herstart, Magister-storing),
+    # dan is de lijst ervoor leeg en zou alles nieuw lijken. Die overgangen
+    # tellen daarom niet mee. Gevolg: een cijfer dat precies tijdens een
+    # herstart binnenkomt, wordt niet gemeld. Op de School-weergave staat het
+    # gewoon.
+    #
+    # Een tweede kind: zijn `sensor.magister_<kind>_cijfers` in de trigger
+    # erbij. De naam in de titel komt uit de sensor zelf (`kind_naam`).
+    #
+    # `queued` en niet `single`: alle kinderen worden in dezelfde ronde
+    # ververst, en met `single` zou het tweede kind wegvallen.
+    - id: school_nieuw_cijfer
+      alias: School - Nieuw cijfer naar de ouders
+      description: >-
+        Stuurt de ouders een pushbericht zodra er in Magister een nieuw cijfer
+        bij een kind staat, met vak, cijfer en waarvoor.
+      mode: queued
+
+      triggers:
+        - trigger: state
+          entity_id:
+            - sensor.magister_logan_veen_cijfers
+          attribute: cijfers
+
+      conditions:
+        - condition: template
+          value_template: >-
+            {{ trigger.from_state is not none and trigger.to_state is not none
+               and trigger.from_state.state not in ['unknown', 'unavailable']
+               and trigger.to_state.state not in ['unknown', 'unavailable'] }}
+
+      actions:
+        - variables:
+            kind: "{{ trigger.entity_id | regex_replace('_cijfers$', '') }}"
+            naam: "{{ (trigger.to_state.attributes.kind_naam | default('', true)).split(' ') | first | default('Magister', true) }}"
+            # Op één regel om dezelfde reden als `tekst` hierboven.
+            tekst: "{% from 'school.jinja' import melding_nieuwe_cijfers %}{{ melding_nieuwe_cijfers(kind, trigger.from_state.attributes.cijfers, trigger.to_state.attributes.cijfers) | trim }}"
+
+        - condition: template
+          value_template: "{{ tekst != '' }}"
+
+        - action: notify.mobile_devices_adults
+          data:
+            title: "{{ naam }} - {{ 'nieuwe cijfers' if '\n' in tekst else 'nieuw cijfer' }}"
+            message: "{{ tekst }}"
+            data:
+              group: school
+              url: /lovelace/school
+              clickAction: /lovelace/school

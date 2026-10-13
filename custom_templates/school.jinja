@@ -619,6 +619,61 @@ Huiswerk:
 
 
 {#- ==========================================================================
+    DE MELDING BIJ EEN NIEUW CIJFER
+    ==========================================================================
+    Geeft één regel per NIEUW cijfer terug, of een LEGE TEKST als er niets
+    nieuw is. `oud` en `nieuw` zijn het attribuut `cijfers` van
+    `sensor.magister_<kind>_cijfers` vóór en na een update; de automatisering
+    in `packages/9 - Other/School Meldingen.yaml` geeft ze mee.
+
+    WAAROM VERGELIJKEN EN NIET TELLEN: de integratie haalt de LAATSTE 50
+    cijfers op. Vanaf het 51e cijfer valt er bij elk nieuw cijfer een oud af en
+    blijft de teller op 50 staan. Daarom wordt elk cijfer herkend aan vak,
+    omschrijving, invoermoment en waarde, en telt alleen wat er vóór de update
+    niet stond. Past een docent een cijfer aan, dan is het dus "nieuw" en komt
+    er een melding met de nieuwe waarde - dat is hier de bedoeling.
+
+    MEER DAN VIJF TEGELIJK = GEEN MELDING. In een kwartier (zo vaak ververst de
+    integratie) krijgt één kind niet zes cijfers. Gebeurt dat toch, dan is de
+    lijst even leeg geweest (Magister-storing, half antwoord) en staat nu alles
+    er weer: dat zijn oude cijfers, en vijftig pushberichten erover is erger
+    dan er één missen.
+
+    Het vak staat in deze lijst alleen als afkorting ("wi"). De leesbare naam
+    wordt gezocht via `voortgangscijfers` (afkorting -> vak_id) en het rooster
+    (vak_id -> naam), net als in `voortgang()`. Lukt dat niet, dan blijft de
+    afkorting in hoofdletters staan. Live getest met nepcijfers (13-10-2026);
+    met echte cijfers nog niet gezien - de lijst was toen nog leeg.
+-#}
+
+{%- macro melding_nieuwe_cijfers(kind, oud, nieuw) -%}
+{%- set ns = namespace(gezien=[], erbij=[]) -%}
+{%- for c in oud or [] -%}
+{%- set ns.gezien = ns.gezien + [c.vak ~ '|' ~ c.omschrijving ~ '|' ~ c.ingevoerd_op ~ '|' ~ c.waarde] -%}
+{%- endfor -%}
+{%- for c in nieuw or [] -%}
+{%- if (c.vak ~ '|' ~ c.omschrijving ~ '|' ~ c.ingevoerd_op ~ '|' ~ c.waarde) not in ns.gezien -%}
+{%- set ns.erbij = ns.erbij + [c] -%}
+{%- endif -%}
+{%- endfor -%}
+{%- if 0 < ns.erbij | count <= 5 -%}
+{%- set voortgang = state_attr(kind, 'voortgangscijfers') or [] -%}
+{%- set rooster_af = state_attr(kind, 'afspraken') or [] -%}
+{%- for c in ns.erbij | sort(attribute='ingevoerd_op') -%}
+{%- set vid = voortgang | selectattr('vak', 'eq', c.vak | lower) | map(attribute='vak_id') | map('string') | first | default('') -%}
+{%- set naam = (rooster_af | selectattr('vak_id', 'eq', vid) | rejectattr('vak', 'eq', '') | map(attribute='vak') | first) if vid else none -%}
+{%- set w = c.waarde | string | replace(',', '.') -%}
+{%- set kleur = ('🟢' if w | float(0) >= 6.5 else ('🟠' if w | float(0) >= 5.5 else '🔴')) if w is is_number else '⚪' -%}
+{{ kleur }} {{ vaknaam(naam) if naam else c.vak | upper }}: {{ c.waarde }}
+{%- if c.omschrijving %} - {{ c.omschrijving | truncate(50, true, '…') }}{% endif %}
+{%- if c.weegfactor and c.weegfactor | string not in ['1', '1.0', '0', '0.0', ''] %} (×{{ c.weegfactor }}){% endif -%}
+{{ '\n' if not loop.last }}
+{%- endfor -%}
+{%- endif -%}
+{%- endmacro -%}
+
+
+{#- ==========================================================================
     OVERZICHT VAN ALLE KINDEREN
     ==========================================================================
     De enige macro die de kinderen zelf opzoekt, en dat mag hier: de lijst komt
