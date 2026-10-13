@@ -116,6 +116,25 @@ bathroom_shower_package:
             {{ m is not none
                and m.state not in ['unknown', 'unavailable']
                and (now() - m.last_changed).total_seconds() < 45 }}
+        # NIET NA DE BEDTIJD VAN DE KINDEREN
+        # Wie dan nog doucht, heeft de teller niet nodig (Robin, 13 oktober
+        # 2026). Op 12 oktober ging hij nog om 21:54 af.
+        #
+        # Pas als ze allebei hun bedtijd voorbij zijn, want zolang er nog één
+        # op is, kan dat kind degene onder de douche zijn. De slaaptijd-sensoren
+        # rekenen al met de weekendhelper op vrijdag en zaterdag, dus een
+        # verzette bedtijd schuift hier vanzelf mee.
+        #
+        # Alleen de avondhelft (vanaf 12:00). 's Ochtends staan die sensoren
+        # ook aan, tot `klimaat_wakker` omgaat, en een vroege douche moet de
+        # teller gewoon houden. Een douche die vóór de bedtijd begon, telt
+        # door: de conditie wordt alleen bij de start bekeken.
+        - alias: Niet als beide kinderen hun bedtijd voorbij zijn
+          condition: template
+          value_template: >-
+            {{ not (now().hour >= 12
+                    and is_state('binary_sensor.slaapkamer_maxi_slaaptijd', 'on')
+                    and is_state('binary_sensor.slaapkamer_mini_slaaptijd', 'on')) }}
       actions:
         - repeat:
             sequence:
