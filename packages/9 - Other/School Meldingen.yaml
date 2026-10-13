@@ -86,6 +86,26 @@ school_meldingen_package:
   # ververst elk kwartier), en de storing zelf duurt toch al minstens een uur
   # voor hij zich meldt.
   template:
+    # Het geheugen van `school_nieuw_cijfer`: per cijfersensor de cijfers die
+    # al gemeld zijn (zie `cijfer_sleutels()` in school.jinja). Trigger-based,
+    # want die zet zijn attributen terug na een herstart - een gewone
+    # template-sensor rekent alles opnieuw uit en weet dan niets meer.
+    # Alleen de automatisering schrijft hierin, via het event.
+    - triggers:
+        - trigger: event
+          event_type: magister_cijfers_gezien
+      sensor:
+        - name: "Magister cijfers al gemeld"
+          unique_id: magister_cijfers_al_gemeld
+          icon: mdi:certificate-outline
+          device_class: timestamp
+          state: "{{ now().isoformat() }}"
+          attributes:
+            gezien: >-
+              {% set oud = this.attributes.get('gezien') or {} %}
+              {% set k = trigger.event.data.sensor %}
+              {{ dict(oud.items() | rejectattr(0, 'eq', k) | list + [(k, trigger.event.data.sleutels)]) }}
+
     - binary_sensor:
         - name: "Magister haalt niets meer op"
           unique_id: magister_haalt_niets_meer_op
@@ -173,27 +193,34 @@ school_meldingen_package:
     ## Nieuw cijfer in Magister -> pushbericht naar de ouders
     ###########################################################################
     #
-    # Vuurt als de lijst `cijfers` op de cijfersensor van een kind verandert,
-    # dus hooguit eens per kwartier (zo vaak ververst de integratie). Welke
-    # cijfers er écht nieuw zijn bepaalt `melding_nieuwe_cijfers()` in
-    # school.jinja, door de lijst van vóór en na de update te vergelijken - zie
-    # daar waarom tellen niet werkt en waarom zes-of-meer tegelijk wordt
-    # genegeerd.
+    # Vergelijkt per kind de cijferlijst met wat er al gemeld is (bewaard in
+    # `sensor.magister_cijfers_al_gemeld`, hierboven) en meldt alleen het
+    # verschil. Welke cijfers nieuw zijn bepaalt `melding_nieuwe_cijfers()` in
+    # school.jinja; zie daar waarom tellen niet werkt en waarom zes-of-meer
+    # tegelijk wordt genegeerd.
+    #
+    # WAAROM NIET "VORIGE STAND VAN DE SENSOR": de eerste versie deed dat, en
+    # sloeg overgangen uit `unavailable` over om herstarts niet als een stapel
+    # nieuwe cijfers te lezen. Maar de Magister-sensor valt een paar keer per
+    # dag op `unavailable` als een ophaalronde mislukt, en het eerste echte
+    # cijfer (13-10-2026) kwam precies binnen in de ronde daarna: 0 ->
+    # unavailable -> 1. Overgeslagen. Met een eigen geheugen maakt het niet
+    # meer uit hoe de sensor ertussendoor heeft gestaan.
+    #
+    # Daarom ook kijkt hij niet naar `trigger`: de state-trigger is er voor de
+    # snelheid, het kwartierpatroon vangt alles wat die mist (een herstart, of
+    # een kind dat in dezelfde ronde ververst werd).
+    #
+    # STAAT ER VOOR EEN KIND NOG NIETS IN HET GEHEUGEN (eerste keer na het
+    # invoeren, of een nieuw kind), dan wordt de huidige lijst stil
+    # vastgelegd. Anders krijg je bij een nieuw kind in één klap al zijn
+    # cijfers van dit jaar.
     #
     # Alleen naar de ouders, niet naar het kind: die ziet het cijfer zelf al in
     # de Magister-app.
     #
-    # Komt de sensor uit `unavailable`/`unknown` (herstart, Magister-storing),
-    # dan is de lijst ervoor leeg en zou alles nieuw lijken. Die overgangen
-    # tellen daarom niet mee. Gevolg: een cijfer dat precies tijdens een
-    # herstart binnenkomt, wordt niet gemeld. Op de School-weergave staat het
-    # gewoon.
-    #
-    # Een tweede kind: zijn `sensor.magister_<kind>_cijfers` in de trigger
-    # erbij. De naam in de titel komt uit de sensor zelf (`kind_naam`).
-    #
-    # `queued` en niet `single`: alle kinderen worden in dezelfde ronde
-    # ververst, en met `single` zou het tweede kind wegvallen.
+    # Een tweede kind: zijn `sensor.magister_<kind>_cijfers` in de trigger én
+    # in `kinderen`. De naam in de titel komt uit de sensor zelf (`kind_naam`).
     - id: school_nieuw_cijfer
       alias: School - Nieuw cijfer naar de ouders
       description: >-
@@ -206,29 +233,52 @@ school_meldingen_package:
           entity_id:
             - sensor.magister_logan_veen_cijfers
           attribute: cijfers
-
-      conditions:
-        - condition: template
-          value_template: >-
-            {{ trigger.from_state is not none and trigger.to_state is not none
-               and trigger.from_state.state not in ['unknown', 'unavailable']
-               and trigger.to_state.state not in ['unknown', 'unavailable'] }}
+        - trigger: time_pattern
+          minutes: /15
 
       actions:
         - variables:
-            kind: "{{ trigger.entity_id | regex_replace('_cijfers$', '') }}"
-            naam: "{{ (trigger.to_state.attributes.kind_naam | default('', true)).split(' ') | first | default('Magister', true) }}"
-            # Op één regel om dezelfde reden als `tekst` hierboven.
-            tekst: "{% from 'school.jinja' import melding_nieuwe_cijfers %}{{ melding_nieuwe_cijfers(kind, trigger.from_state.attributes.cijfers, trigger.to_state.attributes.cijfers) | trim }}"
+            kinderen:
+              - sensor.magister_logan_veen_cijfers
 
-        - condition: template
-          value_template: "{{ tekst != '' }}"
+        - repeat:
+            for_each: "{{ kinderen }}"
+            sequence:
+              - variables:
+                  sensor: "{{ repeat.item }}"
+                  geldig: >-
+                    {{ states(sensor) not in ['unknown', 'unavailable']
+                       and state_attr(sensor, 'cijfers') is list }}
+                  gezien: "{{ (state_attr('sensor.magister_cijfers_al_gemeld', 'gezien') or {}).get(sensor) }}"
+                  # Op één regel om dezelfde reden als `tekst` hierboven.
+                  sleutels: "{% from 'school.jinja' import cijfer_sleutels %}{{ cijfer_sleutels(state_attr(sensor, 'cijfers')) }}"
 
-        - action: notify.mobile_devices_adults
-          data:
-            title: "{{ naam }} - {{ 'nieuwe cijfers' if '\n' in tekst else 'nieuw cijfer' }}"
-            message: "{{ tekst }}"
-            data:
-              group: school
-              url: /lovelace/school
-              clickAction: /lovelace/school
+              # `if/then` en geen `condition:`, anders breekt een kind zonder
+              # nieuws de herhaling voor het kind erachter af.
+              - if:
+                  - condition: template
+                    value_template: "{{ geldig and (gezien is none or (sleutels | sort) != (gezien | sort)) }}"
+                then:
+                  - variables:
+                      naam: "{{ (state_attr(sensor, 'kind_naam') | default('', true)).split(' ') | first | default('Magister', true) }}"
+                      tekst: "{% from 'school.jinja' import melding_nieuwe_cijfers %}{% if gezien is not none %}{{ melding_nieuwe_cijfers(sensor | regex_replace('_cijfers$', ''), gezien, state_attr(sensor, 'cijfers')) | trim }}{% endif %}"
+
+                  # Eerst vastleggen, dan melden: lukt de push niet, dan liever
+                  # één cijfer gemist dan elk kwartier dezelfde melding.
+                  - event: magister_cijfers_gezien
+                    event_data:
+                      sensor: "{{ sensor }}"
+                      sleutels: "{{ sleutels }}"
+
+                  - if:
+                      - condition: template
+                        value_template: "{{ tekst != '' }}"
+                    then:
+                      - action: notify.mobile_devices_adults
+                        data:
+                          title: "{{ naam }} - {{ 'nieuwe cijfers' if '\n' in tekst else 'nieuw cijfer' }}"
+                          message: "{{ tekst }}"
+                          data:
+                            group: school
+                            url: /lovelace/school
+                            clickAction: /lovelace/school
