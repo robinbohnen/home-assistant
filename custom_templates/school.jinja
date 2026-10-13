@@ -102,6 +102,22 @@
 {%- endmacro -%}
 
 
+{%- macro vak_bij_code(kind, code) -%}
+  {#- 'EN' -> 'Engels'. Cijfers kennen het vak alleen als code, het rooster
+      heeft die code vooraan in de omschrijving van elke les ("EN - thoe -
+      uhv1d", vak "Engels"). NIET via `vak_id`: in de cijfers is dat het
+      studievak (26195), in het rooster een ander nummer (28) - ze matchen
+      nooit. Staat het vak de komende twee weken niet in het rooster, dan
+      blijft de code staan. -#}
+  {%- set code = code | default('', true) | string | trim -%}
+  {%- set naam = (state_attr(kind, 'afspraken') or [])
+                 | selectattr('omschrijving', 'match', code ~ '( - |$)', true)
+                 | rejectattr('vak', 'eq', '') | map(attribute='vak') | first
+                 if code else none -%}
+  {{- vaknaam(naam) if naam else code | upper -}}
+{%- endmacro -%}
+
+
 {%- macro dagnaam(d) -%}
   {#- '2026-08-31' -> 'maandag 31 augustus'. Vandaag, morgen en overmorgen
       krijgen hun eigen woord: dat lees je sneller dan een datum. -#}
@@ -444,14 +460,14 @@ _Nog geen cijfers._
 {%- set getallen = alles | map(attribute='waarde') | map('replace', ',', '.')
                          | select('is_number') | map('float') | list -%}
 {% if getallen | count > 0 -%}
-Gemiddeld **{{ getallen | average | round(1) }}** over {{ getallen | count }} {{ 'cijfer' if getallen | count == 1 else 'cijfers' }}.
+Gemiddeld **{{ '%.1f' | format(getallen | average) | replace('.', ',') }}** over {{ getallen | count }} {{ 'cijfer' if getallen | count == 1 else 'cijfers' }}.
 {% endif %}
 | Vak | Cijfer | Waarvoor |
 |:--|:--:|:--|
 {% for c in (alles | sort(attribute='ingevoerd_op', reverse=true))[:aantal] -%}
 {%- set w = c.waarde | replace(',', '.') -%}
 {%- set kleur = ('🟢' if w | float(0) >= 6.5 else ('🟠' if w | float(0) >= 5.5 else '🔴')) if w is is_number else '⚪' -%}
-| {{ c.vak | upper }} | {{ kleur }} **{{ c.waarde }}** | {{ c.omschrijving | truncate(40, true, '…') }}{% if c.weegfactor and c.weegfactor | string not in ['1', '1.0', ''] %} (×{{ c.weegfactor }}){% endif %} |
+| {{ vak_bij_code(kind, c.vak) }} | {{ kleur }} **{{ c.waarde }}** | {{ c.omschrijving | truncate(40, true, '…') }}{% if c.weegfactor and c.weegfactor | string not in ['1', '1.0', ''] %} (×{{ c.weegfactor }}){% endif %} |
 {% endfor -%}
 {%- endif -%}
 {%- endmacro -%}
@@ -462,36 +478,42 @@ Gemiddeld **{{ getallen | average | round(1) }}** over {{ getallen | count }} {{
     ==========================================================================
     `cijfers()` hierboven toont de LAATSTE cijfers, door elkaar. Dit is de
     andere vraag: hoe staat hij er per vak voor. Komt uit `voortgangscijfers`
-    op de hoofdsensor (nieuw in magister_school v2.1.0): alle cijfers van de
+    op de hoofdsensor (nieuw in magister_school v2.1.0): alle kolommen van de
     lopende aanmelding, met weegfactor en de vlaggen `telt_mee`,
     `vrijstelling` en `moet_inhalen`.
 
-    Het gemiddelde is GEWOGEN met de weegfactor van de kolom, over de cijfers
-    die meetellen. Dat komt dichter bij het rapport dan het ongewogen getal in
-    `cijfers()`, maar is het nog steeds niet: Magister kan per periode
-    rekenen en de school kan kolommen anders laten optellen. Lees het als
-    "zo loopt het", en kijk in Magister voor de eindstand.
+    Het gemiddelde is GEWOGEN met de weegfactor van de kolom. Lees het als "zo
+    loopt het", en kijk in Magister voor de eindstand: de school kan per
+    periode rekenen.
 
-    `vak` is hier de kleine afkorting uit de kolomnaam ("ne101" -> "ne"). De
-    leesbare naam wordt gezocht in het rooster via `vak_id`; staat dat vak de
-    komende twee weken niet in het rooster, dan blijft de afkorting staan.
+    TWEE DINGEN DIE PAS MET ECHTE CIJFERS ZICHTBAAR WERDEN (13-10-2026):
 
-    Nog NIET gezien met echte cijfers (begin oktober 2026 was de lijst leeg).
-    De veldnamen komen uit de broncode van v2.1.0, niet uit een waarneming.
+    1. In de lijst staan naast de toetsen ook de kolommen die Magister ZELF
+       uitrekent: "Eindrapport", "Rapport 1", "Gemiddelde spreken ...",
+       "Gewogen gem.P1-4" - met `telt_mee` aan en meestal weegfactor 1. Na
+       één toets Engels stonden er zeven kolommen; meetellen maakte van één
+       8,7 zes cijfers met een 8,8 gemiddeld. Een vlag die ze onderscheidt
+       geeft de integratie niet door, dus ze gaan eruit op hun omschrijving
+       (`berekend` hieronder). Verzint de school een nieuwe naam voor zo'n
+       kolom, dan telt hij mee - dat zie je dan aan een te hoog aantal.
+    2. `vak` is LEEG: de integratie zoekt kleine letters in de kolomnaam
+       ("^[a-z]+"), maar deze school schrijft "EN116". Het vak komt daarom
+       hier uit de kolomnaam zelf: alles voor het eerste cijfer.
 -#}
 
 {%- macro voortgang(kind) -%}
+{%- set berekend = '(gemiddelde|gem\\.|gewogen|rapport|eindrapport|eindcijfer|eindgemiddelde)' -%}
 {%- set alles = state_attr(kind, 'voortgangscijfers') or [] -%}
 {%- set tellen = alles | selectattr('telt_mee') | rejectattr('vrijstelling')
-                       | rejectattr('cijfer', 'none') | list -%}
+                       | rejectattr('cijfer', 'none')
+                       | rejectattr('omschrijving', 'match', berekend, true) | list -%}
 {%- if tellen | count == 0 -%}
 _Nog geen cijfers dit schooljaar._
 {%- else -%}
-{%- set rooster_af = state_attr(kind, 'afspraken') or [] -%}
 | Vak | Gemiddeld | Cijfers |
 |:--|:--:|:--:|
-{% for v in tellen | map(attribute='vak') | unique | sort -%}
-{%- set rij = tellen | selectattr('vak', 'eq', v) | list -%}
+{% for v in tellen | map(attribute='kolom') | map('regex_replace', '[0-9].*$', '') | map('upper') | unique | sort -%}
+{%- set rij = tellen | selectattr('kolom', 'match', v ~ '[0-9]', true) | list -%}
 {%- set ns = namespace(som=0, gewicht=0) -%}
 {%- for c in rij -%}
 {%- set w = c.weegfactor | float(1) -%}
@@ -500,17 +522,15 @@ _Nog geen cijfers dit schooljaar._
 {%- set ns.gewicht = ns.gewicht + w -%}
 {%- endif -%}
 {%- endfor -%}
-{%- set vid = (rij | first).vak_id | string -%}
-{%- set naam = (rooster_af | selectattr('vak_id', 'eq', vid) | map(attribute='vak') | first) | default(v | upper, true) -%}
 {%- if ns.gewicht > 0 -%}
 {%- set gem = ns.som / ns.gewicht -%}
-| {{ vaknaam(naam) }} | {{ '🟢' if gem >= 6.5 else ('🟠' if gem >= 5.5 else '🔴') }} **{{ '%.1f' | format(gem) | replace('.', ',') }}** | {{ rij | count }} |
+| {{ vak_bij_code(kind, v) }} | {{ '🟢' if gem >= 6.5 else ('🟠' if gem >= 5.5 else '🔴') }} **{{ '%.1f' | format(gem) | replace('.', ',') }}** | {{ rij | count }} |
 {% endif -%}
 {% endfor -%}
 {%- set inhalen = alles | selectattr('moet_inhalen') | list -%}
 {%- if inhalen | count > 0 %}
 
-⚠️ **Nog in te halen:** {% for c in inhalen %}{{ c.vak | upper }}{% if c.omschrijving %} ({{ c.omschrijving | truncate(30, true, '…') }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}
+⚠️ **Nog in te halen:** {% for c in inhalen %}{{ vak_bij_code(kind, c.kolom | regex_replace('[0-9].*$', '')) }}{% if c.omschrijving %} ({{ c.omschrijving | truncate(30, true, '…') }}){% endif %}{{ ', ' if not loop.last }}{% endfor %}
 {%- endif -%}
 {%- endif -%}
 {%- endmacro -%}
@@ -650,12 +670,8 @@ Huiswerk:
     iets met de lijst gebeurd en zijn het oude cijfers; vijftig pushberichten
     daarover is erger dan er één missen.
 
-    HET VAK staat in deze lijst alleen als code ("EN"). Het rooster heeft die
-    code vooraan in de omschrijving van elke les ("EN - thoe - uhv1d", vak
-    "Engels"), dus daar wordt de naam opgezocht. NIET via `voortgangscijfers`:
-    daar is `vak` leeg (de integratie zoekt kleine letters in "EN116") en
-    `vak_id` is een ander nummer dan `vak_id` in het rooster. Staat het vak de
-    komende twee weken niet in het rooster, dan blijft de code staan.
+    HET VAK staat in deze lijst alleen als code ("EN"); `vak_bij_code()`
+    bovenin maakt er de naam van.
 -#}
 
 {%- macro cijfer_sleutels(lijst) -%}
@@ -675,14 +691,10 @@ Huiswerk:
 {%- endif -%}
 {%- endfor -%}
 {%- if 0 < ns.erbij | count <= 5 -%}
-{%- set rooster_af = state_attr(kind, 'afspraken') or [] -%}
 {%- for c in ns.erbij | sort(attribute='ingevoerd_op') -%}
-{%- set code = c.vak | default('', true) | string | trim -%}
-{%- set naam = (rooster_af | selectattr('omschrijving', 'match', code ~ '( - |$)', true)
-                           | rejectattr('vak', 'eq', '') | map(attribute='vak') | first) if code else none -%}
 {%- set w = c.waarde | string | replace(',', '.') -%}
 {%- set kleur = ('🟢' if w | float(0) >= 6.5 else ('🟠' if w | float(0) >= 5.5 else '🔴')) if w is is_number else '⚪' -%}
-{{ kleur }} {{ vaknaam(naam) if naam else code | upper }}: {{ c.waarde }}
+{{ kleur }} {{ vak_bij_code(kind, c.vak) }}: {{ c.waarde }}
 {%- if c.omschrijving %} - {{ c.omschrijving | truncate(50, true, '…') }}{% endif %}
 {%- if c.weegfactor and c.weegfactor | string not in ['1', '1.0', '0', '0.0', ''] %} (×{{ c.weegfactor }}){% endif -%}
 {{ '\n' if not loop.last }}
