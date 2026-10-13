@@ -41,6 +41,32 @@ electricity_package:
       keep_last_sample: true
       precision: 3
 
+    # WARMTEPOMP IN KWH, VOOR HET ENERGY-DASHBOARD (13 oktober 2026)
+    # De VR940 meldt via EEBUS alleen vermogen (sensor.vaillant_vr940_power,
+    # add-on SlimHuys EEBUS), geen energieteller; het dashboard wil kWh. Dit
+    # telt het vermogen op tot kWh.
+    #
+    # `left` en niet de standaard `trapezoidal`: de VR940 meldt alleen bij een
+    # wijziging, dus een waarde geldt tot de volgende. Trapezium zou tussen
+    # 24 W (standby) en een opstart naar 2 kW een schuine lijn trekken over
+    # het hele stille stuk ervoor en zo energie verzinnen.
+    #
+    # `max_sub_interval`: zonder nieuwe melding telt hij niet bij. Blijft de
+    # pomp een kwartier stabiel op 1,8 kW, dan zou die energie pas bij de
+    # volgende wijziging in één keer bijkomen; zo telt hij elke minuut door.
+    #
+    # Is de bron `unavailable` (add-on weg of de waarde langer dan 12 min niet
+    # ververst), dan telt deze teller niet en verzint dus ook niets.
+    - platform: integration
+      name: "Warmtepomp energie"
+      unique_id: warmtepomp_energie
+      source: sensor.vaillant_vr940_power
+      method: left
+      unit_prefix: k
+      round: 3
+      max_sub_interval:
+        minutes: 1
+
   template:
     - switch:
         - name: Live Energieverbruik Totaal Negatief
