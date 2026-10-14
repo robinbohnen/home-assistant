@@ -208,19 +208,9 @@ cards:
                 var accuSt = states['sensor.accu_status'];
                 var accuMode = (!accuSt || accuW === null) ? ''
                              : ({laden: 'laadt', ontladen: 'ontlaadt', rust: 'standby'}[accuSt.state] || '');
-                // De percentages komen uit de attributen `zw`/`o` van
-                // sensor.zon_vermogen_nu, die een uitval tot tien minuten
-                // vasthoudt - zie packages/2 - Second Floor/Attic/Solarpanels.yaml.
-                var zonAttr = (zonS || {}).attributes || {};
-                var pct = function(vermogen, capId, terugval){
-                  var p = (vermogen === undefined || vermogen === null || isNaN(Number(vermogen)))
-                        ? null : Number(vermogen);
-                  var c = num(capId);
-                  c = (c === null ? terugval : c) * 1000;
-                  return (p === null || c <= 0) ? null : Math.round(p / c * 100);
-                };
-                var zw = pct(zonAttr.zw, 'sensor.inverter_kroon_18_achtertuin_capacity', 5);
-                var oo = pct(zonAttr.o, 'sensor.inverter_kroon_18_zolder_capacity', 3);
+                // Tot 14-10-2026 stond achter de zon "ZW x% · O y%", per GoodWe-
+                // omvormer. Alle panelen hangen nu aan de Deye en MarkeDroid
+                // geeft alleen het totaal, dus die uitsplitsing is er niet meer.
                 // Alles in W, pas vanaf 10 kW in kW: "0,14 kW" en "2654 W"
                 // onder elkaar las niet. Uitvoer [getal, eenheid] zodat het
                 // huisgetal de eenheid kleiner kan zetten.
@@ -233,7 +223,7 @@ cards:
                 var vtekst = function(w){ var f = vermogen(w); return f[1] ? f[0] + ' ' + f[1] : f[0]; };
 
                 // ---------- bouwstenen ----------
-                var INKT = 'var(--primary-text-color)', GRIJS = 'var(--ov-ink-55)', GEEL = 'var(--ov-clip)';
+                var INKT = 'var(--primary-text-color)', GRIJS = 'var(--ov-ink-55)';
                 var ZON = 'var(--ov-ok)', HUIS = 'var(--ov-info-strong)', ACCU = 'var(--ov-ink-70)';
                 var NET = 'repeating-linear-gradient(135deg, var(--ov-ink-50) 0 2px, var(--ov-ink-14) 2px 5px)';
                 var LEEG = 'var(--ov-ink-7)';
@@ -275,10 +265,6 @@ cards:
                 };
 
                 // ---------- komt van / gaat naar ----------
-                var deel = function(naam, p){
-                  if(p === null) return '';
-                  return ` <span style="color:${p >= 98 ? GEEL : GRIJS}">· ${naam} ${p}%</span>`;
-                };
                 var accuDeel = {bg: ACCU, w: accuW === null ? 0 : Math.abs(accuW), naam: 'accu',
                                 waarde: vtekst(accuW)};
                 var netDeel = {bg: NET, w: nettoW === null ? 0 : Math.abs(nettoW), naam: 'net', waarde: vtekst(nettoW)};
@@ -286,8 +272,7 @@ cards:
                 // Onder 50 W is de zon geen bron maar schemerlicht; een bron
                 // die zich niet meldt blijft als streepje zichtbaar.
                 if(zonW === null) van.push({naam: 'zon', waarde: '—', dof: true});
-                else if(zonW > 50) van.push({bg: ZON, w: zonW, naam: 'zon', waarde: vtekst(zonW),
-                                             extra: deel('ZW', zw) + deel('O', oo)});
+                else if(zonW > 50) van.push({bg: ZON, w: zonW, naam: 'zon', waarde: vtekst(zonW)});
                 if(accuMode === 'ontlaadt') van.push(accuDeel);
                 if(nettoW === null) van.push({naam: 'net', waarde: '—', dof: true});
                 else if(nettoW > 0) van.push(netDeel);

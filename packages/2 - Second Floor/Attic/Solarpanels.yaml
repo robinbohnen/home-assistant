@@ -1,205 +1,37 @@
 solar_panels_package:
+  ######################################################################
+  ## DE ZON KOMT SINDS 14 OKTOBER 2026 UIT DE DEYE
+  ##
+  ## Tot die dag hingen de panelen aan twee GoodWe-omvormers: zuidwest op
+  ## de overkapping (16 panelen, GW5000N-EH, 5 kW) en oost op de zolder
+  ## (12 panelen, GW3000D-NS, 3 kW). Die zijn eruit; alle panelen hangen nu
+  ## aan de Deye, en die komt via MarkeDroid binnen (Battery.yaml):
+  ## `sensor.markedroid_zon_vermogen` (W, elke ~10 s) en
+  ## `sensor.markedroid_zon_energie` (Wh, opgeteld uit `TotWhInc`).
+  ##
+  ## Weg zijn daarmee: de sensoren per set (`zon_vermogen_zw/_o`,
+  ## `zon_vandaag_zw/_o`), het vasthouden van een haperende omvormer tot tien
+  ## minuten, de terugval van de lokale GoodWe-koppeling op de SEMS-cloud en
+  ## de UI-helper `attic_solar_total_today`. Dat was allemaal reparatiewerk
+  ## voor twee omvormers die elk los wegvielen (elf keer op 27-08-2026). De
+  ## MarkeDroid-feed is één bron; valt die een minuut stil, dan maakt
+  ## `expire_after: 60` hem unavailable en wordt de zon hier eerlijk `—`.
+  ##
+  ## MarkeDroid geeft alleen het totaal, niet per string. De ZW/O-percentages
+  ## op het Overzicht, de klok en de spraak-intent werken daarom nu met één
+  ## totaal en het piekvermogen hieronder.
+  ##
+  ## Alles in huis leest de zon via deze twee sensoren en nooit via
+  ## `sensor.markedroid_*` zelf - zelfde patroon als de accu en de P1.
+  ######################################################################
   utility_meter:
-    solar_attic:
-      name: Attic - Solar Total Today
-      unique_id: attic_solar_today
-      source: sensor.inverter_kroon_18_zolder_voorzijde_energy
+    zon_deye_vandaag:
+      name: Zon Deye Vandaag
+      unique_id: zon_deye_vandaag
+      source: sensor.markedroid_zon_energie
       cycle: daily
 
-  ######################################################################
-  ## EEN HAPERENDE OMVORMER MAG DE HELE ZONMETING NIET WISSEN
-  ##
-  ## Hier stonden twee `min_max`-sommen (type: sum) over de twee arrays.
-  ## Die integratie geeft `unknown` zodra ÉÉN bron unavailable is - hij telt
-  ## niet door met wat er wel binnenkomt. En de omvormers vallen vaak weg:
-  ## op 27-08-2026 elf keer tussen 06:00 en 13:20, meestal 1-2 minuten,
-  ## zolder en achtertuin grotendeels onafhankelijk van elkaar.
-  ##
-  ## Gevolg op het Overzicht-paneel (Robin, 27-08-2026: "waarom staat er
-  ## - kW"): zon op `—`, geen groene lijn, gaten in de grafiek, en het
-  ## dagtotaal in kWh verdween ook - want `sensor.huis_verbruik` heeft een
-  ## availability-guard op de zonsensor en viel dus mee om.
-  ##
-  ## VASTHOUDEN IS HIER BETER DAN BLANKEN
-  ## Per omvormer staat er nu een sensor die ALLEEN op een geldige waarde
-  ## bijwerkt (`not_to: unavailable/unknown`). Valt de bron weg, dan vuurt er
-  ## geen trigger en blijft de laatste meting staan - precies wat je wilt bij
-  ## een gat van twee minuten, want de zon springt niet. Dat vasthouden is
-  ## expres eindig: blijft de bron langer dan tien minuten weg, dan vuurt de
-  ## tweede trigger (`for: 00:10:00`) en wordt die helft eerlijk unavailable.
-  ## De som telt een weggevallen helft dan als 0 en gaat pas zelf op `—` als
-  ## ze allebei dood zijn. Alle elf uitvallen van vandaag zaten binnen die
-  ## tien minuten; de kaart had er geen van gemerkt.
-  ##
-  ## De dagtotalen in kWh hebben geen tienminutenrem maar een dagwissel: een
-  ## dagteller mag nooit halverwege terugvallen (dat leest als een defect),
-  ## dus die houdt zijn stand vast tot 00:00:30 en begint dan op 0.
-  ##
-  ## De `homeassistant start`-trigger staat erbij omdat een trigger-sensor
-  ## anders op `unknown` blijft staan tot zijn bron voor het eerst verandert.
-  ######################################################################
   template:
-    # ---------- vermogen per array (W) ----------
-    #
-    # ZW LEEST DE OMVORMER LOKAAL, NIET MEER VIA DE CLOUD (16 september 2026)
-    # `sensor.inverter_kroon_18_overkapping` komt uit SEMS, de GoodWe-cloud, en
-    # die ververst voor deze GW5000N-EH maar eens per ~4 minuten (mediaan op
-    # de ochtend van 16 september; langste gat 16 minuten). De zolder-omvormer
-    # doet dat via dezelfde cloud wel elke minuut.
-    #
-    # Dat "de zon springt niet" hierboven klopt op een strakblauwe dag, maar
-    # niet onder stapelwolken. Op 16 september stond ZW negen minuten lang op
-    # 878 W terwijl de omvormer zelf 2.434 W gaf. Het net (SlimHuys, ~2x per
-    # seconde) en de accu (toen de Marstek via ESPHome, elke 15 s; sinds
-    # 20-09-2026 de Deye via ha-solarman) reageren wél meteen, dus
-    # `sensor.huis_verbruik` rekende net + te weinig zon - accu, kwam onder
-    # nul uit en werd op 0,00 kW afgekapt: dertig keer tussen 09:42 en 11:45.
-    # Robin zag het huis op 0,00 staan terwijl de zon 2,85 kW, het net 0,95 kW
-    # teruglevering en de accu 2.350 W laden aangaf - samen 0,45 kW meer eruit
-    # dan erin.
-    #
-    # Hetzelfde apparaat hangt ook in de lokale `goodwe`-integratie, en daar
-    # komt `sensor.pv_power` elke 10 seconden (langste gat 60 s). Waar SEMS en
-    # lokaal tegelijk verversten, verschillen ze een paar watt: het is dezelfde
-    # meting, alleen vers. Over 13-16 september viel de lokale koppeling negen
-    # keer weg, 10 tot 76 seconden en bijna allemaal 's nachts. Het dagtotaal
-    # hieronder (`today_s_pv_generation`) kwam al lokaal binnen.
-    #
-    # SEMS blijft staan als terugval, niet als tweede bron: zolang
-    # `pv_power` een getal heeft wint die altijd. Pas als de lokale koppeling
-    # zelf weg is telt de cloudwaarde - een oude meting is dan beter dan geen.
-    # De tienminutenrem hangt aan de lokale bron; is die zo lang weg en heeft
-    # SEMS ook niets, dan wordt ZW eerlijk unavailable, precies als voorheen.
-    - triggers:
-        - trigger: state
-          entity_id: sensor.pv_power
-          not_to: ["unavailable", "unknown"]
-          id: waarde
-        # Een SEMS-update vuurt ook, maar de state hieronder kiest dan nog
-        # steeds `pv_power` zolang die leeft. Hij doet pas iets als de lokale
-        # koppeling weg is.
-        - trigger: state
-          entity_id: sensor.inverter_kroon_18_overkapping
-          not_to: ["unavailable", "unknown"]
-          id: cloud
-        - trigger: state
-          entity_id: sensor.pv_power
-          to: ["unavailable", "unknown"]
-          for: "00:10:00"
-          id: dood
-        - trigger: homeassistant
-          event: start
-          id: start
-      sensor:
-        - name: "Zon Vermogen ZW"
-          unique_id: zon_vermogen_zw
-          default_entity_id: sensor.zon_vermogen_zw
-          unit_of_measurement: "W"
-          device_class: power
-          state_class: measurement
-          availability: >-
-            {{ trigger.id == 'waarde'
-               or is_number(states('sensor.pv_power'))
-               or is_number(states('sensor.inverter_kroon_18_overkapping')) }}
-          state: >-
-            {% if trigger.id == 'waarde' %}{{ trigger.to_state.state | float(0) | round(1) }}
-            {% elif is_number(states('sensor.pv_power')) %}{{ states('sensor.pv_power') | float(0) | round(1) }}
-            {% else %}{{ states('sensor.inverter_kroon_18_overkapping') | float(0) | round(1) }}{% endif %}
-
-    - triggers:
-        - trigger: state
-          entity_id: sensor.inverter_kroon_18_zolder_voorzijde
-          not_to: ["unavailable", "unknown"]
-          id: waarde
-        - trigger: state
-          entity_id: sensor.inverter_kroon_18_zolder_voorzijde
-          to: ["unavailable", "unknown"]
-          for: "00:10:00"
-          id: dood
-        - trigger: homeassistant
-          event: start
-          id: start
-      sensor:
-        - name: "Zon Vermogen O"
-          unique_id: zon_vermogen_o
-          default_entity_id: sensor.zon_vermogen_o
-          unit_of_measurement: "W"
-          device_class: power
-          state_class: measurement
-          availability: >-
-            {{ trigger.id == 'waarde' or is_number(states('sensor.inverter_kroon_18_zolder_voorzijde')) }}
-          state: >-
-            {% if trigger.id == 'waarde' %}{{ trigger.to_state.state | float(0) | round(1) }}
-            {% else %}{{ states('sensor.inverter_kroon_18_zolder_voorzijde') | float(0) | round(1) }}{% endif %}
-
-    # ---------- dagtotaal per array (kWh) ----------
-    - triggers:
-        - trigger: state
-          entity_id: sensor.today_s_pv_generation
-          not_to: ["unavailable", "unknown"]
-          id: waarde
-        - trigger: time
-          at: "00:00:30"
-          id: dagwissel
-        - trigger: homeassistant
-          event: start
-          id: start
-      sensor:
-        - name: "Zon Vandaag ZW"
-          unique_id: zon_vandaag_zw
-          default_entity_id: sensor.zon_vandaag_zw
-          unit_of_measurement: "kWh"
-          device_class: energy
-          state_class: measurement
-          availability: >-
-            {{ trigger.id in ['waarde', 'dagwissel'] or is_number(states('sensor.today_s_pv_generation')) }}
-          state: >-
-            {% if trigger.id == 'waarde' %}{{ trigger.to_state.state | float(0) | round(2) }}
-            {% elif trigger.id == 'dagwissel' %}0
-            {% else %}{{ states('sensor.today_s_pv_generation') | float(0) | round(2) }}{% endif %}
-
-    - triggers:
-        - trigger: state
-          entity_id: sensor.attic_solar_total_today
-          not_to: ["unavailable", "unknown"]
-          id: waarde
-        - trigger: time
-          at: "00:00:30"
-          id: dagwissel
-        - trigger: homeassistant
-          event: start
-          id: start
-      sensor:
-        - name: "Zon Vandaag O"
-          unique_id: zon_vandaag_o
-          default_entity_id: sensor.zon_vandaag_o
-          unit_of_measurement: "kWh"
-          device_class: energy
-          state_class: measurement
-          # EEN DAGTELLER BOVEN DE 72 KWH IS GEEN DAGTELLER (3 oktober 2026)
-          # `sensor.attic_solar_total_today` is een helper uit de UI die de
-          # dagproductie afleidt uit de totaalstand van de omvormer. Op 29
-          # september om 10:54 raakte hij zijn beginstand kwijt en gaf hij de
-          # hele totaalstand door: van 1,3 naar 21.754,5 kWh, en dat bleef zo
-          # tot de nacht van 30 september op 1 oktober. Twee dagen stond er
-          # "vandaag opgewekt · 21.7xx kWh" op het paneel.
-          # 72 kWh is 3 kW (het vermogen van deze array) maal 24 uur: daarboven
-          # kan het natuurkundig geen dagproductie zijn. De sensor gaat dan op
-          # unavailable in plaats van het getal door te geven; de som hieronder
-          # telt dan alleen de zuidwest en zet `volledig` op false.
-          availability: >-
-            {% set v = trigger.to_state.state if trigger.id == 'waarde'
-               else states('sensor.attic_solar_total_today') %}
-            {{ trigger.id == 'dagwissel' or (is_number(v) and v | float <= 72) }}
-          state: >-
-            {% if trigger.id == 'waarde' %}{{ trigger.to_state.state | float(0) | round(2) }}
-            {% elif trigger.id == 'dagwissel' %}0
-            {% else %}{{ states('sensor.attic_solar_total_today') | float(0) | round(2) }}{% endif %}
-
-    # ---------- de sommen waar de rest van het huis op leunt ----------
-    # Vervangen `sensor.solar_power_generated_now` / `_today` (min_max).
-    # Eenheid blijft W resp. kWh, zodat alle plekken die op de eenheid
-    # testen (dashboards, huis_verbruik) blijven kloppen.
     - sensor:
         - name: "Zon Vermogen Nu"
           unique_id: zon_vermogen_nu
@@ -207,44 +39,29 @@ solar_panels_package:
           unit_of_measurement: "W"
           device_class: power
           state_class: measurement
-          availability: >-
-            {{ has_value('sensor.zon_vermogen_zw') or has_value('sensor.zon_vermogen_o') }}
-          state: >-
-            {{ (states('sensor.zon_vermogen_zw') | float(0)
-                + states('sensor.zon_vermogen_o') | float(0)) | round(1) }}
+          availability: "{{ has_value('sensor.markedroid_zon_vermogen') }}"
+          state: "{{ states('sensor.markedroid_zon_vermogen') | float(0) | round(1) }}"
           attributes:
-            # Voor de ZW/O-percentages op het Overzicht: die stonden op de ruwe
-            # omvormersensoren en verdwenen dus bij elke hik.
-            zw: "{{ states('sensor.zon_vermogen_zw') | float(0) | round(1) }}"
-            o: "{{ states('sensor.zon_vermogen_o') | float(0) | round(1) }}"
-            volledig: "{{ has_value('sensor.zon_vermogen_zw') and has_value('sensor.zon_vermogen_o') }}"
+            # Het piekvermogen van ALLE panelen samen, in W: de 100% voor de
+            # klok, de spraak-intent en het Overzicht. Eén plek, zodat die
+            # drie niet elk een eigen getal gaan verzinnen.
+            #
+            # 8000 is de som van de twee oude omvormers (5 + 3 kW) en dus een
+            # VOORLOPIG getal: dat was hun AC-plafond, niet wat de panelen
+            # kunnen. De Deye (20 kW) knipt niets meer af, dus het echte
+            # piekvermogen (28 panelen x Wp per paneel) ligt waarschijnlijk
+            # hoger. Vervangen zodra dat bekend is.
+            piekvermogen: 8000
 
         - name: "Zon Opgewekt Vandaag"
           unique_id: zon_opgewekt_vandaag
           default_entity_id: sensor.zon_opgewekt_vandaag
           unit_of_measurement: "kWh"
           device_class: energy
-          # Een dagteller die om middernacht naar 0 gaat: `total_increasing`.
-          # Stond op `measurement`, wat bij device_class energy niet mag (HA
-          # waarschuwde, en de langetermijnstatistiek was onbruikbaar).
-          #
-          # Maar `total_increasing` leest elke daling als een nieuwe dag. En
-          # de twee omvormers vallen los van elkaar weg (beide ~6x in 3 dagen,
-          # oktober 2026); de oude som telde de ontbrekende dan als 0. Dat gaf
-          # een dip - "reset" - en daarna een sprong terug die er in de
-          # statistiek bovenop kwam. Daarom: alleen optellen als ze er allebei
-          # zijn, en anders de vorige stand vasthouden. Bij een herstart is er
-          # geen vorige stand; dan de halve som, want stijgen mag altijd.
+          # Een dagteller die om middernacht naar 0 gaat. De utility_meter
+          # hierboven doet de dagwissel; `markedroid_zon_energie` telt alleen
+          # op (een negatief increment telt daar als 0), dus binnen een dag
+          # kan hij niet dalen.
           state_class: total_increasing
-          availability: >-
-            {{ has_value('sensor.zon_vandaag_zw') or has_value('sensor.zon_vandaag_o') }}
-          state: >-
-            {% set som = (states('sensor.zon_vandaag_zw') | float(0)
-                          + states('sensor.zon_vandaag_o') | float(0)) | round(2) %}
-            {% if has_value('sensor.zon_vandaag_zw') and has_value('sensor.zon_vandaag_o') %}
-              {{ som }}
-            {% else %}
-              {{ this.state | float(som) }}
-            {% endif %}
-          attributes:
-            volledig: "{{ has_value('sensor.zon_vandaag_zw') and has_value('sensor.zon_vandaag_o') }}"
+          availability: "{{ has_value('sensor.zon_deye_vandaag') }}"
+          state: "{{ (states('sensor.zon_deye_vandaag') | float(0) / 1000) | round(2) }}"

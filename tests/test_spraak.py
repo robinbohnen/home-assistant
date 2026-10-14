@@ -336,14 +336,13 @@ print("\nZonnepanelen")
 wereld(**{
     "sensor.zon_vermogen_nu": "4224.71",
     "sensor.zon_opgewekt_vandaag": "7.3",
-    "sensor.inverter_kroon_18_achtertuin_capacity": "5.0",
-    "sensor.inverter_kroon_18_zolder_capacity": "3.0",
+    "sensor.zon_vermogen_nu.piekvermogen": 8000,
 })
 check("volle zon", zeg("Zonnepanelen"),
       ["4,2 kilowatt", "53 procent", "7,3 kilowattuur"])
 
-# Capacity-sensoren onbereikbaar: terugval op 5+3 kW, en onder de kilowatt
-# spreken we in hele watts.
+# Attribuut `piekvermogen` ontbreekt: terugval op 8000 W, en onder de
+# kilowatt spreken we in hele watts.
 wereld(**{
     "sensor.zon_vermogen_nu": "640",
     "sensor.zon_opgewekt_vandaag": "0.9",

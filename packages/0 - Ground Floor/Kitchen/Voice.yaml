@@ -455,17 +455,14 @@ keuken_voice_package:
             Ik kan de zonnepanelen even niet lezen.
           {%- else -%}
             {%- if nu is not none -%}
-              {#- Plafond uit de capacity-sensoren (kW), net als de
-                  productietegel op het overzicht; terugval 5+3 als een
-                  omvormer even weg is. In de praktijk komt dit nooit op 100%:
-                  de sets pieken op verschillende momenten. -#}
-              {%- set cap = (states('sensor.inverter_kroon_18_achtertuin_capacity') | float(5))
-                          + (states('sensor.inverter_kroon_18_zolder_capacity') | float(3)) -%}
-              {#- De `| max` met 1: float(5)/float(3) vangt alleen een
-                  niet-numerieke sensor op; meldt een omvormer numeriek 0,
-                  dan zou dit delen door nul zijn en faalt de hele
-                  spraakreactie. Zelfde guard als in Klokken.yaml. -#}
-              {%- set pct = (nu / ([cap * 1000, 1] | max) * 100) | round(0) | int -%}
+              {#- Plafond = het piekvermogen van alle panelen (W), een
+                  attribuut van sensor.zon_vermogen_nu, net als op de klok en
+                  het overzicht. Tot 14-10-2026 de som van de capacity-
+                  sensoren van de twee GoodWe-omvormers. In de praktijk komt
+                  dit nooit op 100%: oost en zuidwest pieken op verschillende
+                  momenten. De `| max` met 1 voorkomt delen door nul. -#}
+              {%- set cap = state_attr('sensor.zon_vermogen_nu', 'piekvermogen') | float(8000) -%}
+              {%- set pct = (nu / ([cap, 1] | max) * 100) | round(0) | int -%}
               {%- if nu >= 1000 -%}
                 De panelen leveren nu {{ (nu / 1000) | round(1) | string | replace('.', ',') }} kilowatt, {{ pct }} procent van wat ze kunnen.
               {%- else -%}
