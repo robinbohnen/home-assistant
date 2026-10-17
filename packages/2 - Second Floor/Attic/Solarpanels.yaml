@@ -32,7 +32,53 @@ solar_panels_package:
       cycle: daily
 
   template:
-    - sensor:
+    ######################################################################
+    ## EEN 0 W-SAMPLE MIDDEN OP DE DAG IS EEN LEESFOUT, GEEN WOLK
+    ##
+    ## Sinds de panelen aan de Deye hangen stuurt MarkeDroid in `solar.W`
+    ## geregeld een 0 terwijl de omvormer gewoon doorlevert: 12% van de
+    ## productie-samples op 15-10, 20% op 16-10, 12% op 17-10 (gemeten uit
+    ## de historie; vóór 14-10 kwam het niet voor). Meestal één bericht van
+    ## 10 s, soms twee of drie achter elkaar. Dat het een leesfout is blijkt
+    ## uit de andere drie stromen op hetzelfde moment: accu laadt 1,6 kW,
+    ## last 0,5 kW, net 0 W - die 2,1 kW moet ergens vandaan komen. `load.W`
+    ## valt op die momenten vaak mee naar 0; `battery` en `meter` niet.
+    ##
+    ## Zonder filter zakte `huis_verbruik` (net + zon - accu) bij elke
+    ## leesfout naar 0 kW (48x in twee uur) en trok dat het 120 s-gemiddelde
+    ## op het Overzicht een paar procent omlaag. SlimHuys negeert 0 W-samples
+    ## al in zijn mediaan; HA liet ze door.
+    ##
+    ## Daarom een trigger-sensor op het MQTT-bericht zelf: komt er een 0
+    ## binnen terwijl de vorige stand > 300 W was EN de Wh-teller in
+    ## hetzelfde bericht zegt dat er wél geproduceerd is (`TotWhInc`
+    ## omgerekend > 100 W), dan blijft de vorige stand staan. Valt de zon
+    ## echt weg, dan is `TotWhInc` ook ~0 en gaat de sensor gewoon naar 0.
+    ## De trigger vuurt op ELK bericht, ook als de waarde gelijk blijft, zodat
+    ## een tweede 0 op rij ook wordt gevangen.
+    ##
+    ## NIET gerepareerd: `sensor.markedroid_zon_energie`. MarkeDroid rekent
+    ## `TotWhInc` kennelijk uit zijn eigen (foute) samples, want per kwartier
+    ## loopt die teller gelijk met het gemiddelde INCLUSIEF de nullen en
+    ## 12-17% onder het gemiddelde zonder. De dagopbrengst (hier én bij
+    ## SlimHuys, die dezelfde teller krijgt) is dus vermoedelijk ~10% te
+    ## laag. Dat is een melding voor ModuSun, niet iets om in HA bij te
+    ## verzinnen.
+    ######################################################################
+    - triggers:
+        - trigger: mqtt
+          topic: "public/realtimedata/solar"
+        # Zonder deze twee blijft de sensor na een stille broker staan op zijn
+        # laatste waarde: de availability van een trigger-sensor wordt alleen
+        # bij een trigger opnieuw bekeken. De MQTT-sensor gaat na 60 s stilte
+        # op unavailable (expire_after), en dat moment moet hier doorkomen.
+        - trigger: state
+          entity_id: sensor.markedroid_zon_vermogen
+          to: unavailable
+        - trigger: state
+          entity_id: sensor.markedroid_zon_vermogen
+          from: unavailable
+      sensor:
         - name: "Zon Vermogen Nu"
           unique_id: zon_vermogen_nu
           default_entity_id: sensor.zon_vermogen_nu
@@ -40,7 +86,21 @@ solar_panels_package:
           device_class: power
           state_class: measurement
           availability: "{{ has_value('sensor.markedroid_zon_vermogen') }}"
-          state: "{{ states('sensor.markedroid_zon_vermogen') | float(0) | round(1) }}"
+          state: >-
+            {% if trigger.platform != 'mqtt' or trigger.payload_json is not defined %}
+              {{ states('sensor.markedroid_zon_vermogen') | float(0) | round(1) }}
+            {% else %}
+              {% set w = trigger.payload_json.W | default(0) | float(0) %}
+              {% set inc = trigger.payload_json.TotWhInc | default(0) | float(0) %}
+              {% set sl = trigger.payload_json.SinceLast | default(10) | float(10) %}
+              {% set teller_w = (inc / sl * 3600) if sl > 0 else 0 %}
+              {% set vorige = this.state | float(0) if is_number(this.state) else 0 %}
+              {% if w == 0 and vorige > 300 and teller_w > 100 %}
+                {{ vorige | round(1) }}
+              {% else %}
+                {{ w | round(1) }}
+              {% endif %}
+            {% endif %}
           attributes:
             # Het piekvermogen van ALLE panelen samen, in W: de 100% voor de
             # klok, de spraak-intent en het Overzicht. Eén plek, zodat die
