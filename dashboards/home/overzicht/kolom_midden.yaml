@@ -159,6 +159,7 @@ cards:
             - sensor.zon_vermogen_nu
             - sensor.accu_vermogen
             - sensor.accu_lading
+            - sensor.accu_capaciteit
             - sensor.accu_status
             - sensor.accu_geladen_vandaag
             - sensor.accu_ontladen_vandaag
@@ -314,7 +315,17 @@ cards:
                   var actief = accuMode === 'laadt' || accuMode === 'ontlaadt';
                   var vul = (!isNaN(afslag) && soc <= afslag) ? 'var(--ov-bad)' : (actief ? ACCU : 'var(--ov-ink-30)');
                   meter = `<div style="height:14px;border-radius:7px;background:${LEEG};overflow:hidden"><div style="width:${Math.max(0, Math.min(100, soc))}%;height:100%;border-radius:7px;background:${vul}"></div></div>`;
-                  accuRij.push({bg: vul, naam: accuMode || 'lading', waarde: Math.round(soc) + '%'});
+                  // Achter het percentage de kilowatturen: bij laden wat er
+                  // nog bij past, anders wat er nog af kan tot het
+                  // afslagpunt (de omvormer stopt daar, niet bij nul).
+                  var cap = num('sensor.accu_capaciteit'), socTekst = Math.round(soc) + '%';
+                  if(cap !== null){
+                    var nogKwh = accuMode === 'laadt' ? cap * (100 - soc) / 100
+                      : cap * Math.max(0, soc - (isNaN(afslag) ? 10 : afslag)) / 100;
+                    var k1 = function(v){ return v.toFixed(1).replace('.',','); };
+                    socTekst += ` · ${k1(nogKwh)} / ${k1(cap)} kWh`;
+                  }
+                  accuRij.push({bg: vul, naam: accuMode || 'lading', waarde: socTekst});
                   // De dagtellers staan in Wh (utility_meter in Battery.yaml).
                   // Kort gehouden ("+ erin / − eruit") zodat de regel op de
                   // kolombreedte van het wandpaneel op één regel blijft.
