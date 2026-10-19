@@ -43,12 +43,22 @@
 # stonden. Vandaar 1000 (aan) en 2500 (uit): een gewone dag raakt geen van
 # beide, en de band ertussen is "geen mening" - dan beslist de zon.
 #
+# DE INHAALSLAG BIJ HET OPSTARTEN DOET ALLEEN "UIT" (19 oktober 2026)
+# Een zon-trigger die valt terwijl HA herstart, wordt niet ingehaald. Op 19
+# oktober stopte HA om 09:07:46 en was hij om 09:08:43 terug; zonsopkomst +1u
+# viel om ~09:08:40, precies in het gat. Achtertuin en carport brandden daarna
+# de hele dag, want de luxmeter stond al ruim boven 2500 en kruiste dus niets.
+# Daarom de `start`-trigger: valt een herstart midden op de dag, dan gaat de
+# lamp alsnog uit. Bewust nooit andersom - een inhaalslag die AANzet, zou de
+# achtertuin weer laten branden nadat de avond-knop in de slaapkamer hem net
+# had uitgedaan.
+#
 # TWEE DINGEN OM NIET VAN TE SCHRIKKEN
 # - Een `numeric_state`-trigger vuurt op het KRUISEN van de drempel, niet op
 #   "staat er nu onder". Na een herstart of een reload midden op een grauwe dag
-#   gebeurt er dus niets tot de meter de drempel echt een keer passeert. Dat is
-#   met opzet zo gelaten: een inhaalslag bij het opstarten zou de achtertuin ook
-#   weer aanzetten nadat de avond-knop in de slaapkamer hem net had uitgedaan.
+#   gaat de lamp dus niet vanzelf aan tot de meter de drempel echt een keer
+#   passeert. Wel laat de `start`-tak hierboven een lamp die al brandt dan met
+#   rust: onder de aan-drempel zet hij niets uit.
 # - Vallen beide meters weg, dan wordt de max-sensor unavailable en vuurt geen
 #   van beide luxtriggers meer. De verlichting valt dan stil terug op de zon,
 #   precies zoals voor 17 augustus 2026.
@@ -152,6 +162,8 @@ variables:
   # `!input` staat niet zomaar in een Jinja-expressie.
   helderheid: !input helderheid
   overgang: !input overgang
+  lux_sensor: !input lux_sensor
+  lux_aan_onder: !input lux_aan_onder
 
 triggers:
   - id: aan
@@ -172,6 +184,9 @@ triggers:
     entity_id: !input lux_sensor
     above: !input lux_uit_boven
     for: !input lux_periode
+  - id: start
+    trigger: homeassistant
+    event: start
 
 actions:
   - choose:
@@ -205,6 +220,28 @@ actions:
           - condition: trigger
             id:
               - lux_licht
+          - condition: sun
+            after: sunrise
+            after_offset: !input uit_offset
+            before: sunset
+            before_offset: !input aan_offset
+        sequence:
+          - action: light.turn_off
+            target:
+              entity_id: !input lamp
+            data:
+              transition: "{{ states(overgang) | int(1) }}"
+      # HA is net opgestart en kan het uit-moment gemist hebben. Alleen uit,
+      # alleen overdag, en niet als de meter nu onder de aan-drempel zit - dan
+      # brandt de lamp op een grauwe dag terecht. Geeft de meter (nog) geen
+      # getal, dan beslist de zon, net als wanneer hij wegvalt.
+      - conditions:
+          - condition: trigger
+            id:
+              - start
+          - condition: template
+            value_template: >-
+              {{ states(lux_sensor) | float(lux_aan_onder) >= lux_aan_onder }}
           - condition: sun
             after: sunrise
             after_offset: !input uit_offset
