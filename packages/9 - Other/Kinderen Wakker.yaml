@@ -44,6 +44,24 @@
 ## `tot` (09:30) als einde. Verschuif je de 05:30, doe het dan op allebei de
 ## plekken.
 ##
+## HET LICHT LOOPT OP (Robin, 20 oktober 2026)
+## Het kamerlicht springt niet meer ineens aan: het begint op 1% en gaat elke
+## minuut 10% omhoog (1, 11, 21, 31, 41) tot het normale niveau van 50%, dus
+## ruim vijf minuten in totaal. Doet iemand de lamp tussendoor uit of zet hij
+## hem zelf op een andere stand, dan stopt het oplopen meteen - een kind dat
+## het licht zelf regelt heeft het laatste woord.
+##
+## Een Zigbee-lamp onthoudt bij uit de laatste stand. Gaat hij uit op 21%, dan
+## komt hij de volgende keer - via de knop naast het bed, het dashboard, of
+## welke automatisering dan ook - ook weer op 21% aan. Daarom zet het oplopen
+## per lamp een vlag (`input_boolean.kinderlamp_*_terug_naar_50`) die pas weer
+## valt als de 50% gehaald is. Gaat de lamp uit terwijl die vlag staat, dan
+## zet `kids_may_wake_up_light_reset_level` hem bij de eerstvolgende keer
+## aangaan meteen op 50%. Dat gebeurt achteraf en niet bij het uitzetten,
+## want een uitgeschakelde lamp kun je geen helderheid geven zonder hem aan
+## te zetten. Je ziet dus heel even de oude stand, en wie die ene keer zelf
+## bewust een andere stand kiest, krijgt toch de 50%.
+##
 ## LET OP: dit is een nieuw packagebestand; het laadt pas na een volledige
 ## herstart van Home Assistant, een YAML-reload is niet genoeg.
 ##############################################################################
@@ -54,6 +72,14 @@ kinderen_wakker_package:
     kinderen_mogen_wakker_worden:
       name: "Kinderen - Mogen wakker worden"
       icon: mdi:weather-sunset-up
+    # Zie "HET LICHT LOOPT OP" in de kop: aan = deze lamp is uitgegaan (of kan
+    # uitgaan) op een tussenstand van het oplopen.
+    kinderlamp_maxi_terug_naar_50:
+      name: "Kinderen - Lamp Logan terug naar 50%"
+      icon: mdi:brightness-percent
+    kinderlamp_mini_terug_naar_50:
+      name: "Kinderen - Lamp Emma terug naar 50%"
+      icon: mdi:brightness-percent
 
   template:
     - binary_sensor:
@@ -76,7 +102,8 @@ kinderen_wakker_package:
       alias: Kinderen - Kamerlicht aan bij open deur
       description: >-
         Staat "kinderen mogen wakker worden" aan, dan gaat het kamerlicht van
-        het kind dat zijn deur opendoet drie seconden later aan.
+        het kind dat zijn deur opendoet drie seconden later aan op 1%, en
+        loopt dan elke minuut 10% op tot 50%.
       # parallel en niet single: gaan beide deuren binnen die drie seconden
       # open, dan hoort ieder kind zijn eigen licht te krijgen. Met `single`
       # viel de tweede weg, met `queued` kwam zijn licht pas na zes seconden.
@@ -105,18 +132,108 @@ kinderen_wakker_package:
               {{ {'binary_sensor.slaapkamer_maxi_deur_contact': 'light.slaapkamer_maxi_lampen',
                   'binary_sensor.slaapkamer_mini_deur_contact': 'light.slaapkamer_mini_lampen'}
                  .get(trigger.entity_id, '') }}
+            vlag: >-
+              {{ {'binary_sensor.slaapkamer_maxi_deur_contact': 'input_boolean.kinderlamp_maxi_terug_naar_50',
+                  'binary_sensor.slaapkamer_mini_deur_contact': 'input_boolean.kinderlamp_mini_terug_naar_50'}
+                 .get(trigger.entity_id, '') }}
+            overgang: "{{ states('input_number.lights_transition_seconds')|int }}"
         - condition: template
-          value_template: "{{ lamp != '' }}"
+          value_template: "{{ lamp != '' and vlag != '' }}"
         - delay:
             hours: 0
             minutes: 0
             seconds: 3
             milliseconds: 0
+        # Alleen oplopen vanuit uit. Doet het kind de deur dicht en weer open
+        # terwijl het licht al brandt, dan zou het anders terugvallen naar 1%.
+        - condition: template
+          value_template: "{{ is_state(lamp, 'off') }}"
+        # Eerst de vlag weg, dan pas aan: anders ziet de herstelregel deze
+        # 1% als "lamp kwam aan op een oude stand" en trekt hem naar 50%.
+        - action: input_boolean.turn_off
+          target:
+            entity_id: "{{ vlag }}"
         - action: light.turn_on
           data:
-            transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+            brightness_pct: 1
+            transition: "{{ overgang }}"
           target:
             entity_id: "{{ lamp }}"
+        # De vlag pas zetten als de herstelregel deze aan-melding al gezien
+        # heeft. Vijf seconden is daar ruim genoeg voor. Ook zetten als de lamp
+        # alweer uit is: dan onthoudt hij 1%, en juist dan moet hij terug.
+        - delay:
+            seconds: 5
+        - action: input_boolean.turn_on
+          target:
+            entity_id: "{{ vlag }}"
+        - variables:
+            stappen: [1, 11, 21, 31, 41, 50]
+        - repeat:
+            for_each: "{{ stappen[1:] }}"
+            sequence:
+              - delay:
+                  minutes: 1
+              # Stoppen zodra iemand anders de lamp heeft overgenomen: uit, of
+              # op een stand die niet de vorige stap is (3% speling, want de
+              # lamp meldt 0-255 terug en niet het percentage). `stop` en geen
+              # condition: die zou alleen deze ronde overslaan en de volgende
+              # minuut gewoon verder gaan. De vlag blijft dan staan.
+              - variables:
+                  vorige: "{{ stappen[repeat.index - 1] }}"
+                  nu_pct: >-
+                    {% set b = state_attr(lamp, 'brightness') %}
+                    {{ (b | float(0) / 255 * 100) | round(0) | int if b is not none else -1 }}
+              - if:
+                  - condition: template
+                    value_template: >-
+                      {{ not is_state(lamp, 'on') or (nu_pct - vorige) | abs > 3 }}
+                then:
+                  - stop: Lamp overgenomen tijdens het oplopen
+              - action: light.turn_on
+                data:
+                  brightness_pct: "{{ repeat.item }}"
+                  transition: "{{ overgang }}"
+                target:
+                  entity_id: "{{ lamp }}"
+        # Normaal niveau gehaald: deze lamp onthoudt nu gewoon 50%. Die 50
+        # staat ook als laatste stap hierboven en in de herstelregel.
+        - action: input_boolean.turn_off
+          target:
+            entity_id: "{{ vlag }}"
+
+    - id: kids_may_wake_up_light_reset_level
+      alias: Kinderen - Lamp na onderbroken oplopen terug naar 50%
+      description: >-
+        Is het oplopende ochtendlicht onderweg uitgezet, dan onthoudt de lamp
+        die tussenstand. Gaat hij daarna weer aan, door wat dan ook, dan zet
+        deze regel hem meteen op 50%.
+      mode: parallel
+      max: 4
+      triggers:
+        - trigger: state
+          entity_id:
+            - light.slaapkamer_maxi_lampen
+            - light.slaapkamer_mini_lampen
+          from: "off"
+          to: "on"
+      actions:
+        - variables:
+            vlag: >-
+              {{ {'light.slaapkamer_maxi_lampen': 'input_boolean.kinderlamp_maxi_terug_naar_50',
+                  'light.slaapkamer_mini_lampen': 'input_boolean.kinderlamp_mini_terug_naar_50'}
+                 .get(trigger.entity_id, '') }}
+        - condition: template
+          value_template: "{{ vlag != '' and is_state(vlag, 'on') }}"
+        - action: input_boolean.turn_off
+          target:
+            entity_id: "{{ vlag }}"
+        - action: light.turn_on
+          data:
+            brightness_pct: 50
+            transition: "{{ states('input_number.lights_transition_seconds')|int }}"
+          target:
+            entity_id: "{{ trigger.entity_id }}"
 
     - id: kids_may_wake_up_reset
       alias: Kinderen - Mogen wakker worden weer uit
