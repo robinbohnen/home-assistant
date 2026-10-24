@@ -54,12 +54,17 @@
       'surface': '#161920', 'surface-2': '#1b1f27', 'surface-deep': '#0e1015',
       'surface-blue': 'rgba(8,25,45,0.92)', 'scrim-soft': 'rgba(10,12,18,0.55)',
       'scrim': 'rgba(0,0,0,0.5)',
+      'popup-bg': '#0e1015',
     },
     light: {
       'panel-bg': 'rgba(255,255,255,0.72)', 'panel-bg-2': 'rgba(255,255,255,0.86)',
       'surface': '#f4f5f7', 'surface-2': '#eceef2', 'surface-deep': '#e4e7ec',
       'surface-blue': 'rgba(224,236,250,0.92)', 'scrim-soft': 'rgba(240,242,246,0.55)',
       'scrim': 'rgba(15,18,25,0.32)',
+      /* Popup-achtergrond. Was surface-deep (#e4e7ec), maar dat oogde in
+         licht als een grijze plaat. Bijna wit, zodat de witte kaarten erin
+         op hun rand en niet op kleurverschil leunen. Donker ongewijzigd. */
+      'popup-bg': '#f8f9fb',
     },
   };
 
