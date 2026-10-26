@@ -142,6 +142,21 @@ cards:
         # de klokdisplay hetzelfde zeggen. In "komt van"/"gaat naar" staat
         # bij de accu alleen nog het vermogen; de lading staat hier.
         #
+        # MARKEDROID STAAT ACHTERAAN DE ACCUREGEL (26 oktober 2026)
+        # Hij bepaalt wát de accu doet, dus zijn stand (`sensor.markedroid_regie`)
+        # hoort naast het laadt/ontlaadt: "ontlaadt" bij "eigen verbruik" is
+        # gewoon, "laadt" bij "laadt van net" is een keuze. Kort woord per
+        # stand, de lange omschrijving staat op de accu-pagina. `eigen_verbruik`
+        # in inkt; elke andere stand is MarkeDroid die met opzet ingrijpt en
+        # krijgt de accentkleur. Geen regie-veld (`niet_geleverd`) of de
+        # sensor verlopen: weglaten, dat is geen nieuws. Geen berichten meer
+        # (`binary_sensor.markedroid_verbinding` uit) is dat wél, in rood.
+        # Een dichte exportbegrenzer komt erachter, want die verklaart waarom
+        # er ondanks zon niets naar het net gaat.
+        # De regel breekt hiermee op het wandpaneel naar een tweede regel af;
+        # dat mag, net als bij "in huis".
+        # Getest in tests/test_energie_nu.py (draait de JS echt in node).
+        #
         # HET HUIS STAAT WÉL IN DE REGEL ONDER "GAAT NAAR", ook al is het
         # hetzelfde getal als het grote rechts. Het is een paar uur weggelaten
         # geweest als dubbeling; toen stond er een blauw segment zonder naam
@@ -164,6 +179,9 @@ cards:
             - sensor.accu_geladen_vandaag
             - sensor.accu_ontladen_vandaag
             - sensor.noodstroom_resterend
+            - sensor.markedroid_regie
+            - sensor.markedroid_exportbegrenzer
+            - binary_sensor.markedroid_verbinding
             - sensor.veelgebruikers
             - sensor.veelgebruikers_gemiddeld
           show_icon: false
@@ -247,7 +265,7 @@ cards:
                     : `<span style="display:inline-block;width:6px;height:6px;border-radius:2px;border:1px solid var(--ov-ink-35);margin-right:5px"></span>`;
                   return `<span style="display:inline-block;white-space:nowrap;margin-right:14px">${blok}`
                     + `<span style="color:${GRIJS}">${d.naam}</span>`
-                    + (d.waarde ? ` <span style="font-weight:600;color:${d.dof ? GRIJS : INKT}">${d.waarde}</span>` : '')
+                    + (d.waarde ? ` <span style="font-weight:600;color:${d.kleur || (d.dof ? GRIJS : INKT)}">${d.waarde}</span>` : '')
                     + (d.extra || '') + `</span>`;
                 };
                 // 13 px en niet 12: dit was de kleinste tekst op het paneel, en
@@ -334,6 +352,24 @@ cards:
                   if(erin !== null && eruit !== null) accuRij.push({kaal: true, naam: 'vandaag', waarde: `+${erin} / −${eruit} kWh`});
                   var nood = num('sensor.noodstroom_resterend');
                   if(nood !== null) accuRij.push({kaal: true, naam: 'noodstroom', waarde: '~' + (nood < 10 ? nood.toFixed(1).replace('.',',') : String(Math.round(nood))) + ' u'});
+                }
+                // MarkeDroid: welke stand hij de accu gegeven heeft (zie kop).
+                var mdVb = states['binary_sensor.markedroid_verbinding'];
+                var mdRg = states['sensor.markedroid_regie'];
+                var mdEx = states['sensor.markedroid_exportbegrenzer'];
+                var MD_WOORD = {geen_regie: 'stuurt niet', geblokkeerd: 'accu geblokkeerd',
+                  vasthouden: 'vasthouden', geforceerd_laden: 'laadt van net',
+                  teruglevering_voorrang: 'teruglevering eerst', eigen_verbruik: 'eigen verbruik',
+                  flex: 'flex-opdracht', max_terugleveren: 'max terugleveren'};
+                if(mdVb && mdVb.state === 'off'){
+                  accuRij.push({kaal: true, naam: 'MarkeDroid', waarde: 'stil', kleur: 'var(--ov-bad)'});
+                } else if(mdRg && MD_WOORD[mdRg.state]){
+                  var mdTekst = MD_WOORD[mdRg.state];
+                  var flexW = Number(mdRg.attributes.flex_w);
+                  if(mdRg.state === 'flex' && mdRg.attributes.flex_w !== null && !isNaN(flexW)) mdTekst += ' ' + vtekst(flexW);
+                  if(mdEx && mdEx.state === 'actief') mdTekst += ' · teruglevering dicht';
+                  accuRij.push({kaal: true, naam: 'MarkeDroid', waarde: mdTekst,
+                    kleur: mdRg.state === 'eigen_verbruik' ? INKT : 'var(--ov-accent)'});
                 }
 
                 var huis = vermogen(huisW);
