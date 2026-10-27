@@ -17,11 +17,14 @@
 #                  EN er is geen ander teken van leven in die kamer))
 #   uit  = in alle andere gevallen
 #
+#   Wordt hij tijdens de avondrust of de slaaptijd aangezet terwijl er iemand
+#   thuis is, dan gaat hij meteen weer uit en volgt een melding (punt 6).
+#
 # Gebruikt door:
 #   packages/2 - Second Floor/Bedroom Mini/Aircleaner.yaml   (Emma)
 #   packages/1 - First Floor/Bedroom Maxi/Aircleaner.yaml    (Logan)
 #
-# Vijf dingen die hier bewust zo staan:
+# Zes dingen die hier bewust zo staan:
 #
 #   1. BRANDEND LICHT WINT VAN ALLES, OOK VAN "NIEMAND THUIS". Die staat
 #      buiten de OR, als eerste voorwaarde. Een lamp die aangaat is het
@@ -60,6 +63,15 @@
 #        dan wacht de reiniger daarna nog een half uur. Dat lost zichzelf op en
 #        de halfuurronde raapt hem op; het is het niet waard daar een
 #        aparte tijdstempel voor bij te houden.
+#   6. 'S NACHTS AANZETTEN GAAT METEEN WEER UIT, MET MELDING (Robin, 27
+#      oktober 2026). Zet iemand de reiniger aan terwijl de avondrust begonnen
+#      is of de slaaptijd loopt, en er is iemand thuis, dan gaat hij direct
+#      weer uit en volgt de `melding`. Voorheen deed pas de halfuurronde dat,
+#      en stil. "Er is iemand thuis" staat erin omdat deze regel 's nachts
+#      zelf ook aanzet, als het huis leeg is - dat aan-commando komt via
+#      dezelfde trigger binnen en mag niet als overtreding tellen. Overdag
+#      aanzetten blijft zoals het was: daar reageert die trigger niet op en de
+#      halfuurronde beslist.
 #
 # WAT DIT OP 4 SEPTEMBER 2026 FOUT DEED (en waarom de avondrust erbij kwam)
 #
@@ -161,6 +173,15 @@ blueprint:
       default: []
       selector:
         trigger:
+    melding:
+      name: Melding bij aanzetten in de nacht (optioneel)
+      description: >-
+        Wat er gebeurt nadat de reiniger tijdens de avondrust of de slaaptijd
+        is aangezet en meteen weer is uitgezet. Bedoeld voor een
+        `notify`-actie. Leeg = alleen uitzetten, geen melding.
+      default: []
+      selector:
+        action:
 
 mode: restart
 
@@ -212,6 +233,15 @@ triggers:
   - trigger: time
     at: !input avondrust
     id: avondrust
+  # Iemand zet de reiniger aan. Alleen 's nachts doet de eerste tak hieronder
+  # daar iets mee; zie punt 6 bovenaan. `from: "off"` zodat een stekker die na
+  # een stroomonderbreking terugkomt geen melding "aangezet" oplevert - die
+  # raapt de halfuurronde op.
+  - trigger: state
+    entity_id: !input reiniger
+    from: "off"
+    to: "on"
+    id: reiniger_aan
   - trigger: homeassistant
     event: start
     id: herstart
@@ -230,6 +260,40 @@ conditions: []
 
 actions:
   - choose:
+      - alias: "'s Nachts aangezet terwijl er iemand thuis is"
+        conditions:
+          - condition: trigger
+            id: reiniger_aan
+          # Is er niemand thuis, dan kwam dit aan-commando van de tak
+          # hieronder zelf. Zie punt 6 bovenaan.
+          - alias: "Er is iemand thuis"
+            condition: numeric_state
+            entity_id: zone.home
+            above: 0
+          # Alleen `after:` betekent "van dit tijdstip tot middernacht"; na
+          # middernacht neemt de slaaptijd-sensor het over.
+          - alias: "De avondrust is begonnen of het is bedtijd"
+            condition: or
+            conditions:
+              - condition: time
+                after: !input avondrust
+              - condition: state
+                entity_id: !input slaaptijd
+                state: "on"
+        sequence:
+          - action: switch.turn_off
+            target:
+              entity_id: !input reiniger
+          - alias: Melding
+            sequence: !input melding
+      # Overdag aangezet: daar gaat dit verzoek niet over. Zonder deze tak zou
+      # het in de `default` vallen en meteen weer uitgaan.
+      - alias: Overdag aangezet, met rust laten
+        conditions:
+          - condition: trigger
+            id: reiniger_aan
+        sequence:
+          - stop: Overdag aangezet; de halfuurronde beslist.
       - alias: Donker, en niemand thuis of niemand die er last van heeft
         conditions:
           # Buiten de OR hieronder, want dit gaat er ook boven: brandt er

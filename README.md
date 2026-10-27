@@ -79,6 +79,12 @@ stubbed sensors — including the cases you would otherwise only hear when they 
 level, the reverse-wired sun screen) — and checks that every sentence still has an
 intent and every intent still has a sentence. This one needs `pyyaml` too.
 
+`tests/test_luchtreiniger.py` reads the air purifier blueprint for the kids' rooms
+and works out which branch wins when someone switches the purifier on: during the
+evening wind-down or bedtime it has to go straight back off with a notification,
+except when nobody is home (then the switch-on came from the blueprint itself), and
+in daytime nothing happens. It also checks that both rooms pass a notification.
+
 ## <a name="hubs">Hubs</a>
 
 | [Menu](#menu) |
