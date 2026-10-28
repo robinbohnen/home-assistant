@@ -99,6 +99,12 @@ to 99 kW, that a silent meter removes the app, and that the once-a-second refres
 in `packages/9 - Other/Klokken.yaml` knows all three clocks and stops when the app
 leaves the screen.
 
+`tests/test_klok_indicatoren.py` covers indicator 3 on the clocks: what MarkeDroid is
+doing with the battery (`sensor.markedroid_regie`), in the colours of the MarkeDroid
+app. It checks every mode's colour, that "stop managing" and a silent MarkeDroid turn
+the dot off, that all three clocks get it, and that the solar and battery bars now end
+at x=29 so they no longer run under the dot.
+
 ## <a name="hubs">Hubs</a>
 
 | [Menu](#menu) |
