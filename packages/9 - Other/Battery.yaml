@@ -398,6 +398,16 @@ battery_package:
     ## als nul (`default(0)`): op 21 september 18:28 kwam er één zo binnen,
     ## vermoedelijk bij een herstart van MarkeDroid, en toen gaven drie tellers
     ## een renderfout.
+    ##
+    ## ALLEEN DE ZONTELLER HEEFT EEN PLAFOND (sinds 28-10-2026). Vanaf 26-10
+    ## ~23:20 komen er in `solar` berichten met onzin als 263.457 W, en de
+    ## `TotWhInc` daarin is net zo kapot: twee keer ~350 Wh in tien seconden,
+    ## ook 's nachts. Tot 28-10 telde dat ~23,5 kWh te veel bij (op een stand
+    ## van 166 kWh), en die ging zo naar SlimHuys en het Energie-dashboard.
+    ## Nu: zon dieper onder dan 3 graden telt 0, en een increment boven het
+    ## plafond (1,3 x piekvermogen, zie Attic/Solarpanels.yaml) wordt
+    ## vervangen door het gefilterde `zon_vermogen_nu` x `SinceLast`. De
+    ## sprongen die al in de historie staan blijven daar staan.
     ##########################################################################
     - triggers:
         - trigger: mqtt
@@ -411,7 +421,13 @@ battery_package:
           state_class: total_increasing
           icon: mdi:solar-power
           state: >-
-            {{ ((this.state | float(0)) + ([trigger.payload_json.TotWhInc | default(0) | float(0), 0] | max)) | round(2) }}
+            {% set inc = [trigger.payload_json.TotWhInc | default(0) | float(0), 0] | max %}
+            {% set sl = [trigger.payload_json.SinceLast | default(10) | float(10), 0] | max %}
+            {% set plafond = state_attr('sensor.zon_vermogen_nu', 'piekvermogen') | float(9460) * 1.3 %}
+            {% set nacht = state_attr('sun.sun', 'elevation') | float(90) < -3 %}
+            {% set zon = [[states('sensor.zon_vermogen_nu') | float(0), 0] | max, plafond] | min %}
+            {% set inc = 0 if nacht else (inc if inc <= plafond * sl / 3600 else zon * sl / 3600) %}
+            {{ ((this.state | float(0)) + inc) | round(2) }}
     - triggers:
         - trigger: mqtt
           topic: "public/realtimedata/load"

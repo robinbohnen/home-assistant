@@ -64,6 +64,20 @@ solar_panels_package:
     ## SlimHuys, die dezelfde teller krijgt) is dus vermoedelijk ~10% te
     ## laag. Dat is een melding voor ModuSun, niet iets om in HA bij te
     ## verzinnen.
+    ##
+    ## SINDS 26-10-2026 ~23:20 OOK ONZIN IN DE HONDERDDUIZENDEN
+    ## Daarna kwamen er ~60 per etmaal waarden als 263.457 W, 193.740 W of
+    ## 417.801 W binnen, ook midden in de nacht, af en toe eentje rond de
+    ## 5 kW om 23:00 en een enkele negatieve (-137 W). Altijd één bericht.
+    ## Ze liepen door naar `huis_verbruik` (418 kW op 27-10) en de klokken.
+    ## Twee regels vangen dat af:
+    ## - Is de zon dieper onder dan 3 graden, dan is het 0. -3 en niet 0,
+    ##   want vlak na zonsondergang levert het strooilicht nog wat; een
+    ##   glitch in die schemer gaat er dus nog door.
+    ## - Boven het plafond (1,3 x `piekvermogen`, ~12,3 kW) of onder 0 blijft
+    ##   de vorige stand staan. Een glitch onder het plafond overdag
+    ##   herkennen we niet; daar is geen tweede bron voor.
+    ## De Wh-teller (Battery.yaml) gebruikt dezelfde grens.
     ######################################################################
     - triggers:
         - trigger: mqtt
@@ -87,31 +101,36 @@ solar_panels_package:
           state_class: measurement
           availability: "{{ has_value('sensor.markedroid_zon_vermogen') }}"
           state: >-
-            {% if trigger.platform != 'mqtt' or trigger.payload_json is not defined %}
-              {{ states('sensor.markedroid_zon_vermogen') | float(0) | round(1) }}
+            {% set mqtt = trigger.platform == 'mqtt' and trigger.payload_json is defined %}
+            {% set w = (trigger.payload_json.W | default(0) if mqtt
+                        else states('sensor.markedroid_zon_vermogen')) | float(0) %}
+            {% set inc = (trigger.payload_json.TotWhInc | default(0) if mqtt else 0) | float(0) %}
+            {% set sl = (trigger.payload_json.SinceLast | default(10) if mqtt else 10) | float(10) %}
+            {% set teller_w = (inc / sl * 3600) if sl > 0 else 0 %}
+            {% set plafond = state_attr('sensor.zon_vermogen_nu', 'piekvermogen') | float(9460) * 1.3 %}
+            {# Geen sun.sun? Dan niet alles op 0 zetten: 90 graden. #}
+            {% set nacht = state_attr('sun.sun', 'elevation') | float(90) < -3 %}
+            {% set vorige = this.state | float(0) if is_number(this.state) else 0 %}
+            {% set vorige = vorige if 0 <= vorige <= plafond else 0 %}
+            {% if nacht %}
+              0
+            {% elif w < 0 or w > plafond %}
+              {{ vorige | round(1) }}
+            {% elif w == 0 and vorige > 300 and teller_w > 100 %}
+              {{ vorige | round(1) }}
             {% else %}
-              {% set w = trigger.payload_json.W | default(0) | float(0) %}
-              {% set inc = trigger.payload_json.TotWhInc | default(0) | float(0) %}
-              {% set sl = trigger.payload_json.SinceLast | default(10) | float(10) %}
-              {% set teller_w = (inc / sl * 3600) if sl > 0 else 0 %}
-              {% set vorige = this.state | float(0) if is_number(this.state) else 0 %}
-              {% if w == 0 and vorige > 300 and teller_w > 100 %}
-                {{ vorige | round(1) }}
-              {% else %}
-                {{ w | round(1) }}
-              {% endif %}
+              {{ w | round(1) }}
             {% endif %}
           attributes:
             # Het piekvermogen van ALLE panelen samen, in W: de 100% voor de
             # klok, de spraak-intent en het Overzicht. Eén plek, zodat die
             # drie niet elk een eigen getal gaan verzinnen.
             #
-            # 8000 is de som van de twee oude omvormers (5 + 3 kW) en dus een
-            # VOORLOPIG getal: dat was hun AC-plafond, niet wat de panelen
-            # kunnen. De Deye (20 kW) knipt niets meer af, dus het echte
-            # piekvermogen (28 panelen x Wp per paneel) ligt waarschijnlijk
-            # hoger. Vervangen zodra dat bekend is.
-            piekvermogen: 8000
+            # 9,46 kWp: de 28 panelen samen (28-10-2026, zoals in SlimHuys).
+            # Tot die dag stond hier 8000, de AC-plafonds van de twee oude
+            # GoodWe's. Ook de leesfout-grens hierboven (1,3 x dit getal) en
+            # die van de Wh-teller in Battery.yaml rekenen hiermee.
+            piekvermogen: 9460
 
         - name: "Zon Opgewekt Vandaag"
           unique_id: zon_opgewekt_vandaag

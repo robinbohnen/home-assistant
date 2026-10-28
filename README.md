@@ -85,6 +85,13 @@ evening wind-down or bedtime it has to go straight back off with a notification,
 except when nobody is home (then the switch-on came from the blueprint itself), and
 in daytime nothing happens. It also checks that both rooms pass a notification.
 
+`tests/test_zon_filter.py` runs the read-error filter on the solar feed (since
+26-10-2026 MarkeDroid sometimes sends values like 263,457 W, at night too) through
+real messages from the history. It covers both `sensor.zon_vermogen_nu` and the Wh
+counter `sensor.markedroid_zon_energie` that SlimHuys receives: zero below -3° sun
+elevation, the previous value above 1.3 × the peak power or below zero, and the
+filtered power instead of a corrupted increment.
+
 ## <a name="hubs">Hubs</a>
 
 | [Menu](#menu) |
