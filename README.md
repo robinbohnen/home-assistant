@@ -92,6 +92,13 @@ counter `sensor.markedroid_zon_energie` that SlimHuys receives: zero below -3° 
 elevation, the previous value above 1.3 × the peak power or below zero, and the
 filtered power instead of a corrupted increment.
 
+`tests/test_klok_net.py` renders the clock app `net` from `custom_templates/klok.jinja`:
+what goes over the P1 meter right now, import or export. It checks the arrow and colour
+per direction, that the label never runs into the pylon icon or the indicator dots up
+to 99 kW, that a silent meter removes the app, and that the once-a-second refresh loop
+in `packages/9 - Other/Klokken.yaml` knows all three clocks and stops when the app
+leaves the screen.
+
 ## <a name="hubs">Hubs</a>
 
 | [Menu](#menu) |

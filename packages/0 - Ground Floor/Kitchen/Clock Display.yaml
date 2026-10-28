@@ -236,19 +236,13 @@ kitchen_clock_display_package:
               ns.t | round(1) if ns.t is not none else '--' }}"}
           action: mqtt.publish
           alias: Display temperature
-        - data:
-            qos: 0
-            retain: true
-            topic: clock_1/custom/power_usage
-            # Groen bij negatief verbruik: dan leveren we terug aan het net.
-            payload: >-
-              {"icon": 54077,"color":"{{ '32D74B' if
-              states('sensor.live_energieverbruik_totaal') | float(0) < 0
-              else 'FFFFFF' }}","repeat": 2,"text": "{{
-              states('sensor.live_energieverbruik_totaal') | float(0) | round(2)
-              if has_value('sensor.live_energieverbruik_totaal') else '--' }}"}
-          action: mqtt.publish
-          alias: Display power usage
+        # HET NETTO OP DE METER STAAT NIET MEER HIER (28-10-2026)
+        # Hier stond `power_usage`: `live_energieverbruik_totaal` in kW met
+        # een firmware-icoon, elke 30 s. Dat getal staat nu als app `net` op
+        # alle drie de klokken, getekend door `script.klok_zon_en_accu`
+        # hieronder en elke seconde ververst zolang hij in beeld is (zie
+        # packages/9 - Other/Klokken.yaml). Het bewaarde `power_usage`-bericht
+        # is op de broker gewist met een lege retained publish.
         # ZON EN ACCU STAAN NIET MEER HIER
         # Beide frames zijn met de hand uitgerekende pixels, en de woonkamer-
         # en garageklok tonen exact dezelfde twee apps. Drie kopieen van die

@@ -10,7 +10,8 @@
 ## de thuisaccu ervoor staat en wat de dag tot nu toe kost. Zodra de panelen
 ## niets meer leveren komt het huisverbruik erbij, anders bleef er 's avonds
 ## alleen de accu over. De keukenklok had die laatste twee al in zijn eigen
-## rotatie. Daarnaast branden hun twee bovenste indicatoren:
+## rotatie. Alle drie tonen ook wat er nu over de slimme meter gaat (app
+## `net`, zie hieronder). Daarnaast branden hun twee bovenste indicatoren:
 ##   indicator 1  stroomprijs nu, een kleur per tariefniveau:
 ##                blauw spotgoedkoop / groen goedkoop / oranje midden /
 ##                diep oranje duur / rood spotduur
@@ -69,6 +70,14 @@
 ## script hieronder, in de herstart-trigger en in de `klokken`-lijst van
 ## `script.woonkamer_media_licht`. Bij een brandweermelding gaat hij even aan,
 ## zie `brandweer_pixelwall_aan` in Brandweer Automations.yaml.
+##
+## TWEE APPS MET WATTS, EN DAT ZIJN TWEE VERSCHILLENDE DINGEN
+## `verbruik` (gele bliksem, witte cijfers) is wat het huis gebruikt: net + zon
+## - accu. `net` (grijze mast, pijl, blauw of groen) is wat er 1-op-1 over de
+## P1-meter gaat: omlaag = afname, omhoog = teruglevering. Ze zien er met
+## opzet anders uit, want 's avonds staat er 900 W in de ene en ~0 W in de
+## andere. Het frame staat in custom_templates/klok.jinja; `klokken_net_live`
+## onderaan ververst het elke seconde zolang het op een scherm staat.
 ##
 ## EEN NIEUWE KLOK KOMT MET VIER FIRMWARE-APPS
 ## Uit de doos draaien Time, Temperature, Humidity en Battery mee in de
@@ -347,8 +356,9 @@ klokken_package:
             # `huis_verbruik` EN NIET HET NETTO OP DE METER
             # 's Avonds dekt de accu vaak het hele huis en staat de meter op
             # ~0 W. Het getal dat je wil zien is wat het huis gebruikt, en dat
-            # is net + zon - accu (packages/9 - Other/Electricity.yaml). De
-            # keukenklok toont wel het netto; daar is dat een bewuste keuze.
+            # is net + zon - accu (packages/9 - Other/Electricity.yaml). Het
+            # netto op de meter heeft sinds 28-10-2026 een eigen app (`net`),
+            # op alle drie de klokken.
             verbruik_payload: >-
               {%- if zon_payload | trim == '' and has_value('sensor.huis_verbruik') -%}
               {%- set w = states('sensor.huis_verbruik') | float(0) * 1000 -%}
@@ -404,6 +414,9 @@ klokken_package:
               {"dt": [{{ tx }}, 0, "{{ label }}", "{{ kleur }}"]}
               ], "duration": 8, "lifetime": 300, "lifetimeMode": 0}
               {%- endif -%}
+            # NETTO OP DE METER, ALTIJD - zie custom_templates/klok.jinja
+            net_payload: >-
+              {% from 'klok.jinja' import net_frame %}{{ net_frame() }}
         - alias: Beide frames naar elke klok sturen
           repeat:
             for_each: "{{ klokken }}"
@@ -422,6 +435,16 @@ klokken_package:
                   retain: true
                   topic: "{{ repeat.item }}/custom/battery"
                   payload: "{{ accu_payload }}"
+              # Op elke klok, ook de keuken: dit is een ander getal dan het
+              # huisverbruik, dus de reden om het daar niet dubbel te tonen
+              # (zie `met_verbruik_en_kosten`) geldt hier niet.
+              - alias: Netto op de meter
+                action: mqtt.publish
+                data:
+                  qos: 0
+                  retain: true
+                  topic: "{{ repeat.item }}/custom/net"
+                  payload: "{{ net_payload }}"
               - alias: Verbruik en dagkosten
                 if: "{{ met_verbruik_en_kosten | default(false) }}"
                 then:
@@ -441,6 +464,68 @@ klokken_package:
                       payload: "{{ kosten_payload }}"
 
   automation:
+    # ELKE SECONDE, MAAR ALLEEN ZOLANG `net` OP HET SCHERM STAAT
+    # De firmware meldt welke app hij toont (`stats/currentApp`, in HA de
+    # sensor `..._current_app`). Springt die op `net`, dan wordt het frame
+    # elke seconde opnieuw gestuurd; de klok werkt een app die al op het
+    # scherm staat direct bij. Gaat de klok naar de volgende app (na de
+    # `duration` van 8 s), dan stopt de lus vanzelf.
+    #
+    # Waarom niet gewoon elke seconde naar alle klokken: dat zijn drie
+    # publishes per seconde, de hele dag, voor een app die per rotatie maar
+    # acht seconden in beeld is. Dit kost ~8 publishes per rotatie.
+    #
+    # Het plafond van 30 rondes is een vangnet. Blijft `current_app` op `net`
+    # hangen (klok uit of weg zonder dat de sensor dat meldt), dan loopt de
+    # lus niet eeuwig door. Het matrix-licht in de conditie dient hetzelfde.
+    #
+    # Rechtstreeks een mqtt.publish en geen script: een script dat elke
+    # seconde start en stopt schrijft elke keer een state naar de recorder.
+    - id: klokken_net_live
+      alias: Klokken - Netto op de meter elke seconde
+      description: >-
+        Ververst de app `net` (afname of teruglevering op de P1-meter) elke
+        seconde zolang hij op een klok in beeld is.
+      mode: parallel
+      max: 6
+      triggers:
+        - trigger: state
+          entity_id: sensor.awtrix_121d6c_current_app
+          to: net
+          id: clock_1
+        - trigger: state
+          entity_id: sensor.awtrix_9c6510_current_app
+          to: net
+          id: clock_2
+        - trigger: state
+          entity_id: sensor.awtrix_9bf654_current_app
+          to: net
+          id: clock_3
+      conditions: []
+      actions:
+        - variables:
+            matrix: >-
+              {{ {'clock_1': 'light.keuken_klok_awtrix_keuken_matrix',
+                  'clock_2': 'light.woonkamer_klok_awtrix_woonkamer_matrix',
+                  'clock_3': 'light.garage_klok_awtrix_garage_matrix'}[trigger.id] }}
+        - repeat:
+            while:
+              - condition: template
+                value_template: >-
+                  {{ repeat.index <= 30
+                     and is_state(trigger.entity_id, 'net')
+                     and is_state(matrix, 'on') }}
+            sequence:
+              - action: mqtt.publish
+                data:
+                  qos: 0
+                  retain: true
+                  topic: "{{ trigger.id }}/custom/net"
+                  payload: >-
+                    {% from 'klok.jinja' import net_frame %}{{ net_frame() }}
+              - delay:
+                  seconds: 1
+
     - id: klokken_zon_accu_woonkamer_garage
       alias: Klokken - Zon en accu woonkamer en garage
       description: >-

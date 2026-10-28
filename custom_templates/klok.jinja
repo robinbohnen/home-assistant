@@ -1,0 +1,84 @@
+{#-
+==============================================================================
+  KLOK - FRAMES VOOR DE AWTRIX-KLOKKEN DIE OP MEER DAN EEN PLEK NODIG ZIJN
+==============================================================================
+
+  Gebruik:
+
+      {% from 'klok.jinja' import net_frame %}{{ net_frame() }}
+
+  LET OP: custom_templates worden alleen bij het opstarten ingelezen, of met
+  de actie `homeassistant.reload_custom_templates`.
+
+  ---------------------------------------------------------------------------
+  net_frame() - WAT ER NU OVER DE SLIMME METER GAAT (28 oktober 2026)
+  ---------------------------------------------------------------------------
+  Het P1-netto, 1-op-1: afname van het net of teruglevering aan het net. Dit
+  is NIET het huisverbruik. Dat staat in de app `verbruik` (gele bliksem,
+  witte cijfers) en is net + zon - accu. 's Avonds dekt de accu vaak het hele
+  huis: dan zegt `verbruik` 900 W en dit frame ~0 W. Om die twee nooit door
+  elkaar te halen ziet dit frame er bewust anders uit:
+
+    - links een grijze hoogspanningsmast in plaats van de bliksem;
+    - daarnaast een pijl: omlaag = van het net het huis in, omhoog = terug
+      naar het net. Onder 10 W geen pijl;
+    - het getal in de kleur van de richting, zoals op het dashboard:
+      blauw afname, groen teruglevering, wit rust. Altijd zonder minteken,
+      want de pijl zegt al welke kant op.
+
+  Bron: `sensor.meterkast_slimhuys_zonneplan_netto_vermogen` (W, positief =
+  afname). Die rekent het netto zelf uit; niet zelf aftrekken, zie de
+  SlimHuys-notities. De P1 komt ~16 s na de werkelijkheid in HA binnen.
+
+  Is de meter stil, dan is de uitkomst leeg: een lege payload haalt de app
+  van de klok, net als bij de zon- en verbruiksapps.
+
+  Ververst wordt hij elke 10 s door `script.klok_zon_en_accu` en elke seconde
+  door `klokken_net_live` zolang hij op het scherm staat, beide in
+  packages/9 - Other/Klokken.yaml.
+-#}
+{%- macro net_frame() -%}
+{%- set bron = 'sensor.meterkast_slimhuys_zonneplan_netto_vermogen' -%}
+{%- if has_value(bron) -%}
+{%- set w = states(bron) | float(0) | round(0) | int -%}
+{%- set a = w | abs -%}
+{%- set richting = 'af' if w >= 10 else ('terug' if w <= -10 else 'rust') -%}
+{%- set kleur = {'af': '#0A84FF', 'terug': '#32D74B', 'rust': '#FFFFFF'}[richting] -%}
+{#- Hele watts; vanaf 10 kW hele kW ("12kW", 18 px). Met een decimaal
+    ("12.3kW", 24 px) zou het label over de pijl lopen. -#}
+{%- if a < 10000 -%}
+{%- set label = a | string ~ 'W' -%}
+{%- else -%}
+{%- set label = ((a / 1000) | round(0) | int) | string ~ 'kW' -%}
+{%- endif -%}
+{#- Opgemeten tekenbreedtes en rechter rand x=29: zie het zonneframe in
+    Klokken.yaml. Het breedste label ("9999W", 22 px) begint op x=9, een
+    kolom rechts van de pijl. -#}
+{%- set tekenbreedte = {'.': 2, 'W': 6} -%}
+{%- set b = namespace(px=0) -%}
+{%- for teken in label -%}
+{%- set b.px = b.px + tekenbreedte.get(teken, 4) -%}
+{%- endfor -%}
+{%- set tx = 31 - b.px -%}
+{"draw": [
+{"df": [2, 0, 1, 1, "#8E8E93"]},
+{"df": [1, 1, 3, 1, "#8E8E93"]},
+{"df": [2, 2, 1, 1, "#8E8E93"]},
+{"df": [0, 3, 5, 1, "#8E8E93"]},
+{"df": [1, 4, 1, 2, "#8E8E93"]},
+{"df": [3, 4, 1, 2, "#8E8E93"]},
+{"df": [0, 6, 1, 2, "#8E8E93"]},
+{"df": [4, 6, 1, 2, "#8E8E93"]}
+{%- if richting == 'af' %},
+{"df": [6, 2, 1, 2, "{{ kleur }}"]},
+{"df": [5, 4, 3, 1, "{{ kleur }}"]},
+{"df": [6, 5, 1, 1, "{{ kleur }}"]}
+{%- elif richting == 'terug' %},
+{"df": [6, 2, 1, 1, "{{ kleur }}"]},
+{"df": [5, 3, 3, 1, "{{ kleur }}"]},
+{"df": [6, 4, 1, 2, "{{ kleur }}"]}
+{%- endif %},
+{"dt": [{{ tx }}, 0, "{{ label }}", "{{ kleur }}"]}
+], "duration": 8, "lifetime": 300, "lifetimeMode": 0}
+{%- endif -%}
+{%- endmacro -%}
