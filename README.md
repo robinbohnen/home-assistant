@@ -99,6 +99,20 @@ ten minutes, so the current measurement is not working. It covers every other co
 mode, the car charger (on the grid side, so it doesn't count), a nearly empty battery,
 a silent MarkeDroid, the twelve-hour brake and the message text.
 
+`tests/test_warmtepomp_rem.py` checks the heat pump brake in
+`packages/9 - Other/Warmtepomp.yaml` (since 29-10-2026): while MarkeDroid holds the
+battery (`vasthouden`) and the tariff is `high`, `very_high` or `peak`, the Vaillant is
+limited to 250 W over EEBUS; any other known mode or a cheaper tariff lifts it. A silent
+MarkeDroid or a missing tariff leaves the limit as it is. It also checks the order of
+the service calls (the 250 W value before the switch, which the add-on requires), that
+the ten-minute check restores a limit the add-on dropped after 240 minutes, and that it
+never removes a limit someone set by hand.
+
+`tests/test_nest_hub_markedroid.py` runs the price strip of the ENERGIE · NU card on the
+Nest Hub and checks the MarkeDroid line underneath: the same words and colours as on the
+Overzicht, red when silent, hidden without a mode field, and still shown when there are
+no prices.
+
 `tests/test_klok_net.py` renders the clock app `net` from `custom_templates/klok.jinja`:
 what goes over the P1 meter right now, import or export. It checks the arrow and colour
 per direction, that the label never runs into the pylon icon or the indicator dots up

@@ -499,6 +499,29 @@ cards:
                   var start = nu - 3600000, eind = nu + 11 * 3600000;
                   var pct = function(t){ return (t - start) / (eind - start) * 100; };
                   var klem = function(v){ return Math.max(0, Math.min(100, v)); };
+
+                  // MarkeDroid: welke stand hij de accu gegeven heeft. Dezelfde
+                  // woorden en kleuren als achteraan de accuregel op het
+                  // Overzicht (overzicht/kolom_midden.yaml): accent als hij
+                  // ingrijpt, rood als hij stil is, niets zonder regie-veld.
+                  var mdVb = states['binary_sensor.markedroid_verbinding'];
+                  var mdRg = states['sensor.markedroid_regie'];
+                  var mdEx = states['sensor.markedroid_exportbegrenzer'];
+                  var MD_WOORD = {geen_regie: 'stuurt niet', geblokkeerd: 'accu geblokkeerd',
+                    vasthouden: 'vasthouden', geforceerd_laden: 'laadt van net',
+                    teruglevering_voorrang: 'teruglevering eerst', eigen_verbruik: 'eigen verbruik',
+                    flex: 'flex-opdracht', max_terugleveren: 'max terugleveren'};
+                  var md = null;
+                  if(mdVb && mdVb.state === 'off'){
+                    md = {tekst: 'stil', kleur: 'var(--ov-bad)'};
+                  } else if(mdRg && MD_WOORD[mdRg.state]){
+                    var mdTekst = MD_WOORD[mdRg.state];
+                    var flexW = Number(mdRg.attributes.flex_w);
+                    if(mdRg.state === 'flex' && mdRg.attributes.flex_w != null && !isNaN(flexW))
+                      mdTekst += ' ' + (Math.abs(flexW) >= 1000 ? (flexW / 1000).toFixed(1).replace('.', ',') + ' kW' : Math.round(flexW) + ' W');
+                    if(mdEx && mdEx.state === 'actief') mdTekst += ' · teruglevering dicht';
+                    md = {tekst: mdTekst, kleur: mdRg.state === 'eigen_verbruik' ? 'var(--primary-text-color)' : 'var(--ov-accent)'};
+                  }
                   // Prijsblokken uit SlimHuys: kwartieren als die er zijn, anders uren,
                   // plus die van morgen. 't' is de START van een blok; de code hieronder
                   // leidt de bloklengte af uit het verschil tussen twee starts.
@@ -510,7 +533,12 @@ cards:
                     var d = new Date(e.start), p = Number(e.value);
                     return (isNaN(d.getTime()) || isNaN(p)) ? null : {t: d.getTime(), p: p, l: e.level};
                   }).filter(Boolean).sort(function(a,b){ return a.t - b.t; });
-                  if(slots.length < 2) return `<span style="font-size:2.1vh;color:var(--ov-ink-35)">geen prijsvoorspelling</span>`;
+                  var mdSpan = md === null ? ''
+                    : `<span style="color:var(--ov-ink-70)">MarkeDroid</span>
+                      <span style="font-weight:600;color:${md.kleur}">${md.tekst}</span>`;
+                  if(slots.length < 2) return `<div style="display:flex;flex-direction:column;gap:0.8vh">
+                    <span style="font-size:2.1vh;color:var(--ov-ink-35)">geen prijsvoorspelling</span>
+                    ${md === null ? '' : `<span style="display:flex;align-items:baseline;gap:0.8vh;font-size:1.9vh;white-space:nowrap">${mdSpan}</span>`}</div>`;
                   var stap = slots[1].t - slots[0].t;
                   // Kleur per blok = SlimHuys-niveau (`level`), dezelfde kleuren als
                   // de stroomprijsgrafiek en slimhuys.nl. very_high is door peak
@@ -579,12 +607,18 @@ cards:
                     if(px < 3 || px > 97) continue;
                     assen.push(`<div style="position:absolute;left:${px}%;transform:translateX(-50%);top:4.2vh;font-size:1.8vh;color:var(--ov-ink-68)">${('0'+new Date(x).getHours()).slice(-2)}:00</div>`);
                   }
-                  return `<div style="position:relative;width:100%;height:${regel ? '9.6vh' : '6.8vh'}">
+
+                  var mdTop = regel ? 9.6 : 7;
+                  var mdRegel = md === null ? ''
+                    : `<div style="position:absolute;left:0;right:0;top:${mdTop}vh;display:flex;align-items:baseline;gap:0.8vh;font-size:1.9vh;white-space:nowrap">${mdSpan}</div>`;
+                  var hoogte = md !== null ? mdTop + 2.8 : (regel ? 9.6 : 6.8);
+                  return `<div style="position:relative;width:100%;height:${hoogte}vh">
                     <div style="position:absolute;left:0;right:0;top:0;height:3.2vh;border-radius:0.5vh;overflow:hidden;background:var(--ov-ink-5)">${blokken.join('')}</div>
                     <div style="position:absolute;left:${klem(pct(nu))}%;top:0;height:3.2vh;border-left:2px dashed var(--ov-ink-85)"></div>
                     ${beugel}
                     ${assen.join('')}
-                    ${regel}</div>`;
+                    ${regel}
+                    ${mdRegel}</div>`;
                 ]]]
 
     # =================== ONDERSTE RIJ ===================

@@ -1,0 +1,119 @@
+##############################################################################
+## WARMTEPOMP - REM BIJ DURE STROOM ALS DE ACCU VASTHOUDT (29 oktober 2026)
+##
+## Staat MarkeDroid op `vasthouden` (de accu laadt nog wel maar ontlaadt niet
+## meer), dan komt elke watt van de warmtepomp van het net. Valt dat samen met
+## een duur tarief, dan zet HA de Vaillant via EEBUS (LPC, de add-on
+## SlimHuys/slimhuys-eebus) op 250 W. Zodra één van de twee niet meer klopt,
+## gaat de limiet er weer af.
+##
+## WANNEER IS STROOM "DUUR"
+## Dezelfde regel als "stroom is duur" op de Nest Hub en het Overzicht:
+## `sensor.slimhuys_zonneplan_tariefniveau_nu` bevat `high` of `peak`, dus
+## high, very_high en peak. Let op: `peak` bevat het woord `high` NIET (zie
+## de kop van Stroomprijs.yaml), daarom staan ze er los in.
+##
+## ONBEKEND IS GEEN BESLISSING
+## MarkeDroid valt na 60 s stilte op `unavailable` (expire_after), en zonder
+## regie-veld meldt hij `niet_geleverd`. Dat zegt niets over de accu. De
+## sensor hieronder wordt dan zelf `unavailable` en de automatisering laat de
+## limiet staan zoals hij stond - anders zou elke hapering in de MQTT-stroom
+## de pomp even loslaten en weer afknijpen. Kan het antwoord tóch al worden
+## gegeven (regie bekend en geen `vasthouden`, of tarief bekend en niet duur),
+## dan blijft de sensor beschikbaar en staat hij op `off`.
+## Elke andere bekende regie dan `vasthouden` haalt de limiet eraf, niet
+## alleen `eigen_verbruik`: de regel is "vasthouden én duur", niets meer.
+##
+## TWEE DINGEN VAN DE ADD-ON (zie eebus/DOCS.md en CHANGELOG.md daar)
+##   * De schakelaar weigert een limiet onder 500 W, tenzij die waarde in
+##     dezelfde run vanuit HA is gezet. Daarom eerst de number, dan de switch.
+##   * Een limiet vervalt na `power_limit_max_minutes` (240 min). Daarom kijkt
+##     de automatisering elke tien minuten of hij er nog op staat. Gevolg: wie
+##     de limiet met de hand uitzet terwijl de rem gewenst is, ziet hem binnen
+##     tien minuten terugkomen.
+##
+## Getest in tests/test_warmtepomp_rem.py.
+##############################################################################
+
+warmtepomp_package:
+
+  template:
+    - binary_sensor:
+        - name: "Warmtepomp rem gewenst"
+          unique_id: warmtepomp_rem_gewenst
+          default_entity_id: binary_sensor.warmtepomp_rem_gewenst
+          icon: mdi:heat-pump-outline
+          availability: >-
+            {% set r = states('sensor.markedroid_regie') %}
+            {% set n = states('sensor.slimhuys_zonneplan_tariefniveau_nu') %}
+            {% set r_ok = r not in ['unknown', 'unavailable', 'niet_geleverd'] %}
+            {% set n_ok = n not in ['unknown', 'unavailable'] %}
+            {% set duur = 'high' in n or 'peak' in n %}
+            {{ (r_ok and n_ok) or (r_ok and r != 'vasthouden') or (n_ok and not duur) }}
+          state: >-
+            {% set n = states('sensor.slimhuys_zonneplan_tariefniveau_nu') %}
+            {{ is_state('sensor.markedroid_regie', 'vasthouden')
+               and ('high' in n or 'peak' in n) }}
+
+  automation:
+    - id: warmtepomp_rem_bij_vasthouden
+      alias: Warmtepomp - Limiet bij dure stroom en vasthoudende accu
+      description: >-
+        Zet de Vaillant op 250 W zolang MarkeDroid de accu vasthoudt en stroom
+        duur is; haalt de limiet eraf zodra één van beide niet meer geldt.
+      mode: queued
+      max: 3
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.warmtepomp_rem_gewenst
+          to: "on"
+          id: aan
+        - trigger: state
+          entity_id: binary_sensor.warmtepomp_rem_gewenst
+          to: "off"
+          id: uit
+        # De add-on laat een limiet na 240 minuten los, en na een herstart van
+        # HA of de add-on staat hij ook uit.
+        - trigger: time_pattern
+          minutes: "/10"
+          id: controle
+        - trigger: homeassistant
+          event: start
+          id: controle
+      actions:
+        - choose:
+            - conditions:
+                - condition: state
+                  entity_id: binary_sensor.warmtepomp_rem_gewenst
+                  state: "on"
+                # Niets opnieuw sturen als hij er al goed op staat.
+                - condition: template
+                  value_template: >-
+                    {{ not is_state('switch.vaillant_vr940_power_limit_active', 'on')
+                       or states('number.vaillant_vr940_power_limit') | float(-1) != 250 }}
+              sequence:
+                - action: number.set_value
+                  target:
+                    entity_id: number.vaillant_vr940_power_limit
+                  data:
+                    value: 250
+                - action: switch.turn_on
+                  target:
+                    entity_id: switch.vaillant_vr940_power_limit_active
+            # Alleen op de overgang naar `off`, niet bij de controle elke tien
+            # minuten: een limiet die iemand met de hand zet terwijl de rem
+            # niet nodig is, blijft dan gewoon staan.
+            - conditions:
+                - condition: trigger
+                  id: uit
+                # In de wachtrij kan de sensor intussen alweer omgeslagen zijn.
+                - condition: state
+                  entity_id: binary_sensor.warmtepomp_rem_gewenst
+                  state: "off"
+                - condition: state
+                  entity_id: switch.vaillant_vr940_power_limit_active
+                  state: "on"
+              sequence:
+                - action: switch.turn_off
+                  target:
+                    entity_id: switch.vaillant_vr940_power_limit_active
