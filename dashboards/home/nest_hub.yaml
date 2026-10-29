@@ -477,10 +477,15 @@ cards:
                   var fmt = function(v){ return v === null ? '—' : v.toFixed(2).replace('.',','); };
                   var klein = function(waarde, label, kleur){
                     return `<div style="display:flex;flex-direction:column;gap:0.3vh">
-                      <span style="font-size:4.2vh;font-weight:700;line-height:1;color:${kleur}">${waarde}</span>
+                      <span style="font-size:4.2vh;font-weight:700;line-height:1;white-space:nowrap;color:${kleur}">${waarde}</span>
                       <span style="font-size:2.1vh;color:var(--ov-ink-70)">${label}</span></div>`;
                   };
-                  var nettoKleur = (netto !== null && netto < 0) ? 'var(--ov-ok)' : 'var(--primary-text-color)';
+                  // Batterij: groot het vermogen in kW, net als de tegels
+                  // ernaast (zonder teken: laadt/ontlaadt staat in het label),
+                  // en de lading klein erachter op de plek van de eenheid.
+                  var accu = (bpv === null ? '—' : fmt(Math.abs(bpv) / 1000))
+                    + (socv === null ? '' : ` <span style="font-size:2.6vh;font-weight:400;color:var(--ov-ink-72)">${socv}%</span>`);
+                  var nettoKleur =(netto !== null && netto < 0) ? 'var(--ov-ok)' : 'var(--primary-text-color)';
                   return `<div style="display:grid;grid-template-columns:1.5fr 1fr 1fr 1.1fr;align-items:end;column-gap:1.2vh">
                     <div style="display:flex;flex-direction:column;gap:0.3vh">
                       <span><span style="font-size:7vh;font-weight:700;line-height:1;color:${nettoKleur}">${fmt(netto)}</span>
@@ -488,7 +493,7 @@ cards:
                       <span style="font-size:2.1vh;color:var(--ov-ink-70)">netto verbruik</span></div>
                     ${klein(fmt(prod), 'productie', 'var(--ov-ok)')}
                     ${klein(fmt(verbr), 'huis verbruik', 'var(--ov-info-strong)')}
-                    ${klein(socv === null ? '—' : socv + '%', 'batterij' + bmode, 'var(--primary-text-color)')}
+                    ${klein(accu, 'batterij' + bmode, 'var(--primary-text-color)')}
                   </div>`;
                 ]]]
               strook: |

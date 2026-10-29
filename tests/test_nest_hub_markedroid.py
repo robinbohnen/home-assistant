@@ -7,6 +7,9 @@ Haalt de button-card-JS letterlijk uit de YAML en draait die in node met
 nagebootste `states`, net als tests/test_energie_nu.py. Bewaakt (29-10-2026):
 dezelfde woorden en kleuren als op het Overzicht, rood bij "stil", weglaten
 zonder regie-veld, en dat de regel er ook staat als er geen prijzen zijn.
+
+Daarnaast de batterijtegel in de cijfers-rij (`custom_fields.cijfers`): groot
+het accuvermogen in kW zonder teken, de lading klein erachter.
 """
 import json
 import os
@@ -19,23 +22,33 @@ CONFIG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KAART = os.path.join(CONFIG, "dashboards", "home", "nest_hub.yaml")
 
 
-def _vind_strook(knoop):
+def _vind_veld(knoop, veld):
+    """Zoek de ENERGIE · NU-kaart (die heeft een `strook`) en geef `veld` terug."""
     if isinstance(knoop, dict):
-        if "strook" in (knoop.get("custom_fields") or {}) and isinstance(knoop["custom_fields"]["strook"], str):
-            return knoop["custom_fields"]["strook"]
+        velden = knoop.get("custom_fields") or {}
+        if isinstance(velden.get("strook"), str):
+            return velden[veld]
         knoop = list(knoop.values())
     if isinstance(knoop, list):
         for k in knoop:
-            gevonden = _vind_strook(k)
+            gevonden = _vind_veld(k, veld)
             if gevonden:
                 return gevonden
     return None
 
 
 with open(KAART, encoding="utf-8") as f:
-    STROOK = _vind_strook(yaml.safe_load(f)).strip()
-assert STROOK.startswith("[[[") and STROOK.endswith("]]]"), "strook is geen button-card-JS meer"
-JS = STROOK[3:-3]
+    _DOC = yaml.safe_load(f)
+
+
+def _js(veld):
+    tekst = _vind_veld(_DOC, veld).strip()
+    assert tekst.startswith("[[[") and tekst.endswith("]]]"), f"{veld} is geen button-card-JS meer"
+    return tekst[3:-3]
+
+
+JS = _js("strook")
+CIJFERS = _js("cijfers")
 
 
 def st(state, **attrs):
@@ -56,7 +69,7 @@ BASIS = {
 }
 
 
-def render(**extra):
+def render(_js=None, **extra):
     states = dict(BASIS)
     for k, v in extra.items():
         states[k.replace("__", ".", 1)] = v
@@ -64,7 +77,7 @@ def render(**extra):
         "const states = " + json.dumps(states) + ";\n"
         "const variables = {laadvenster_uren: 3};\n"
         "const entity = states['sensor.live_energieverbruik_totaal'];\n"
-        "process.stdout.write((function(){" + JS + "})());"
+        "process.stdout.write((function(){" + (_js or JS) + "})());"
     )
     uit = subprocess.run(["node", "-e", prog], capture_output=True, text=True, check=True)
     return uit.stdout
@@ -123,6 +136,41 @@ def test_ook_zonder_prijzen():
                   sensor__slimhuys_zonneplan_prijzen_vandaag=st("unavailable"))
     assert "geen prijsvoorspelling" in html
     assert ">vasthouden</span>" in html
+
+
+def batterij(vermogen, lading=44, status="ontladen"):
+    return render(CIJFERS,
+                  sensor__accu_vermogen=st(vermogen),
+                  sensor__accu_lading=st(lading),
+                  sensor__accu_status=st(status),
+                  sensor__live_energieverbruik_totaal=st(0.67),
+                  sensor__zon_vermogen_nu=st(0, unit_of_measurement="W"))
+
+
+def test_batterij_toont_kw_en_lading_klein():
+    html = batterij(-120)
+    # Ontladen is negatief (positief = laden), maar het label zegt al welke kant.
+    assert ">0,12 <span" in html
+    assert ">44%</span>" in html
+    assert "batterij · ontlaadt" in html
+
+
+def test_batterij_laden():
+    html = batterij(2350, lading=61, status="laden")
+    assert ">2,35 <span" in html and ">61%</span>" in html
+    assert "batterij · laadt" in html
+
+
+def test_batterij_zonder_vermogen():
+    html = batterij("unavailable", lading=44)
+    assert ">— <span" in html
+    assert ">44%</span>" in html
+
+
+def test_batterij_zonder_lading():
+    html = batterij(-120, lading="unavailable")
+    assert ">0,12</span>" in html
+    assert "%</span>" not in html
 
 
 if __name__ == "__main__":

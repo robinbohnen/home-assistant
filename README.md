@@ -111,7 +111,9 @@ never removes a limit someone set by hand.
 `tests/test_nest_hub_markedroid.py` runs the price strip of the ENERGIE · NU card on the
 Nest Hub and checks the MarkeDroid line underneath: the same words and colours as on the
 Overzicht, red when silent, hidden without a mode field, and still shown when there are
-no prices.
+no prices. It also checks the battery tile next to it: the battery power in kW as the big
+number (without a sign — the label says charging or discharging) with the charge level
+small behind it.
 
 `tests/test_klok_net.py` renders the clock app `net` from `custom_templates/klok.jinja`:
 what goes over the P1 meter right now, import or export. It checks the arrow and colour
