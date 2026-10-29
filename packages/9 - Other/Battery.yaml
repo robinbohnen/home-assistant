@@ -375,6 +375,51 @@ battery_package:
             herstart_procent: "{{ state_attr('sensor.accu_capaciteit', 'herstart_procent') | int(50) }}"
 
     ##########################################################################
+    ## Stroommeting verdacht (29 oktober 2026)
+    ##
+    ## In `eigen_verbruik` hoort de accu het net op nul te regelen: het huis
+    ## trekt stroom, de accu levert die. Haalt het huis tien minuten lang
+    ## stroom van het net terwijl de accu stil blijft (binnen ±100 W), dan
+    ## ziet de Deye of MarkeDroid het verbruik niet - de stroommeting werkt
+    ## niet goed. De automatisering `accu_stroommeting_melding` onderaan
+    ## stuurt dan een bericht.
+    ##
+    ## Wat hem bewust NIET aanzet:
+    ##   * een andere regie dan `eigen_verbruik` - bij `vasthouden`,
+    ##     `geblokkeerd` of `flex` staat de accu met opzet stil;
+    ##   * de laadpaal: die zit aan de netkant (zie de NOODSTROOM-kop) en
+    ##     telt dus niet mee als verbruik dat de accu had moeten dekken;
+    ##   * een lege accu: tot 5% boven het afslagpunt mag hij stil staan.
+    ##     NIET GETOETST: of de Deye na een afslag pas bij het herstartpunt
+    ##     (50%) weer ontlaadt. Komt er een melding bij 15-50% na een lege
+    ##     nacht, dan is dát het, en moet de grens hier naar `herstart_procent`;
+    ##   * een stille MarkeDroid: dan is het accuvermogen `unavailable`, en dat
+    ##     is `binary_sensor.markedroid_verbinding`, niet dit.
+    ## De 200 W en de tien minuten zijn niet geijkt. De P1 loopt ~16 s achter
+    ## (zie de MARKEDROID-kop); een last die aanslaat geeft dus even een
+    ## bult van het net, maar geen tien minuten.
+    ##########################################################################
+    - binary_sensor:
+        - name: "Accu stroommeting verdacht"
+          unique_id: accu_stroommeting_verdacht
+          default_entity_id: binary_sensor.accu_stroommeting_verdacht
+          device_class: problem
+          icon: mdi:current-ac
+          state: >-
+            {% set accu = states('sensor.markedroid_accu_vermogen') %}
+            {% set net = states('sensor.slimhuys_zonneplan_actief_vermogen') %}
+            {% set laadpaal = states('sensor.charging_station_active_power') | float(0) %}
+            {% set afslag = state_attr('sensor.accu_capaciteit', 'afslag_procent') | float(10) %}
+            {{ is_state('sensor.markedroid_regie', 'eigen_verbruik')
+               and is_number(accu) and accu | float | abs < 100
+               and is_number(net) and net | float - laadpaal > 200
+               and states('sensor.accu_lading') | float(0) > afslag + 5 }}
+          delay_on: "00:10:00"
+          # Eén meting onder de drempel is nog geen herstel; zonder dit tikt
+          # hij bij een wisselende last aan en uit.
+          delay_off: "00:01:00"
+
+    ##########################################################################
     ## MarkeDroid energietellers - zie de MARKEDROID-kop hieronder
     ##
     ## MarkeDroid stuurt geen standen maar de Wh SINDS HET VORIGE BERICHT
@@ -832,3 +877,41 @@ battery_package:
                      and value_json.VppValue is defined and value_json.VppValue is number else 'OFF' }}
         icon: mdi:swap-vertical-bold
         expire_after: 60
+
+  ############################################################################
+  ## MELDING - alleen een bericht, geen sturing
+  ##
+  ## De kop zegt "HA leest hier alleen nog", en dat blijft zo: dit stuurt
+  ## niets naar de accu, het vertelt het alleen. Wanneer de sensor aangaat
+  ## staat bij `binary_sensor.accu_stroommeting_verdacht` in het template-deel.
+  ############################################################################
+  automation:
+    - id: accu_stroommeting_melding
+      alias: Accu - Stroommeting werkt niet goed
+      description: >-
+        Meldt als MarkeDroid op eigen verbruik staat, het huis van het net
+        trekt en de accu toch stil blijft.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        # De tien minuten zitten al in de `delay_on` van de sensor.
+        - trigger: state
+          entity_id: binary_sensor.accu_stroommeting_verdacht
+          to: "on"
+      conditions:
+        # Hooguit één keer per twaalf uur; een meting die stuk blijft gaat
+        # anders bij elke wisselende last opnieuw af.
+        - condition: template
+          value_template: >-
+            {{ this.attributes.last_triggered is none
+               or now() - this.attributes.last_triggered > timedelta(hours=12) }}
+      actions:
+        - action: notify.mobile_devices_robin
+          data:
+            title: Stroommeting accu werkt niet goed
+            message: >-
+              MarkeDroid staat op eigen verbruik, maar de accu doet al tien
+              minuten niets ({{ states('sensor.markedroid_accu_vermogen') | float(0) | round(0) | int }} W)
+              terwijl het huis {{ states('sensor.slimhuys_zonneplan_actief_vermogen') | float(0) | round(0) | int }} W
+              van het net haalt. De Deye of MarkeDroid ziet het verbruik
+              waarschijnlijk niet; kijk in de ModuSun-app.

@@ -92,6 +92,13 @@ counter `sensor.markedroid_zon_energie` that SlimHuys receives: zero below -3° 
 elevation, the previous value above 1.3 × the peak power or below zero, and the
 filtered power instead of a corrupted increment.
 
+`tests/test_accu_stroommeting.py` checks `binary_sensor.accu_stroommeting_verdacht`
+and the notification behind it (since 29-10-2026): MarkeDroid is on `eigen_verbruik`,
+the house draws more than 200 W from the grid and the battery stays within ±100 W for
+ten minutes, so the current measurement is not working. It covers every other control
+mode, the car charger (on the grid side, so it doesn't count), a nearly empty battery,
+a silent MarkeDroid, the twelve-hour brake and the message text.
+
 `tests/test_klok_net.py` renders the clock app `net` from `custom_templates/klok.jinja`:
 what goes over the P1 meter right now, import or export. It checks the arrow and colour
 per direction, that the label never runs into the pylon icon or the indicator dots up
