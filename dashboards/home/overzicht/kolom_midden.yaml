@@ -1302,14 +1302,18 @@ cards:
                     var kw = blok('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier', 'raw_today');
                     if(kw.length) raw = kw;
                   }
-                  var lo = null, hi = null;
+                  var lo = null, hi = null, som = 0, n = 0;
                   raw.forEach(function(e){
                     var d = new Date(e.start), t = new Date(e.end), v = Number(e.value);
                     if(isNaN(d.getTime()) || isNaN(v)) return;
                     if(lo === null || v < lo.p) lo = {p: v, d: d, t: t};
                     if(hi === null || v > hi.p) hi = {p: v, d: d, t: t};
+                    som += v; n++;
                   });
-                  return lo === null ? null : {lo: lo, hi: hi};
+                  // Gemiddelde over dezelfde blokken als laag/hoog. Alle blokken
+                  // van een lijst zijn even lang (kwartier óf uur), dus een
+                  // gewoon gemiddelde is hier ook het tijdgewogen gemiddelde.
+                  return lo === null ? null : {lo: lo, hi: hi, gem: som / n};
                 };
                 var klok = function(d){ return ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2); };
                 // Op een breed scherm paste alles op één regel, en stond dus ook
@@ -1350,10 +1354,18 @@ cards:
                     ? ` title="gemiddeld € ${gem.toFixed(3).replace('.',',')} · mediaan 30 dagen € ${med.toFixed(3).replace('.',',')}"` : '';
                   return `<span${tip} style="display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:11px;color:var(--ov-ink-65)"><span style="width:7px;height:7px;border-radius:50%;background:${d[1]}"></span>${d[0]}</span>`;
                 };
+                // Het daggemiddelde in inkt: geen tip of waarschuwing, alleen
+                // de maat waar je laag en hoog tegen afzet. Het wordt niet grijs
+                // als de dag vordert; het blijft over de hele dag gaan.
+                var gem = function(p){
+                  return `<span style="display:inline-flex;align-items:baseline;gap:4px;white-space:nowrap">`
+                    + `<span style="color:var(--ov-ink-45);font-size:11px">gem.</span>`
+                    + `<span style="color:var(--ov-ink-65);font-weight:600">€ ${p.toFixed(3).replace('.',',')}</span></span>`;
+                };
                 var deel = function(lbl, x, niveau){
                   var kop = `<span style="color:var(--ov-ink-45);font-size:11px;letter-spacing:0.3px">${lbl}</span>`;
                   var inhoud = x
-                    ? `${kop}${niveau}${f(x.lo,'var(--ov-ok)','▼')}${f(x.hi,'var(--ov-bad)','▲')}`
+                    ? `${kop}${niveau}${f(x.lo,'var(--ov-ok)','▼')}${gem(x.gem)}${f(x.hi,'var(--ov-bad)','▲')}`
                     : `${kop}<span style="color:var(--ov-ink-30)">nog niet bekend</span>`;
                   // Met het dagniveau erbij is een dag te breed voor een
                   // telefoon; hij mag dan breken, maar alleen tussen de delen
