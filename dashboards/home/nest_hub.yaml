@@ -230,7 +230,13 @@ cards:
               grid:
                 - grid-template-areas: '"t" "ploegen" "uitrukken" "melding"'
                 - grid-template-rows: auto auto auto auto
-                - align-content: space-evenly
+                # KOPPEN OP ÉÉN HOOGTE: space-between, niet space-evenly. Met
+                # space-evenly kreeg elke kaart boven de kop een eigen gat dat
+                # afhing van hoeveel inhoud eronder stond, dus stonden de vier
+                # koppen op vier hoogtes (31-10-2026). Nu staat de eerste rij
+                # (de kop) bij elke kaart tegen de bovenpadding en verdelen de
+                # overige rijen de rest. Geldt voor alle vier de kwadranten.
+                - align-content: space-between
                 - row-gap: 1.4vh
                 - height: 100%
               custom_fields:
@@ -387,7 +393,8 @@ cards:
               grid:
                 - grid-template-areas: '"t" "cijfers" "strook"'
                 - grid-template-rows: auto auto auto
-                - align-content: space-evenly
+                # space-between: zie KOPPEN OP ÉÉN HOOGTE bij BRANDWEER.
+                - align-content: space-between
                 - row-gap: 1.2vh
                 - height: 100%
               custom_fields:
@@ -527,6 +534,40 @@ cards:
                     if(mdEx && mdEx.state === 'actief') mdTekst += ' · teruglevering dicht';
                     md = {tekst: mdTekst, kleur: mdRg.state === 'eigen_verbruik' ? 'var(--primary-text-color)' : 'var(--ov-accent)'};
                   }
+                  // Veelgebruikers onder de MarkeDroid-regel: dezelfde indeling
+                  // als de legenda "in huis" op het Overzicht (overzicht/
+                  // kolom_midden.yaml), zonder de balk. Hoogstens vijf stekkers
+                  // die minstens 1,5% van het huis zijn, dan "andere stekkers"
+                  // en "niet gemeten". Ook hier de gemiddelde sensoren: de ruwe
+                  // koffiemachine pulseert en telde op tegen een gemiddeld huis
+                  // niet op. Twee regels hoog afgekapt, zodat een lange lijst
+                  // de HOOGTEBEGROTING niet opblaast.
+                  var wNum = function(id){ var e = states[id]; return (e && !isNaN(Number(e.state))) ? Number(e.state) : null; };
+                  var wTekst = function(w){ return w >= 1000 ? (w / 1000).toFixed(1).replace('.', ',') + ' kW' : Math.round(w) + ' W'; };
+                  var vg = states['sensor.veelgebruikers_gemiddeld'];
+                  if(!vg || isNaN(Number(vg.state))) vg = states['sensor.veelgebruikers'];
+                  var stekW = (vg && !isNaN(Number(vg.state))) ? Number(vg.state) : null;
+                  var huisW = wNum('sensor.huis_verbruik_gemiddeld');
+                  if(huisW === null) huisW = wNum('sensor.huis_verbruik');
+                  var stekkers = '';
+                  if(stekW !== null){
+                    var schaal = Math.max(huisW === null ? 0 : huisW, stekW);
+                    var drempel = Math.max(5, schaal * 0.015);
+                    var TINT = [1, 0.82, 0.66, 0.52, 0.4];
+                    var rij = [], benoemd = 0;
+                    ((vg.attributes && vg.attributes.top) || []).filter(function(r){ return r.watt >= drempel; }).slice(0, 5).forEach(function(r, i){
+                      benoemd += r.watt;
+                      rij.push({bg: 'var(--ov-info-strong)', op: TINT[i], naam: r.naam, w: r.watt});
+                    });
+                    var andere = Math.max(0, stekW - benoemd);
+                    if(andere >= 1) rij.push({bg: 'var(--ov-info-strong)', op: 0.22, naam: 'andere stekkers', w: andere});
+                    var onbekend = huisW === null ? 0 : Math.max(0, huisW - stekW);
+                    if(onbekend >= 1) rij.push({bg: 'var(--ov-ink-18)', op: 1, naam: 'niet gemeten', w: onbekend});
+                    if(rij.length) stekkers = `<div style="margin-top:0.6vh;font-size:1.9vh;line-height:1.45;text-align:left;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden">`
+                      + rij.map(function(d){
+                        return `<span style="display:inline-block;white-space:nowrap;margin-right:1.8vh"><span style="display:inline-block;width:1.1vh;height:1.1vh;border-radius:0.25vh;background:${d.bg};opacity:${d.op};margin-right:0.6vh"></span><span style="color:var(--ov-ink-70)">${d.naam}</span> <span style="font-weight:600;color:var(--primary-text-color)">${wTekst(d.w)}</span></span>`;
+                      }).join('') + `</div>`;
+                  }
                   // Prijsblokken uit SlimHuys: kwartieren als die er zijn, anders uren,
                   // plus die van morgen. 't' is de START van een blok; de code hieronder
                   // leidt de bloklengte af uit het verschil tussen twee starts.
@@ -543,7 +584,7 @@ cards:
                       <span style="font-weight:600;color:${md.kleur}">${md.tekst}</span>`;
                   if(slots.length < 2) return `<div style="display:flex;flex-direction:column;gap:0.8vh">
                     <span style="font-size:2.1vh;color:var(--ov-ink-35)">geen prijsvoorspelling</span>
-                    ${md === null ? '' : `<span style="display:flex;align-items:baseline;gap:0.8vh;font-size:1.9vh;white-space:nowrap">${mdSpan}</span>`}</div>`;
+                    ${md === null ? '' : `<span style="display:flex;align-items:baseline;gap:0.8vh;font-size:1.9vh;white-space:nowrap">${mdSpan}</span>`}${stekkers}</div>`;
                   var stap = slots[1].t - slots[0].t;
                   // Kleur per blok = SlimHuys-niveau (`level`), dezelfde kleuren als
                   // de stroomprijsgrafiek en slimhuys.nl. very_high is door peak
@@ -623,7 +664,7 @@ cards:
                     ${beugel}
                     ${assen.join('')}
                     ${regel}
-                    ${mdRegel}</div>`;
+                    ${mdRegel}</div>${stekkers}`;
                 ]]]
 
     # =================== ONDERSTE RIJ ===================
@@ -660,7 +701,8 @@ cards:
               grid:
                 - grid-template-areas: '"t" "afval" "agenda" "voet"'
                 - grid-template-rows: auto auto auto auto
-                - align-content: space-evenly
+                # space-between: zie KOPPEN OP ÉÉN HOOGTE bij BRANDWEER.
+                - align-content: space-between
                 - row-gap: 1.2vh
                 - height: 100%
               custom_fields:
@@ -835,7 +877,8 @@ cards:
               grid:
                 - grid-template-areas: '"t" "mensen" "huis"'
                 - grid-template-rows: auto auto auto
-                - align-content: space-evenly
+                # space-between: zie KOPPEN OP ÉÉN HOOGTE bij BRANDWEER.
+                - align-content: space-between
                 - row-gap: 1.2vh
                 - height: 100%
               custom_fields:

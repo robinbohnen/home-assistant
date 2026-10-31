@@ -10,6 +10,10 @@ zonder regie-veld, en dat de regel er ook staat als er geen prijzen zijn.
 
 Daarnaast de batterijtegel in de cijfers-rij (`custom_fields.cijfers`): groot
 het accuvermogen in kW zonder teken, de lading klein erachter.
+
+Sinds 31-10-2026 ook de veelgebruikers onder de MarkeDroid-regel (zelfde
+indeling als "in huis" op het Overzicht) en dat de koppen van de vier
+kwadranten op één hoogte staan (`align-content: space-between`).
 """
 import json
 import os
@@ -171,6 +175,59 @@ def test_batterij_zonder_lading():
     html = batterij(-120, lading="unavailable")
     assert ">0,12</span>" in html
     assert "%</span>" not in html
+
+
+def vg(totaal, top):
+    return st(totaal, top=[{"naam": n, "watt": w} for n, w in top])
+
+
+def test_veelgebruikers_onder_markedroid():
+    html = render(sensor__markedroid_regie=regie("vasthouden"),
+                  sensor__veelgebruikers_gemiddeld=vg(600, [("Koffiezetapparaat", 284), ("Serverrack", 46)]),
+                  sensor__huis_verbruik_gemiddeld=st(700))
+    assert html.index(">vasthouden</span>") < html.index("Koffiezetapparaat")
+    assert "Koffiezetapparaat</span> <span" in html and ">284 W</span>" in html
+    assert ">andere stekkers</span>" in html and ">270 W</span>" in html
+    assert ">niet gemeten</span>" in html and ">100 W</span>" in html
+    # Afkappen op twee regels, en afbreken mag (button-card zet nowrap).
+    assert "-webkit-line-clamp:2" in html and "white-space:normal" in html
+
+
+def test_veelgebruikers_drempel_en_maximaal_vijf():
+    top = [("Stekker %d" % i, 100 - i) for i in range(7)] + [("Sluimer", 3)]
+    html = render(sensor__veelgebruikers_gemiddeld=vg(700, top), sensor__huis_verbruik_gemiddeld=st(700))
+    assert "Stekker 4" in html and "Stekker 5" not in html
+    assert "Sluimer" not in html
+    # Stekkers lopen voor op het huis: geen negatief "niet gemeten".
+    assert "niet gemeten" not in html
+
+
+def test_veelgebruikers_kw_en_terugval_op_ruwe_sensor():
+    html = render(sensor__veelgebruikers_gemiddeld=st("unavailable"),
+                  sensor__veelgebruikers=vg(1400, [("Waterkoker", 1360)]),
+                  sensor__huis_verbruik=st(1500))
+    assert ">1,4 kW</span>" in html
+    assert ">100 W</span>" in html  # niet gemeten via de terugval huis_verbruik
+
+
+def test_veelgebruikers_ook_zonder_prijzen():
+    html = render(sensor__slimhuys_zonneplan_prijzen_vandaag=st("unavailable"),
+                  sensor__veelgebruikers_gemiddeld=vg(300, [("Serverrack", 46)]))
+    assert "geen prijsvoorspelling" in html and "Serverrack" in html
+
+
+def test_zonder_stekkersensor_geen_regel():
+    html = render(sensor__markedroid_regie=regie("vasthouden"))
+    assert "stekkers" not in html and "line-clamp" not in html
+
+
+def test_vier_koppen_op_dezelfde_hoogte():
+    # space-evenly gaf elke kop een eigen gat erboven (31-10-2026); de kop moet
+    # in elk kwadrant tegen de bovenpadding staan.
+    with open(KAART, encoding="utf-8") as f:
+        tekst = f.read()
+    assert "align-content: space-evenly" not in tekst
+    assert tekst.count("- align-content: space-between") == 4
 
 
 if __name__ == "__main__":
