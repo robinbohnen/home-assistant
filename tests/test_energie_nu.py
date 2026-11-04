@@ -157,6 +157,23 @@ def test_accu_dagtellers_in_kwh():
     assert "+3,5 / −8,1 kWh" in html
 
 
+def test_momentopname_uit_een_sensor():
+    # 4-11-2026: zon, net, accu en huis uit de attributen van huis_verbruik,
+    # niet uit de losse sensoren (die lopen niet gelijk). De losse sensoren
+    # staan hier bewust op andere getallen: die mogen niet doorkomen.
+    html = render(sensor__huis_verbruik=st(1.467, unit_of_measurement="kW", bron="deye",
+                                           net_w=814, zon_w=653, accu_w=0, huis_w=1467),
+                  sensor__accu_vermogen=st(0), sensor__accu_status=st("rust"))
+    assert "653" in html and "814" in html and "1467" in html
+    assert "1220" not in html  # zon_vermogen_nu uit BASIS
+    assert "803" not in html   # P1 uit BASIS
+
+
+def test_zonder_attributen_de_losse_sensoren():
+    html = render()
+    assert "1220" in html and "803" in html
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_")]
     for naam, f in tests:

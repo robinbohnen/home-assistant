@@ -94,6 +94,13 @@ power or below zero, a fresh 0 W after more than 150 W held as a read error for 
 counters `sensor.zon_energie_totaal` and `sensor.accu_geladen_totaal` never go down and
 never swallow a jump the panels or the battery could not have made.
 
+`tests/test_huis_verbruik.py` checks `sensor.huis_verbruik` (since 4-11-2026 one
+snapshot from one Solarman round): grid (the Deye's own CT) + sun − battery, with those
+three as attributes on the sensor so the energy cards always show them from the same
+moment and they always add up; the fallback to the P1 meter when Solarman is silent
+(then a new value only every 5 s, state and attributes held in between), the battery
+hiccup hold, the one-second trigger, and that the 120 s average is gone.
+
 `tests/test_omvormer_pagina.py` runs the NU and IN ORDE? cards of the Omvormer page
 in node: both strings on the solar tile, grid voltage, frequency and inverter
 temperature from the Deye, the inverter alarm line, which source went silent

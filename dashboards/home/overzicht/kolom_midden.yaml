@@ -69,22 +69,25 @@ cards:
         # en kostten 106 px voor drie streepjes. In een balk is de lengte het
         # aandeel: je ziet de verdeling zonder voortekens of richting te lezen.
         #
-        # HET HUISGETAL KOMT UIT DE SENSOR EN IS EEN GEMIDDELDE OVER 2 MINUTEN
-        # De kaart rekende net + zon - accu zelf nog eens uit, op het moment
-        # van tekenen. Op 3 oktober stond er daardoor 0 W terwijl het huis
-        # ~1,5 kW trok: de accu pendelde elke ~50 s tussen laden en ontladen,
-        # meldt zich om de ~11 s, en de P1 komt 16 s te laat binnen - elke
-        # losse som combineert dan waarden van verschillende momenten (2372
-        # zon - 1662 terug - 963 accu = -253, afgekapt op 0). Nu leest de
-        # kaart `sensor.huis_verbruik_gemiddeld` (Electricity.yaml, 120 s -
-        # zie daar waarom 60 s te kort bleek), met `sensor.huis_verbruik` als
-        # terugval zolang die nog niet bestaat. Prijs: een waterkoker zit pas
-        # na twee minuten volledig in het getal; de live-strook is sneller.
+        # ALLES IS ÉÉN MOMENTOPNAME (4 november 2026)
+        # Zon, net, accu en huis komen uit de attributen van ÉÉN sensor,
+        # `sensor.huis_verbruik` (Electricity.yaml), die ze in één render uit
+        # één Solarman-uitleesronde haalt (~5 s, binnen een seconde in HA). Ze
+        # zijn dus altijd van hetzelfde moment, en net + zon - accu = huis.
+        #
+        # Daarvoor (3 oktober - 4 november) las de kaart een gemiddelde over
+        # 120 s (`sensor.huis_verbruik_gemiddeld`, nu geschrapt): de P1 kwam
+        # 16 s te laat en de accu om de ~11 s, en een losse som gaf bij een
+        # pendelende accu onzin (2372 zon - 1662 terug - 963 accu = -253). Het
+        # gemiddelde maakte het getal rustig, maar dan telden de balken niet
+        # op: "zon 653 + net 814" onder een huis van 1654 W (Robin, 4-11).
+        # Met één bron per ronde is dat middelen niet meer nodig.
         #
         # ELKE BALK IS ZIJN EIGEN 100%
-        # Zon, net en accu zijn momentopnames en het huis is dat gemiddelde;
-        # "komt van" en "gaat naar" tellen dus niet op de watt gelijk op. Elke
-        # balk verdeelt daarom zijn eigen som in plaats van een gedeelde schaal.
+        # Met de momentopname tellen "komt van" en "gaat naar" op, maar elke
+        # balk verdeelt nog steeds zijn eigen som. Dat blijft goed werken als
+        # de bron terugvalt op de P1 (attribuut `bron: p1`), want dan loopt het
+        # net weer achter en klopt de som niet op de watt.
         #
         # KLEUR VOLGT DE PARTIJ
         # zon groen, huis blauw (de verbruikskleur van de grafieken eronder),
@@ -105,12 +108,14 @@ cards:
         # blauwtint loopt af met de rangorde; namen in dezelfde volgorde
         # eronder. De rijen per stekker staan in #ov-energie.
         #
-        # De stekkers komen uit `sensor.veelgebruikers_gemiddeld` (packages/
-        # 9 - Other/Veelgebruikers.yaml) en niet uit de ruwe sensor: een
-        # gemiddeld huis naast stekkers van dít moment telde niet op. Het
-        # koffiezetapparaat pulseert 1,36 kW voor een paar seconden, en dan
-        # stond er 1751 W aan stekkers onder een huis van 998 W. De ruwe
-        # sensor is de terugval zolang de gemiddelde nog niet bestaat.
+        # De stekkers komen sinds 4-11-2026 uit de ruwe `sensor.veelgebruikers`,
+        # omdat het huis nu ook een momentopname is. Daarvoor het gemiddelde
+        # (`sensor.veelgebruikers_gemiddeld`): een gemiddeld huis naast
+        # stekkers van dít moment telde niet op. Keerzijde nu: het
+        # koffiezetapparaat pulseert 1,36 kW voor een paar seconden, en die
+        # puls zie je in de balk - maar dan ook in het huisgetal erboven. De
+        # stekkers melden zich niet in de Solarman-ronde, dus "niet gemeten"
+        # (huis min stekkers, afgekapt op 0) kan een paar seconden achterlopen.
         #
         # PER SET, NIET SAMEN (ZW/O-percentages, overgenomen van de oude
         # productietegel): één percentage over beide omvormers haalt nooit
@@ -170,7 +175,6 @@ cards:
         - type: custom:button-card
           entity: sensor.huis_verbruik
           triggers_update:
-            - sensor.huis_verbruik_gemiddeld
             - sensor.zon_vermogen_nu
             - sensor.accu_vermogen
             - sensor.accu_lading
@@ -185,7 +189,6 @@ cards:
             - sensor.markedroid_exportbegrenzer
             - binary_sensor.markedroid_verbinding
             - sensor.veelgebruikers
-            - sensor.veelgebruikers_gemiddeld
           show_icon: false
           show_name: false
           show_state: false
@@ -209,20 +212,34 @@ cards:
                 // ---------- waarden, alles in W ----------
                 var num = function(id){ var s = states[id];
                   return (s && !isNaN(Number(s.state))) ? Number(s.state) : null; };
-                // zon: sensor staat in W tenzij hij expliciet kW zegt
-                var zonS = states['sensor.zon_vermogen_nu'];
-                var zonW = null;
-                if(zonS && !isNaN(Number(zonS.state))){
-                  var zu = zonS.attributes.unit_of_measurement || '';
-                  zonW = Number(zonS.state) * (zu === 'kW' ? 1000 : 1);
+                // ÉÉN MOMENTOPNAME (4 november 2026): zon, net, accu en huis
+                // komen uit de attributen van sensor.huis_verbruik, die ze in
+                // één render uit één Solarman-ronde haalt (Electricity.yaml).
+                // Dan zijn ze altijd van hetzelfde moment en geldt
+                // net + zon - accu = huis. Alleen als die attributen er niet
+                // zijn (oude config, sensor weg) de losse sensoren.
+                var hv = states['sensor.huis_verbruik'];
+                var hva = (hv && hv.attributes) || {};
+                var getal = function(v){ return (v === null || v === undefined || v === '' || isNaN(Number(v))) ? null : Number(v); };
+                var snap = hv && !isNaN(Number(hv.state)) && getal(hva.huis_w) !== null;
+                var zonW = null, nettoW = null, accuW = null, huisW = null;
+                if(snap){
+                  zonW = getal(hva.zon_w); accuW = getal(hva.accu_w);
+                  nettoW = getal(hva.net_w); huisW = Math.max(0, getal(hva.huis_w));
+                } else {
+                  var zonS = states['sensor.zon_vermogen_nu'];
+                  if(zonS && !isNaN(Number(zonS.state))){
+                    var zu = zonS.attributes.unit_of_measurement || '';
+                    zonW = Number(zonS.state) * (zu === 'kW' ? 1000 : 1);
+                  }
+                  var netto = num('sensor.live_energieverbruik_totaal');
+                  nettoW = netto === null ? null : netto * 1000;
+                  accuW = num('sensor.accu_vermogen');
+                  var huisKw = num('sensor.huis_verbruik');
+                  huisW = huisKw === null ? null : Math.max(0, huisKw * 1000);
                 }
-                // netto (kW): negatief = teruglevering; ruis rond nul plat slaan
-                var netto = num('sensor.live_energieverbruik_totaal');
-                var nettoW = netto === null ? null : (Math.abs(netto) < 0.005 ? 0 : netto * 1000);
-                var accuW = num('sensor.accu_vermogen');
-                var huisKw = num('sensor.huis_verbruik_gemiddeld');
-                if(huisKw === null) huisKw = num('sensor.huis_verbruik');
-                var huisW = huisKw === null ? null : Math.max(0, huisKw * 1000);
+                // ruis rond nul plat slaan (onder 5 W is "in balans")
+                if(nettoW !== null && Math.abs(nettoW) < 5) nettoW = 0;
                 var soc = num('sensor.accu_lading');
                 // Het woord komt uit de sensor en wordt hier alleen vertaald
                 // naar de werkwoordsvorm die op deze kaart staat.
@@ -320,8 +337,9 @@ cards:
                 if(nettoW !== null && nettoW < 0) naar.push(netDeel);
 
                 // ---------- in huis ----------
-                var vg = states['sensor.veelgebruikers_gemiddeld'];
-                if(!vg || isNaN(Number(vg.state))) vg = states['sensor.veelgebruikers'];
+                // Ook de stekkers als momentopname (4-11-2026): het huis is
+                // dat nu ook, dus de ruwe sensor en niet meer het gemiddelde.
+                var vg = states['sensor.veelgebruikers'];
                 var top = (vg && vg.attributes && vg.attributes.top) || [];
                 var stekW = (vg && !isNaN(Number(vg.state))) ? Number(vg.state) : null;
                 var huisRij = [];

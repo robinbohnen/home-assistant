@@ -456,13 +456,22 @@ cards:
                     var u = e.attributes.unit_of_measurement || '';
                     return (alsW && u === 'W') ? v / 1000 : v;
                   };
-                  var netto = lees('sensor.live_energieverbruik_totaal');
+                  // ÉÉN MOMENTOPNAME (4-11-2026): net, zon en accu uit de
+                  // attributen van sensor.huis_verbruik, uit één Solarman-ronde
+                  // (Electricity.yaml), zodat ze altijd van hetzelfde moment
+                  // zijn. Zonder die attributen de losse sensoren.
+                  var hv = states['sensor.huis_verbruik'];
+                  var hva = (hv && hv.attributes) || {};
+                  var getal = function(v){ return (v === null || v === undefined || v === '' || isNaN(Number(v))) ? null : Number(v); };
+                  var snap = hv && !isNaN(Number(hv.state)) && getal(hva.huis_w) !== null;
+                  var netto = snap ? getal(hva.net_w) / 1000 : lees('sensor.live_energieverbruik_totaal');
                   if(netto !== null && Math.abs(netto) < 0.005) netto = 0;
-                  var prod = lees('sensor.zon_vermogen_nu', true);
+                  var prod = snap ? getal(hva.zon_w) / 1000 : lees('sensor.zon_vermogen_nu', true);
                   var soc = states['sensor.accu_lading'];
                   var bp = states['sensor.accu_vermogen'];
                   var socv = soc && !isNaN(Number(soc.state)) ? Math.round(Number(soc.state)) : null;
-                  var bpv = bp && !isNaN(Number(bp.state)) ? Math.round(Number(bp.state)) : null;
+                  var bpv = snap ? Math.round(getal(hva.accu_w))
+                          : (bp && !isNaN(Number(bp.state)) ? Math.round(Number(bp.state)) : null);
                   // HUIS, NIET DE METERSTAND
                   // Hier stond `sensor.electricity_meter_energieverbruik` (DSMR,
                   // weg sinds 04-09-2026), en dat is de netafname - die staat
@@ -470,8 +479,9 @@ cards:
                   // Twee tegels naast elkaar met hetzelfde getal en een ander
                   // label, en bij zon allebei te laag. Zie dezelfde som en
                   // toelichting bij `verbruik` in overzicht/kolom_midden.yaml.
-                  var verbr = (netto === null || prod === null) ? null
-                            : Math.max(0, netto + prod - (bpv === null ? 0 : bpv / 1000));
+                  var verbr = snap ? Math.max(0, getal(hva.huis_w)) / 1000
+                            : ((netto === null || prod === null) ? null
+                               : Math.max(0, netto + prod - (bpv === null ? 0 : bpv / 1000)));
                   // De standby-grens stond hier als eigen getal (15 W, de
                   // ruststroom van de Marstek) en op het overzicht nog een
                   // keer. Twee kopieën van dezelfde drempel lopen uit elkaar
@@ -538,17 +548,22 @@ cards:
                   // als de legenda "in huis" op het Overzicht (overzicht/
                   // kolom_midden.yaml), zonder de balk. Hoogstens vijf stekkers
                   // die minstens 1,5% van het huis zijn, dan "andere stekkers"
-                  // en "niet gemeten". Ook hier de gemiddelde sensoren: de ruwe
-                  // koffiemachine pulseert en telde op tegen een gemiddeld huis
-                  // niet op. Twee regels hoog afgekapt, zodat een lange lijst
-                  // de HOOGTEBEGROTING niet opblaast.
+                  // en "niet gemeten". Sinds 4-11-2026 net als het huis een
+                  // momentopname (ruwe stekkers, huis uit de attributen van
+                  // sensor.huis_verbruik, allebei in W). Tot die dag stond hier
+                  // het gemiddelde huis in kW tegenover stekkers in W, waardoor
+                  // "niet gemeten" altijd 0 was. Twee regels hoog afgekapt,
+                  // zodat een lange lijst de HOOGTEBEGROTING niet opblaast.
                   var wNum = function(id){ var e = states[id]; return (e && !isNaN(Number(e.state))) ? Number(e.state) : null; };
                   var wTekst = function(w){ return w >= 1000 ? (w / 1000).toFixed(1).replace('.', ',') + ' kW' : Math.round(w) + ' W'; };
-                  var vg = states['sensor.veelgebruikers_gemiddeld'];
-                  if(!vg || isNaN(Number(vg.state))) vg = states['sensor.veelgebruikers'];
+                  // Momentopname, net als het huis (4-11-2026): de ruwe stekkers.
+                  var vg = states['sensor.veelgebruikers'];
                   var stekW = (vg && !isNaN(Number(vg.state))) ? Number(vg.state) : null;
-                  var huisW = wNum('sensor.huis_verbruik_gemiddeld');
-                  if(huisW === null) huisW = wNum('sensor.huis_verbruik');
+                  var hvS = states['sensor.huis_verbruik'];
+                  var hvW = hvS && hvS.attributes ? hvS.attributes.huis_w : null;
+                  var huisW = (hvW !== null && hvW !== undefined && hvW !== '' && !isNaN(Number(hvW)))
+                            ? Math.max(0, Number(hvW)) : null;
+                  if(huisW === null){ var hk = wNum('sensor.huis_verbruik'); huisW = hk === null ? null : hk * 1000; }
                   var stekkers = '';
                   if(stekW !== null){
                     var schaal = Math.max(huisW === null ? 0 : huisW, stekW);

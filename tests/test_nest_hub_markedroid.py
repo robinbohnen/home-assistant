@@ -183,8 +183,8 @@ def vg(totaal, top):
 
 def test_veelgebruikers_onder_markedroid():
     html = render(sensor__markedroid_regie=regie("vasthouden"),
-                  sensor__veelgebruikers_gemiddeld=vg(600, [("Koffiezetapparaat", 284), ("Serverrack", 46)]),
-                  sensor__huis_verbruik_gemiddeld=st(700))
+                  sensor__veelgebruikers=vg(600, [("Koffiezetapparaat", 284), ("Serverrack", 46)]),
+                  sensor__huis_verbruik=st(0.7, huis_w=700, net_w=700, zon_w=0, accu_w=0))
     assert html.index(">vasthouden</span>") < html.index("Koffiezetapparaat")
     assert "Koffiezetapparaat</span> <span" in html and ">284 W</span>" in html
     assert ">andere stekkers</span>" in html and ">270 W</span>" in html
@@ -195,24 +195,32 @@ def test_veelgebruikers_onder_markedroid():
 
 def test_veelgebruikers_drempel_en_maximaal_vijf():
     top = [("Stekker %d" % i, 100 - i) for i in range(7)] + [("Sluimer", 3)]
-    html = render(sensor__veelgebruikers_gemiddeld=vg(700, top), sensor__huis_verbruik_gemiddeld=st(700))
+    html = render(sensor__veelgebruikers=vg(700, top), sensor__huis_verbruik=st(0.7, huis_w=700, net_w=700, zon_w=0, accu_w=0))
     assert "Stekker 4" in html and "Stekker 5" not in html
     assert "Sluimer" not in html
     # Stekkers lopen voor op het huis: geen negatief "niet gemeten".
     assert "niet gemeten" not in html
 
 
-def test_veelgebruikers_kw_en_terugval_op_ruwe_sensor():
-    html = render(sensor__veelgebruikers_gemiddeld=st("unavailable"),
-                  sensor__veelgebruikers=vg(1400, [("Waterkoker", 1360)]),
-                  sensor__huis_verbruik=st(1500))
+def test_veelgebruikers_kw_en_terugval_zonder_momentopname():
+    # Zonder attributen op huis_verbruik: de state, en die staat in kW. Tot
+    # 4-11-2026 werd die kW hier als W gelezen, waardoor "niet gemeten" op
+    # het echte paneel altijd 0 was.
+    html = render(sensor__veelgebruikers=vg(1400, [("Waterkoker", 1360)]),
+                  sensor__huis_verbruik=st(1.5, unit_of_measurement="kW"))
     assert ">1,4 kW</span>" in html
-    assert ">100 W</span>" in html  # niet gemeten via de terugval huis_verbruik
+    assert ">100 W</span>" in html  # niet gemeten: 1500 - 1400
+
+
+def test_huis_uit_de_momentopname():
+    html = render(sensor__veelgebruikers=vg(400, [("Serverrack", 99)]),
+                  sensor__huis_verbruik=st(1.654, huis_w=1654, net_w=814, zon_w=840, accu_w=0))
+    assert ">niet gemeten</span>" in html and ">1,3 kW</span>" in html  # 1654 - 400
 
 
 def test_veelgebruikers_ook_zonder_prijzen():
     html = render(sensor__slimhuys_zonneplan_prijzen_vandaag=st("unavailable"),
-                  sensor__veelgebruikers_gemiddeld=vg(300, [("Serverrack", 46)]))
+                  sensor__veelgebruikers=vg(300, [("Serverrack", 46)]))
     assert "geen prijsvoorspelling" in html and "Serverrack" in html
 
 
