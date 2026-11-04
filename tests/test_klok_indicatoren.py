@@ -133,6 +133,41 @@ def test_balken_blijven_vrij_van_het_stipje():
     assert _rechterrand(accu) == 29
 
 
+def _balken(payload):
+    """{rij: lengte} van de groene balken onderin het zonframe."""
+    frame = json.loads(payload)
+    return {d["df"][1]: d["df"][2] for d in frame["draw"]
+            if "df" in d and d["df"][4] == "#32D74B"}
+
+
+def test_zon_per_string_twee_balken():
+    # Sinds 4-11-2026: oost (zolder) op rij 6, zuidwest (overkapping) op rij 7,
+    # elk vol bij het piekvermogen van zijn eigen string.
+    STATES.clear()
+    STATES.update({
+        "sensor.zon_vermogen_nu": "6757",
+        "sensor.zon_vermogen_nu.piekvermogen": 9460,
+        "sensor.zon_vermogen_o": "4054",
+        "sensor.zon_vermogen_o.piekvermogen": 4054,
+        "sensor.zon_vermogen_zw": "2703",
+        "sensor.zon_vermogen_zw.piekvermogen": 5406,
+    })
+    zon = env.from_string(KLOK_VARS["zon_payload"]).render().strip()
+    assert _balken(zon) == {6: 30, 7: 15}
+    frame = json.loads(zon)
+    assert all(d["df"][3] == 1 for d in frame["draw"] if "df" in d and d["df"][4] == "#32D74B")
+
+
+def test_zon_zonder_strings_valt_terug_op_totaal():
+    STATES.clear()
+    STATES.update({
+        "sensor.zon_vermogen_nu": "4730",
+        "sensor.zon_vermogen_nu.piekvermogen": 9460,
+    })
+    zon = env.from_string(KLOK_VARS["zon_payload"]).render().strip()
+    assert _balken(zon) == {6: 15}
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_")]
     for naam, f in tests:

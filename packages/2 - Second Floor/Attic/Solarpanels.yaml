@@ -1,136 +1,189 @@
 solar_panels_package:
   ######################################################################
-  ## DE ZON KOMT SINDS 14 OKTOBER 2026 UIT DE DEYE
+  ## DE ZON KOMT UIT DE DEYE, SINDS 4 NOVEMBER 2026 VIA SOLARMAN
   ##
-  ## Tot die dag hingen de panelen aan twee GoodWe-omvormers: zuidwest op
-  ## de overkapping (16 panelen, GW5000N-EH, 5 kW) en oost op de zolder
-  ## (12 panelen, GW3000D-NS, 3 kW). Die zijn eruit; alle panelen hangen nu
-  ## aan de Deye, en die komt via MarkeDroid binnen (Battery.yaml):
-  ## `sensor.markedroid_zon_vermogen` (W, elke ~10 s) en
-  ## `sensor.markedroid_zon_energie` (Wh, opgeteld uit `TotWhInc`).
+  ## Tot 14 oktober 2026 hingen de panelen aan twee GoodWe-omvormers:
+  ## zuidwest op de overkapping (16 panelen, GW5000N-EH, 5 kW) en oost op
+  ## de zolder (12 panelen, GW3000D-NS, 3 kW). Sindsdien hangen ze allemaal
+  ## aan de Deye. Van 14 oktober tot 4 november kwam de zon via MarkeDroid
+  ## (alleen het totaal, om de 10 s); nu via de Solarman-integratie, om de
+  ## ~5 s, en weer PER STRING:
   ##
-  ## Weg zijn daarmee: de sensoren per set (`zon_vermogen_zw/_o`,
-  ## `zon_vandaag_zw/_o`), het vasthouden van een haperende omvormer tot tien
-  ## minuten, de terugval van de lokale GoodWe-koppeling op de SEMS-cloud en
-  ## de UI-helper `attic_solar_total_today`. Dat was allemaal reparatiewerk
-  ## voor twee omvormers die elk los wegvielen (elf keer op 27-08-2026). De
-  ## MarkeDroid-feed is één bron; valt die een minuut stil, dan maakt
-  ## `expire_after: 60` hem unavailable en wordt de zon hier eerlijk `—`.
+  ##   sensor.inverter_pv1_power  -> sensor.zon_vermogen_zw  (overkapping)
+  ##   sensor.inverter_pv2_power  -> sensor.zon_vermogen_o   (zolder)
+  ##   sensor.zon_vermogen_nu     =  ZW + O
+  ##   sensor.inverter_total_production -> sensor.zon_energie_totaal (kWh)
   ##
-  ## MarkeDroid geeft alleen het totaal, niet per string. De ZW/O-percentages
-  ## op het Overzicht, de klok en de spraak-intent werken daarom nu met één
-  ## totaal en het piekvermogen hieronder.
+  ## WELKE STRING IS WELKE (afgeleid op 4 november, NIET op het dak
+  ## nagekeken): PV1 draaide ~288 V, PV2 ~189 V. Dat past bij 2x8 panelen
+  ## op PV1 (16 = overkapping) en 2x6 op PV2 (12 = zolder). En PV2 doet het
+  ## naar verhouding het best in de ochtend (PV1/PV2 1,75 om 09:00, 2,4 om
+  ## 13:30), zoals een oostdak hoort. Blijkt het andersom: alleen de twee
+  ## `bron`-regels hieronder omwisselen.
   ##
-  ## Alles in huis leest de zon via deze twee sensoren en nooit via
-  ## `sensor.markedroid_*` zelf - zelfde patroon als de accu en de P1.
+  ## De oude entity-id's `zon_vermogen_zw`/`_o` (GoodWe-tijd, tot 14-10)
+  ## komen hiermee terug, met dezelfde unique_id's: de historie van toen
+  ## sluit aan.
+  ##
+  ## Alles in huis leest de zon via deze sensoren en nooit via
+  ## `sensor.inverter_*` zelf - zelfde patroon als de accu en de P1.
   ######################################################################
   utility_meter:
-    zon_deye_vandaag:
-      name: Zon Deye Vandaag
-      unique_id: zon_deye_vandaag
-      source: sensor.markedroid_zon_energie
+    # NIEUWE NAAM (4 november). De oude `zon_deye_vandaag` telde in Wh op de
+    # MarkeDroid-teller; een utility_meter die van bron wisselt neemt zijn
+    # oude stand mee en telt het verschil tussen de twee tellers als opwek.
+    # Waarom niet `inverter_today_production`: die zet de Deye om middernacht
+    # van ZIJN klok op nul, deze om middernacht van HA.
+    zon_vandaag:
+      name: Zon Vandaag
+      unique_id: zon_vandaag
+      source: sensor.zon_energie_totaal
       cycle: daily
 
   template:
     ######################################################################
     ## EEN 0 W-SAMPLE MIDDEN OP DE DAG IS EEN LEESFOUT, GEEN WOLK
     ##
-    ## Sinds de panelen aan de Deye hangen stuurt MarkeDroid in `solar.W`
-    ## geregeld een 0 terwijl de omvormer gewoon doorlevert: 12% van de
-    ## productie-samples op 15-10, 20% op 16-10, 12% op 17-10 (gemeten uit
-    ## de historie; vóór 14-10 kwam het niet voor). Meestal één bericht van
-    ## 10 s, soms twee of drie achter elkaar. Dat het een leesfout is blijkt
-    ## uit de andere drie stromen op hetzelfde moment: accu laadt 1,6 kW,
-    ## last 0,5 kW, net 0 W - die 2,1 kW moet ergens vandaan komen. `load.W`
-    ## valt op die momenten vaak mee naar 0; `battery` en `meter` niet.
+    ## Gemeten op 4 november: 280 van de ~2.500 zon-samples tussen 08:30 en
+    ## 13:40 waren precies 0, telkens één uitleesronde, en in die ronde
+    ## staan PV1, PV2, de last en de backup-last vaak óók op 0 terwijl de
+    ## accu gewoon 2,8 kW levert. Dezelfde fout zag MarkeDroid sinds 14-10
+    ## (12-20% van de samples) - hij zit dus in de omvormer of de logger.
     ##
-    ## Zonder filter zakte `huis_verbruik` (net + zon - accu) bij elke
-    ## leesfout naar 0 kW (48x in twee uur) en trok dat het 120 s-gemiddelde
-    ## op het Overzicht een paar procent omlaag. SlimHuys negeert 0 W-samples
-    ## al in zijn mediaan; HA liet ze door.
+    ## Zonder filter zakt `huis_verbruik` (net + zon - accu) bij elke
+    ## leesfout honderden watts, en springen de klok en het Overzicht mee.
     ##
-    ## Daarom een trigger-sensor op het MQTT-bericht zelf: komt er een 0
-    ## binnen terwijl de vorige stand > 300 W was EN de Wh-teller in
-    ## hetzelfde bericht zegt dat er wél geproduceerd is (`TotWhInc`
-    ## omgerekend > 100 W), dan blijft de vorige stand staan. Valt de zon
-    ## echt weg, dan is `TotWhInc` ook ~0 en gaat de sensor gewoon naar 0.
-    ## De trigger vuurt op ELK bericht, ook als de waarde gelijk blijft, zodat
-    ## een tweede 0 op rij ook wordt gevangen.
-    ##
-    ## NIET gerepareerd: `sensor.markedroid_zon_energie`. MarkeDroid rekent
-    ## `TotWhInc` kennelijk uit zijn eigen (foute) samples, want per kwartier
-    ## loopt die teller gelijk met het gemiddelde INCLUSIEF de nullen en
-    ## 12-17% onder het gemiddelde zonder. De dagopbrengst (hier én bij
-    ## SlimHuys, die dezelfde teller krijgt) is dus vermoedelijk ~10% te
-    ## laag. Dat is een melding voor ModuSun, niet iets om in HA bij te
-    ## verzinnen.
-    ##
-    ## SINDS 26-10-2026 ~23:20 OOK ONZIN IN DE HONDERDDUIZENDEN
-    ## Daarna kwamen er ~60 per etmaal waarden als 263.457 W, 193.740 W of
-    ## 417.801 W binnen, ook midden in de nacht, af en toe eentje rond de
-    ## 5 kW om 23:00 en een enkele negatieve (-137 W). Altijd één bericht.
-    ## Ze liepen door naar `huis_verbruik` (418 kW op 27-10) en de klokken.
-    ## Twee regels vangen dat af:
+    ## REGELS, per string:
     ## - Is de zon dieper onder dan 3 graden, dan is het 0. -3 en niet 0,
-    ##   want vlak na zonsondergang levert het strooilicht nog wat; een
-    ##   glitch in die schemer gaat er dus nog door.
-    ## - Boven het plafond (1,3 x `piekvermogen`, ~12,3 kW) of onder 0 blijft
-    ##   de vorige stand staan. Een glitch onder het plafond overdag
-    ##   herkennen we niet; daar is geen tweede bron voor.
-    ## De Wh-teller (Battery.yaml) gebruikt dezelfde grens.
+    ##   want vlak na zonsondergang levert het strooilicht nog wat.
+    ## - Boven 1,3 x het piekvermogen van de string, of onder 0: de vorige
+    ##   stand. (MarkeDroid gaf sinds 26-10 waarden als 263.457 W; Solarman
+    ##   deed dat op 4 november niet, maar de regel kost niets.)
+    ## - Een 0 terwijl de vorige stand > 150 W was: de vorige stand, zolang
+    ##   die 0 jonger is dan 90 seconden. Blijft hij langer staan, dan is
+    ##   het echt (omvormer uit, sneeuw): bij de volgende minuuttik - `now()`
+    ##   laat het template elke minuut opnieuw rekenen - gaat hij naar 0.
+    ##   Tot 4 november was de getuige `TotWhInc` uit hetzelfde
+    ##   MarkeDroid-bericht; Solarman heeft zo'n veld niet, dus nu de tijd.
     ######################################################################
-    - triggers:
-        - trigger: mqtt
-          topic: "public/realtimedata/solar"
-        # Zonder deze twee blijft de sensor na een stille broker staan op zijn
-        # laatste waarde: de availability van een trigger-sensor wordt alleen
-        # bij een trigger opnieuw bekeken. De MQTT-sensor gaat na 60 s stilte
-        # op unavailable (expire_after), en dat moment moet hier doorkomen.
-        - trigger: state
-          entity_id: sensor.markedroid_zon_vermogen
-          to: unavailable
-        - trigger: state
-          entity_id: sensor.markedroid_zon_vermogen
-          from: unavailable
-      sensor:
+    - sensor:
+        - name: "Zon Vermogen ZW"
+          unique_id: zon_vermogen_zw
+          default_entity_id: sensor.zon_vermogen_zw
+          unit_of_measurement: "W"
+          device_class: power
+          state_class: measurement
+          icon: mdi:solar-panel
+          availability: "{{ has_value('sensor.inverter_pv1_power') }}"
+          state: >-
+            {% set bron = 'sensor.inverter_pv1_power' %}
+            {% set plafond = this.attributes.piekvermogen | default(5406) | float(5406) * 1.3 %}
+            {% set w = states(bron) | float(0) %}
+            {% set nacht = state_attr('sun.sun', 'elevation') | float(90) < -3 %}
+            {% set vorige = this.state | float(0) if is_number(this.state) else 0 %}
+            {% set vorige = vorige if 0 <= vorige <= plafond else 0 %}
+            {% set sinds = (now() - states[bron].last_changed).total_seconds() if states[bron] is not none else 999 %}
+            {% if nacht %}0
+            {% elif w < 0 or w > plafond %}{{ vorige | round(0) }}
+            {% elif w == 0 and vorige > 150 and sinds < 90 %}{{ vorige | round(0) }}
+            {% else %}{{ w | round(0) }}{% endif %}
+          attributes:
+            # 16 van de 28 panelen van 9,46 kWp samen. De som van de twee
+            # strings moet `piekvermogen` van zon_vermogen_nu blijven.
+            piekvermogen: 5406
+            richting: zuidwest
+            plek: overkapping
+
+        - name: "Zon Vermogen O"
+          unique_id: zon_vermogen_o
+          default_entity_id: sensor.zon_vermogen_o
+          unit_of_measurement: "W"
+          device_class: power
+          state_class: measurement
+          icon: mdi:solar-panel
+          availability: "{{ has_value('sensor.inverter_pv2_power') }}"
+          state: >-
+            {% set bron = 'sensor.inverter_pv2_power' %}
+            {% set plafond = this.attributes.piekvermogen | default(4054) | float(4054) * 1.3 %}
+            {% set w = states(bron) | float(0) %}
+            {% set nacht = state_attr('sun.sun', 'elevation') | float(90) < -3 %}
+            {% set vorige = this.state | float(0) if is_number(this.state) else 0 %}
+            {% set vorige = vorige if 0 <= vorige <= plafond else 0 %}
+            {% set sinds = (now() - states[bron].last_changed).total_seconds() if states[bron] is not none else 999 %}
+            {% if nacht %}0
+            {% elif w < 0 or w > plafond %}{{ vorige | round(0) }}
+            {% elif w == 0 and vorige > 150 and sinds < 90 %}{{ vorige | round(0) }}
+            {% else %}{{ w | round(0) }}{% endif %}
+          attributes:
+            # 12 van de 28 panelen.
+            piekvermogen: 4054
+            richting: oost
+            plek: zolder
+
         - name: "Zon Vermogen Nu"
           unique_id: zon_vermogen_nu
           default_entity_id: sensor.zon_vermogen_nu
           unit_of_measurement: "W"
           device_class: power
           state_class: measurement
-          availability: "{{ has_value('sensor.markedroid_zon_vermogen') }}"
+          # Een string die even weg is maakt het totaal niet onbekend: dan
+          # telt alleen de andere. Allebei weg = Solarman weg = eerlijk `—`.
+          availability: >-
+            {{ has_value('sensor.zon_vermogen_zw') or has_value('sensor.zon_vermogen_o') }}
           state: >-
-            {% set mqtt = trigger.platform == 'mqtt' and trigger.payload_json is defined %}
-            {% set w = (trigger.payload_json.W | default(0) if mqtt
-                        else states('sensor.markedroid_zon_vermogen')) | float(0) %}
-            {% set inc = (trigger.payload_json.TotWhInc | default(0) if mqtt else 0) | float(0) %}
-            {% set sl = (trigger.payload_json.SinceLast | default(10) if mqtt else 10) | float(10) %}
-            {% set teller_w = (inc / sl * 3600) if sl > 0 else 0 %}
-            {% set plafond = state_attr('sensor.zon_vermogen_nu', 'piekvermogen') | float(9460) * 1.3 %}
-            {# Geen sun.sun? Dan niet alles op 0 zetten: 90 graden. #}
-            {% set nacht = state_attr('sun.sun', 'elevation') | float(90) < -3 %}
-            {% set vorige = this.state | float(0) if is_number(this.state) else 0 %}
-            {% set vorige = vorige if 0 <= vorige <= plafond else 0 %}
-            {% if nacht %}
-              0
-            {% elif w < 0 or w > plafond %}
-              {{ vorige | round(1) }}
-            {% elif w == 0 and vorige > 300 and teller_w > 100 %}
-              {{ vorige | round(1) }}
-            {% else %}
-              {{ w | round(1) }}
-            {% endif %}
+            {{ (states('sensor.zon_vermogen_zw') | float(0) + states('sensor.zon_vermogen_o') | float(0)) | round(0) }}
           attributes:
             # Het piekvermogen van ALLE panelen samen, in W: de 100% voor de
             # klok, de spraak-intent en het Overzicht. Eén plek, zodat die
             # drie niet elk een eigen getal gaan verzinnen.
             #
             # 9,46 kWp: de 28 panelen samen (28-10-2026, zoals in SlimHuys).
-            # Tot die dag stond hier 8000, de AC-plafonds van de twee oude
-            # GoodWe's. Ook de leesfout-grens hierboven (1,3 x dit getal) en
-            # die van de Wh-teller in Battery.yaml rekenen hiermee.
+            # = 5406 (ZW) + 4054 (O), de attributen van de twee strings.
             piekvermogen: 9460
+            # De twee strings in W, voor kaarten die één entiteit lezen.
+            zw: "{{ states('sensor.zon_vermogen_zw') | float(none) }}"
+            o: "{{ states('sensor.zon_vermogen_o') | float(none) }}"
+
+        ######################################################################
+        ## DE TELLER - de eigen productieteller van de Deye
+        ##
+        ## Voor het Energie-dashboard en de SlimHuys-integratie
+        ## (`produced_kwh_total`). In kWh: SlimHuys rekent om op basis van
+        ## `unit_of_measurement` (Wh / 1000, kWh x 1, MWh x 1000), dus die
+        ## eenheid NOOIT weghalen.
+        ##
+        ## Twee regels tegen leesfouten: een teller die DAALT houdt de vorige
+        ## stand vast - `total_increasing` zou dat als meterwissel lezen en de
+        ## hele stand nog een keer optellen - en een STIJGING groter dan de
+        ## panelen in die tijd hadden kunnen leveren (1,3 x 9,46 kW, plus
+        ## 0,5 kWh marge) ook. Na `unknown`/`unavailable` gaat de eerste waarde
+        ## ongezien door; anders zet een lange uitval de teller voor altijd vast.
+        ##
+        ## OPGEVALLEN OP 4 NOVEMBER, NIET OPGELOST: deze teller liep tussen
+        ## 07:43 en 12:33 UTC 6,6 kWh op, terwijl de integraal van
+        ## `inverter_pv_power` over die tijd 5,1 kWh gaf (5,7 als je de
+        ## 0 W-leesfouten opvult). De accutellers kloppen wel met hun
+        ## vermogen (3,6 tegen 3,57 kWh). Wie gelijk heeft is niet uitgezocht;
+        ## naast de ModuSun-/Solarman-app leggen. MarkeDroids oude teller zat
+        ## er nog onder (~10% te laag, zie de geschiedenis in Battery.yaml).
+        ######################################################################
+        - name: "Zon energie totaal"
+          unique_id: zon_energie_totaal
+          default_entity_id: sensor.zon_energie_totaal
+          unit_of_measurement: "kWh"
+          device_class: energy
+          state_class: total_increasing
+          icon: mdi:solar-power
+          availability: "{{ has_value('sensor.inverter_total_production') }}"
+          state: >-
+            {% set n = states('sensor.inverter_total_production') | float(0) %}
+            {% if not is_number(this.state) %}{{ n }}
+            {% else %}
+              {% set oud = this.state | float %}
+              {% set piek = state_attr('sensor.zon_vermogen_nu', 'piekvermogen') | float(9460) / 1000 %}
+              {% set uren = (now() - this.last_changed).total_seconds() / 3600 %}
+              {{ oud if n < oud or n - oud > piek * 1.3 * uren + 0.5 else n }}
+            {% endif %}
 
         - name: "Zon Opgewekt Vandaag"
           unique_id: zon_opgewekt_vandaag
@@ -138,9 +191,8 @@ solar_panels_package:
           unit_of_measurement: "kWh"
           device_class: energy
           # Een dagteller die om middernacht naar 0 gaat. De utility_meter
-          # hierboven doet de dagwissel; `markedroid_zon_energie` telt alleen
-          # op (een negatief increment telt daar als 0), dus binnen een dag
-          # kan hij niet dalen.
+          # hierboven doet de dagwissel; `zon_energie_totaal` kan niet dalen,
+          # dus binnen een dag kan deze dat ook niet.
           state_class: total_increasing
-          availability: "{{ has_value('sensor.zon_deye_vandaag') }}"
-          state: "{{ (states('sensor.zon_deye_vandaag') | float(0) / 1000) | round(2) }}"
+          availability: "{{ has_value('sensor.zon_vandaag') }}"
+          state: "{{ states('sensor.zon_vandaag') | float(0) | round(2) }}"

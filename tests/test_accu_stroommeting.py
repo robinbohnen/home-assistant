@@ -9,8 +9,10 @@ Bewaakt wordt:
 1. aan bij `eigen_verbruik` + accu binnen ±100 W + afname van het net;
 2. uit bij elke andere regie, een accu die echt werkt, geen afname, of een
    afname die helemaal van de laadpaal komt;
-3. uit bij een (bijna) lege accu en bij een stille MarkeDroid;
-4. de tien minuten vertraging, de twaalf-uursrem en het bericht zelf.
+3. uit bij een (bijna) lege accu en bij een stille bron;
+4. de tien minuten vertraging, de twaalf-uursrem en het bericht zelf;
+5. sinds 4-11-2026 (accu uit Solarman via `sensor.accu_vermogen`): het
+   bericht noemt wat de CT van de Deye zelf op de aansluiting meet.
 """
 import os
 from datetime import datetime, timedelta
@@ -76,11 +78,12 @@ SENSOR = _zoek(ACCU, "unique_id", "accu_stroommeting_verdacht")
 AUTO = _zoek(ACCU, "id", "accu_stroommeting_melding")
 
 
-def wereld(regie="eigen_verbruik", accu="20", net="850", laadpaal="0", lading="60"):
+def wereld(regie="eigen_verbruik", accu="20", net="850", laadpaal="0", lading="60", deye="unknown"):
     STATES.clear()
     STATES.update({
         "sensor.markedroid_regie": regie,
-        "sensor.markedroid_accu_vermogen": accu,
+        "sensor.accu_vermogen": accu,
+        "sensor.omvormer_net_vermogen": deye,
         "sensor.slimhuys_zonneplan_actief_vermogen": net,
         "sensor.charging_station_active_power": laadpaal,
         "sensor.accu_lading": lading,
@@ -178,6 +181,25 @@ def test_bericht_noemt_de_getallen():
     assert "(-12 W)" in bericht, bericht
     assert "854 W" in bericht, bericht
     assert data["title"] == "Stroommeting accu werkt niet goed"
+    assert "Deye zelf" not in bericht  # zonder Deye-meting geen halve zin
+
+
+def test_bericht_deye_ziet_het_niet():
+    wereld(accu="-12", net="853", deye="14")
+    bericht = env.from_string(AUTO["actions"][0]["data"]["message"]).render()
+    assert "De Deye zelf meet 14 W op de aansluiting: zijn CT ziet het verbruik dus niet." in bericht, bericht
+
+
+def test_bericht_deye_ziet_het_wel():
+    wereld(accu="-12", net="853", deye="840")
+    bericht = env.from_string(AUTO["actions"][0]["data"]["message"]).render()
+    assert "De Deye zelf meet 840 W op de aansluiting, dus hij ziet het wel; dan doet de regie niets." in bericht, bericht
+
+
+def test_getuigen_als_attribuut():
+    attrs = SENSOR["attributes"]
+    assert "omvormer_net_vermogen" in attrs["deye_net_w"]
+    assert "slimhuys_zonneplan_actief_vermogen" in attrs["p1_net_w"]
 
 
 if __name__ == "__main__":

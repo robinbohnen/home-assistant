@@ -244,7 +244,7 @@ klokken_package:
         - alias: Beide frames een keer uitrekenen
           variables:
             # Een frame op 32x8: links een zonnetje, rechts het totaal, en
-            # onderaan een balk van twee rijen voor het totaal.
+            # onderaan een balk per string panelen.
             #
             # HET ZONNETJE IS GEEN VERSIERING
             # Het is het enige dat zegt waar je naar kijkt. Zonder dat plaatje
@@ -252,20 +252,24 @@ klokken_package:
             # opwek, verbruik of teruglevering is - dat is uitgeprobeerd en het
             # leest niet. Zeven pixels breed en dat is hij waard.
             #
-            # EEN BALK VOOR HET TOTAAL (sinds 14 oktober 2026)
-            # Tot die dag stond hier een balk per set panelen, elk gedeeld door
-            # zijn eigen GoodWe-omvormer (zolder 3 kW, achtertuin 5 kW), zodat
-            # je het klippen tegen dat plafond geel zag worden. Alle panelen
-            # hangen nu aan de Deye; MarkeDroid geeft alleen het totaal, en een
-            # omvormer van 20 kW knipt niets meer af. Dus: één balk, vol bij
-            # het piekvermogen van alle panelen (attribuut `piekvermogen` van
-            # sensor.zon_vermogen_nu), twee rijen dik op de plek van de oude
-            # twee balken.
+            # WEER EEN BALK PER STRING (sinds 4 november 2026)
+            # Tot 14 oktober stond hier een balk per GoodWe-omvormer, daarna
+            # (MarkeDroid gaf alleen het totaal) één balk van twee rijen. Sinds
+            # de zon via Solarman binnenkomt is hij er weer per string:
+            # `sensor.zon_vermogen_o` (zolder, 12 panelen, oost) op rij 6 en
+            # `sensor.zon_vermogen_zw` (overkapping, 16 panelen, zuidwest) op
+            # rij 7 - de volgorde op de kavel van voor naar achter, dus de
+            # bovenste balk piekt 's ochtends en de onderste 's middags.
+            # Elke balk is vol bij het piekvermogen van ZIJN string (attribuut
+            # `piekvermogen`), zodat een heldere dag ook echt vol loopt; een
+            # balk op het totaal haalt dat nooit, want oost en zuidwest pieken
+            # op verschillende momenten. Geen geel meer bij "vol": de Deye
+            # (20 kW) knipt niets af, zoals de GoodWe's dat deden.
             zon_payload: >-
               {%- if has_value('sensor.zon_vermogen_nu')
                      and states('sensor.zon_vermogen_nu') | float(0) > 0 -%}
               {%- set tot = states('sensor.zon_vermogen_nu') | float(0) -%}
-              {%- set piek = [state_attr('sensor.zon_vermogen_nu', 'piekvermogen') | float(8000), 1] | max -%}
+              {%- set piek = [state_attr('sensor.zon_vermogen_nu', 'piekvermogen') | float(9460), 1] | max -%}
               {#- HELE WATTS, MAAR KW ZODRA HET ER VIJF CIJFERS WORDEN
                   Met alle panelen aan de Deye (20 kW) kan het totaal over de
                   9999 en dan loopt het label het zonnetje in. Boven de 10 kW
@@ -293,6 +297,15 @@ klokken_package:
               {#- 30 PX EN NIET 32: indicator 3 (regie) ligt op (31,6), (30,7)
                   en (31,7). Een balk tot de rand verdween daar onder het
                   stipje; nu is vol ook echt vol te zien. -#}
+              {%- set p_o = states('sensor.zon_vermogen_o') | float(0) -%}
+              {%- set p_zw = states('sensor.zon_vermogen_zw') | float(0) -%}
+              {%- set c_o = [state_attr('sensor.zon_vermogen_o', 'piekvermogen') | float(4054), 1] | max -%}
+              {%- set c_zw = [state_attr('sensor.zon_vermogen_zw', 'piekvermogen') | float(5406), 1] | max -%}
+              {%- set l_o = [[(p_o * 30 / c_o) | round(0) | int, 30] | min, 0] | max -%}
+              {%- set l_zw = [[(p_zw * 30 / c_zw) | round(0) | int, 30] | min, 0] | max -%}
+              {#- Geen string-sensoren (bron weg)? Dan het totaal over twee
+                  rijen, zoals tussen 14 oktober en 4 november. -#}
+              {%- set per_string = has_value('sensor.zon_vermogen_o') or has_value('sensor.zon_vermogen_zw') -%}
               {%- set l_zon = [[(tot * 30 / piek) | round(0) | int, 30] | min, 0] | max -%}
               {"draw": [
               {"df": [0, 6, 30, 2, "#222222"]},
@@ -302,7 +315,10 @@ klokken_package:
               {"df": [0, 2, 1, 1, "#FFD60A"]},
               {"df": [6, 2, 1, 1, "#FFD60A"]},
               {"dt": [{{ tx }}, 0, "{{ label }}", "#FFFFFF"]}
-              {%- if l_zon > 0 %}, {"df": [0, 6, {{ l_zon }}, 2, "#32D74B"]}{% endif %}
+              {%- if per_string -%}
+              {%- if l_o > 0 %}, {"df": [0, 6, {{ l_o }}, 1, "#32D74B"]}{% endif %}
+              {%- if l_zw > 0 %}, {"df": [0, 7, {{ l_zw }}, 1, "#32D74B"]}{% endif %}
+              {%- elif l_zon > 0 %}, {"df": [0, 6, {{ l_zon }}, 2, "#32D74B"]}{% endif %}
               ], "duration": 8, "lifetime": 300, "lifetimeMode": 0}
               {%- endif -%}
             # Een frame op 32x8: batterijsymbool met vulniveau (links, kleur =
@@ -543,8 +559,9 @@ klokken_package:
         verder niets, dus er zit hier bewust geen aan/uit-check op de matrix
         voor: dan zou de app na vijf minuten (`lifetime: 300`) van het scherm
         vallen terwijl de klok gewoon aan is.
-      # Elke 10 s: zo vaak meldt MarkeDroid de accu, vaker verversen tekent
-      # alleen hetzelfde frame opnieuw. De keuken blijft op `/30` (Clock
+      # Elke 10 s. Solarman leest de Deye sinds 4-11-2026 om de ~5 s, maar
+      # elke MQTT-publicatie naar drie klokken kost verkeer en een sprong
+      # van 5 s zie je op een matrix van 32 px niet. De keuken blijft op `/30` (Clock
       # Display.yaml) - die rouleert apps en toont dit frame maar even.
       mode: single
       triggers:

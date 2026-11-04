@@ -134,6 +134,29 @@ def test_zonder_markedroid_sensoren_geen_fout():
     assert "ontlaadt" in html  # de rest van de kaart blijft werken
 
 
+def test_zon_per_string():
+    # Sinds 4-11-2026 weer per string (Solarman): elk gedeeld door zijn eigen
+    # piekvermogen. 2703 / 5406 = 50%, 4054 / 4054 = 100% -> geel.
+    html = render(sensor__zon_vermogen_nu=st(6757, unit_of_measurement="W"),
+                  sensor__zon_vermogen_zw=st(2703, piekvermogen=5406),
+                  sensor__zon_vermogen_o=st(4054, piekvermogen=4054))
+    assert "· ZW 50%" in html
+    assert "var(--ov-clip)\">· O 100%" in html
+
+
+def test_zon_zonder_strings_geen_percentages():
+    html = render()
+    assert "ZW" not in html and "· O " not in html
+    assert "1220" in html
+
+
+def test_accu_dagtellers_in_kwh():
+    # De utility_meters staan sinds 4-11-2026 in kWh, niet meer in Wh.
+    html = render(sensor__accu_vandaag_geladen=st(3.5),
+                  sensor__accu_vandaag_ontladen=st(8.1))
+    assert "+3,5 / −8,1 kWh" in html
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_")]
     for naam, f in tests:

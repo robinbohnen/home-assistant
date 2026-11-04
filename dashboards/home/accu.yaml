@@ -13,14 +13,14 @@
 # "heeft hij het goed gedaan", en dat lees je af aan de grafiek onderaan: de
 # lading van vandaag over de kwartierprijzen heen.
 #
-# ALLES KOMT VAN MARKEDROID, NIETS MEER VAN SOLARMAN (22 september 2026).
-# Lading, vermogen, status en inhoud uit `sensor.accu_*` (Battery.yaml), de
-# dagtellers uit `sensor.accu_geladen_vandaag` / `_ontladen_vandaag`, en de
-# rest uit `sensor.markedroid_*`. Tot die dag las deze pagina een dozijn
-# `sensor.deye_*`-sensoren via de Solarman-logger; die botste met MarkeDroid
-# op dezelfde lijn (zie de kop van Battery.yaml). Wat MarkeDroid niet stuurt -
-# meldingen en storingscodes van de omvormer, zijn eigen temperatuur, het
-# omzettingsverlies - staat hier daarom niet meer; dat is de ModuSun-app.
+# DE METINGEN KOMEN VAN SOLARMAN, DE REGIE VAN MARKEDROID (4 november 2026).
+# Lading, vermogen, status, inhoud, temperatuur en de dagtellers
+# (`sensor.accu_vandaag_geladen` / `_ontladen`, in kWh) uit `sensor.accu_*`
+# (Battery.yaml), de gezondheid uit de attributen van `sensor.accu_capaciteit`
+# en `binary_sensor.omvormer_storing`. Alleen wat MarkeDroid beslist (regie,
+# exportbegrenzer, flex) leest nog `sensor.markedroid_*`. Tussen 22 september
+# en 4 november kwam alles van MarkeDroid en ontbraken de meldingen van de
+# omvormer; zie de kop van Battery.yaml voor de hele geschiedenis.
 title: Accu
 path: accu
 icon: mdi:home-battery
@@ -274,12 +274,13 @@ cards:
         template: ov_title
         variables:
           title: VANDAAG
-      # Tellers die HA zelf bijhoudt uit MarkeDroids berichten (Wh sinds het
-      # vorige bericht, opgeteld), elke nacht op nul. Wat MarkeDroid publiceert
-      # terwijl HA plat ligt telt niet mee - een gat, geen verkeerd getal.
+      # Utility_meters op de eigen kWh-tellers van de Deye, elke nacht op nul
+      # (Battery.yaml). Die tellers lopen door terwijl HA plat ligt, dus na een
+      # herstart klopt de dag weer. 0,1 kWh nauwkeurig, ~elke tien minuten
+      # ververst.
       - type: custom:button-card
         template: ov_listrow
-        entity: sensor.accu_geladen_vandaag
+        entity: sensor.accu_vandaag_geladen
         variables:
           mdi: mdi:battery-arrow-up
           kleur: "var(--ov-ok)"
@@ -287,7 +288,7 @@ cards:
         custom_fields:
           s: |
             [[[
-              var v = entity && !isNaN(Number(entity.state)) ? Number(entity.state) / 1000 : null;
+              var v = entity && !isNaN(Number(entity.state)) ? Number(entity.state) : null;
               return v === null ? '—' : v.toFixed(1).replace('.',',') + ' kWh erin';
             ]]]
       # HET RENDEMENT IS EEN DAGCIJFER EN GEEN MOMENTOPNAME. Halverwege de
@@ -296,9 +297,9 @@ cards:
       # zuiver rendement: de lading aan het begin en eind van de dag verschilt.
       - type: custom:button-card
         template: ov_listrow
-        entity: sensor.accu_ontladen_vandaag
+        entity: sensor.accu_vandaag_ontladen
         triggers_update:
-          - sensor.accu_geladen_vandaag
+          - sensor.accu_vandaag_geladen
         variables:
           mdi: mdi:battery-arrow-down
           kleur: "var(--ov-warn)"
@@ -307,8 +308,8 @@ cards:
           s: |
             [[[
               var num = function(id){ var s = states[id];
-                return (s && !isNaN(Number(s.state))) ? Number(s.state) / 1000 : null; };
-              var uit = num('sensor.accu_ontladen_vandaag'), inn = num('sensor.accu_geladen_vandaag');
+                return (s && !isNaN(Number(s.state))) ? Number(s.state) : null; };
+              var uit = num('sensor.accu_vandaag_ontladen'), inn = num('sensor.accu_vandaag_geladen');
               if(uit === null) return '—';
               var t = uit.toFixed(1).replace('.',',') + ' kWh eruit';
               if(inn !== null && inn >= 2 && uit >= 2)
@@ -408,9 +409,8 @@ cards:
           legend_value: true
 
   # -------------------------------------------------------------- gezondheid
-  # Wat MarkeDroid over de accu meldt. De meldingen, storingscodes en
-  # temperatuur van de omvormer zelf stonden hier tot 22 september uit
-  # Solarman; MarkeDroid stuurt ze niet door (zie de kop van dit bestand).
+  # Temperatuur, gezondheid en meldingen van de omvormer en het BMS, via
+  # Solarman (sinds 4 november weer; daarvoor stuurde MarkeDroid ze niet).
   - type: vertical-stack
     cards:
       - type: custom:button-card
@@ -419,7 +419,7 @@ cards:
           title: STAAT VAN DE ACCU
       - type: custom:button-card
         template: ov_listrow
-        entity: sensor.markedroid_accu_temperatuur
+        entity: sensor.accu_temperatuur
         variables:
           mdi: mdi:thermometer
           title: Temperatuur
@@ -433,6 +433,46 @@ cards:
               // 5-40 °C is er niets om over na te denken.
               if(t < 5 || t > 40) return '<span style="color:var(--ov-warn)">' + txt + ' · buiten het comfortgebied van de cellen</span>';
               return txt;
+            ]]]
+      # Wat het BMS over de cellen zegt (attributen van sensor.accu_capaciteit,
+      # Battery.yaml). Een LFP-pakket is na 6.000 cycli op ~80%; onder 90%
+      # is het een gesprek met de installateur waard.
+      - type: custom:button-card
+        template: ov_listrow
+        entity: sensor.accu_capaciteit
+        variables:
+          mdi: mdi:battery-heart-variant
+          title: Gezondheid
+        custom_fields:
+          s: |
+            [[[
+              if(!entity) return '—';
+              var a = entity.attributes || {};
+              var soh = Number(a.gezondheid_procent), cyc = Number(a.cycli);
+              var delen = [];
+              if(a.gezondheid_procent !== null && a.gezondheid_procent !== undefined && !isNaN(soh)){
+                var t = soh.toFixed(1).replace('.',',') + '%';
+                delen.push(soh < 90 ? '<span style="color:var(--ov-warn)">' + t + '</span>' : t);
+              }
+              if(a.cycli !== null && a.cycli !== undefined && !isNaN(cyc))
+                delen.push(cyc.toFixed(0) + ' cycli');
+              return delen.length ? delen.join(' · ') : '—';
+            ]]]
+      # Melding of fout van de omvormer of het BMS (binary_sensor.omvormer_storing).
+      - type: custom:button-card
+        template: ov_listrow
+        entity: binary_sensor.omvormer_storing
+        variables:
+          mdi: mdi:alert-outline
+          title: Meldingen
+        custom_fields:
+          s: |
+            [[[
+              if(!entity || entity.state === 'unavailable' || entity.state === 'unknown')
+                return '<span style="color:var(--ov-ink-55)">omvormer niet bereikbaar</span>';
+              if(entity.state === 'on')
+                return '<span style="color:var(--ov-bad)">' + (entity.attributes.omschrijving || 'probleem') + '</span>';
+              return 'geen';
             ]]]
       # WAT MARKEDROID MET DE ACCU DOET
       # Eén regel: de stand die hij gekozen heeft, en alleen als het iets zegt

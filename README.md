@@ -85,19 +85,28 @@ evening wind-down or bedtime it has to go straight back off with a notification,
 except when nobody is home (then the switch-on came from the blueprint itself), and
 in daytime nothing happens. It also checks that both rooms pass a notification.
 
-`tests/test_zon_filter.py` runs the read-error filter on the solar feed (since
-26-10-2026 MarkeDroid sometimes sends values like 263,457 W, at night too) through
-real messages from the history. It covers both `sensor.zon_vermogen_nu` and the Wh
-counter `sensor.markedroid_zon_energie` that SlimHuys receives: zero below -3° sun
-elevation, the previous value above 1.3 × the peak power or below zero, and the
-filtered power instead of a corrupted increment.
+`tests/test_zon_filter.py` runs the read-error filters on the solar feed. Since
+4-11-2026 the sun comes from Solarman again, per string (`sensor.zon_vermogen_zw` from
+PV1, `sensor.zon_vermogen_o` from PV2, `sensor.zon_vermogen_nu` is their sum). It
+checks: zero below -3° sun elevation, the previous value above 1.3 × the string's peak
+power or below zero, a fresh 0 W after more than 150 W held as a read error for up to
+90 seconds (about 11% of the samples on 4-11 were such zeros), and that the kWh
+counters `sensor.zon_energie_totaal` and `sensor.accu_geladen_totaal` never go down and
+never swallow a jump the panels or the battery could not have made.
+
+`tests/test_omvormer_pagina.py` runs the NU and IN ORDE? cards of the Omvormer page
+in node: both strings on the solar tile, grid voltage, frequency and inverter
+temperature from the Deye, the inverter alarm line, which source went silent
+(Solarman and/or MarkeDroid), and that no MarkeDroid measurement is left on the page
+(only its control mode, export limiter, flex and connection).
 
 `tests/test_accu_stroommeting.py` checks `binary_sensor.accu_stroommeting_verdacht`
 and the notification behind it (since 29-10-2026): MarkeDroid is on `eigen_verbruik`,
 the house draws more than 200 W from the grid and the battery stays within ±100 W for
 ten minutes, so the current measurement is not working. It covers every other control
 mode, the car charger (on the grid side, so it doesn't count), a nearly empty battery,
-a silent MarkeDroid, the twelve-hour brake and the message text.
+a silent source, the twelve-hour brake and the message text, which since 4-11-2026 also
+says what the Deye's own CT measures at the connection.
 
 `tests/test_warmtepomp_rem.py` checks the heat pump brake in
 `packages/9 - Other/Warmtepomp.yaml` (since 29-10-2026): while MarkeDroid holds the
@@ -231,7 +240,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Ikea Alpstuga air quality monitor | 2 | Matter | [Matter](https://www.home-assistant.io/integrations/matter/) | Temperature, humidity, CO2 and PM2.5. One in the living room, one in Maxi's bedroom since 4 September 2026; there it is the room's designated thermometer (see custom_templates/kamers.jinja) and its display is switched off during bedtime, see packages/1 - First Floor/Bedroom Maxi/Multisensor.yaml |
 | Ikea Myggspray motion sensor | 3 | Matter | [Matter](https://www.home-assistant.io/integrations/matter/) | Occupancy and illuminance in Maxi's bedroom, the office and the meter cupboard. The meter cupboard one keeps the led strip on together with the door contact, see `packages/0 - Ground Floor/Meterkast/Lights.yaml` |
 | Ikea Timmerflotte temp/humidity sensor | 8 | Matter | [Matter](https://www.home-assistant.io/integrations/matter/) | Temperature and humidity per room |
-| Deye LV three-phase hybrid inverter 20 kW + ~28.8 kWh battery | 1 | Solarman logger | [ha-solarman](https://github.com/davidrapan/ha-solarman) | Home battery since 20 September 2026, replacing the Marstek Venus E. Controlled by the MarkeDroid appliance (ModuSun), not by Home Assistant: HA only reads it, through the `sensor.accu_*` layer in `packages/9 - Other/Battery.yaml` |
+| Deye LV three-phase hybrid inverter 20 kW + 51.2 kWh battery (1,000 Ah) | 1 | Solarman logger | [ha-solarman](https://github.com/davidrapan/ha-solarman) | Home battery since 20 September 2026, replacing the Marstek Venus E; since 14 October all 28 panels (9.46 kWp, two strings) hang on it too. Controlled by the MarkeDroid appliance (ModuSun), not by Home Assistant: HA only reads it (since 4 November 2026 via Solarman again, MarkeDroid's MQTT only for its control mode), through the `sensor.accu_*` and `sensor.zon_*` layers in `packages/9 - Other/Battery.yaml` and `packages/2 - Second Floor/Attic/Solarpanels.yaml` |
 | [KEBA KeContact P40 Pro](https://www.keba.com/en/emobility/products/ac-charging-stations/p40/kecontact-p40-overview) | 1 | Ethernet | [Modbus](https://www.home-assistant.io/integrations/modbus/) + [KEBA P40](https://github.com/Ich-h4lt/keba-p40-home-assistant) | Wallbox at the carport, 16 A over three phases. Modbus TCP on port 502 gives the readings with readable names (`packages/3 - Outside/Carport/KEBA P40 Pro.yaml`), the HACS integration adds the controls over the local REST API. The wallbox answers only one Modbus session at a time, so nothing else may poll port 502 |
 
 ## <a name="vms">Virtual Machines</a>
