@@ -95,6 +95,15 @@ leftover `_low_speed`, on a `_langzaam` id that is used but not defined, on a
 template cover that drives the wrong entity or forgets `speed: slow` on open, close or
 position, and on a slow cover group with a fast member.
 
+`tests/test_deurbel.py` guards the doorbell. UniFi Protect drops
+`binary_sensor.g4_doorbell_voortuin_doorbell` in HA 2027.1, so the Sonos chime, the
+bedroom lights and `binary_sensor.deurbel_recent` now trigger on
+`event.g4_doorbell_voortuin_doorbell` with the `event.received` trigger
+(`event_type: ring`). Unlike a plain state trigger on an event entity, that one does
+not fire when the entity comes back from `unavailable` after a restart. The test fails
+on any leftover use of the binary sensor and on a doorbell trigger that is not exactly
+that.
+
 `tests/test_luchtreiniger.py` reads the air purifier blueprint for the kids' rooms
 and works out which branch wins when someone switches the purifier on: during the
 evening wind-down or bedtime it has to go straight back off with a notification,

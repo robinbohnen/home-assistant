@@ -5,10 +5,14 @@ livingroom_doorbell_package:
       description: "Play doorbell to Sonos to announce someone is there"
       mode: single
       triggers:
-        - trigger: state
-          entity_id:
-            - binary_sensor.g4_doorbell_voortuin_doorbell
-          to: "on"
+        # De event-entiteit en niet meer de binary_sensor (die verdwijnt uit
+        # UniFi Protect in HA 2027.1). event.received vuurt niet op de
+        # unavailable->stand-flank na een herstart, wel op de eerste bel daarna.
+        - trigger: event.received
+          target:
+            entity_id: event.g4_doorbell_voortuin_doorbell
+          options:
+            event_type: ring
       conditions: []
       actions:
         - action: mqtt.publish

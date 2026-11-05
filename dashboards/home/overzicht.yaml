@@ -2555,11 +2555,15 @@ cards:
             square: false
             cards:
               - type: custom:mushroom-template-card
-                entity: binary_sensor.g4_doorbell_voortuin_doorbell
+                # De state van een event-entiteit is het tijdstip van de laatste
+                # bel en overleeft een herstart; last_changed van de oude
+                # binary_sensor sprong bij elke herstart naar "nu".
+                entity: event.g4_doorbell_voortuin_doorbell
                 primary: Laatst aangebeld
                 secondary: >-
-                  {% set s = states.binary_sensor.g4_doorbell_voortuin_doorbell %}
-                  {{ (relative_time(s.last_changed) ~ ' geleden') if s else '—' }}
+                  {% set s = states('event.g4_doorbell_voortuin_doorbell') %}
+                  {% set t = as_datetime(s, none) if s not in ['unknown', 'unavailable'] else none %}
+                  {{ (relative_time(t) ~ ' geleden') if t else '—' }}
                 icon: mdi:doorbell
                 icon_color: >-
                   {{ 'amber' if is_state('binary_sensor.deurbel_recent','on') else 'grey' }}
@@ -2580,7 +2584,7 @@ cards:
           - type: logbook
             hours_to_show: 48
             entities:
-              - binary_sensor.g4_doorbell_voortuin_doorbell
+              - event.g4_doorbell_voortuin_doorbell
               - binary_sensor.g4_doorbell_pro_motion
               - lock.kroon18voordeur
               # Het deurcontact erbij: bel, beweging en slot zeggen niet of er
