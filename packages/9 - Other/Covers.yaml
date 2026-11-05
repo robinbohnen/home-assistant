@@ -188,25 +188,235 @@ covers_package:
                   tag: "cover-reageert-niet-{{ cover }}"
                   notification_icon: mdi:window-shutter-alert
 
+  ###########################################################################
+  ## LANGZAME ROLLUIKEN (`cover.*_langzaam`)
+  ##
+  ## Tot november 2026 gaf Overkiz per Somfy-rolluik een tweede entiteit,
+  ## `cover.*_low_speed`, die op lage snelheid liep. Die verdwijnt in HA
+  ## 2027.5; daarvoor in de plaats kent de gewone entiteit nu `speed: slow` bij
+  ## open_cover, close_cover en set_cover_position.
+  ##
+  ## Waarom dan toch weer een eigen entiteit en niet overal de gewone met
+  ## `speed: slow`: een cover-group (`cover.covers_office`,
+  ## `cover.covers_bedroom_maxi`) geeft `speed` niet door aan zijn leden, en
+  ## de dashboardkaarten (mushroom-cover-card, bubble-card) kunnen het niet
+  ## meegeven. Die zouden dan op volle snelheid gaan - en dat is precies het
+  ## geluid dat we 's ochtends en 's avonds niet door het huis willen. Deze
+  ## template-covers spiegelen de stand van de gewone entiteit en sturen die
+  ## altijd met `speed: slow` aan, zodat alles wat ze gebruikt (routines,
+  ## klimaatregie, groepen, dashboards) vanzelf langzaam blijft.
+  ##
+  ## De gewone entiteit (zonder `_langzaam`) is de snelle; die gebruiken
+  ## alleen `cover.all_covers_upstairs` (brand/alarm) en de airco.
+  ## Getest in tests/test_langzame_covers.py.
+  ###########################################################################
+  template:
+    - cover:
+        - name: Kantoor links langzaam
+          unique_id: kantoor_links_langzaam
+          default_entity_id: cover.kantoor_links_langzaam
+          device_class: shutter
+          availability: "{{ has_value('cover.kantoor_links') }}"
+          state: "{{ states('cover.kantoor_links') }}"
+          position: "{{ state_attr('cover.kantoor_links', 'current_position') }}"
+          open_cover:
+            - action: cover.open_cover
+              target:
+                entity_id: cover.kantoor_links
+              data:
+                speed: slow
+          close_cover:
+            - action: cover.close_cover
+              target:
+                entity_id: cover.kantoor_links
+              data:
+                speed: slow
+          stop_cover:
+            - action: cover.stop_cover
+              target:
+                entity_id: cover.kantoor_links
+          set_cover_position:
+            - action: cover.set_cover_position
+              target:
+                entity_id: cover.kantoor_links
+              data:
+                position: "{{ position }}"
+                speed: slow
+
+        - name: Kantoor rechts langzaam
+          unique_id: kantoor_rechts_langzaam
+          default_entity_id: cover.kantoor_rechts_langzaam
+          device_class: shutter
+          availability: "{{ has_value('cover.kantoor_rechts') }}"
+          state: "{{ states('cover.kantoor_rechts') }}"
+          position: "{{ state_attr('cover.kantoor_rechts', 'current_position') }}"
+          open_cover:
+            - action: cover.open_cover
+              target:
+                entity_id: cover.kantoor_rechts
+              data:
+                speed: slow
+          close_cover:
+            - action: cover.close_cover
+              target:
+                entity_id: cover.kantoor_rechts
+              data:
+                speed: slow
+          stop_cover:
+            - action: cover.stop_cover
+              target:
+                entity_id: cover.kantoor_rechts
+          set_cover_position:
+            - action: cover.set_cover_position
+              target:
+                entity_id: cover.kantoor_rechts
+              data:
+                position: "{{ position }}"
+                speed: slow
+
+        - name: Badkamer rolluik langzaam
+          unique_id: badkamer_rolluik_langzaam
+          default_entity_id: cover.badkamer_rolluik_langzaam
+          device_class: shutter
+          availability: "{{ has_value('cover.badkamer_rolluik') }}"
+          state: "{{ states('cover.badkamer_rolluik') }}"
+          position: "{{ state_attr('cover.badkamer_rolluik', 'current_position') }}"
+          open_cover:
+            - action: cover.open_cover
+              target:
+                entity_id: cover.badkamer_rolluik
+              data:
+                speed: slow
+          close_cover:
+            - action: cover.close_cover
+              target:
+                entity_id: cover.badkamer_rolluik
+              data:
+                speed: slow
+          stop_cover:
+            - action: cover.stop_cover
+              target:
+                entity_id: cover.badkamer_rolluik
+          set_cover_position:
+            - action: cover.set_cover_position
+              target:
+                entity_id: cover.badkamer_rolluik
+              data:
+                position: "{{ position }}"
+                speed: slow
+
+        - name: Slaapkamer rolluik langzaam
+          unique_id: slaapkamer_rolluik_langzaam
+          default_entity_id: cover.slaapkamer_rolluik_langzaam
+          device_class: shutter
+          availability: "{{ has_value('cover.slaapkamer_rolluik') }}"
+          state: "{{ states('cover.slaapkamer_rolluik') }}"
+          position: "{{ state_attr('cover.slaapkamer_rolluik', 'current_position') }}"
+          open_cover:
+            - action: cover.open_cover
+              target:
+                entity_id: cover.slaapkamer_rolluik
+              data:
+                speed: slow
+          close_cover:
+            - action: cover.close_cover
+              target:
+                entity_id: cover.slaapkamer_rolluik
+              data:
+                speed: slow
+          stop_cover:
+            - action: cover.stop_cover
+              target:
+                entity_id: cover.slaapkamer_rolluik
+          set_cover_position:
+            - action: cover.set_cover_position
+              target:
+                entity_id: cover.slaapkamer_rolluik
+              data:
+                position: "{{ position }}"
+                speed: slow
+
+        - name: Slaapkamer Maxi links langzaam
+          unique_id: slaapkamer_maxi_links_langzaam
+          default_entity_id: cover.slaapkamer_maxi_links_langzaam
+          device_class: shutter
+          availability: "{{ has_value('cover.slaapkamer_maxi_links') }}"
+          state: "{{ states('cover.slaapkamer_maxi_links') }}"
+          position: "{{ state_attr('cover.slaapkamer_maxi_links', 'current_position') }}"
+          open_cover:
+            - action: cover.open_cover
+              target:
+                entity_id: cover.slaapkamer_maxi_links
+              data:
+                speed: slow
+          close_cover:
+            - action: cover.close_cover
+              target:
+                entity_id: cover.slaapkamer_maxi_links
+              data:
+                speed: slow
+          stop_cover:
+            - action: cover.stop_cover
+              target:
+                entity_id: cover.slaapkamer_maxi_links
+          set_cover_position:
+            - action: cover.set_cover_position
+              target:
+                entity_id: cover.slaapkamer_maxi_links
+              data:
+                position: "{{ position }}"
+                speed: slow
+
+        - name: Slaapkamer Maxi rechts langzaam
+          unique_id: slaapkamer_maxi_rechts_langzaam
+          default_entity_id: cover.slaapkamer_maxi_rechts_langzaam
+          device_class: shutter
+          availability: "{{ has_value('cover.slaapkamer_maxi_rechts') }}"
+          state: "{{ states('cover.slaapkamer_maxi_rechts') }}"
+          position: "{{ state_attr('cover.slaapkamer_maxi_rechts', 'current_position') }}"
+          open_cover:
+            - action: cover.open_cover
+              target:
+                entity_id: cover.slaapkamer_maxi_rechts
+              data:
+                speed: slow
+          close_cover:
+            - action: cover.close_cover
+              target:
+                entity_id: cover.slaapkamer_maxi_rechts
+              data:
+                speed: slow
+          stop_cover:
+            - action: cover.stop_cover
+              target:
+                entity_id: cover.slaapkamer_maxi_rechts
+          set_cover_position:
+            - action: cover.set_cover_position
+              target:
+                entity_id: cover.slaapkamer_maxi_rechts
+              data:
+                position: "{{ position }}"
+                speed: slow
+
   group:
     # LET OP: dit zijn dezelfde zeven ramen als `cover.all_covers_upstairs` in
-    # packages/2 - Second Floor/Attic/AC.yaml, maar dan de `_low_speed`-
+    # packages/2 - Second Floor/Attic/AC.yaml, maar dan de `_langzaam`-
     # varianten - die lopen langzamer en zijn 's ochtends niet door het hele
     # huis te horen. Twee lijsten van dezelfde ramen dus, met een ander doel:
     # deze voor de dagelijkse routines, die andere voor brand- en alarmgevallen
     # waar snelheid boven stilte gaat. Komt er een rolluik bij, zet het in
-    # ALLEBEI. (`cover.slaapkamer_mini` heeft geen low_speed-variant en staat
+    # ALLEBEI. (`cover.slaapkamer_mini` heeft geen `_langzaam`-variant en staat
     # daarom in beide lijsten met dezelfde entiteit.)
     covers_first_floor:
       name: Rolluiken eerste verdieping
       icon: mdi:window-shutter
       entities:
-        - cover.kantoor_links_low_speed
-        - cover.kantoor_rechts_low_speed
-        - cover.badkamer_rolluik_low_speed
-        - cover.slaapkamer_rolluik_low_speed
-        - cover.slaapkamer_maxi_links_low_speed
-        - cover.slaapkamer_maxi_rechts_low_speed
+        - cover.kantoor_links_langzaam
+        - cover.kantoor_rechts_langzaam
+        - cover.badkamer_rolluik_langzaam
+        - cover.slaapkamer_rolluik_langzaam
+        - cover.slaapkamer_maxi_links_langzaam
+        - cover.slaapkamer_maxi_rechts_langzaam
         - cover.slaapkamer_mini
 
   automation:
@@ -253,8 +463,8 @@ covers_package:
               data: {}
               target:
                 entity_id:
-                  - cover.badkamer_rolluik_low_speed
-                  - cover.slaapkamer_rolluik_low_speed
+                  - cover.badkamer_rolluik_langzaam
+                  - cover.slaapkamer_rolluik_langzaam
             - action: cover.close_cover
               data: {}
               target:

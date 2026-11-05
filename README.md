@@ -86,6 +86,15 @@ test fails on any `/hacsfiles/` URL, and on a module in `frontend.extra_module_u
 whose URL differs from its entry in `dashboards/resources.yaml` by even one character,
 because then the browser runs card-mod or kiosk-mode twice.
 
+`tests/test_langzame_covers.py` guards the slow roller shutters. Overkiz drops its
+`cover.*_low_speed` entities in HA 2027.5 in favour of `speed: slow` on the normal cover.
+A cover group and the dashboard cards cannot pass that option, so
+`packages/9 - Other/Covers.yaml` defines six template covers `cover.*_langzaam` that
+mirror the normal cover and always drive it with `speed: slow`. The test fails on any
+leftover `_low_speed`, on a `_langzaam` id that is used but not defined, on a
+template cover that drives the wrong entity or forgets `speed: slow` on open, close or
+position, and on a slow cover group with a fast member.
+
 `tests/test_luchtreiniger.py` reads the air purifier blueprint for the kids' rooms
 and works out which branch wins when someone switches the purifier on: during the
 evening wind-down or bedtime it has to go straight back off with a notification,

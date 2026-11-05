@@ -93,10 +93,10 @@ Tien zones, elk met een sensor `sensor.zonwering_advies_<zone>`:
 | `keuken_screens` | `cover.covers_kitchen_screens` | voor | screen: geen kier, in bij storm |
 | `keuken_rolgordijn_groot` | `cover.rollerblind_0001` | voor | binnenzonwering; alleen als het screen er niet staat; stil vanaf de kinderbedtijd |
 | `keuken_rolgordijn_klein` | `cover.rollerblind_0002` | voor | idem, eigen raamcontact |
-| `kantoor_links` | `cover.kantoor_links_low_speed` | voor + zij | |
-| `kantoor_rechts` | `cover.kantoor_rechts_low_speed` | voor + zij | |
-| `badkamer` | `cover.badkamer_rolluik_low_speed` | achter | stille uren |
-| `slaapkamer` | `cover.slaapkamer_rolluik_low_speed` | achter | stille uren |
+| `kantoor_links` | `cover.kantoor_links_langzaam` | voor + zij | |
+| `kantoor_rechts` | `cover.kantoor_rechts_langzaam` | voor + zij | |
+| `badkamer` | `cover.badkamer_rolluik_langzaam` | achter | stille uren |
+| `slaapkamer` | `cover.slaapkamer_rolluik_langzaam` | achter | stille uren |
 | `slaapkamer_logan` | `cover.covers_bedroom_maxi` | voor | slaapvenster vanaf 19:00 |
 | `slaapkamer_emma` | `cover.slaapkamer_mini` | zij + achter | slaapvenster vanaf 19:00 |
 | `zonnescherm` | `cover.achtertuin_zonnescherm` | achter | screen; **omgekeerd bedraad**; **vraagt eerst** |
