@@ -79,6 +79,13 @@ stubbed sensors — including the cases you would otherwise only hear when they 
 level, the reverse-wired sun screen) — and checks that every sentence still has an
 intent and every intent still has a sentence. This one needs `pyyaml` too.
 
+`tests/test_frontend_resources.py` guards the dashboard resources. Since 5-11-2026
+they load from `/local/community/` instead of the old HACS path `/hacsfiles/` (the
+Marketplace only serves that for compatibility and raises a repair issue for it). The
+test fails on any `/hacsfiles/` URL, and on a module in `frontend.extra_module_url`
+whose URL differs from its entry in `dashboards/resources.yaml` by even one character,
+because then the browser runs card-mod or kiosk-mode twice.
+
 `tests/test_luchtreiniger.py` reads the air purifier blueprint for the kids' rooms
 and works out which branch wins when someone switches the purifier on: during the
 evening wind-down or bedtime it has to go straight back off with a notification,
