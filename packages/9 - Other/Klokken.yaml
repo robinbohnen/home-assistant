@@ -69,13 +69,16 @@
 ## De garageklok houdt zijn eigen `BRI`; die hangt in een ruimte zonder
 ## avondstand.
 ##
-## DE PIXELWALL LIFT MEE
+## DE PIXELWALLS LIFTEN MEE
 ## `light.pixelwall_woonkamer` is geen AWTRIX, maar hangt in dezelfde kamer en
 ## hoort hetzelfde te doen: aan en uit op dezelfde momenten, 1% of 50% op
 ## dezelfde kijkstand. Hij staat daarom overal naast de woonkamerklok - in het
 ## script hieronder, in de herstart-trigger en in de `klokken`-lijst van
 ## `script.woonkamer_media_licht`. Bij een brandweermelding gaat hij even aan,
 ## zie `brandweer_pixelwall_aan` in Brandweer Automations.yaml.
+## Zo ook `light.garage_pixelwall_garage`: die gaat met de garageklok mee aan
+## en uit op beweging en het alarm (`klokken_garage_matrix_beweging`), en houdt
+## net als die klok zijn eigen helderheid.
 ##
 ## TWEE APPS MET WATTS, EN DAT ZIJN TWEE VERSCHILLENDE DINGEN
 ## `verbruik` (gele bliksem, witte cijfers) is wat het huis gebruikt: net + zon
@@ -859,8 +862,13 @@ klokken_package:
       alias: Klokken - Garageklok aan bij beweging
       description: >-
         De garage is meestal leeg; daar hoeft geen scherm voor te branden. Bij
-        beweging gaat hij aan, twee minuten na de laatste beweging weer uit, en
-        zodra het alarm aan staat blijft hij uit.
+        beweging gaan de garageklok en de pixelwall in de garage aan, twee
+        minuten na de laatste beweging weer uit, en zodra het alarm aan staat
+        blijven ze uit.
+      # DE PIXELWALL GARAGE STAAT IN ELKE TAK NAAST DE KLOK
+      # Zelfde momenten, zelfde regels: wie er een tak bij maakt, zet ze er
+      # allebei in (tests/test_garage_schermen.py bewaakt dat). Ook de pixelwall
+      # krijgt geen helderheid mee; die volgt zijn eigen helderheidsschema.
       # WAAROM NIET DE BEWEGINGSLICHT-BLUEPRINT
       # Die wil een helderheid- en een overgangshelper en brengt deurcontacten,
       # een lux-drempel en het alarm mee. Een display is geen lamp: de
@@ -936,7 +944,9 @@ klokken_package:
               sequence:
                 - action: light.turn_off
                   target:
-                    entity_id: light.garage_klok_awtrix_garage_matrix
+                    entity_id:
+                      - light.garage_klok_awtrix_garage_matrix
+                      - light.garage_pixelwall_garage
             - alias: Beweging - scherm aan
               conditions:
                 - condition: trigger
@@ -953,7 +963,9 @@ klokken_package:
                 # waarheid naast zet.
                 - action: light.turn_on
                   target:
-                    entity_id: light.garage_klok_awtrix_garage_matrix
+                    entity_id:
+                      - light.garage_klok_awtrix_garage_matrix
+                      - light.garage_pixelwall_garage
             - alias: Twee minuten stil - scherm uit
               conditions:
                 - condition: trigger
@@ -964,7 +976,9 @@ klokken_package:
               sequence:
                 - action: light.turn_off
                   target:
-                    entity_id: light.garage_klok_awtrix_garage_matrix
+                    entity_id:
+                      - light.garage_klok_awtrix_garage_matrix
+                      - light.garage_pixelwall_garage
             # Bewust alleen uitzetten en niet aan: staat de sensor bij het
             # opstarten juist op beweging, dan is de gewone aan-trigger zo weer
             # aan de beurt.
@@ -989,4 +1003,6 @@ klokken_package:
               sequence:
                 - action: light.turn_off
                   target:
-                    entity_id: light.garage_klok_awtrix_garage_matrix
+                    entity_id:
+                      - light.garage_klok_awtrix_garage_matrix
+                      - light.garage_pixelwall_garage
