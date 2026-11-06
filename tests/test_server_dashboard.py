@@ -1,0 +1,343 @@
+"""Offline test van het Server-dashboard (dashboards/server.yaml), 6 november 2026.
+
+Draaien:  .venv/bin/python tests/test_server_dashboard.py      (nodig: pyyaml, jinja2 en node)
+
+Bewaakt wordt:
+1. het dashboard is ingehaakt in configuration.yaml (YAML-modus, url met
+   streepje, alleen beheerders) en het bestand bestaat;
+2. de ventileerknoppen roepen het handbedieningsscript aan met `stand: aan`
+   en een aantal uren dat het script accepteert, en "Auto" het script dat
+   de automatisering terugzet; alle helpers die het dashboard leest bestaan;
+3. het script kiest de juiste kant: `aan`/`uit` expliciet, zonder `stand`
+   omklappen zoals de knop op het overzicht altijd deed (Jinja gerenderd);
+4. het script begrenst `uren` zelf (0,5-12): de selector geldt alleen in de UI;
+5. de JS van elk paneel, in node gedraaid met nagebootste `states`: kleuren
+   en oordelen bij normaal, warm, kritiek en weggevallen sensoren, en tekst
+   uit een state wordt ge-escaped voor hij de HTML in gaat.
+"""
+import json
+import os
+import re
+import subprocess
+import time
+
+import jinja2
+import yaml
+
+CONFIG = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DASHBOARD = os.path.join(CONFIG, "dashboards", "server.yaml")
+CONFIGURATION = os.path.join(CONFIG, "configuration.yaml")
+VENTILATIE = os.path.join(CONFIG, "packages", "9 - Other", "Ventilation.yaml")
+
+
+class HALoader(yaml.SafeLoader):
+    """SafeLoader die HA-tags als !include en !secret negeert."""
+
+
+HALoader.add_multi_constructor("!", lambda loader, suffix, node: None)
+
+
+def laad(pad):
+    with open(pad, encoding="utf-8") as f:
+        return yaml.load(f, Loader=HALoader)
+
+
+DOC = laad(DASHBOARD)
+PAKKET = laad(VENTILATIE)["ventilation_cooling_package"]
+
+
+def kaarten(knoop):
+    """Alle kaarten in de boom, ook die in stacks, mod-cards en grids."""
+    if isinstance(knoop, dict):
+        if "type" in knoop:
+            yield knoop
+        for waarde in knoop.values():
+            yield from kaarten(waarde)
+    elif isinstance(knoop, list):
+        for item in knoop:
+            yield from kaarten(item)
+
+
+ALLE = list(kaarten(DOC["views"]))
+
+
+def kaart(naam):
+    for k in ALLE:
+        if (k.get("variables") or {}).get("kaart") == naam:
+            return k
+    raise AssertionError(f"kaart {naam} niet gevonden")
+
+
+# ------------------------------------------------------------------ 1. inhaken
+def test_dashboard_ingehaakt():
+    with open(DASHBOARD, encoding="utf-8") as f:
+        assert f.read().count("button_card_templates: !include home/overzicht_templates.yaml") == 1
+    db = laad(CONFIGURATION)["lovelace"]["dashboards"]
+    assert "server-dashboard" in db
+    d = db["server-dashboard"]
+    assert d["mode"] == "yaml"
+    assert d["filename"] == "dashboards/server.yaml"
+    assert d["require_admin"] is True
+    for url in db:
+        assert "-" in url, f"HA eist een streepje in de url van een dashboard: {url}"
+
+
+# ------------------------------------------------------- 2. knoppen en helpers
+def knoppen():
+    return [k for k in ALLE if (k.get("tap_action") or {}).get("action") == "perform-action"]
+
+
+def test_ventileerknoppen():
+    script = PAKKET["script"]["ventilation_serverrack_handbediening"]
+    veld = script["fields"]["uren"]["selector"]["number"]
+    uren = []
+    for k in knoppen():
+        actie = k["tap_action"]
+        naam = actie["perform_action"].split(".", 1)[1]
+        assert naam in PAKKET["script"], f"onbekend script {naam}"
+        if naam == "ventilation_serverrack_handbediening":
+            assert actie["data"]["stand"] == "aan", "een tweede tik mag de ventilatoren niet uitzetten"
+            u = actie["data"]["uren"]
+            assert veld["min"] <= u <= veld["max"], f"{u} uur valt buiten het script"
+            uren.append(u)
+    assert uren == [1, 2, 4, 8]
+    assert any(k["tap_action"]["perform_action"] == "script.ventilation_serverrack_automatisch" for k in knoppen())
+    # restart: een nieuwe keuze terwijl het script nog loopt mag niet stil wegvallen.
+    assert script["mode"] == "restart"
+    assert script["fields"]["stand"]["default"] == "wissel"
+
+
+def test_helpers_bestaan():
+    with open(DASHBOARD, encoding="utf-8") as f:
+        tekst = f.read()
+    for domein in ("input_number", "input_datetime"):
+        for naam in set(re.findall(rf"{domein}\.([a-z0-9_]+)", tekst)):
+            assert naam in PAKKET[domein], f"{domein}.{naam} bestaat niet in Ventilation.yaml"
+
+
+# --------------------------------------------------------------- 3. het script
+def nieuwe_stand(stand, schakelaar):
+    script = PAKKET["script"]["ventilation_serverrack_handbediening"]
+    sjabloon = next(s for s in script["sequence"] if "variables" in s)["variables"]["nieuw"]
+    env = jinja2.Environment()
+    ctx = {"is_state": lambda e, s: schakelaar == s}
+    if stand is not None:
+        ctx["stand"] = stand
+    return env.from_string(sjabloon).render(**ctx)
+
+
+def test_script_stand():
+    for schakelaar in ("on", "off"):
+        assert nieuwe_stand("aan", schakelaar) == "on"
+        assert nieuwe_stand("uit", schakelaar) == "off"
+        assert nieuwe_stand("AAN", schakelaar) == "on"
+    # Zonder stand (de knop op het overzicht) en met `wissel`: omklappen.
+    assert nieuwe_stand(None, "on") == "off"
+    assert nieuwe_stand(None, "off") == "on"
+    assert nieuwe_stand("wissel", "on") == "off"
+
+
+def duur(uren):
+    script = PAKKET["script"]["ventilation_serverrack_handbediening"]
+    sjabloon = next(s for s in script["sequence"] if "variables" in s)["variables"]["duur"]
+    ctx = {} if uren is None else {"uren": uren}
+    return float(jinja2.Environment().from_string(sjabloon).render(**ctx))
+
+
+def test_script_duur_begrensd():
+    # Via de API gelden de selectorgrenzen niet: het script klemt zelf.
+    assert duur(None) == 2
+    assert duur(4) == 4
+    assert duur(1000) == 12
+    assert duur(0) == 0.5
+    assert duur("onzin") == 2
+
+
+# ------------------------------------------------------------ 4. JS in node
+def js(naam):
+    x = kaart(naam)["custom_fields"]["x"].strip()
+    assert x.startswith("[[[") and x.endswith("]]]")
+    return x[3:-3]
+
+
+def render(naam, states, entity_id=None):
+    k = kaart(naam)
+    entity_id = entity_id or k.get("entity")
+    # De states gaan via stdin: met een volledige /api/states-dump als invoer
+    # wordt een opdrachtregel te lang.
+    prog = (
+        "const states = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
+        "const variables = %s; const entity = states[%s];"
+        "const out = (function(){ %s })(); process.stdout.write(out);"
+        % (json.dumps(k.get("variables") or {}), json.dumps(entity_id), js(naam))
+    )
+    r = subprocess.run(["node", "-e", prog], input=json.dumps(states),
+                       capture_output=True, text=True, timeout=20)
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def st(state, **attrs):
+    return {"state": str(state), "attributes": attrs}
+
+
+RACK = {
+    "sensor.garage_serverrack_temperatuur_temperature": st(27.3),
+    "sensor.garage_serverrack_temperatuur_humidity": st(35),
+    "sensor.garage_garage_temperatuur_temperatuur": st(20.2),
+    "sensor.ventilatie_serverrack_temp_verandering_1u": st(-0.6),
+    "switch.garage_garage_stopcontact_serverrack_ventilatoren": st("off"),
+    "input_number.ventilation_serverrack_warm_threshold": st(28),
+    "input_number.ventilation_serverrack_critical_threshold": st(35),
+}
+
+
+def test_rack():
+    h = render("rack", RACK)
+    assert "koel genoeg" in h and "27,3°" in h and "var(--ov-ok)" in h
+    assert "−0,6 °C" in h and "20,2 °C" in h
+    h = render("rack", {**RACK, "sensor.garage_serverrack_temperatuur_temperature": st(29.1)})
+    assert ">warm<" in h and "var(--ov-warn)" in h
+    h = render("rack", {**RACK, "sensor.garage_serverrack_temperatuur_temperature": st(36)})
+    assert "kritiek</span>" in h
+    h = render("rack", {**RACK, "sensor.garage_serverrack_temperatuur_temperature": st("unavailable")})
+    assert "geen meting" in h
+    # Helper even weg (reload): terugvallen op de standaarddrempels.
+    h = render("rack", {**RACK, "input_number.ventilation_serverrack_warm_threshold": st("unavailable")})
+    assert "warm 28°" in h
+    h = render("rack", {**RACK, "switch.garage_garage_stopcontact_serverrack_ventilatoren": st("on")})
+    assert "draaien" in h
+
+
+def test_ventileren():
+    nu = time.time()
+    basis = {
+        "switch.garage_garage_stopcontact_serverrack_ventilatoren": st("on"),
+        "input_datetime.ventilation_serverrack_handbediening_tot": st("x", timestamp=nu + 80 * 60),
+        "input_datetime.ventilation_serverrack_lockout_until": st("x", timestamp=nu - 60),
+    }
+    h = render("ventileren", basis)
+    assert "Handmatig aan tot" in h and "nog 1 u 20 min" in h and ">aan<" in h
+    h = render("ventileren", {**basis,
+        "switch.garage_garage_stopcontact_serverrack_ventilatoren": st("off"),
+        "input_datetime.ventilation_serverrack_handbediening_tot": st("x", timestamp=nu - 60),
+        "input_datetime.ventilation_serverrack_lockout_until": st("x", timestamp=nu + 3600)})
+    assert "Blazen hielp niet meer" in h and ">uit<" in h
+    h = render("ventileren", {**basis, "input_datetime.ventilation_serverrack_handbediening_tot": st("x", timestamp=nu - 60)})
+    assert h.count("Automatisch:") == 1
+    h = render("ventileren", {**basis, "switch.garage_garage_stopcontact_serverrack_ventilatoren": st("unavailable")})
+    assert "geen verbinding" in h
+
+
+NUC = {
+    "sensor.proxmox_nuc_intel_cpu_temperatuur": st(62),
+    "sensor.proxmox_nuc_intel_nvme_temperatuur": st(48),
+    "sensor.proxmox_nuc_intel_cpu_verbruik": st(9),
+    "sensor.node_intel_cpu_used": st(23.4),
+    "sensor.node_intel_memory_used_percentage": st(71.3),
+    "sensor.node_intel_status": st("online"),
+}
+
+
+def test_nuc():
+    h = render("nuc", NUC)
+    assert "in orde" in h and "62°" in h and "9 W" in h and "71%" in h
+    h = render("nuc", {**NUC, "sensor.proxmox_nuc_intel_cpu_temperatuur": st(90)})
+    assert ">warm<" in h
+    h = render("nuc", {**NUC, "sensor.proxmox_nuc_intel_cpu_temperatuur": st(93)})
+    assert "kritiek heet" in h
+    # expire_after: na vijf minuten stilte is de sensor unavailable.
+    h = render("nuc", {**NUC, "sensor.proxmox_nuc_intel_cpu_temperatuur": st("unavailable")})
+    assert "stuurt niets" in h
+    h = render("nuc", {**NUC, "sensor.node_intel_status": st("offline")})
+    assert "Proxmox offline" in h
+
+
+def test_nuc_details():
+    s = {
+        "sensor.node_intel_disk_used": st(33.0), "sensor.node_intel_disk_total": st(100.9),
+        "sensor.node_intel_memory_used": st(47.8), "sensor.node_intel_memory_total": st(67.1),
+        "sensor.proxmox_nuc_intel_load_average": st(6.9),
+        "sensor.proxmox_nuc_intel_throttle_events": st(10),
+        "sensor.node_intel_io_delay": st(0.5), "sensor.node_intel_swap_used": st(49.5),
+        "sensor.node_intel_virtual_machines_running": st(8), "sensor.node_intel_containers_running": st(6),
+        "sensor.proxmox_nuc_intel_uptime": st(188155),
+        "sensor.node_intel_failed_tasks": st(0),
+        "binary_sensor.node_intel_backup_running": st("off"),
+        "sensor.node_intel_version": st("9.2.26"), "update.proxmox_ve_update": st("off"),
+    }
+    h = render("nuc_details", s)
+    assert "33 van 101 GB" in h and "6,9 op 8 threads" in h
+    assert "10× sinds opstart" in h and "2 d 4 u" in h and "8 VM's · 6 containers" in h
+    assert "Mislukte taken" not in h and "update klaar" not in h
+    h = render("nuc_details", {**s, "sensor.node_intel_failed_tasks": st(2), "update.proxmox_ve_update": st("on"),
+                                "sensor.proxmox_nuc_intel_throttle_events": st(0)})
+    assert "Mislukte taken" in h and "update klaar" in h and "nooit" in h
+
+
+def test_nas():
+    s = {"device_tracker.unas_pro_8": st("home"), "sensor.immich_nas_vrij": st(4698), "binary_sensor.immich_nas": st("on")}
+    h = render("nas", s)
+    assert "online" in h and "4,7 TB" in h and "bereikbaar" in h
+    h = render("nas", {**s, "device_tracker.unas_pro_8": st("not_home"), "sensor.immich_nas_vrij": st(180)})
+    assert "onbereikbaar" in h and "180 GB" in h and "var(--ov-bad)" in h
+
+
+def test_gasten():
+    s = {}
+    for g in kaart("gasten")["variables"]["gasten"]:
+        s[f"sensor.{g['p']}_status"] = st("running")
+        s[f"sensor.{g['p']}_cpu_used"] = st(3.2)
+        s[f"sensor.{g['p']}_memory_used_percentage"] = st(96)
+        s[f"sensor.{g['p']}_disk_used_percentage"] = st(40)
+    h = render("gasten", s)
+    assert "alles draait" in h and h.count("var(--ov-ok)\"></span>") == len(kaart("gasten")["variables"]["gasten"])
+    # Geheugen kleurt nooit (paginacache, zie de kop van het dashboard).
+    assert "96%" in h and "var(--ov-warn)\">96%" not in h and "var(--ov-bad)\">96%" not in h
+    h = render("gasten", {**s, "sensor.qemu_windows_107_status": st("stopped"),
+                          "sensor.qemu_tools_110_disk_used_percentage": st(97)})
+    assert "1 uit" in h and "· stopped" in h and "var(--ov-bad)\">97%" in h
+
+
+def test_gasten_uniek():
+    lijst = kaart("gasten")["variables"]["gasten"]
+    for veld in ("naam", "id", "p"):
+        waarden = [g[veld] for g in lijst]
+        assert len(waarden) == len(set(waarden)), f"dubbele {veld}"
+
+
+def test_backups():
+    nu = time.time()
+    iso = lambda t: time.strftime("%Y-%m-%dT%H:%M:%S+00:00", time.gmtime(t))
+    s = {
+        "sensor.backup_last_successful_automatic_backup": st(iso(nu - 10 * 3600)),
+        "sensor.backup_last_successful_automatic_backup_size": st(6653.2),
+        "sensor.backup_next_scheduled_automatic_backup": st(iso(nu + 14 * 3600)),
+        "sensor.immich_backup": st("ok"),
+        "sensor.immich_backup_leeftijd": st(10.5),
+    }
+    h = render("backups", s)
+    assert ">bij<" in h and "10 uur geleden" in h and "6,5 GB" in h and "Volgende HA-back-up" in h
+    h = render("backups", {**s, "sensor.backup_last_successful_automatic_backup": st(iso(nu - 50 * 3600)),
+                           "sensor.immich_backup": st("mislukt")})
+    assert "2 problemen" in h and "mislukt" in h
+
+
+def test_state_tekst_wordt_ge_escaped():
+    kwaad = "<img src=x onerror=alert(1)>"
+    h = render("backups", {"sensor.immich_backup": st(kwaad)})
+    assert "<img" not in h and "&lt;img" in h
+    h = render("nuc_details", {"sensor.node_intel_version": st(kwaad)})
+    assert "<img" not in h
+    h = render("nuc", {**NUC, "sensor.node_intel_status": st(kwaad)})
+    assert "<img" not in h
+    g = kaart("gasten")["variables"]["gasten"][0]["p"]
+    h = render("gasten", {f"sensor.{g}_status": st(kwaad)})
+    assert "<img" not in h
+
+
+if __name__ == "__main__":
+    for naam, fn in list(globals().items()):
+        if naam.startswith("test_"):
+            fn()
+            print(f"ok  {naam}")

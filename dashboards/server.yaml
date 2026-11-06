@@ -1,0 +1,759 @@
+# Dashboard "Server" (/server-dashboard): de Proxmox-NUC, het serverrack in de
+# garage, de NAS, de VM's en de back-ups op één pagina. Aangemaakt op
+# 6 november 2026: drie kolommen panelen,
+# alleen voor beheerders.
+#
+# INGEHAAKT in configuration.yaml onder `lovelace: dashboards:` (YAML-modus).
+# Een nieuw dashboard daar vraagt een VOLLEDIGE herstart; daarna is een
+# wijziging in dit bestand gewoon een browser-refresh.
+#
+# OPBOUW (ontwerpregel: eerst wat er nu speelt, groot en met kleur; details
+# compact eronder - zie de kop van dashboards/home/omvormer.yaml):
+#   kolom 1  SERVERRACK  temperatuur in één oogopslag + 24-uursgrafiek
+#            VENTILEREN  1/2/4/8 uur aan, of terug naar automatisch
+#   kolom 2  NUC         temperaturen, CPU, geheugen, schijf, grafiek, details
+#   kolom 3  NAS, VM'S EN CONTAINERS, BACK-UPS
+#
+# BRONNEN
+#   sensor.proxmox_nuc_intel_*   MQTT van de host zelf (packages/9 - Other/Proxmox NUC.yaml)
+#   sensor.node_intel_*          Proxmox VE-integratie (UI), de host
+#   sensor.<gast>_*              Proxmox VE-integratie, per VM/container
+#   sensor.garage_serverrack_*   Zigbee-thermometer in het rack
+#   ventilatie                   packages/9 - Other/Ventilation.yaml
+#   device_tracker.unas_pro_8    UniFi Network (is de NAS bereikbaar)
+#   sensor.immich_*              Immich (vrije ruimte op de NAS, back-up)
+#
+# DE NAS (UniFi UNAS Pro 8) HEEFT NOG GEEN EIGEN INTEGRATIE. Bereikbaarheid
+# komt van UniFi Network, de vrije ruimte van Immich (die de NAS gemount
+# heeft). Schijven, RAID-status en temperaturen van de UNAS zelf zitten niet
+# in HA: SNMP staat uit op de UNAS (getest 06-11-2026) en voor UniFi Drive is
+# er geen HA-integratie. Komt die er, dan hoort hij in het NAS-paneel.
+#
+# DE ENTITY-ID'S VAN DE GASTEN KLOPPEN NIET MET HUN NAAM. De Proxmox-integratie
+# hield de oude id's toen VM's werden vervangen: `qemu_mqtt_100` is CT 100
+# (zigbee2mqtt), `qemu_scrypted_102` is CT 102 (npm), `qemu_nginx_proxy_manager_111`
+# is VM 111 (scanalyse-scanner). Daarom staat de lijst hieronder met de hand
+# uitgeschreven: naam en prefix per gast. Nieuwe gast = één regel erbij.
+#
+# GEHEUGEN PER VM KLEURT NIET ROOD. Proxmox rekent de paginacache van een
+# gast mee als gebruikt; een VM zonder ballooning staat dus vaak op 90-100%
+# terwijl er niets aan de hand is. Het getal staat er, grijs.
+#
+# Drempels NUC: 85 / 92 °C, dezelfde als de meldingen in Proxmox NUC.yaml.
+# Drempels rack: de helpers van Ventilation.yaml (warm/kritiek), live gelezen.
+#
+# Test: tests/test_server_dashboard.py draait de JS van de panelen in node.
+
+button_card_templates: !include home/overzicht_templates.yaml
+
+title: Server
+views:
+  - title: Server
+    path: status
+    icon: mdi:server
+    panel: true
+    background: "var(--primary-background-color)"
+    cards:
+      - type: vertical-stack
+        card_mod:
+          style: |
+            :host { height: 100% !important; }
+            #root {
+              /* Kleurtokens komen uit www/ov-tokens.js, zie overzicht.yaml. */
+              --ov-panel-border: 1px solid var(--ov-ink-6);
+              gap: 16px !important;
+              min-height: calc(100vh - 8px) !important;
+              margin: 0 !important;
+              padding: 20px 24px 24px 24px !important;
+              background: var(--primary-background-color) !important;
+              box-sizing: border-box !important;
+            }
+        cards:
+          - type: horizontal-stack
+            card_mod:
+              style: |
+                #root {
+                  display: grid !important;
+                  grid-template-columns: 1fr 1fr 1fr !important;
+                  gap: 16px !important;
+                  align-items: start !important;
+                }
+                @media (max-width: 1500px) {
+                  #root { grid-template-columns: 1fr 1fr !important; }
+                }
+                @media (max-width: 1000px) {
+                  #root { grid-template-columns: 1fr !important; }
+                }
+            cards:
+              # ======================= KOLOM 1: SERVERRACK =======================
+              - type: vertical-stack
+                cards:
+                  - type: custom:mod-card
+                    card_mod:
+                      style: &paneel |
+                        ha-card {
+                          background: var(--ov-panel-bg) !important;
+                          border: var(--ov-panel-border) !important;
+                          border-radius: 20px !important;
+                          box-shadow: none !important;
+                          padding: 16px 18px !important;
+                        }
+                    card:
+                      type: vertical-stack
+                      cards:
+                        - type: custom:button-card
+                          entity: sensor.garage_serverrack_temperatuur_temperature
+                          show_icon: false
+                          show_name: false
+                          show_state: false
+                          tap_action:
+                            action: more-info
+                          triggers_update:
+                            - sensor.garage_serverrack_temperatuur_temperature
+                            - sensor.garage_serverrack_temperatuur_humidity
+                            - sensor.garage_garage_temperatuur_temperatuur
+                            - sensor.ventilatie_serverrack_temp_verandering_1u
+                            - switch.garage_garage_stopcontact_serverrack_ventilatoren
+                            - input_number.ventilation_serverrack_warm_threshold
+                            - input_number.ventilation_serverrack_critical_threshold
+                          variables:
+                            kaart: rack
+                          styles: &html_kaart
+                            card:
+                              - background: none
+                              - border: none
+                              - box-shadow: none
+                              - padding: 0 2px 4px 2px
+                            grid:
+                              - grid-template-areas: '"x"'
+                              - grid-template-columns: minmax(0, 1fr)
+                            custom_fields:
+                              x:
+                                - justify-self: stretch
+                                - text-align: left
+                                - min-width: 0
+                                - white-space: normal
+                          custom_fields:
+                            x: |
+                              [[[
+                                var num = function(id){ var s = states[id]; if(!s) return null; var n = parseFloat(s.state); return isNaN(n) ? null : n; };
+                                var nl = function(n, d){ d = d || 0; return n.toLocaleString('nl-NL', {minimumFractionDigits: d, maximumFractionDigits: d}); };
+                                var pil = function(k, t){ return '<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;white-space:nowrap;color:var(--ov-' + k + ');background:var(--ov-' + k + '-15)">' + t + '</span>'; };
+                                var rack = num('sensor.garage_serverrack_temperatuur_temperature');
+                                var garage = num('sensor.garage_garage_temperatuur_temperatuur');
+                                var vocht = num('sensor.garage_serverrack_temperatuur_humidity');
+                                var trend = num('sensor.ventilatie_serverrack_temp_verandering_1u');
+                                var warm = num('input_number.ventilation_serverrack_warm_threshold'); if(warm === null) warm = 28;
+                                var krit = num('input_number.ventilation_serverrack_critical_threshold'); if(krit === null) krit = 35;
+                                var fan = states['switch.garage_garage_stopcontact_serverrack_ventilatoren'];
+                                var k = rack === null ? 'ink-35' : (rack >= krit ? 'bad' : (rack >= warm ? 'warn' : 'ok'));
+                                var oordeel = rack === null ? pil('bad', 'geen meting')
+                                  : (rack >= krit ? pil('bad', 'kritiek') : (rack >= warm ? pil('warn', 'warm') : pil('ok', 'koel genoeg')));
+                                var regel = function(label, waarde){
+                                  return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:3px 0">'
+                                    + '<span style="color:var(--ov-ink-55)">' + label + '</span>'
+                                    + '<span style="font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">' + waarde + '</span></div>';
+                                };
+                                var tr = trend === null ? '—' : ((trend > 0 ? '+' : (trend < 0 ? '−' : '')) + nl(Math.abs(trend), 1) + ' °C');
+                                var fanTekst = !fan || ['unavailable', 'unknown'].indexOf(fan.state) !== -1
+                                  ? '<span style="color:var(--ov-bad)">geen verbinding</span>'
+                                  : (fan.state === 'on' ? '<span style="color:var(--ov-ok)">draaien</span>' : 'stil');
+                                return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 10px 0">'
+                                    + '<span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">SERVERRACK</span>' + oordeel + '</div>'
+                                  + '<div style="display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:22px;align-items:center">'
+                                    + '<div><div style="font-size:46px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;color:var(--ov-' + k + ')">'
+                                      + (rack === null ? '—' : nl(rack, 1) + '°') + '</div>'
+                                      + '<div style="font-size:12px;color:var(--ov-ink-50);margin-top:6px">warm ' + nl(warm, 0) + '° · kritiek ' + nl(krit, 0) + '°</div></div>'
+                                    + '<div style="min-width:0">'
+                                      + regel('Garage', garage === null ? '—' : nl(garage, 1) + ' °C')
+                                      + regel('Laatste uur', tr)
+                                      + regel('Vocht', vocht === null ? '—' : nl(vocht, 0) + '%')
+                                      + regel('Ventilatoren', fanTekst)
+                                    + '</div></div>';
+                              ]]]
+
+                        # Rack en garage over 24 uur, met de draaitijd van de
+                        # ventilatoren als vlak eronder: zo zie je in één keer of
+                        # blazen helpt (de rack-lijn zakt naar de garage-lijn).
+                        - type: custom:apexcharts-card
+                          graph_span: 24h
+                          update_interval: 5min
+                          card_mod:
+                            style: &grafiek |
+                              ha-card { background: none !important; box-shadow: none !important; border: none !important; }
+                          header:
+                            show: false
+                          yaxis:
+                            - id: temp
+                              decimals: 0
+                              apex_config:
+                                tickAmount: 4
+                            - id: fan
+                              show: false
+                              min: 0
+                              max: 1
+                          apex_config: &grafiek_apex
+                            chart:
+                              height: 180
+                              toolbar:
+                                show: false
+                            grid:
+                              borderColor: "var(--ov-ink-6)"
+                              padding:
+                                left: 4
+                                right: 8
+                                top: -10
+                                bottom: 0
+                            legend:
+                              show: true
+                              position: top
+                              horizontalAlign: left
+                              fontSize: 11px
+                              labels:
+                                colors: "var(--ov-ink-58)"
+                              markers:
+                                size: 4
+                            tooltip:
+                              x:
+                                format: HH:mm
+                            xaxis:
+                              labels:
+                                datetimeUTC: false
+                                style:
+                                  colors: "var(--ov-ink-45)"
+                          series:
+                            - entity: switch.garage_garage_stopcontact_serverrack_ventilatoren
+                              name: ventilatoren aan
+                              yaxis_id: fan
+                              type: area
+                              curve: stepline
+                              stroke_width: 0
+                              opacity: 0.18
+                              color: "var(--ov-ok)"
+                              transform: "return x === 'on' ? 1 : 0;"
+                              show:
+                                in_header: false
+                                legend_value: false
+                            - entity: sensor.garage_serverrack_temperatuur_temperature
+                              name: rack
+                              yaxis_id: temp
+                              type: line
+                              curve: smooth
+                              stroke_width: 2
+                              color: "var(--ov-warn)"
+                              float_precision: 1
+                              group_by:
+                                duration: 10min
+                                func: avg
+                              show:
+                                legend_value: false
+                            - entity: sensor.garage_garage_temperatuur_temperatuur
+                              name: garage
+                              yaxis_id: temp
+                              type: line
+                              curve: smooth
+                              stroke_width: 2
+                              color: "var(--ov-info)"
+                              float_precision: 1
+                              group_by:
+                                duration: 10min
+                                func: avg
+                              show:
+                                legend_value: false
+
+                  # ------------------------------------------------ VENTILEREN
+                  # Elke knop roept het bestaande handbedieningsscript aan met
+                  # `stand: aan`: tweemaal tikken zet ze dus niet weer uit. Zolang
+                  # de handbediening loopt blijft de automatisering eraf; alleen
+                  # de kritieke drempel wint nog (zie Ventilation.yaml).
+                  - type: custom:mod-card
+                    card_mod:
+                      style: *paneel
+                    card:
+                      type: vertical-stack
+                      cards:
+                        - type: custom:button-card
+                          entity: switch.garage_garage_stopcontact_serverrack_ventilatoren
+                          show_icon: false
+                          show_name: false
+                          show_state: false
+                          tap_action:
+                            action: more-info
+                          # sensor.time: "nog 1 u 20 min" moet aftellen.
+                          triggers_update:
+                            - switch.garage_garage_stopcontact_serverrack_ventilatoren
+                            - input_datetime.ventilation_serverrack_handbediening_tot
+                            - input_datetime.ventilation_serverrack_lockout_until
+                            - sensor.time
+                          variables:
+                            kaart: ventileren
+                          styles: *html_kaart
+                          custom_fields:
+                            x: |
+                              [[[
+                                var pil = function(k, t){ return '<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;white-space:nowrap;color:var(--ov-' + k + ');background:var(--ov-' + k + '-15)">' + t + '</span>'; };
+                                var nu = Date.now() / 1000;
+                                var ts = function(id){ var s = states[id]; var t = s && s.attributes ? Number(s.attributes.timestamp) : NaN; return isNaN(t) ? null : t; };
+                                var klok = function(t){
+                                  var d = new Date(t * 1000), v = new Date(nu * 1000);
+                                  var hm = d.toLocaleTimeString('nl-NL', {hour: '2-digit', minute: '2-digit'});
+                                  return d.toDateString() === v.toDateString() ? hm : d.toLocaleDateString('nl-NL', {weekday: 'short'}) + ' ' + hm;
+                                };
+                                var duur = function(s){ var m = Math.max(1, Math.round(s / 60)); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' u' + (m % 60 ? ' ' + (m % 60) + ' min' : ''); };
+                                var fan = entity;
+                                var weg = !fan || ['unavailable', 'unknown'].indexOf(fan.state) !== -1;
+                                var aan = !weg && fan.state === 'on';
+                                var hand = ts('input_datetime.ventilation_serverrack_handbediening_tot');
+                                var lock = ts('input_datetime.ventilation_serverrack_lockout_until');
+                                var badge, uitleg;
+                                if(weg){ badge = pil('bad', 'geen verbinding'); uitleg = 'De stekker van de ventilatoren reageert niet.'; }
+                                else {
+                                  badge = aan ? pil('ok', 'aan') : '<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:var(--ov-ink-50);background:var(--ov-ink-6)">uit</span>';
+                                  if(hand !== null && hand > nu) uitleg = 'Handmatig ' + (aan ? 'aan' : 'uit') + ' tot <b>' + klok(hand) + '</b> (nog ' + duur(hand - nu) + '), daarna weer automatisch.';
+                                  else if(!aan && lock !== null && lock > nu) uitleg = 'Automatisch. Blazen hielp niet meer; pas na ' + klok(lock) + ' weer aan, tenzij het rack kritiek wordt.';
+                                  else uitleg = 'Automatisch: aan als het rack warm is en de garagelucht koeler.';
+                                }
+                                return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 8px 0">'
+                                    + '<span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">VENTILEREN</span>' + badge + '</div>'
+                                  + '<div style="font-size:13px;line-height:1.45;color:var(--ov-ink-70);padding-bottom:12px">' + uitleg + '</div>';
+                              ]]]
+                        - type: grid
+                          columns: 5
+                          square: false
+                          cards:
+                            - type: custom:button-card
+                              name: 1 uur
+                              tap_action:
+                                action: perform-action
+                                perform_action: script.ventilation_serverrack_handbediening
+                                data:
+                                  stand: aan
+                                  uren: 1
+                              <<: &knop
+                                show_icon: false
+                                show_state: false
+                                hold_action:
+                                  action: none
+                                styles:
+                                  card:
+                                    - background: var(--ov-ink-6)
+                                    - border: none
+                                    - box-shadow: none
+                                    - border-radius: 12px
+                                    - padding: 10px 2px
+                                  name:
+                                    - font-size: 13.5px
+                                    - font-weight: "600"
+                                    - color: var(--primary-text-color)
+                            - type: custom:button-card
+                              name: 2 uur
+                              tap_action:
+                                action: perform-action
+                                perform_action: script.ventilation_serverrack_handbediening
+                                data:
+                                  stand: aan
+                                  uren: 2
+                              <<: *knop
+                            - type: custom:button-card
+                              name: 4 uur
+                              tap_action:
+                                action: perform-action
+                                perform_action: script.ventilation_serverrack_handbediening
+                                data:
+                                  stand: aan
+                                  uren: 4
+                              <<: *knop
+                            - type: custom:button-card
+                              name: 8 uur
+                              tap_action:
+                                action: perform-action
+                                perform_action: script.ventilation_serverrack_handbediening
+                                data:
+                                  stand: aan
+                                  uren: 8
+                              <<: *knop
+                            # Handbediening meteen beëindigen; de automatisering
+                            # beslist direct opnieuw (kan ze dus aan laten).
+                            - type: custom:button-card
+                              name: Auto
+                              tap_action:
+                                action: perform-action
+                                perform_action: script.ventilation_serverrack_automatisch
+                              <<: *knop
+
+              # ========================== KOLOM 2: NUC ===========================
+              - type: custom:mod-card
+                card_mod:
+                  style: *paneel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      entity: sensor.proxmox_nuc_intel_cpu_temperatuur
+                      show_icon: false
+                      show_name: false
+                      show_state: false
+                      tap_action:
+                        action: none
+                      triggers_update:
+                        - sensor.proxmox_nuc_intel_cpu_temperatuur
+                        - sensor.proxmox_nuc_intel_nvme_temperatuur
+                        - sensor.proxmox_nuc_intel_cpu_verbruik
+                        - sensor.node_intel_cpu_used
+                        - sensor.node_intel_memory_used_percentage
+                        - sensor.node_intel_status
+                      variables:
+                        kaart: nuc
+                      styles: *html_kaart
+                      custom_fields:
+                        x: |
+                          [[[
+                            // Tekst uit een state gaat de HTML in: escapen, een integratie kan alles sturen.
+                            var esc = function(v){ return String(v).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+                            var num = function(id){ var s = states[id]; if(!s) return null; var n = parseFloat(s.state); return isNaN(n) ? null : n; };
+                            var nl = function(n, d){ d = d || 0; return n.toLocaleString('nl-NL', {minimumFractionDigits: d, maximumFractionDigits: d}); };
+                            var pil = function(k, t){ return '<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;white-space:nowrap;color:var(--ov-' + k + ');background:var(--ov-' + k + '-15)">' + t + '</span>'; };
+                            var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + id + '\'},bubbles:true,composed:true}))'; };
+                            var tegel = function(id, label, waarde, k, sub){
+                              return '<div onclick="' + info(id) + '" style="cursor:pointer;flex:1 1 76px;min-width:0;background:var(--ov-ink-4);border-radius:14px;padding:11px 13px">'
+                                + '<div style="font-size:10.5px;font-weight:700;letter-spacing:1px;color:var(--ov-ink-55)">' + label + '</div>'
+                                + '<div style="font-size:24px;font-weight:700;line-height:1.25;margin-top:3px;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--ov-' + k + ')">' + waarde + '</div>'
+                                + '<div style="font-size:11.5px;color:var(--ov-ink-58);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + sub + '</div></div>';
+                            };
+                            var cpu = num('sensor.proxmox_nuc_intel_cpu_temperatuur');
+                            var nvme = num('sensor.proxmox_nuc_intel_nvme_temperatuur');
+                            var watt = num('sensor.proxmox_nuc_intel_cpu_verbruik');
+                            var last = num('sensor.node_intel_cpu_used');
+                            var mem = num('sensor.node_intel_memory_used_percentage');
+                            var node = states['sensor.node_intel_status'];
+                            // 85/92: zelfde grenzen als de meldingen in Proxmox NUC.yaml.
+                            var ck = cpu === null ? 'ink-35' : (cpu >= 92 ? 'bad' : (cpu >= 85 ? 'warn' : 'ok'));
+                            var nk = nvme === null ? 'ink-35' : (nvme >= 70 ? 'bad' : (nvme >= 60 ? 'warn' : 'ok'));
+                            var lk = last === null ? 'ink-35' : (last >= 90 ? 'bad' : (last >= 70 ? 'warn' : 'ok'));
+                            var mk = mem === null ? 'ink-35' : (mem >= 95 ? 'bad' : (mem >= 85 ? 'warn' : 'ok'));
+                            var badge;
+                            if(cpu === null) badge = pil('bad', 'stuurt niets');
+                            else if(node && node.state !== 'online') badge = pil('bad', 'Proxmox ' + esc(node.state));
+                            else if(cpu >= 92) badge = pil('bad', 'kritiek heet');
+                            else if(cpu >= 85) badge = pil('warn', 'warm');
+                            else badge = pil('ok', 'in orde');
+                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 10px 0">'
+                                + '<span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">NUC · PROXMOX</span>' + badge + '</div>'
+                              + '<div style="display:flex;flex-wrap:wrap;gap:8px">'
+                                + tegel('sensor.proxmox_nuc_intel_cpu_temperatuur', 'CPU', cpu === null ? '—' : nl(cpu) + '°', ck, watt === null ? 'temperatuur' : nl(watt) + ' W')
+                                + tegel('sensor.proxmox_nuc_intel_nvme_temperatuur', 'NVME', nvme === null ? '—' : nl(nvme) + '°', nk, 'temperatuur')
+                                + tegel('sensor.node_intel_cpu_used', 'BELASTING', last === null ? '—' : nl(last) + '%', lk, 'CPU')
+                                + tegel('sensor.node_intel_memory_used_percentage', 'GEHEUGEN', mem === null ? '—' : nl(mem) + '%', mk, 'in gebruik')
+                              + '</div>';
+                          ]]]
+
+                    # CPU- en NVMe-temperatuur over 24 uur. Max per tien minuten
+                    # en geen gemiddelde: een piek naar 92° is precies wat je
+                    # hier wilt zien. Streeplijn op 85° = de meldingsgrens.
+                    - type: custom:apexcharts-card
+                      graph_span: 24h
+                      update_interval: 5min
+                      card_mod:
+                        style: *grafiek
+                      header:
+                        show: false
+                      yaxis:
+                        - decimals: 0
+                          min: ~40
+                          max: ~95
+                          apex_config:
+                            tickAmount: 4
+                      apex_config:
+                        <<: *grafiek_apex
+                        annotations:
+                          yaxis:
+                            - y: 85
+                              borderColor: "var(--ov-warn)"
+                              strokeDashArray: 4
+                      series:
+                        - entity: sensor.proxmox_nuc_intel_cpu_temperatuur
+                          name: CPU
+                          type: line
+                          curve: smooth
+                          stroke_width: 2
+                          color: "var(--ov-warn)"
+                          float_precision: 0
+                          group_by:
+                            duration: 10min
+                            func: max
+                          show:
+                            legend_value: false
+                        - entity: sensor.proxmox_nuc_intel_nvme_temperatuur
+                          name: NVMe
+                          type: line
+                          curve: smooth
+                          stroke_width: 2
+                          color: "var(--ov-info)"
+                          float_precision: 0
+                          group_by:
+                            duration: 10min
+                            func: max
+                          show:
+                            legend_value: false
+
+                    - type: custom:button-card
+                      entity: sensor.node_intel_last_boot
+                      show_icon: false
+                      show_name: false
+                      show_state: false
+                      tap_action:
+                        action: none
+                      triggers_update:
+                        - sensor.proxmox_nuc_intel_load_average
+                        - sensor.proxmox_nuc_intel_throttle_events
+                        - sensor.proxmox_nuc_intel_uptime
+                        - sensor.node_intel_disk_used
+                        - sensor.node_intel_disk_total
+                        - sensor.node_intel_memory_used
+                        - sensor.node_intel_memory_total
+                        - sensor.node_intel_swap_used
+                        - sensor.node_intel_io_delay
+                        - sensor.node_intel_failed_tasks
+                        - sensor.node_intel_version
+                        - sensor.node_intel_virtual_machines_running
+                        - sensor.node_intel_containers_running
+                        - binary_sensor.node_intel_backup_running
+                        - update.proxmox_ve_update
+                      variables:
+                        kaart: nuc_details
+                        # NUC11TNKi5: 4 kernen, 8 threads. Load boven 8 = er
+                        # staat werk in de rij.
+                        threads: 8
+                      styles: *html_kaart
+                      custom_fields:
+                        x: |
+                          [[[
+                            // Tekst uit een state gaat de HTML in: escapen, een integratie kan alles sturen.
+                            var esc = function(v){ return String(v).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+                            var num = function(id){ var s = states[id]; if(!s) return null; var n = parseFloat(s.state); return isNaN(n) ? null : n; };
+                            var nl = function(n, d){ d = d || 0; return n.toLocaleString('nl-NL', {minimumFractionDigits: d, maximumFractionDigits: d}); };
+                            var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + id + '\'},bubbles:true,composed:true}))'; };
+                            var balk = function(pct, k){
+                              return '<div style="height:6px;border-radius:3px;background:var(--ov-ink-6);margin-top:5px"><div style="height:6px;border-radius:3px;width:'
+                                + Math.max(0, Math.min(100, pct)) + '%;background:var(--ov-' + k + ')"></div></div>';
+                            };
+                            var rij = function(id, naam, waarde, k, extra){
+                              return '<div onclick="' + info(id) + '" style="cursor:pointer;padding:8px 0;border-top:1px solid var(--ov-ink-6)">'
+                                + '<div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px">'
+                                + '<span style="color:var(--ov-ink-80)">' + naam + '</span>'
+                                + '<span style="font-weight:600;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:' + (k ? 'var(--ov-' + k + ')' : 'var(--primary-text-color)') + '">' + waarde + '</span></div>'
+                                + (extra || '') + '</div>';
+                            };
+                            var r = [];
+                            var du = num('sensor.node_intel_disk_used'), dt = num('sensor.node_intel_disk_total');
+                            if(du !== null && dt) {
+                              var dp = du / dt * 100, dk = dp >= 90 ? 'bad' : (dp >= 80 ? 'warn' : 'info');
+                              r.push(rij('sensor.node_intel_disk_used_percentage', 'Systeemschijf', nl(du) + ' van ' + nl(dt) + ' GB', dk === 'info' ? null : dk, balk(dp, dk)));
+                            }
+                            var mu = num('sensor.node_intel_memory_used'), mt = num('sensor.node_intel_memory_total');
+                            if(mu !== null && mt) r.push(rij('sensor.node_intel_memory_used_percentage', 'Geheugen', nl(mu) + ' van ' + nl(mt) + ' GB', null, balk(mu / mt * 100, 'info')));
+                            var ld = num('sensor.proxmox_nuc_intel_load_average');
+                            if(ld !== null) r.push(rij('sensor.proxmox_nuc_intel_load_average', 'Load (1 min)', nl(ld, 1) + ' op ' + variables.threads + ' threads', ld > variables.threads ? 'warn' : null));
+                            var th = num('sensor.proxmox_nuc_intel_throttle_events');
+                            if(th !== null) r.push(rij('sensor.proxmox_nuc_intel_throttle_events', 'Teruggeklokt', th === 0 ? 'nooit' : nl(th) + '× sinds opstart', th > 0 ? 'warn' : null));
+                            var io = num('sensor.node_intel_io_delay');
+                            if(io !== null) r.push(rij('sensor.node_intel_io_delay', 'IO-wachttijd', nl(io, 1) + '%', io >= 5 ? 'warn' : null));
+                            var sw = num('sensor.node_intel_swap_used');
+                            if(sw !== null) r.push(rij('sensor.node_intel_swap_used', 'Swap', nl(sw) + ' MB', sw > 1024 ? 'warn' : null));
+                            var vm = num('sensor.node_intel_virtual_machines_running'), ct = num('sensor.node_intel_containers_running');
+                            if(vm !== null || ct !== null) r.push(rij('sensor.node_intel_virtual_machines_running', 'Draait', (vm === null ? '?' : vm) + ' VM\'s · ' + (ct === null ? '?' : ct) + ' containers'));
+                            var up = num('sensor.proxmox_nuc_intel_uptime');
+                            if(up !== null) {
+                              var d = Math.floor(up / 86400), u = Math.floor((up % 86400) / 3600);
+                              r.push(rij('sensor.node_intel_last_boot', 'Aan sinds', (d ? d + ' d ' : '') + u + ' u'));
+                            }
+                            var ft = num('sensor.node_intel_failed_tasks');
+                            if(ft !== null && ft > 0) r.push(rij('sensor.node_intel_failed_tasks', 'Mislukte taken', nl(ft), 'bad'));
+                            if(states['binary_sensor.node_intel_backup_running'] && states['binary_sensor.node_intel_backup_running'].state === 'on')
+                              r.push(rij('binary_sensor.node_intel_backup_running', 'Back-up', 'loopt nu', 'info'));
+                            var ver = states['sensor.node_intel_version'], upd = states['update.proxmox_ve_update'];
+                            var nieuw = upd && upd.state === 'on';
+                            if(ver) r.push(rij(nieuw ? 'update.proxmox_ve_update' : 'sensor.node_intel_version', 'Proxmox VE', esc(ver.state) + (nieuw ? ' · update klaar' : ''), nieuw ? 'warn' : null));
+                            return '<div style="padding-top:4px">' + r.join('') + '</div>';
+                          ]]]
+
+              # ================== KOLOM 3: NAS, GASTEN, BACK-UPS ==================
+              - type: vertical-stack
+                cards:
+                  - type: custom:mod-card
+                    card_mod:
+                      style: *paneel
+                    card:
+                      type: custom:button-card
+                      entity: device_tracker.unas_pro_8
+                      show_icon: false
+                      show_name: false
+                      show_state: false
+                      tap_action:
+                        action: none
+                      triggers_update:
+                        - device_tracker.unas_pro_8
+                        - sensor.immich_nas_vrij
+                        - binary_sensor.immich_nas
+                      variables:
+                        kaart: nas
+                      styles: *html_kaart
+                      custom_fields:
+                        x: |
+                          [[[
+                            var num = function(id){ var s = states[id]; if(!s) return null; var n = parseFloat(s.state); return isNaN(n) ? null : n; };
+                            var nl = function(n, d){ d = d || 0; return n.toLocaleString('nl-NL', {minimumFractionDigits: d, maximumFractionDigits: d}); };
+                            var pil = function(k, t){ return '<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;white-space:nowrap;color:var(--ov-' + k + ');background:var(--ov-' + k + '-15)">' + t + '</span>'; };
+                            var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + id + '\'},bubbles:true,composed:true}))'; };
+                            var rij = function(id, naam, waarde, k){
+                              return '<div onclick="' + info(id) + '" style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:8px 0;border-top:1px solid var(--ov-ink-6)">'
+                                + '<span style="color:var(--ov-ink-80)">' + naam + '</span>'
+                                + '<span style="font-weight:600;white-space:nowrap;color:' + (k ? 'var(--ov-' + k + ')' : 'var(--primary-text-color)') + '">' + waarde + '</span></div>';
+                            };
+                            var nas = entity;
+                            var online = nas && nas.state === 'home';
+                            var vrij = num('sensor.immich_nas_vrij');
+                            var mount = states['binary_sensor.immich_nas'];
+                            var vrijTekst = vrij === null ? '—' : (vrij >= 1000 ? nl(vrij / 1000, 1) + ' TB' : nl(vrij) + ' GB');
+                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 10px 0">'
+                                + '<span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">NAS · UNAS PRO 8</span>'
+                                + (online ? pil('ok', 'online') : pil('bad', 'onbereikbaar')) + '</div>'
+                              + '<div style="font-size:34px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;color:'
+                                + (vrij === null ? 'var(--ov-ink-35)' : (vrij < 250 ? 'var(--ov-bad)' : (vrij < 1000 ? 'var(--ov-warn)' : 'var(--primary-text-color)'))) + '">' + vrijTekst + '</div>'
+                              + '<div style="font-size:12px;color:var(--ov-ink-50);margin:2px 0 8px 0">vrij</div>'
+                              + rij('device_tracker.unas_pro_8', 'Netwerk', online ? 'bereikbaar' : 'niet gezien', online ? null : 'bad')
+                              + (mount ? rij('binary_sensor.immich_nas', 'Gekoppeld aan Immich', mount.state === 'on' ? 'ja' : 'nee', mount.state === 'on' ? null : 'bad') : '')
+                              + '<div style="font-size:11.5px;color:var(--ov-ink-45);padding-top:8px">Schijven en RAID van de UNAS zelf zitten nog niet in Home Assistant.</div>';
+                          ]]]
+
+                  # ---------------------------------- VM'S EN CONTAINERS
+                  # Expliciete lijst, zie de kop: naam + prefix van de entiteiten.
+                  - type: custom:mod-card
+                    card_mod:
+                      style: *paneel
+                    card:
+                      type: custom:button-card
+                      entity: sensor.node_intel_virtual_machines_running
+                      show_icon: false
+                      show_name: false
+                      show_state: false
+                      tap_action:
+                        action: none
+                      # Elke minuut opnieuw tekenen: per gast drie sensoren in
+                      # `triggers_update` zetten zou bij elke CPU-tik hertekenen.
+                      triggers_update:
+                        - sensor.time
+                      variables:
+                        kaart: gasten
+                        gasten:
+                          - {naam: home-assistant, id: VM 106, p: qemu_home_assistant_106}
+                          - {naam: zigbee2mqtt, id: CT 100, p: qemu_mqtt_100}
+                          - {naam: mqtt, id: CT 108, p: lxc_mqtt_kroon18_slimhuys_nl_108}
+                          - {naam: npm, id: CT 102, p: qemu_scrypted_102}
+                          - {naam: scrypted, id: CT 10443, p: lxc_scrypted_kroon18_slimhuys_nl_10443}
+                          - {naam: p2000, id: VM 103, p: qemu_p2000_103}
+                          - {naam: paperless-ngx, id: VM 104, p: qemu_paperless_ngx_104}
+                          - {naam: tools, id: VM 110, p: qemu_tools_110}
+                          - {naam: scanalyse-scanner, id: VM 111, p: qemu_nginx_proxy_manager_111}
+                          - {naam: windows, id: VM 107, p: qemu_windows_107}
+                      styles: *html_kaart
+                      custom_fields:
+                        x: |
+                          [[[
+                            // Tekst uit een state gaat de HTML in: escapen, een integratie kan alles sturen.
+                            var esc = function(v){ return String(v).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+                            var num = function(id){ var s = states[id]; if(!s) return null; var n = parseFloat(s.state); return isNaN(n) ? null : n; };
+                            var pil = function(k, t){ return '<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;white-space:nowrap;color:var(--ov-' + k + ');background:var(--ov-' + k + '-15)">' + t + '</span>'; };
+                            var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + id + '\'},bubbles:true,composed:true}))'; };
+                            var pct = function(n, k){ return '<span style="text-align:right;font-variant-numeric:tabular-nums;color:' + (k ? 'var(--ov-' + k + ')' : 'var(--ov-ink-70)') + '">' + (n === null ? '—' : Math.round(n) + '%') + '</span>'; };
+                            var kol = 'display:grid;grid-template-columns:10px minmax(0,1fr) 44px 44px 50px;column-gap:10px;align-items:center';
+                            var uit = [];
+                            var rijen = (variables.gasten || []).map(function(g){
+                              var st = states['sensor.' + g.p + '_status'];
+                              var draait = st && st.state === 'running';
+                              var bekend = st && ['unavailable', 'unknown'].indexOf(st.state) === -1;
+                              if(!draait) uit.push(g.naam);
+                              var cpu = num('sensor.' + g.p + '_cpu_used');
+                              var mem = num('sensor.' + g.p + '_memory_used_percentage');
+                              var dsk = num('sensor.' + g.p + '_disk_used_percentage');
+                              var stip = draait ? 'ok' : (bekend ? 'bad' : 'ink-25');
+                              return '<div onclick="' + info('sensor.' + g.p + '_status') + '" style="cursor:pointer;' + kol + ';padding:7px 0;border-top:1px solid var(--ov-ink-6);font-size:13px">'
+                                + '<span style="width:8px;height:8px;border-radius:50%;background:var(--ov-' + stip + ')"></span>'
+                                + '<span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600">' + g.naam + '</span>'
+                                + ' <span style="color:var(--ov-ink-45);font-size:11.5px">' + g.id + (draait || !st ? '' : ' · ' + esc(st.state)) + '</span></span>'
+                                + pct(draait ? cpu : null, cpu !== null && cpu >= 80 ? 'warn' : null)
+                                + pct(draait ? mem : null, null)
+                                + pct(dsk, dsk === null ? null : (dsk >= 95 ? 'bad' : (dsk >= 85 ? 'warn' : null))) + '</div>';
+                            });
+                            var badge = uit.length ? pil('bad', uit.length + ' uit') : pil('ok', 'alles draait');
+                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 10px 0">'
+                                + '<span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">VM\'S EN CONTAINERS</span>' + badge + '</div>'
+                              + '<div style="' + kol + ';font-size:10.5px;font-weight:700;letter-spacing:.8px;color:var(--ov-ink-45);padding-bottom:4px">'
+                                + '<span></span><span></span><span style="text-align:right">CPU</span><span style="text-align:right">RAM</span><span style="text-align:right">SCHIJF</span></div>'
+                              + rijen.join('');
+                          ]]]
+
+                  # -------------------------------------------- BACK-UPS
+                  - type: custom:mod-card
+                    card_mod:
+                      style: *paneel
+                    card:
+                      type: custom:button-card
+                      entity: sensor.backup_last_successful_automatic_backup
+                      show_icon: false
+                      show_name: false
+                      show_state: false
+                      tap_action:
+                        action: none
+                      triggers_update:
+                        - sensor.backup_last_successful_automatic_backup
+                        - sensor.backup_last_successful_automatic_backup_size
+                        - sensor.backup_next_scheduled_automatic_backup
+                        - sensor.immich_backup
+                        - sensor.immich_backup_leeftijd
+                        - sensor.time
+                      variables:
+                        kaart: backups
+                      styles: *html_kaart
+                      custom_fields:
+                        x: |
+                          [[[
+                            // Tekst uit een state gaat de HTML in: escapen, een integratie kan alles sturen.
+                            var esc = function(v){ return String(v).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+                            var pil = function(k, t){ return '<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;white-space:nowrap;color:var(--ov-' + k + ');background:var(--ov-' + k + '-15)">' + t + '</span>'; };
+                            var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + id + '\'},bubbles:true,composed:true}))'; };
+                            var rij = function(id, naam, waarde, k){
+                              return '<div onclick="' + info(id) + '" style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:8px 0;border-top:1px solid var(--ov-ink-6)">'
+                                + '<span style="color:var(--ov-ink-80)">' + naam + '</span>'
+                                + '<span style="font-weight:600;white-space:nowrap;text-align:right;color:' + (k ? 'var(--ov-' + k + ')' : 'var(--primary-text-color)') + '">' + waarde + '</span></div>';
+                            };
+                            var uren = function(ms){ var u = ms / 3600000; return u < 1 ? Math.max(1, Math.round(u * 60)) + ' min' : (u < 48 ? Math.round(u) + ' uur' : Math.round(u / 24) + ' dagen'); };
+                            var nu = Date.now();
+                            var slecht = 0, r = [];
+                            // Home Assistant: draait elke nacht; ouder dan 36 uur = een nacht gemist.
+                            var ha = states['sensor.backup_last_successful_automatic_backup'];
+                            var hat = ha ? new Date(ha.state).getTime() : NaN;
+                            var mb = states['sensor.backup_last_successful_automatic_backup_size'];
+                            var gb = mb ? Number(mb.state) / 1024 : NaN;
+                            if(isNaN(hat)) { slecht++; r.push(rij('sensor.backup_last_successful_automatic_backup', 'Home Assistant', 'onbekend', 'bad')); }
+                            else {
+                              var oud = nu - hat > 36 * 3600000; if(oud) slecht++;
+                              r.push(rij('sensor.backup_last_successful_automatic_backup', 'Home Assistant',
+                                uren(nu - hat) + ' geleden' + (isNaN(gb) ? '' : ' · ' + gb.toLocaleString('nl-NL', {maximumFractionDigits: 1}) + ' GB'), oud ? 'bad' : null));
+                            }
+                            // Immich levert zelf het oordeel (`ok`) en de leeftijd in uren.
+                            var im = states['sensor.immich_backup'], iml = states['sensor.immich_backup_leeftijd'];
+                            if(im) {
+                              var ok = im.state === 'ok'; if(!ok) slecht++;
+                              var l = iml ? Number(iml.state) : NaN;
+                              r.push(rij('sensor.immich_backup', 'Immich (foto\'s)', ok ? (isNaN(l) ? 'ok' : uren(l * 3600000) + ' geleden') : esc(im.state), ok ? null : 'bad'));
+                            }
+                            var nx = states['sensor.backup_next_scheduled_automatic_backup'];
+                            var nxt = nx ? new Date(nx.state).getTime() : NaN;
+                            var volgende = isNaN(nxt) ? '' : '<div style="font-size:11.5px;color:var(--ov-ink-45);padding-top:8px">Volgende HA-back-up '
+                              + new Date(nxt).toLocaleString('nl-NL', {weekday: 'short', hour: '2-digit', minute: '2-digit'}) + '.</div>';
+                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 10px 0">'
+                                + '<span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">BACK-UPS</span>'
+                                + (slecht ? pil('bad', slecht === 1 ? '1 probleem' : slecht + ' problemen') : pil('ok', 'bij')) + '</div>'
+                              + r.join('') + volgende;
+                          ]]]

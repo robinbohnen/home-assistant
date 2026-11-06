@@ -36,7 +36,7 @@ UI editors happy. Everything is YAML, split per room.
 | `packages/` | Grouped per floor and room, e.g. `0 - Ground Floor/Livingroom/Lights.yaml`. `9 - Other/` holds the house-wide packages: climate, energy, presence, alarm, ventilation, watchdog. |
 | `blueprints/automation/robin/` | Own blueprints. `motion_light.yaml` drives the motion lighting in nine rooms; a room package only supplies the sensor, the lamp and its exceptions. |
 | `custom_templates/` | Jinja macro libraries. `klimaat.jinja` is the single decision table for all sun shading — the one place to change behaviour; `brandweer.jinja` is the single place where the quirks of the PreCom staffing webhook are handled. Note: edits here need a **full restart**, a YAML reload is not enough. |
-| `dashboards/` | Lovelace in YAML mode. `overzicht/` is the wall panel (split per column), plus separate views for Woning, Klimaat, Systeem, Camera's, Kalender and a Nest Hub cast target. |
+| `dashboards/` | Lovelace in YAML mode. `overzicht/` is the wall panel (split per column), plus separate views for Woning, Klimaat, Systeem, Camera's, Kalender and a Nest Hub cast target. `server.yaml` is a dashboard of its own (*Server*: NUC, server rack, NAS, VMs, backups). |
 | `custom_sentences/nl/` | The sentences behind the house's own Assist intents. Matched literally — what isn't in there isn't understood. Needs a **full restart** as well. |
 | `docs/` | Design notes. `klimaatregie.md` explains the five layers of the climate control and why each rule exists; `spraak.md` does the same for the voice satellite. |
 | `tests/` | Offline tests that run without Home Assistant. |
@@ -168,6 +168,19 @@ doing with the battery (`sensor.markedroid_regie`), in the colours of the MarkeD
 app. It checks every mode's colour, that "stop managing" and a silent MarkeDroid turn
 the dot off, that all three clocks get it, and that the solar and battery bars now end
 at x=29 so they no longer run under the dot.
+
+`tests/test_server_dashboard.py` covers the Server dashboard (`dashboards/server.yaml`,
+sidebar entry *Server*, admins only, hooked in under `lovelace: dashboards:` in
+`configuration.yaml`). That page shows the Proxmox NUC (temperatures, CPU, memory, system
+disk, throttling, 24-hour temperature graph), the server rack in the garage (temperature
+at a glance plus a 24-hour graph of rack, garage and fan run time), the NAS, every VM and
+container, and the backups. Its *Ventileren* panel runs the rack fans for 1, 2, 4 or 8
+hours through `script.ventilation_serverrack_handbediening`, which since 6-11-2026 takes
+`stand: aan|uit` next to `uren` (without `stand` it still toggles, as the button on the
+overview always did). The test checks the hook-up, that every fan button passes
+`stand: aan` and an hour count the script accepts, renders the script's choice with
+Jinja, and runs the JavaScript of each panel in node against normal, hot, critical and
+missing sensors. It needs `node` next to `pyyaml` and `jinja2`.
 
 ## <a name="hubs">Hubs</a>
 

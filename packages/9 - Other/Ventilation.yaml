@@ -22,8 +22,11 @@ ventilation_cooling_package:
   ## er staat weinig warmmakends in en de ventilatoren maken herrie.
   ##
   ## HANDBEDIENING SERVERRACK
-  ## script.ventilation_serverrack_handbediening klapt de stekker om én zet
-  ## input_datetime.ventilation_serverrack_handbediening_tot twee uur vooruit.
+  ## script.ventilation_serverrack_handbediening klapt de stekker om (of zet
+  ## hem met `stand: aan|uit` expliciet) én zet
+  ## input_datetime.ventilation_serverrack_handbediening_tot `uren` vooruit
+  ## (standaard twee). Het Server-dashboard (dashboards/server/server.yaml)
+  ## gebruikt dat voor "1/2/4/8 uur ventileren".
   ## Zolang die loopt doet de automatisering niets - alleen de kritieke
   ## drempel wint er nog van. Zonder die pauze zet de automatisering een
   ## handmatig aangezette ventilator binnen een kwartier weer uit, en dan lijkt
@@ -661,11 +664,30 @@ ventilation_cooling_package:
     ventilation_serverrack_handbediening:
       alias: Ventilatie Serverrack - Handbediening
       description: >-
-        Klapt de rackventilatoren om en laat de automatisering er twee uur van
-        af. Daarna neemt ze het vanzelf weer over.
+        Zet de rackventilatoren aan of uit (standaard: omklappen) en laat de
+        automatisering er een aantal uur van af. Daarna neemt ze het vanzelf
+        weer over.
       icon: mdi:fan
-      mode: single
+      # restart en niet single: wie op "4 u" tikt terwijl "1 u" nog loopt, wil
+      # dat de nieuwe keuze wint, niet dat de tik stil genegeerd wordt.
+      mode: restart
       fields:
+        # Toegevoegd 6 november 2026 voor het Server-dashboard ("x uur
+        # ventileren"). Met `wissel` (de standaard) blijft de knop op het
+        # overzicht precies doen wat hij deed. `aan`/`uit` zijn expliciet: een
+        # tweede tik op "2 u ventileren" mag de ventilatoren niet uitzetten.
+        stand:
+          name: Stand
+          description: aan, uit of wissel (omklappen)
+          required: false
+          example: aan
+          default: wissel
+          selector:
+            select:
+              options:
+                - wissel
+                - aan
+                - uit
         uren:
           name: Uren
           description: Hoe lang de automatisering er vanaf blijft
@@ -683,8 +705,13 @@ ventilation_cooling_package:
         # maar die loopt een paar seconden achter op het commando, dus meldde
         # het logboek geregeld de verkeerde kant (21-09-2026).
         - variables:
+            # De selector (0,5-12) geldt alleen in de UI; een service-call via
+            # de API kan alles meegeven. Daarom hier nog eens begrensd.
+            duur: >-
+              {{ [[(uren | default(2)) | float(2), 0.5] | max, 12] | min }}
             nieuw: >-
-              {{ 'off' if is_state('switch.garage_garage_stopcontact_serverrack_ventilatoren', 'on') else 'on' }}
+              {%- set s = (stand | default('wissel') | string | lower) -%}
+              {%- if s == 'aan' -%}on{%- elif s == 'uit' -%}off{%- else -%}{{ 'off' if is_state('switch.garage_garage_stopcontact_serverrack_ventilatoren', 'on') else 'on' }}{%- endif -%}
         - action: "switch.turn_{{ nieuw }}"
           target:
             entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
@@ -693,7 +720,7 @@ ventilation_cooling_package:
             entity_id: input_datetime.ventilation_serverrack_handbediening_tot
           data:
             datetime: >-
-              {{ (now() + timedelta(hours=(uren | default(2)) | float(2))).strftime('%Y-%m-%d %H:%M:%S') }}
+              {{ (now() + timedelta(hours=duur | float(2))).strftime('%Y-%m-%d %H:%M:%S') }}
         # Een stagnatie-lockout van eerder hoort hier te vervallen: je hebt nu
         # zelf gezegd wat er moet gebeuren. Bleef hij staan, dan zou de
         # automatisering na de handbediening alsnog uren niet mogen aanzetten.
@@ -708,7 +735,7 @@ ventilation_cooling_package:
             message: >-
               Handbediening: ventilatoren
               {{ 'aan' if nieuw == 'on' else 'uit' }}
-              gezet, automatisering pauzeert {{ (uren | default(2)) | float(2) }} uur.
+              gezet, automatisering pauzeert {{ duur }} uur.
 
     # Terug naar automatisch zonder te wachten: handbediening meteen aflopen
     # laten. De eerstvolgende evaluatie (elk kwartier, of eerder bij een nieuwe
