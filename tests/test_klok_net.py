@@ -156,6 +156,24 @@ def test_script_stuurt_net_naar_elke_klok():
     assert len(net) == 1 and "if" not in net[0]
 
 
+def test_oude_power_usage_app_komt_niet_terug():
+    """`net` verving op 28-10-2026 de keuken-app `power_usage` (kW, vast getal).
+
+    Op 6-11-2026 stond zijn retained bericht (`-0.09`) nog op de broker, en de
+    keukenklok liet dat bij elke herverbinding als stilstaand getal zien. Op de
+    broker is het nu gewist; deze test zorgt dat niets in de config dat topic
+    weer gaat vullen. Commentaarregels tellen niet mee.
+    """
+    bestanden = [f"{CONFIG}/automations.yaml", f"{CONFIG}/scripts.yaml"]
+    for root, _, files in os.walk(f"{CONFIG}/packages"):
+        bestanden += [os.path.join(root, f) for f in files if f.endswith(".yaml")]
+    for pad in bestanden:
+        with open(pad, encoding="utf-8") as fh:
+            for nr, regel in enumerate(fh, 1):
+                code = regel.split("#", 1)[0] if not regel.lstrip().startswith("#") else ""
+                assert "power_usage" not in code, f"{pad}:{nr} publiceert weer power_usage"
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_")]
     for naam, f in tests:
