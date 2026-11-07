@@ -1,16 +1,28 @@
 ###############################################################################
-## SCHOOL - de Magister-weergave
+## SCHOOL - de Magister-weergave (Server-stijl sinds 7 november 2026)
 ###############################################################################
 #
-# Eén kolom per kind, plus een gedeelde kolom rechts met het weekrooster en de
-# staat van de integratie.
+# WAT. Per kind een blok van twee kolommen (school/<kind>.yaml) met waar het
+# nu is in zijn dag, het rooster, huiswerk en toetsen, cijfers, absenties en
+# onderweg; rechts een gedeelde kolom met "Vandaag in het kort", de
+# weektaken, de week-planner over twee weken en - alleen als er iets te doen
+# is - ONDERHOUD van de integratie.
 #
-# Bewust met standaardkaarten gebouwd (markdown, entities, heading), net als
-# `klimaat.yaml` en anders dan `overzicht.yaml`: dit is een leespagina die je
-# op een telefoon opent, geen wandpaneel. Hij moet het dus ook doen als
-# button-card of card-mod een keer niet laden. De enige custom kaart is de
-# week-planner, en die staat in de gedeelde kolom - valt hij weg, dan mis je
-# een overzicht, geen informatie.
+# WAAROM ZO. Tot 7-11-2026 was dit een sections-weergave met standaardkaarten
+# (markdown, entities, heading), bewust zonder button-card/card-mod. Robin
+# koos ervoor alle weergaven behalve Overzicht, Nest Hub, Kalender en Camera's
+# in de stijl van het Server-dashboard te zetten (docs/dashboard-stijl.md).
+# De Magister-logica blijft in custom_templates/school.jinja: de tabellen en
+# lijsten zijn markdown-kaarten zonder eigen kaart, in Server-typografie,
+# binnen een paneel. Kop, badge en tegels komen uit www/sv-kit.js en lezen
+# alleen tellers en tijden. Zie de kop van school/logan.yaml.
+#
+# OPBOUW. Panel-weergave met de schil uit dashboards/server.yaml: een raster
+# van drie kolommen. Elk kind-blok neemt er twee (`span 2`), de gedeelde
+# kolom de derde. `grid-auto-flow: dense` zet de gedeelde kolom naast het
+# eerste kind, ook als er een tweede kind onder staat. Onder 1500 px staat
+# alles onder elkaar in de volle breedte (kind-blok nog in twee kolommen),
+# onder 1000 px in één kolom.
 #
 # ---------------------------------------------------------------------------
 # EEN TWEEDE KIND ERBIJ
@@ -21,262 +33,359 @@
 #      haalt elk kwartier op en maakt zijn sensoren vanzelf aan.
 #   2. Kopieer `school/logan.yaml` naar `school/<roepnaam>.yaml` en vervang
 #      daarin overal `sensor.magister_logan_veen` door de nieuwe prefix (te
-#      vinden onder Ontwikkelhulpmiddelen -> Status, filter `magister_`), plus
-#      onderaan de vier entiteiten van de kaart "Onderweg" (persoon, GEO,
-#      reistijd en de batterij van zijn telefoon).
-#   3. Zet hieronder de `!include` erbij, en zijn Magister-kalender in de
-#      week-planner in de gedeelde kolom.
+#      vinden onder Ontwikkelhulpmiddelen -> Status, filter `magister_`),
+#      `naam: LOGAN` door zijn naam, en in de kaart ONDERWEG de vier
+#      entiteiten van zijn telefoon (persoon, GEO, reistijd, batterij).
+#   3. Zet hieronder de `!include` erbij, VOOR de gedeelde kolom (die moet de
+#      laatste kaart blijven: het raster herkent hem daaraan), en zijn
+#      Magister-kalender in de week-planner in de gedeelde kolom.
 #
-# `max_columns: 3` klopt dan nog steeds: twee kinderen plus de gedeelde kolom.
-# Bij een derde kind moet dat getal mee omhoog, anders wikkelt de gedeelde
-# kolom naar een tweede rij en valt er een gat onder de kortste kolom (dezelfde
-# valkuil als bij de airco's in `klimaat.yaml`).
+# Het tweede kind komt op een eigen rij onder het eerste (twee kolommen
+# breed); de gedeelde kolom blijft rechts naast het eerste kind staan.
 #
 # De regel "Vandaag in het kort" bovenaan de gedeelde kolom heeft stap 2 en 3
 # niet nodig: die leest de kinderlijst die de integratie zelf bijhoudt en toont
-# een nieuw kind dus meteen, ook al is zijn kolom er nog niet.
-
-type: sections
-max_columns: 3
+# een nieuw kind dus meteen, ook al is zijn blok er nog niet.
+#
+# Test: tests/test_school_pagina.py (panelen in node), tests/test_school.py
+# (de macro's).
 title: School
 path: school
 icon: mdi:school
-dense_section_placement: true
-
-sections:
-  - !include school/logan.yaml
-  # - !include school/emma.yaml
-
-  #############################################################################
-  ## Gedeeld - geldt voor alle kinderen tegelijk
-  #############################################################################
-  - type: grid
+panel: true
+background: "var(--primary-background-color)"
+cards:
+  - type: vertical-stack
+    card_mod:
+      style: |
+        :host { height: 100% !important; }
+        #root {
+          /* Kleurtokens komen uit www/ov-tokens.js, zie overzicht.yaml. */
+          --ov-panel-border: 1px solid var(--ov-ink-6);
+          gap: 0 !important;
+          min-height: calc(100vh - 8px) !important;
+          margin: 0 !important;
+          padding: 12px 16px !important;
+          background: var(--primary-background-color) !important;
+          box-sizing: border-box !important;
+        }
     cards:
-      - type: heading
-        heading: Vandaag in het kort
-        heading_style: title
-        icon: mdi:account-multiple-outline
+      - type: horizontal-stack
+        card_mod:
+          style: |
+            #root {
+              display: grid !important;
+              grid-template-columns: 1fr 1fr 1fr !important;
+              grid-auto-flow: dense !important;
+              gap: 12px !important;
+              align-items: start !important;
+            }
+            /* Elk kind-blok twee kolommen breed; de gedeelde kolom is de laatste. */
+            #root > *:not(:last-child) { grid-column: span 2 !important; }
+            @media (max-width: 1500px) {
+              #root { grid-template-columns: 1fr 1fr !important; }
+              #root > *:last-child { grid-column: span 2 !important; }
+            }
+            @media (max-width: 1000px) {
+              #root { grid-template-columns: 1fr !important; }
+              #root > * { grid-column: auto !important; }
+            }
+        cards:
+          - !include school/logan.yaml
+          # - !include school/emma.yaml
 
-      # Eén regel per kind. Dit is de kaart die het langst meegaat: hij kent
-      # geen kinderen bij naam maar leest `sensor.magister_data`, de lijst die
-      # de integratie zelf bijhoudt.
-      - type: markdown
-        content: |-
-          {%- from 'school.jinja' import overzicht_alle -%}
-          {{ overzicht_alle() }}
+          # ===================== GEDEELD: ALLE KINDEREN =====================
+          - type: vertical-stack
+            cards:
+              # Eén regel per kind. Kent geen kinderen bij naam maar leest
+              # `sensor.magister_data`, de lijst die de integratie bijhoudt.
+              - type: custom:mod-card
+                card_mod:
+                  style: &paneel |
+                    ha-card {
+                      background: var(--ov-panel-bg) !important;
+                      border: var(--ov-panel-border) !important;
+                      border-radius: 16px !important;
+                      box-shadow: none !important;
+                      padding: 12px 16px !important;
+                    }
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: sv_html
+                      entity: sensor.magister_data
+                      triggers_update:
+                        - sensor.time
+                        - sensor.magister_data
+                        - binary_sensor.magister_haalt_niets_meer_op
+                      variables:
+                        kaart: kort
+                      custom_fields:
+                        x: |
+                          [[[
+                            var S = window.svKit && window.svKit(states);
+                            if(!S) return '';
+                            var d = S.st('sensor.magister_data');
+                            // Kale lokale tijd zonder tijdzone: new Date() leest die als lokaal.
+                            var t = d && !S.weg(d) ? new Date(d.state).getTime() : NaN;
+                            var stil = S.st('binary_sensor.magister_haalt_niets_meer_op');
+                            var badge = isNaN(t) ? S.pil('bad', 'nog niets opgehaald')
+                              : (stil && stil.state === 'on' ? S.pil('warn', 'haalt niets meer op') : S.pil('ok', S.duur(Math.max(0, Date.now() - t)) + ' geleden'));
+                            return S.kop('VANDAAG IN HET KORT', badge, {klik: 'sensor.magister_data'});
+                          ]]]
+                    - type: markdown
+                      card_mod: &md
+                        style:
+                          .: |
+                            ha-card { background: none !important; border: none !important; box-shadow: none !important; }
+                            ha-markdown { padding: 6px 2px 2px 2px !important; }
+                          ha-markdown$: |
+                            * { font-size: 13px; line-height: 1.45; }
+                            p { margin: 4px 0 !important; }
+                            h1, h2, h3, h4, h5 { font-size: 10.5px !important; font-weight: 700 !important; letter-spacing: 1px; text-transform: uppercase; color: var(--ov-ink-45); margin: 10px 0 4px 0 !important; }
+                            table { width: 100%; border-collapse: collapse; }
+                            th { font-size: 10.5px !important; font-weight: 700; letter-spacing: .8px; color: var(--ov-ink-45); text-align: left; padding: 0 8px 4px 0; text-transform: uppercase; }
+                            td { padding: 4px 8px 4px 0; border-top: 1px solid var(--ov-ink-6); vertical-align: top; }
+                            strong { font-weight: 600; }
+                            em { color: var(--ov-ink-55); }
+                            ul, ol { padding-left: 18px; margin: 4px 0; }
+                            li { margin: 2px 0; }
+                      content: |-
+                        {%- from 'school.jinja' import overzicht_alle -%}
+                        {{ overzicht_alle() }}
 
-      - type: heading
-        heading: Weektaken
-        heading_style: title
-        icon: mdi:clipboard-text-outline
+              # De 00:00-afspraken van Magister: weektaken, "Eerste schoolweek",
+              # studiedagen. Ze zijn met `filter` uit de week-planner gehaald
+              # (waarom: bij `weektaken_alle` in school.jinja) en staan hier op de
+              # schooldag waar ze bij horen.
+              - type: custom:mod-card
+                card_mod:
+                  style: *paneel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: sv_html
+                      variables:
+                        kaart: weektaken
+                      custom_fields:
+                        x: |
+                          [[[
+                            var S = window.svKit && window.svKit(states);
+                            if(!S) return '';
+                            return S.kop('WEEKTAKEN', S.pil('grijs', '14 dagen'));
+                          ]]]
+                    - type: markdown
+                      card_mod: *md
+                      content: |-
+                        {%- from 'school.jinja' import weektaken_alle -%}
+                        {{ weektaken_alle(14) }}
 
-      # De 00:00-afspraken van Magister: weektaken, "Eerste schoolweek",
-      # studiedagen. Ze stonden in de kaart hieronder en zijn daar met `filter`
-      # uit gehaald - waarom staat bij `weektaken_alle` in `school.jinja`. Kort:
-      # het zijn afspraken van nul minuten, de week-planner zette ze twee keer
-      # in het raster (begin- en einddag), en Magister hangt ze aan zondag.
-      # Hier staan ze op de schooldag waar ze bij horen.
-      - type: markdown
-        content: |-
-          {%- from 'school.jinja' import weektaken_alle -%}
-          {{ weektaken_alle(14) }}
+              # ------------------------------------------- DEZE TWEE WEKEN
+              - type: custom:mod-card
+                card_mod:
+                  style: *paneel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: sv_html
+                      variables:
+                        kaart: weken
+                      custom_fields:
+                        x: |
+                          [[[
+                            var S = window.svKit && window.svKit(states);
+                            if(!S) return '';
+                            return S.kop('DEZE TWEE WEKEN', S.pil('grijs', 'rooster + agenda'));
+                          ]]]
+                    # Magister levert het rooster tot twee weken vooruit; verder terug of
+                    # vooruit heeft deze kaart dus niets te tonen. De persoonlijke agenda's
+                    # (`calendar.maxi` / `calendar.mini`) staan er bewust naast: zwemles en
+                    # een proefwerkweek botsen op dezelfde avond, en die zie je alleen als ze
+                    # in hetzelfde raster staan. Dezelfde kaart en dezelfde teksten als op de
+                    # KALENDER-weergave, zodat het één ding blijft dat je leert lezen.
+                    # VIER INSTELLINGEN DIE HIER HET VERSCHIL MAKEN, geleerd van hoe deze
+                    # kaart er in de zomervakantie en in de eerste schoolweek uitzag:
+                    #
+                    #   hideWeekend            Er is geen school in het weekend, dus zaterdag
+                    #     + filter             en zondag zijn hier lege dagen. Ze stonden er
+                    #                          toch, of liever: zondag stond er en zaterdag
+                    #                          niet, omdat Magister zijn weekmededelingen aan
+                    #                          het BEGIN van de week hangt en dat bij Magister
+                    #                          zondag is. Twee regels dus, en ze doen elk iets
+                    #                          anders: `filter` (per kalender, verderop) haalt
+                    #                          de mededelingen zelf eruit en zet ze in de
+                    #                          kaart "Weektaken" hierboven; `hideWeekend`
+                    #                          haalt de dagen weg.
+                    #                          `days: 14` telt kalenderdagen door, niet
+                    #                          schooldagen: het venster blijft twee weken,
+                    #                          er blijven tien dagen van over.
+                    #                          LET OP: hiermee zijn weekendafspraken uit de
+                    #                          privé-agenda's hier onzichtbaar. Die hoor je
+                    #                          op de KALENDER-weergave te zien; deze kaart
+                    #                          gaat over schooldagen.
+                    #
+                    #   hideDaysWithoutEvents  Zonder dit staan er veertien dagen onder
+                    #     + hideToday...       elkaar met "Geen lessen" eronder, en moet je
+                    #                          langs een halve meter niets scrollen om bij de
+                    #                          eerste schooldag te komen. Nu klapt de kaart in
+                    #                          tot alleen de dagen waarop iets gebeurt.
+                    #
+                    #   filterText             De titel van een Magister-afspraak is de
+                    #     + replaceTitleText   roostercode: "CT_BG - hwij - uhv1d" (vakcode -
+                    #                          docentcode - klascode). De vaknaam zelf staat
+                    #                          alleen in de omschrijving van de afspraak, en
+                    #                          daar kan deze kaart niet bij. Vandaar twee
+                    #                          stappen: `filterText` streept docent- en
+                    #                          klascode weg zodat er "WI" overblijft, en
+                    #                          `replaceTitleText` maakt daar "Wiskunde" van.
+                    #                          Beide staan per kalender en niet op de kaart,
+                    #                          anders knipt en verbouwt hij ook de titels van
+                    #                          de privé-agenda.
+                    #
+                    #   showLocation: false    Magister leverde het lokaal dubbel ("603, 603";
+                    #                          sinds magister_school v2.3.1 niet meer).
+                    #                          Het lokaal staat al netjes in de roostertabel
+                    #                          in de kolom van het kind; hier is het ruis.
+                    #
+                    # Voor de leesbare versie van het rooster is de tabel in de kinderkolom
+                    # de plek. Deze kaart beantwoordt een andere vraag: op welke dagen is er
+                    # school, en wat staat er verder nog in de agenda's.
+                    - type: custom:week-planner-card
+                      days: 14
+                      compact: true
+                      noCardBackground: true
+                      locale: nl
+                      hideWeekend: true
+                      hideDaysWithoutEvents: true
+                      hideTodayWithoutEvents: true
+                      showLocation: false
+                      showLegend: true
+                      legendToggle: true
+                      calendars:
+                        - entity: calendar.magister_logan_veen_kalender
+                          name: Rooster Logan
+                          color: "#9fc5e8"
+                          filterText: '\s+-\s+\S+\s+-\s+\S+$'
+                          # Weg met alles wat GEEN lesuur is - dat zijn de dagmededelingen
+                          # van Magister ("Weektaken", "Eerste schoolweek", "BV", een
+                          # studiedag), die in de kaart "Weektaken" hierboven staan.
+                          #
+                          # Herkend aan wat er NIET staat in plaats van aan een lijst titels:
+                          # een lesuur heet altijd "vakcode - docentcode - klascode", een
+                          # mededeling nooit. Een titel opsommen zou betekenen dat elke nieuwe
+                          # mededeling die de school verzint hier weer als een blokje van nul
+                          # minuten in het raster verschijnt.
+                          #
+                          # `filter` kijkt naar de ONBEWERKTE titel, dus vóór `filterText` en
+                          # `replaceTitleText` eroverheen zijn gegaan - anders zou dit ook de
+                          # les "BV - khem - uhv1d" wegstrepen, die na `filterText` net zo
+                          # kaal "BV" heet als de weektaak. Zet ze dus niet in de omgekeerde
+                          # volgorde en maak er geen kaartbrede `filter:` van, want die geldt
+                          # ook voor de privé-agenda.
+                          filter: '^(?!.+ - .+ - )'
+                          # De vakcodes van deze school, overgenomen uit het veld `Vak:` in
+                          # de omschrijving van de afspraken zelf - dus niet zelf verzonnen.
+                          # Een code die hier niet in staat blijft gewoon een code: een nieuw
+                          # vak of een volgend leerjaar breekt hier niets, het leest alleen
+                          # even schraler tot je hem erbij zet.
+                          #
+                          # LETTERLIJKE vervanging, geen regex: hoofdlettergevoelig, en
+                          # alleen de eerste treffer in de titel. Codes met aanhalingstekens
+                          # omdat YAML van een kale `NO` of `ON` een booleaan maakt.
+                          replaceTitleText:
+                            "CT_BG": Coachtijd/Basisgroep
+                            "AK": Aardrijkskunde
+                            "BI": Biologie
+                            "BV": Beeldende vorming
+                            "DGW": Digiwijs
+                            "EN": Engels
+                            "FA": Frans
+                            "GS": Geschiedenis
+                            "LO": Lichamelijke opvoeding
+                            "NE": Nederlands
+                            "TN": Techniek
+                            "WI": Wiskunde
+                        - entity: calendar.maxi
+                          name: Logan privé
+                          color: "#0b5394"
+                        # Bij een tweede kind hier zijn twee kalenders erbij, in een kleur
+                        # die duidelijk van die van Logan verschilt:
+                        # - entity: calendar.magister_<kind>_kalender
+                        #   name: Rooster <kind>
+                        #   color: "#ffc0cb"
+                        #   filterText: '\s+-\s+\S+\s+-\s+\S+$'
+                        #   replaceTitleText:      # zijn eigen vakken, zie hierboven
+                        # - entity: calendar.mini
+                        #   name: Emma privé
+                        #   color: "#a64d79"
+                      texts:
+                        noEvents: Geen lessen
+                        fullDay: Hele dag
+                        today: Vandaag
+                        tomorrow: Morgen
+                        yesterday: Gisteren
+                        moreEvents: Meer
 
-      - type: heading
-        heading: Deze twee weken
-        heading_style: title
-        icon: mdi:calendar-month-outline
-
-      # Magister levert het rooster tot twee weken vooruit; verder terug of
-      # vooruit heeft deze kaart dus niets te tonen. De persoonlijke agenda's
-      # (`calendar.maxi` / `calendar.mini`) staan er bewust naast: zwemles en
-      # een proefwerkweek botsen op dezelfde avond, en die zie je alleen als ze
-      # in hetzelfde raster staan. Dezelfde kaart en dezelfde teksten als op de
-      # KALENDER-weergave, zodat het één ding blijft dat je leert lezen.
-      # VIER INSTELLINGEN DIE HIER HET VERSCHIL MAKEN, geleerd van hoe deze
-      # kaart er in de zomervakantie en in de eerste schoolweek uitzag:
-      #
-      #   hideWeekend            Er is geen school in het weekend, dus zaterdag
-      #     + filter             en zondag zijn hier lege dagen. Ze stonden er
-      #                          toch, of liever: zondag stond er en zaterdag
-      #                          niet, omdat Magister zijn weekmededelingen aan
-      #                          het BEGIN van de week hangt en dat bij Magister
-      #                          zondag is. Twee regels dus, en ze doen elk iets
-      #                          anders: `filter` (per kalender, verderop) haalt
-      #                          de mededelingen zelf eruit en zet ze in de
-      #                          kaart "Weektaken" hierboven; `hideWeekend`
-      #                          haalt de dagen weg.
-      #                          `days: 14` telt kalenderdagen door, niet
-      #                          schooldagen: het venster blijft twee weken,
-      #                          er blijven tien dagen van over.
-      #                          LET OP: hiermee zijn weekendafspraken uit de
-      #                          privé-agenda's hier onzichtbaar. Die hoor je
-      #                          op de KALENDER-weergave te zien; deze kaart
-      #                          gaat over schooldagen.
-      #
-      #   hideDaysWithoutEvents  Zonder dit staan er veertien dagen onder
-      #     + hideToday...       elkaar met "Geen lessen" eronder, en moet je
-      #                          langs een halve meter niets scrollen om bij de
-      #                          eerste schooldag te komen. Nu klapt de kaart in
-      #                          tot alleen de dagen waarop iets gebeurt.
-      #
-      #   filterText             De titel van een Magister-afspraak is de
-      #     + replaceTitleText   roostercode: "CT_BG - hwij - uhv1d" (vakcode -
-      #                          docentcode - klascode). De vaknaam zelf staat
-      #                          alleen in de omschrijving van de afspraak, en
-      #                          daar kan deze kaart niet bij. Vandaar twee
-      #                          stappen: `filterText` streept docent- en
-      #                          klascode weg zodat er "WI" overblijft, en
-      #                          `replaceTitleText` maakt daar "Wiskunde" van.
-      #                          Beide staan per kalender en niet op de kaart,
-      #                          anders knipt en verbouwt hij ook de titels van
-      #                          de privé-agenda.
-      #
-      #   showLocation: false    Magister leverde het lokaal dubbel ("603, 603";
-      #                          sinds magister_school v2.3.1 niet meer).
-      #                          Het lokaal staat al netjes in de roostertabel
-      #                          in de kolom van het kind; hier is het ruis.
-      #
-      # Voor de leesbare versie van het rooster is de tabel in de kinderkolom
-      # de plek. Deze kaart beantwoordt een andere vraag: op welke dagen is er
-      # school, en wat staat er verder nog in de agenda's.
-      - type: custom:week-planner-card
-        days: 14
-        compact: true
-        noCardBackground: true
-        locale: nl
-        hideWeekend: true
-        hideDaysWithoutEvents: true
-        hideTodayWithoutEvents: true
-        showLocation: false
-        showLegend: true
-        legendToggle: true
-        calendars:
-          - entity: calendar.magister_logan_veen_kalender
-            name: Rooster Logan
-            color: "#9fc5e8"
-            filterText: '\s+-\s+\S+\s+-\s+\S+$'
-            # Weg met alles wat GEEN lesuur is - dat zijn de dagmededelingen
-            # van Magister ("Weektaken", "Eerste schoolweek", "BV", een
-            # studiedag), die in de kaart "Weektaken" hierboven staan.
-            #
-            # Herkend aan wat er NIET staat in plaats van aan een lijst titels:
-            # een lesuur heet altijd "vakcode - docentcode - klascode", een
-            # mededeling nooit. Een titel opsommen zou betekenen dat elke nieuwe
-            # mededeling die de school verzint hier weer als een blokje van nul
-            # minuten in het raster verschijnt.
-            #
-            # `filter` kijkt naar de ONBEWERKTE titel, dus vóór `filterText` en
-            # `replaceTitleText` eroverheen zijn gegaan - anders zou dit ook de
-            # les "BV - khem - uhv1d" wegstrepen, die na `filterText` net zo
-            # kaal "BV" heet als de weektaak. Zet ze dus niet in de omgekeerde
-            # volgorde en maak er geen kaartbrede `filter:` van, want die geldt
-            # ook voor de privé-agenda.
-            filter: '^(?!.+ - .+ - )'
-            # De vakcodes van deze school, overgenomen uit het veld `Vak:` in
-            # de omschrijving van de afspraken zelf - dus niet zelf verzonnen.
-            # Een code die hier niet in staat blijft gewoon een code: een nieuw
-            # vak of een volgend leerjaar breekt hier niets, het leest alleen
-            # even schraler tot je hem erbij zet.
-            #
-            # LETTERLIJKE vervanging, geen regex: hoofdlettergevoelig, en
-            # alleen de eerste treffer in de titel. Codes met aanhalingstekens
-            # omdat YAML van een kale `NO` of `ON` een booleaan maakt.
-            replaceTitleText:
-              "CT_BG": Coachtijd/Basisgroep
-              "AK": Aardrijkskunde
-              "BI": Biologie
-              "BV": Beeldende vorming
-              "DGW": Digiwijs
-              "EN": Engels
-              "FA": Frans
-              "GS": Geschiedenis
-              "LO": Lichamelijke opvoeding
-              "NE": Nederlands
-              "TN": Techniek
-              "WI": Wiskunde
-          - entity: calendar.maxi
-            name: Logan privé
-            color: "#0b5394"
-          # Bij een tweede kind hier zijn twee kalenders erbij, in een kleur
-          # die duidelijk van die van Logan verschilt:
-          # - entity: calendar.magister_<kind>_kalender
-          #   name: Rooster <kind>
-          #   color: "#ffc0cb"
-          #   filterText: '\s+-\s+\S+\s+-\s+\S+$'
-          #   replaceTitleText:      # zijn eigen vakken, zie hierboven
-          # - entity: calendar.mini
-          #   name: Emma privé
-          #   color: "#a64d79"
-        texts:
-          noEvents: Geen lessen
-          fullDay: Hele dag
-          today: Vandaag
-          tomorrow: Morgen
-          yesterday: Gisteren
-          moreEvents: Meer
-
-      #########################################################################
-      ## Onderhoud
-      #########################################################################
-      # Magister is een bron die stil kan wegvallen: verloopt het wachtwoord of
-      # verandert de school iets aan het account, dan blijven de sensoren op hun
-      # laatste waarde staan en lijkt het rooster gewoon oud. Dit blok is de
-      # enige plek waar je dat ziet.
-      #
-      # STAAT ER ALLEEN ALS ER IETS TE DOEN IS - anders is dit een kaart die
-      # elke dag "✅ alles goed" zegt, en die lees je na een week niet meer.
-      # Juist dan zegt hij ook niets meer op de dag dat het wél misgaat. Twee
-      # redenen om op te komen, en meer niet:
-      #
-      #   binary_sensor.magister_haalt_niets_meer_op   het ophalen ligt stil
-      #     (staat in `packages/9 - Other/School Meldingen.yaml`, met dezelfde
-      #     drempel van een uur als de tekst hieronder - laat die twee niet uit
-      #     elkaar lopen, anders komt er een kaart op met een groen vinkje erop)
-      #   update.magister_school_update                er is een nieuwe versie
-      #
-      # De voorwaarde staat één keer op de kop en hangt met een anker aan de
-      # twee kaarten eronder. Alleen de kaarten verbergen laat een kop zonder
-      # inhoud staan, en dat leest als een kapotte kaart (zelfde reden als bij
-      # Cijfers in de kolom van het kind).
-      #
-      # `condition: state` en niet `condition: template`: een template-
-      # voorwaarde verbergt hier stil de hele kaart, ook als hij waar is.
-      - type: heading
-        heading: Onderhoud
-        heading_style: title
-        icon: mdi:wrench-outline
-        visibility: &onderhoud_nodig
-          - condition: or
-            conditions:
-              - condition: state
-                entity: binary_sensor.magister_haalt_niets_meer_op
-                state: "on"
-              - condition: state
-                entity: update.magister_school_update
-                state: "on"
-
-      # `sensor.magister_data` zet er een KALE tijd in zonder tijdzone, en die
-      # is lokaal. `as_timestamp` leest een naïeve tijd ook als lokale tijd, dus
-      # dit klopt - met `as_local()` erop zou hij hem als UTC lezen en er twee
-      # uur naast zitten.
-      - type: markdown
-        visibility: *onderhoud_nodig
-        content: |-
-          {%- set t = states('sensor.magister_data') -%}
-          {%- if t in ['unknown', 'unavailable'] -%}
-          ⚠️ **De integratie heeft nog niets opgehaald.**
-          {%- else -%}
-          {%- set min = ((as_timestamp(now()) - as_timestamp(t)) / 60) | round -%}
-          {% if min > 60 %}⚠️{% else %}✅{% endif %} Laatst opgehaald {% if min < 1 %}zojuist{% elif min < 60 %}{{ min }} minuten geleden{% else %}**{{ (min / 60) | round(1) }} uur geleden**{% endif %}. De integratie ververst elk kwartier; staat er meer dan een uur, dan loopt het ophalen vast.
-          {%- endif -%}
-
-      - type: entities
-        visibility: *onderhoud_nodig
-        show_header_toggle: false
-        entities:
-          - entity: update.magister_school_update
-            name: Versie integratie
-          - entity: sensor.magister_logan_veen_afspraken
-            name: Roosterregels Logan
-          - entity: sensor.magister_logan_veen_roosterwijzigingen
-            name: Roosterwijzigingen Logan
+              # ------------------------------------------------- ONDERHOUD
+              # Magister kan stil wegvallen: verloopt het wachtwoord, dan
+              # blijven de sensoren op hun laatste waarde staan en lijkt het
+              # rooster gewoon oud. STAAT ER ALLEEN ALS ER IETS TE DOEN IS -
+              # een kaart die elke dag "alles goed" zegt lees je na een week
+              # niet meer. Twee redenen om op te komen:
+              #   binary_sensor.magister_haalt_niets_meer_op   ophalen ligt stil
+              #     (packages/9 - Other/School Meldingen.yaml, drempel een uur;
+              #     laat die en de 60 minuten hieronder niet uit elkaar lopen)
+              #   update.magister_school_update                nieuwe versie
+              # `condition: state` en niet `template`: een template-voorwaarde
+              # verbergt stil de hele kaart.
+              - type: conditional
+                conditions:
+                  - condition: or
+                    conditions:
+                      - condition: state
+                        entity: binary_sensor.magister_haalt_niets_meer_op
+                        state: "on"
+                      - condition: state
+                        entity: update.magister_school_update
+                        state: "on"
+                card:
+                  type: custom:button-card
+                  template: sv_paneel
+                  entity: sensor.magister_data
+                  triggers_update:
+                    - sensor.time
+                    - sensor.magister_data
+                    - update.magister_school_update
+                  variables:
+                    kaart: onderhoud
+                    kind: sensor.magister_logan_veen
+                  custom_fields:
+                    x: |
+                      [[[
+                        var S = window.svKit && window.svKit(states);
+                        if(!S) return '';
+                        var d = S.st('sensor.magister_data');
+                        // `sensor.magister_data` is een KALE lokale tijd; new Date()
+                        // leest die als lokaal, net als as_timestamp in Jinja.
+                        var t = d && !S.weg(d) ? new Date(d.state).getTime() : NaN;
+                        var min = isNaN(t) ? null : Math.round((Date.now() - t) / 60000);
+                        var tekst = min === null ? '<b>De integratie heeft nog niets opgehaald.</b>'
+                          : 'Laatst opgehaald ' + (min < 1 ? 'zojuist' : (min < 60 ? min + ' minuten geleden' : '<b>' + S.nl(min / 60, 1) + ' uur geleden</b>'))
+                            + '. De integratie ververst elk kwartier; staat er meer dan een uur, dan loopt het ophalen vast.';
+                        var up = S.st('update.magister_school_update'), ua = (up && up.attributes) || {};
+                        var nieuw = up && up.state === 'on';
+                        var problemen = [];
+                        if(min === null || min > 60) problemen.push({k: 'bad', t: 'ophalen ligt stil'});
+                        if(nieuw) problemen.push({k: 'warn', t: 'update klaar'});
+                        return S.kop('ONDERHOUD', S.oordeel(problemen))
+                          + S.tekst(tekst)
+                          + S.rijen([
+                              {klik: 'update.magister_school_update', naam: 'Versie integratie',
+                               waarde: S.esc(ua.installed_version || '—') + (nieuw && ua.latest_version ? ' → ' + S.esc(ua.latest_version) : ''), k: nieuw ? 'warn' : null},
+                              {klik: variables.kind + '_afspraken', naam: 'Roosterregels Logan', waarde: S.waarde(variables.kind + '_afspraken', 0)},
+                              {klik: variables.kind + '_roosterwijzigingen', naam: 'Roosterwijzigingen Logan', waarde: S.waarde(variables.kind + '_roosterwijzigingen', 0)}
+                            ], 1);
+                      ]]]

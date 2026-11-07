@@ -1,11 +1,15 @@
 ###############################################################################
-## LOGAN - alles uit Magister
+## LOGAN - alles uit Magister (Server-stijl sinds 7 november 2026)
 ###############################################################################
 #
-# DIT BESTAND IS HET SJABLOON VOOR EEN TWEEDE KIND. Er staat precies één ding
-# in dat over Logan gaat: de sensor-prefix `sensor.magister_logan_veen`, plus
-# onderaan een handvol entiteiten van zijn telefoon. Kopieer dit bestand, zoek
-# en vervang die prefix, en zet de nieuwe `!include` in `school.yaml`.
+# DIT BESTAND IS HET SJABLOON VOOR EEN TWEEDE KIND. Er staan precies twee
+# dingen in die over Logan gaan:
+#   1. de sensor-prefix `sensor.magister_logan_veen` (in `variables: kind` van
+#      de HTML-kaarten én in de markdown-kaarten en voorwaarden);
+#   2. `naam: Logan` en onderaan de entiteiten van zijn telefoon (persoon,
+#      GEO, reistijd, batterij) in de kaart ONDERWEG.
+# Kopieer dit bestand, zoek en vervang die prefix en die vier entiteiten, en
+# zet de nieuwe `!include` in `school.yaml`.
 #
 # Welke prefix een kind krijgt, bepaalt de integratie: `Roepnaam Achternaam` in
 # kleine letters met underscores. Kijk hem op onder Ontwikkelhulpmiddelen ->
@@ -13,221 +17,367 @@
 # achtervoegsel - de macro's plakken er zelf `_aanmeldingen`, `_cijfers`,
 # `_opdrachten` en `_absenties` achter.
 #
-# Alle logica staat in `custom_templates/school.jinja`. Hier staat alleen welke
-# kaart welke macro aanroept, zodat een wijziging in hoe iets eruitziet één
-# plek raakt en niet twee kinderen.
+# OPBOUW. Dit bestand is één blok van TWEE kolommen (school.yaml laat het twee
+# van de drie kolommen innemen):
+#   links   LOGAN (waar hij nu is in zijn dag, tegels vandaag / volgende
+#           schooldag / laatste cijfer / open opdrachten) en ROOSTER
+#   rechts  HUISWERK EN TOETSEN, CIJFERS, ABSENTIES, ONDERWEG
 #
-# WAAROM ELKE KAART `content: |-` HEEFT EN NIET `>-`
+# WAT IN JINJA BLIJFT EN WAT IN DE BROWSER. Alle Magister-logica (rooster,
+# huiswerk, cijfers, absenties) staat in `custom_templates/school.jinja` en
+# wordt getest door tests/test_school.py. Die tabellen en lijsten blijven
+# markdown-kaarten die de macro's aanroepen, maar dan ZONDER eigen kaart en in
+# de typografie van de Server-stijl (anker &md hieronder), binnen een paneel.
+# Alleen de kop, de badge en de tegels zijn HTML uit www/sv-kit.js: die lezen
+# simpele tellers en tijden, geen macro's. Zo blijft één wijziging in hoe het
+# rooster eruitziet één plek, en ziet de pagina eruit als Server.
+#
+# WAAROM ELKE MARKDOWN-KAART `content: |-` HEEFT EN NIET `>-`
 # In een gevouwen blok (`>-`) wordt een lege regel één regeleinde, en in
 # markdown is één regeleinde geen regeleinde maar een spatie. Een kop plakte
-# daardoor aan zijn tabel vast, en een tabel die niet op een eigen regel begint
-# is voor markdown geen tabel meer maar een alinea vol pipe-tekens. Met `|-`
-# staat er precies wat er staat. De `{%-`/`-%}`-streepjes halen de regeleinden
-# van de template-regels zelf weg, zodat er geen lege regels overblijven waar
-# je ze niet wilt.
+# daardoor aan zijn tabel vast. Met `|-` staat er precies wat er staat.
+#
+# VERBERGEN gaat met `type: conditional` om het hele paneel (kop + inhoud),
+# op de TELSENSOR met `state_not: "0"`: een kop zonder inhoud leest als een
+# kapotte kaart, en een template-voorwaarde verbergt stil alles.
 #
 # LET OP: `school.jinja` wordt alleen bij het OPSTARTEN van Home Assistant
 # ingelezen. Zie je hier na een wijziging een foutmelding over een onbekende
 # macro, dan is het bestand nog niet opnieuw ingelezen - herstart volledig.
 
-type: grid
+type: horizontal-stack
+card_mod:
+  style: |
+    #root {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 12px !important;
+      align-items: start !important;
+    }
+    @media (max-width: 1000px) {
+      #root { grid-template-columns: 1fr !important; }
+    }
 cards:
-  - type: heading
-    heading: Logan
-    heading_style: title
-    icon: mdi:school-outline
+  # ============================ LINKS: DE DAG ============================
+  - type: vertical-stack
+    cards:
+      # ------------------------------------------------------------ LOGAN
+      # De kaart die je op een doordeweekse ochtend leest: `nu()` verandert
+      # mee met het uur (vóór school de begintijd, in een les vak en lokaal,
+      # in een tussenuur wanneer het weer begint, na de bel de volgende
+      # schooldag). Studie en klas eronder (`klas()`, sinds v2.1.0).
+      - type: custom:mod-card
+        card_mod:
+          style: &paneel |
+            ha-card {
+              background: var(--ov-panel-bg) !important;
+              border: var(--ov-panel-border, 1px solid var(--ov-ink-6)) !important;
+              border-radius: 16px !important;
+              box-shadow: none !important;
+              padding: 12px 16px !important;
+            }
+        card:
+          type: vertical-stack
+          cards:
+            - type: custom:button-card
+              template: sv_html
+              entity: sensor.magister_logan_veen
+              triggers_update: &kind_triggers
+                - sensor.time
+                - sensor.magister_logan_veen
+                - sensor.magister_logan_veen_school_start_vandaag
+                - sensor.magister_logan_veen_volgende_schooldag
+                - sensor.magister_logan_veen_cijfers
+                - sensor.magister_logan_veen_opdrachten
+              variables:
+                kaart: kind
+                naam: LOGAN
+                kind: sensor.magister_logan_veen
+              custom_fields:
+                x: |
+                  [[[
+                    var S = window.svKit && window.svKit(states);
+                    if(!S) return '';
+                    var K = variables.kind;
+                    var tijd = function(id){ var s = S.st(id); return !s || S.weg(s) || s.state === 'Geen' || !/^\d{1,2}:\d{2}/.test(s.state) ? null : s.state.slice(0, 5); };
+                    var start = tijd(K + '_school_start_vandaag'), einde = tijd(K + '_school_einde_vandaag');
+                    var vd = S.st(K + '_volgende_schooldag');
+                    var vds = tijd(K + '_volgende_schooldag_start'), vde = tijd(K + '_volgende_schooldag_einde');
+                    var dag = '—';
+                    if(vd && /^\d{4}-\d{2}-\d{2}$/.test(vd.state)) {
+                      var d = new Date(vd.state + 'T12:00:00');
+                      var morgen = new Date(); morgen.setDate(morgen.getDate() + 1);
+                      dag = d.toDateString() === morgen.toDateString() ? 'morgen' : d.toLocaleDateString('nl-NL', {weekday: 'long'});
+                    }
+                    // Het nieuwste cijfer op `ingevoerd_op`: `laatste_3_cijfers` staat
+                    // niet op volgorde (live gezien 07-11-2026).
+                    var cijfers = S.attr(K + '_cijfers', 'cijfers');
+                    var laatste = Array.isArray(cijfers) && cijfers.length ? cijfers.slice().sort(function(a, b){
+                      return String(b.ingevoerd_op || '').localeCompare(String(a.ingevoerd_op || '')); })[0] : null;
+                    var w = laatste ? parseFloat(String(laatste.waarde).replace(',', '.')) : NaN;
+                    var open = S.attr(K + '_opdrachten', 'open_opdrachten');
+                    var nOpen = Array.isArray(open) ? open.length : null;
+                    var badge = S.weg(K) ? S.pil('bad', 'geen data')
+                      : (start ? S.pil('ok', 'school ' + start + (einde ? '–' + einde : '')) : S.pil('grijs', 'vrij vandaag'));
+                    return S.kop(S.esc(variables.naam), badge)
+                      + S.tegels([
+                          {klik: K + '_school_start_vandaag', label: 'VANDAAG', waarde: start ? start : 'vrij', k: start ? 'ink-80' : 'ink-45', sub: start && einde ? 'tot ' + einde : 'geen lessen'},
+                          {klik: K + '_volgende_schooldag', label: 'VOLGENDE', waarde: vds || '—', sub: S.esc(dag) + (vde ? ' tot ' + vde : '')},
+                          {klik: K + '_cijfers', label: 'LAATSTE CIJFER', waarde: isNaN(w) ? '—' : S.esc(laatste.waarde), k: isNaN(w) ? 'ink-45' : (w < 5.5 ? 'bad' : 'ok'),
+                           sub: laatste ? S.esc(laatste.vak || '') + (laatste.omschrijving ? ' · ' + S.esc(laatste.omschrijving) : '') : 'nog geen'},
+                          {klik: K + '_opdrachten', label: 'OPDRACHTEN', waarde: nOpen === null ? '—' : S.nl(nOpen), k: nOpen ? 'warn' : 'ink-80', sub: 'open'}
+                        ], {marge: 4});
+                  ]]]
+            - type: markdown
+              card_mod: &md
+                style:
+                  .: |
+                    ha-card { background: none !important; border: none !important; box-shadow: none !important; }
+                    ha-markdown { padding: 6px 2px 2px 2px !important; }
+                  ha-markdown$: |
+                    * { font-size: 13px; line-height: 1.45; }
+                    p { margin: 4px 0 !important; }
+                    h1, h2, h3, h4, h5 { font-size: 10.5px !important; font-weight: 700 !important; letter-spacing: 1px; text-transform: uppercase; color: var(--ov-ink-45); margin: 10px 0 4px 0 !important; }
+                    table { width: 100%; border-collapse: collapse; }
+                    th { font-size: 10.5px !important; font-weight: 700; letter-spacing: .8px; color: var(--ov-ink-45); text-align: left; padding: 0 8px 4px 0; text-transform: uppercase; }
+                    td { padding: 4px 8px 4px 0; border-top: 1px solid var(--ov-ink-6); vertical-align: top; }
+                    strong { font-weight: 600; }
+                    em { color: var(--ov-ink-55); }
+                    ul, ol { padding-left: 18px; margin: 4px 0; }
+                    li { margin: 2px 0; }
+              content: |-
+                {%- from 'school.jinja' import nu, klas -%}
+                {%- set kind = 'sensor.magister_logan_veen' -%}
+                {{ nu(kind) }}
 
-  #############################################################################
-  ## Waar hij nu is in zijn dag
-  #############################################################################
-  # De enige kaart die je op een doordeweekse ochtend echt leest. Hij verandert
-  # zelf mee met het uur: vóór schooltijd de begintijd, tijdens een les het vak
-  # en het lokaal, in een tussenuur wanneer het weer begint, en na de laatste
-  # bel de volgende schooldag. `now()` in het template zorgt dat Home Assistant
-  # hem elke minuut opnieuw rendert.
-  #
-  # Studie en klas ("Brugklas HAVO/VWO1 · klas UHV1D") staan eronder in plaats
-  # van als badge op de kop: de studie is geen attribuut maar een veld binnen
-  # de lijst `aanmeldingen`, en daar kan `state_content` niet bij. Klas en
-  # profiel zijn er sinds magister_school v2.1.0; het profiel verschijnt pas
-  # als het iets toevoegt aan de studienaam (zie `klas()` in school.jinja).
-  - type: markdown
-    content: |-
-      {%- from 'school.jinja' import nu, klas -%}
-      {%- set kind = 'sensor.magister_logan_veen' -%}
-      {{ nu(kind) }}
+                *{{ klas(kind) }}*
 
-      *{{ klas(kind) }}*
+      # ---------------------------------------------------------- ROOSTER
+      - type: custom:mod-card
+        card_mod:
+          style: *paneel
+        card:
+          type: vertical-stack
+          cards:
+            - type: custom:button-card
+              template: sv_html
+              entity: sensor.magister_logan_veen_roosterwijzigingen
+              triggers_update:
+                - sensor.magister_logan_veen_roosterwijzigingen
+                - sensor.magister_logan_veen_afspraken
+              variables:
+                kaart: rooster
+                kind: sensor.magister_logan_veen
+              custom_fields:
+                x: |
+                  [[[
+                    var S = window.svKit && window.svKit(states);
+                    if(!S) return '';
+                    var K = variables.kind;
+                    var uit = S.num(K + '_afspraken') === null ? null : Number(S.attr(K + '_afspraken', 'aantal_uitval'));
+                    var wz = S.num(K + '_roosterwijzigingen');
+                    var badge = uit ? S.pil('warn', S.nl(uit) + ' uitval')
+                      : (wz ? S.pil('info', S.nl(wz) + ' wijziging' + (wz === 1 ? '' : 'en')) : S.pil('grijs', 'geen wijzigingen'));
+                    return S.kop('ROOSTER', badge, {klik: K + '_roosterwijzigingen'});
+                  ]]]
+            # Alleen op een dag met afspraken: anders zegt hij "Geen lessen
+            # vandaag" onder een kaart die net "vrij vandaag" zei.
+            - type: conditional
+              conditions:
+                - condition: state
+                  entity: sensor.magister_logan_veen_afspraken_vandaag
+                  state_not: "0"
+              card:
+                type: markdown
+                card_mod: *md
+                content: |-
+                  {%- from 'school.jinja' import rooster -%}
+                  **Vandaag**
 
-  #############################################################################
-  ## Het rooster
-  #############################################################################
-  - type: heading
-    heading: Rooster
-    heading_style: subtitle
-    icon: mdi:timetable
+                  {{ rooster('sensor.magister_logan_veen', 'vandaag') }}
+            # Altijd: 's avonds is "hoe laat begint het morgen" de vraag.
+            - type: markdown
+              card_mod: *md
+              content: |-
+                {%- from 'school.jinja' import rooster, volgende_schooldag, dagnaam -%}
+                {%- set kind = 'sensor.magister_logan_veen' -%}
+                {%- set vd = volgende_schooldag(kind) -%}
+                **Volgende schooldag{% if vd %}: {{ dagnaam(vd) }}{% endif %}**
 
-  # Verdwijnt op een dag zonder afspraken. Anders staat er "Geen lessen
-  # vandaag" onder een statuskaart die net "Vrij vandaag" heeft gezegd - twee
-  # kaarten om hetzelfde niets te vertellen.
-  #
-  # De voorwaarde hangt aan de TELSENSOR en niet aan een template: card-level
-  # `visibility:` doet het hier alleen met `condition: state`, een
-  # `condition: template` verbergt stil de hele kaart. `state_not` werkt wel.
-  - type: markdown
-    visibility:
-      - condition: state
-        entity: sensor.magister_logan_veen_afspraken_vandaag
-        state_not: "0"
-    content: |-
-      {%- from 'school.jinja' import rooster -%}
-      **Vandaag**
+                {{ rooster(kind, 'volgende') }}
 
-      {{ rooster('sensor.magister_logan_veen', 'vandaag') }}
+  # ========================= RECHTS: WAT ER AF MOET =========================
+  - type: vertical-stack
+    cards:
+      # Huiswerk én toetsen in één lijst: toetsen tellen in de API NIET als
+      # huiswerk (zie de kop van school.jinja).
+      - type: custom:mod-card
+        card_mod:
+          style: *paneel
+        card:
+          type: vertical-stack
+          cards:
+            - type: custom:button-card
+              template: sv_html
+              entity: sensor.magister_logan_veen_huiswerk
+              triggers_update:
+                - sensor.magister_logan_veen_huiswerk
+                - sensor.magister_logan_veen_opdrachten
+              variables:
+                kaart: werk
+                kind: sensor.magister_logan_veen
+              custom_fields:
+                x: |
+                  [[[
+                    var S = window.svKit && window.svKit(states);
+                    if(!S) return '';
+                    var open = S.attr(variables.kind + '_opdrachten', 'open_opdrachten');
+                    var n = Array.isArray(open) ? open.length : 0;
+                    return S.kop('HUISWERK EN TOETSEN', n ? S.pil('warn', n + ' opdracht' + (n === 1 ? '' : 'en') + ' open') : S.pil('grijs', '14 dagen'),
+                      {klik: variables.kind + '_huiswerk'});
+                  ]]]
+            - type: markdown
+              card_mod: *md
+              content: |-
+                {%- from 'school.jinja' import werk -%}
+                {{ werk('sensor.magister_logan_veen', 14) }}
+            # Alleen als er überhaupt opdrachten zijn (ook ingeleverde tellen
+            # mee; dan staat er "Niets meer open" - een antwoord, geen gat).
+            - type: conditional
+              conditions:
+                - condition: state
+                  entity: sensor.magister_logan_veen_opdrachten
+                  state_not: "0"
+              card:
+                type: markdown
+                card_mod: *md
+                content: |-
+                  {%- from 'school.jinja' import opdrachten -%}
+                  **Opdrachten die nog open staan**
 
-  # Staat er bewust altijd bij en niet alleen op een vrije dag: 's avonds is
-  # "hoe laat begint het morgen" de vraag, ook als er vandaag gewoon les was.
-  - type: markdown
-    content: |-
-      {%- from 'school.jinja' import rooster, volgende_schooldag, dagnaam -%}
-      {%- set kind = 'sensor.magister_logan_veen' -%}
-      {%- set vd = volgende_schooldag(kind) -%}
-      **Volgende schooldag{% if vd %}: {{ dagnaam(vd) }}{% endif %}**
+                  {{ opdrachten('sensor.magister_logan_veen') }}
 
-      {{ rooster(kind, 'volgende') }}
+      # ---------------------------------------------------------- CIJFERS
+      # Eerst "wat kwam er net binnen", dan per vak gewogen over het jaar.
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.magister_logan_veen_cijfers
+            state_not: "0"
+        card:
+          type: custom:mod-card
+          card_mod:
+            style: *paneel
+          card:
+            type: vertical-stack
+            cards:
+              - type: custom:button-card
+                template: sv_html
+                entity: sensor.magister_logan_veen_cijfers
+                triggers_update:
+                  - sensor.magister_logan_veen_cijfers
+                variables:
+                  kaart: cijfers
+                  kind: sensor.magister_logan_veen
+                custom_fields:
+                  x: |
+                    [[[
+                      var S = window.svKit && window.svKit(states);
+                      if(!S) return '';
+                      var lijst = S.attr(variables.kind + '_cijfers', 'cijfers');
+                      var onv = Array.isArray(lijst) ? lijst.filter(function(c){ var w = parseFloat(String(c.waarde).replace(',', '.')); return !isNaN(w) && w < 5.5; }).length : 0;
+                      return S.kop('CIJFERS', onv ? S.pil('warn', onv + ' onvoldoende') : S.pil('ok', 'geen onvoldoendes'), {klik: variables.kind + '_cijfers'});
+                    ]]]
+              - type: markdown
+                card_mod: *md
+                content: |-
+                  {%- from 'school.jinja' import cijfers -%}
+                  {{ cijfers('sensor.magister_logan_veen', 10) }}
+              - type: markdown
+                card_mod: *md
+                content: |-
+                  {%- from 'school.jinja' import voortgang -%}
+                  **Per vak dit schooljaar**
 
-  #############################################################################
-  ## Wat er af moet
-  #############################################################################
-  - type: heading
-    heading: Huiswerk en toetsen
-    heading_style: subtitle
-    icon: mdi:book-education-outline
+                  {{ voortgang('sensor.magister_logan_veen') }}
 
-  # Huiswerk én toetsen in één lijst. Toetsen tellen in de API NIET als
-  # huiswerk (`is_huiswerk` is alleen InfoType 1), dus de kant-en-klare
-  # huiswerksensor zou ze stilletjes overslaan - zie de kop van school.jinja.
-  - type: markdown
-    content: |-
-      {%- from 'school.jinja' import werk -%}
-      {{ werk('sensor.magister_logan_veen', 14) }}
+      # -------------------------------------------------------- ABSENTIES
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.magister_logan_veen_absenties
+            state_not: "0"
+        card:
+          type: custom:mod-card
+          card_mod:
+            style: *paneel
+          card:
+            type: vertical-stack
+            cards:
+              - type: custom:button-card
+                template: sv_html
+                entity: sensor.magister_logan_veen_absenties
+                triggers_update:
+                  - sensor.magister_logan_veen_absenties
+                variables:
+                  kaart: absenties
+                  kind: sensor.magister_logan_veen
+                custom_fields:
+                  x: |
+                    [[[
+                      var S = window.svKit && window.svKit(states);
+                      if(!S) return '';
+                      var lijst = S.attr(variables.kind + '_absenties', 'absenties');
+                      var ongeoorloofd = Array.isArray(lijst) ? lijst.filter(function(a){ return a && a.geoorloofd === false; }).length : 0;
+                      var n = S.num(variables.kind + '_absenties');
+                      return S.kop('ABSENTIES', ongeoorloofd ? S.pil('warn', ongeoorloofd + ' ongeoorloofd') : S.pil('grijs', n === null ? '—' : S.nl(n) + ' dit jaar'),
+                        {klik: variables.kind + '_absenties'});
+                    ]]]
+              - type: markdown
+                card_mod: *md
+                content: |-
+                  {%- from 'school.jinja' import absenties -%}
+                  {{ absenties('sensor.magister_logan_veen') }}
 
-  # Idem: alleen tonen als er überhaupt opdrachten zijn. De telsensor telt ze
-  # allemaal, ook de ingeleverde, dus in een rustige week kan hier nog "Niets
-  # meer open" staan - dat is dan een antwoord en geen leeg vakje.
-  - type: markdown
-    visibility:
-      - condition: state
-        entity: sensor.magister_logan_veen_opdrachten
-        state_not: "0"
-    content: |-
-      {%- from 'school.jinja' import opdrachten -%}
-      **Opdrachten die nog open staan**
-
-      {{ opdrachten('sensor.magister_logan_veen') }}
-
-  #############################################################################
-  ## Cijfers
-  #############################################################################
-  # Kop én kaart krijgen dezelfde voorwaarde. Alleen de kaart verbergen laat
-  # een kop zonder inhoud staan, en dat leest als een kapotte kaart.
-  - type: heading
-    heading: Cijfers
-    heading_style: subtitle
-    icon: mdi:certificate-outline
-    visibility: &heeft_cijfers
-      - condition: state
-        entity: sensor.magister_logan_veen_cijfers
-        state_not: "0"
-
-  - type: markdown
-    visibility: *heeft_cijfers
-    content: |-
-      {%- from 'school.jinja' import cijfers -%}
-      {{ cijfers('sensor.magister_logan_veen', 10) }}
-
-  # Per vak over het hele schooljaar, gewogen (voortgangscijfers, v2.1.0). De
-  # kaart erboven is "wat kwam er net binnen", deze "hoe staat hij ervoor".
-  # Zelfde voorwaarde als de kop: zonder recente cijfers zijn er ook geen
-  # voortgangscijfers, en er bestaat geen telsensor voor deze lijst.
-  - type: markdown
-    visibility: *heeft_cijfers
-    content: |-
-      {%- from 'school.jinja' import voortgang -%}
-      **Per vak dit schooljaar**
-
-      {{ voortgang('sensor.magister_logan_veen') }}
-
-  #############################################################################
-  ## Absenties
-  #############################################################################
-  - type: heading
-    heading: Absenties
-    heading_style: subtitle
-    icon: mdi:account-clock-outline
-    visibility: &heeft_absenties
-      - condition: state
-        entity: sensor.magister_logan_veen_absenties
-        state_not: "0"
-
-  - type: markdown
-    visibility: *heeft_absenties
-    content: |-
-      {%- from 'school.jinja' import absenties -%}
-      {{ absenties('sensor.magister_logan_veen') }}
-
-  #############################################################################
-  ## Thuis
-  #############################################################################
-  # Niet uit Magister, maar wel de vragen die je op deze weergave stelt: is hij
-  # onderweg, en heeft zijn telefoon nog stroom om dat te blijven melden.
-  #
-  # De reistijd komt uit `packages/9 - Other/Locations.yaml` en staat in
-  # minuten; thuis is dat een halve minuut, geen nul.
-  - type: heading
-    heading: Onderweg
-    heading_style: subtitle
-    icon: mdi:bag-personal-outline
-
-  - type: entities
-    show_header_toggle: false
-    entities:
-      - entity: person.logan_veen
-        name: Logan
-        secondary_info: last-changed
-
-      # `sensor.logan_veen_geo` is een Places-sensor die `person.logan_veen`
-      # VOLGT: hij neemt diens foto over en zegt thuis precies hetzelfde
-      # ("Thuis"). Vandaar dat Logan er twee keer stond met dezelfde pasfoto.
-      # Hij is alleen iets waard als hij wég is - dan staat er de straat of de
-      # plek waar hij is. Zelfde verhaal voor de reistijd: thuis is dat 0,4
-      # minuut, wat als "0 m" op de kaart komt en nergens op slaat.
+      # --------------------------------------------------------- ONDERWEG
+      # Niet uit Magister, wel de vragen die je hier stelt: is hij onderweg,
+      # en heeft zijn telefoon nog stroom om dat te blijven melden. Waar en
+      # reistijd tellen alleen als hij weg is (thuis zegt de GEO-sensor ook
+      # "Thuis" en is de reistijd een halve minuut). De reistijd komt uit
+      # packages/9 - Other/Locations.yaml, in minuten.
       #
-      # Een rij in een `entities`-kaart kan zichzelf niet verbergen met
-      # `visibility:`; daarvoor bestaat de rij `type: conditional`.
-      - type: conditional
-        conditions: &logan_is_weg
-          - entity: person.logan_veen
-            state_not: home
-        row:
-          entity: sensor.logan_veen_geo
-          name: Waar
-      - type: conditional
-        conditions: *logan_is_weg
-        row:
-          entity: sensor.logan_reistijd_naar_huis
-          name: Reistijd naar huis
-
-      - type: divider
-      - entity: sensor.iphone_battery_level
-        name: Batterij telefoon
-
       # Hier stonden even de UniFi "block client"-schakelaars van zijn iPad en
-      # iPhone. Op verzoek weggehaald (Robin, 22 augustus 2026): dat is een
-      # knop die het apparaat volledig van het netwerk gooit, en die hoort niet
-      # op een pagina waar je alleen komt om een rooster te lezen.
-      #
-      # Ga je ze ooit ergens anders wél gebruiken, let dan op de richting: de
-      # entiteit heet "Geblokkeerd", maar in de UniFi-integratie is
-      # `is_on = not client.blocked`. AAN betekent dus dat het apparaat op het
-      # netwerk mag, UIT dat het geblokkeerd is.
+      # iPhone; op verzoek weggehaald (Robin, 22 augustus 2026): een knop die
+      # het apparaat van het netwerk gooit hoort niet op een leespagina. (Let
+      # bij hergebruik op: AAN betekent daar "mag op het netwerk".)
+      - type: custom:button-card
+        template: sv_paneel
+        entity: person.logan_veen
+        triggers_update:
+          - person.logan_veen
+          - sensor.logan_veen_geo
+          - sensor.logan_reistijd_naar_huis
+          - sensor.iphone_battery_level
+        variables:
+          kaart: onderweg
+          persoon: person.logan_veen
+          geo: sensor.logan_veen_geo
+          reistijd: sensor.logan_reistijd_naar_huis
+          batterij: sensor.iphone_battery_level
+        custom_fields:
+          x: |
+            [[[
+              var S = window.svKit && window.svKit(states);
+              if(!S) return '';
+              var V = variables, p = S.st(V.persoon);
+              var thuis = p && p.state === 'home';
+              var geo = S.st(V.geo), rt = S.num(V.reistijd), bat = S.num(V.batterij);
+              var bk = S.drempel(bat, 35, 20, true);
+              var badge = S.weg(p) ? S.pil('grijs', 'onbekend') : (thuis ? S.pil('ok', 'thuis') : S.pil('info', p.state === 'not_home' ? 'weg' : S.esc(p.state)));
+              return S.kop('ONDERWEG', badge, {klik: V.persoon})
+                + S.tegels([
+                    {klik: V.geo, label: 'WAAR', waarde: thuis ? 'thuis' : (S.weg(geo) ? '—' : S.esc(geo.state)), breed: 140},
+                    {klik: V.reistijd, label: 'REISTIJD', waarde: thuis || rt === null ? '—' : S.nl(rt) + ' min', sub: thuis ? 'is thuis' : 'naar huis'},
+                    {klik: V.batterij, label: 'TELEFOON', waarde: bat === null ? '—' : S.nl(bat) + '%', k: bat === null ? 'ink-45' : (bk === 'ok' ? 'ink-80' : bk), sub: 'batterij'}
+                  ], {marge: 4});
+            ]]]

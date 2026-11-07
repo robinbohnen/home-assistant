@@ -122,8 +122,9 @@ def test_detectie():
     assert not heeft_actie(kapot) and not klikken_aan(kapot)
     goed = {**kapot, "styles": {"card": [{"pointer-events": "auto"}]}}
     assert klikken_aan(goed)
-    # Template-overerving: ov_uitlegtabel moet het voor zijn gebruikers regelen.
-    assert klikken_aan({"type": "custom:button-card", "template": "ov_uitlegtabel"})
+    # Template-overerving: sv_uitlegtabel (was ov_uitlegtabel, 7-11-2026) regelt
+    # het voor zijn gebruikers, via zichzelf en via sv_paneel -> sv_html.
+    assert klikken_aan({"type": "custom:button-card", "template": "sv_uitlegtabel"})
     assert heeft_actie({"type": "custom:button-card"})   # standaard toggle/more-info
 
 
