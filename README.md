@@ -180,13 +180,15 @@ rack) reads the UniFi UNAS Pro 8 through the HACS integration
 health, CPU, memory and fan, the eight drive bays with temperature and status, and a few
 rows; rows that only report a problem (Immich mount, monitor scripts, a share above 80% of
 its quota) appear only when there is one. The UNAS backup tasks show up as chips under
-*Back-ups* and are found by prefix, so a new task appears by itself. Its *Ventileren* panel runs the rack fans for 1, 2, 4 or 8
+*Back-ups* and are found by prefix, so a new task appears by itself. Its *Ventileren* block (since 7-11-2026 at the bottom of the rack panel, so the whole
+page fits on one 1080p screen without scrolling) runs the rack fans for 1, 2, 4 or 8
 hours through `script.ventilation_serverrack_handbediening`, which since 6-11-2026 takes
 `stand: aan|uit` next to `uren` (without `stand` it still toggles, as the button on the
 overview always did). The test checks the hook-up, that every fan button passes
 `stand: aan` and an hour count the script accepts, renders the script's choice with
 Jinja, and runs the JavaScript of each panel in node against normal, hot, critical and
-missing sensors. It needs `node` next to `pyyaml` and `jinja2`.
+missing sensors, and guards the compact layout (fans inside the rack panel, low graphs,
+detail rows in two columns). It needs `node` next to `pyyaml` and `jinja2`.
 
 ## <a name="hubs">Hubs</a>
 
