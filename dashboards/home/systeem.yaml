@@ -16,6 +16,32 @@
 # staat álles op het herstartmoment. `sensor.home_assistant_gestart` (zie
 # packages/9 - Other/Dashboard Context.yaml) laat de kaarten dat verschil
 # benoemen in plaats van een misleidend absoluut getal te tonen.
+#
+# SERVER-STIJL (7 november 2026). Zelfde schil en maten als dashboards/server.yaml
+# en de stijlgids docs/dashboard-stijl.md: drie kolommen panelen, elk paneel een
+# `sv_paneel`-kaart met een kop + badge, één groot getal of een rij tegels, en
+# compacte regels. De HTML komt uit window.svKit (www/sv-kit.js).
+#   kolom 1  STORINGEN   onbeschikbare entiteiten in vier bakken (zie daar)
+#   kolom 2  BATTERIJEN  bijna leeg of stil, per apparaat
+#            WAAKHOND    kritieke sensoren + leeftijd van de back-up (was een
+#                        entities-kaart onder het raster)
+#   kolom 3  MATTER      per apparaat, oudste rapportage eerst
+# De lange lijsten scrollen binnen hun paneel, zodat de pagina op één
+# 1080p-scherm past.
+#
+# KLIKKEN. Een regel van een apparaat opent zijn apparaatpagina, een losse
+# entiteit zijn more-info - via S.klik (een navigate-actie, zoals een
+# tap_action). Vroeger stond hier per regel een <a> met pointerdown/-up-trucs
+# en pointer-events:auto; die waren nodig omdat button-card op een kaart zonder
+# eigen actie `pointer-events: none` zet. `sv_paneel` zet dat terug op auto,
+# dus een gewone onclick komt nu aan (tests/test_button_card_klikbaar.py).
+#
+# VEILIGHEID. Namen van apparaten, ruimtes, integraties en friendly_names gaan
+# door S.esc(): ze komen uit het register of van een integratie en kunnen alles
+# bevatten. Device-id's gaan alleen via S.klik, dat niets anders doorlaat dan
+# een entity-id, #hash of /pad.
+#
+# Test: tests/test_systeem_pagina.py draait de JS van de panelen in node.
 title: Systeem
 path: systeem
 icon: mdi:heart-pulse
@@ -29,10 +55,10 @@ cards:
         #root {
           /* Kleurtokens komen uit www/ov-tokens.js, zie overzicht.yaml. */
           --ov-panel-border: 1px solid var(--ov-ink-6);
-          gap: 16px !important;
+          gap: 0 !important;
           min-height: calc(100vh - 8px) !important;
           margin: 0 !important;
-          padding: 20px 24px 24px 24px !important;
+          padding: 12px 16px !important;
           background: var(--primary-background-color) !important;
           box-sizing: border-box !important;
         }
@@ -43,7 +69,7 @@ cards:
             #root {
               display: grid !important;
               grid-template-columns: 1fr 1fr 1fr !important;
-              gap: 16px !important;
+              gap: 12px !important;
               align-items: start !important;
             }
             @media (max-width: 1500px) {
@@ -67,16 +93,14 @@ cards:
           #  - ruis       : integraties die per netwerkclient entiteiten maken
           #                 (unifi). Elke gast die ooit op de wifi zat staat er
           #                 nog; 'weg' is daar de normale toestand.
-          # De drie laatste bakken verdwijnen niet, ze staan onderaan als telling.
+          # De drie laatste bakken verdwijnen niet: rechts naast het grote getal
+          # als telling, onderaan uitgesplitst per integratie.
           - type: custom:button-card
+            template: sv_paneel
             entity: sensor.time
             triggers_update: sensor.time
-            show_icon: false
-            show_name: false
-            show_state: false
-            tap_action:
-              action: none
             variables:
+              kaart: storingen
               # 'unknown' erbij? Vaak ruis van entiteiten die nog nooit een waarde
               # hadden, daarom standaard uit.
               ook_unknown: false
@@ -90,50 +114,12 @@ cards:
               # het bij de herstart niet teruggekomen. Entiteiten vallen niet
               # allemaal op dezelfde seconde om, vandaar de marge.
               herstart_marge_min: 3
-            styles:
-              card:
-                - background: var(--ov-panel-bg)
-                - border: var(--ov-panel-border)
-                - border-radius: 20px
-                - box-shadow: none
-                - padding: 16px 18px
-              grid:
-                - grid-template-areas: '"t" "lijst"'
-                - row-gap: 12px
-              custom_fields:
-                t:
-                  - justify-self: stretch
-                lijst:
-                  - justify-self: stretch
             custom_fields:
-              t: |
+              x: |
                 [[[
-                  var mee = function(s){ return s.state === 'unavailable' || (variables.ook_unknown && s.state === 'unknown'); };
-                  var reg = (hass && hass.entities) ? hass.entities : null;
-                  var afgeleid = variables.afgeleid || [];
-                  var ruis = variables.ruis || [];
-                  var alles = 0;
-                  // Zelfde indeling als de lijst hieronder; de badge telt alleen
-                  // wat overblijft als storing.
-                  var n = Object.keys(states).filter(function(id){
-                    var s = states[id];
-                    if(!s || !mee(s)) return false;
-                    var e = reg ? reg[id] : null;
-                    if(e && (e.hidden || e.hidden_by)) return false;
-                    alles++;
-                    if(s.attributes && s.attributes.restored) return false;
-                    var integratie = (e && e.platform) ? e.platform : id.split('.')[0];
-                    return afgeleid.indexOf(integratie) === -1 && ruis.indexOf(integratie) === -1;
-                  }).length;
-                  var kleur = n === 0 ? 'var(--ov-ok)' : (n > 10 ? 'var(--ov-bad)' : 'var(--ov-warn)');
-                  return `<span style="display:flex;align-items:baseline;gap:12px;width:100%">
-                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">STORINGEN</span>
-                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:var(--ov-ink-6)">${n}</span>
-                    <span style="margin-left:auto;font-size:11.5px;color:var(--ov-ink-40)">${alles} onbeschikbaar totaal</span></span>`;
-                ]]]
-              lijst: |
-                [[[
-                  var nu = Date.now();
+                  var S = window.svKit && window.svKit(states);
+                  if(!S) return '';
+                  var esc = S.esc, nu = Date.now();
                   var reg = (hass && hass.entities) ? hass.entities : null;
                   var apparaten = (hass && hass.devices) ? hass.devices : null;
                   var gebieden = (hass && hass.areas) ? hass.areas : null;
@@ -147,15 +133,17 @@ cards:
                   var startMs = startS ? new Date(startS.state).getTime() : NaN;
                   var uptime = isNaN(startMs) ? null : nu - startMs;
                   var marge = (variables.herstart_marge_min || 3) * 60000;
-                  // Per bak, per integratie, een map van apparaat -> aantal
-                  // entiteiten. Eén apparaat levert vaak 2 tot 4 entiteiten; die
-                  // als losse regels tonen maakt de lijst onleesbaar.
+                  // Eén ronde door alle states. Per bak, per integratie, een map
+                  // van apparaat -> aantal entiteiten: één apparaat levert vaak
+                  // 2 tot 4 entiteiten, die als losse regels maken de lijst onleesbaar.
                   var bakken = {storing: {}, wees: {}, afgeleid: {}, ruis: {}};
+                  var alles = 0;
                   Object.keys(states).forEach(function(id){
                     var s = states[id];
                     if(!s || !mee(s)) return;
                     var e = reg ? reg[id] : null;
                     if(e && (e.hidden || e.hidden_by)) return;
+                    alles++;
                     var integratie = (e && e.platform) ? e.platform : id.split('.')[0];
                     var soort = (s.attributes && s.attributes.restored) ? 'wees'
                               : (afgeleid.indexOf(integratie) !== -1 ? 'afgeleid'
@@ -167,8 +155,8 @@ cards:
                     var gebied = (gebiedId && gebieden && gebieden[gebiedId]) ? gebieden[gebiedId].name : null;
                     var naam = dev ? (dev.name_by_user || dev.name || devId)
                                    : ((s.attributes && s.attributes.friendly_name) || id);
-                    var sinds = s.last_changed ? new Date(s.last_changed).getTime() : null;
-                    var duur = sinds === null ? null : nu - sinds;
+                    var sinds = s.last_changed ? new Date(s.last_changed).getTime() : NaN;
+                    var duur = isNaN(sinds) ? null : nu - sinds;
                     var bak = bakken[soort];
                     if(!bak[integratie]) bak[integratie] = {};
                     var g = bak[integratie];
@@ -177,8 +165,6 @@ cards:
                     // langst weg binnen het apparaat telt
                     if(duur !== null && (g[sleutel].duur === null || duur > g[sleutel].duur)) g[sleutel].duur = duur;
                   });
-                  // Per bak: apparaten gesorteerd op langst weg, plus tellingen
-                  // per integratie voor de samenvattingsregels onderaan.
                   var telVan = function(bak){
                     var per = Object.keys(bak).map(function(g){
                       var l = Object.keys(bak[g]).map(function(k){ return bak[g][k]; })
@@ -190,7 +176,8 @@ cards:
                             apparaten: per.reduce(function(a,x){ return a + x.apparaten.length; }, 0),
                             entiteiten: per.reduce(function(a,x){ return a + x.entiteiten; }, 0)};
                   };
-                  var storing = telVan(bakken.storing);
+                  var storing = telVan(bakken.storing), wees = telVan(bakken.wees),
+                      afg = telVan(bakken.afgeleid), rs = telVan(bakken.ruis);
                   var duurTxt = function(ms){
                     if(ms === null) return 'onbekend';
                     if(uptime !== null && Math.abs(ms - uptime) < marge) return 'sinds herstart';
@@ -203,322 +190,272 @@ cards:
                     return d + ' ' + (d === 1 ? 'dag' : 'dagen');
                   };
                   var duurKleur = function(ms){
-                    if(ms === null) return 'var(--ov-ink-40)';
-                    if(ms > 7 * 86400000) return 'var(--ov-bad)';
-                    if(ms > 86400000) return 'var(--ov-warn)';
-                    return 'var(--ov-ink-60)';
+                    if(ms === null) return 'ink-40';
+                    if(ms > 7 * 86400000) return 'bad';
+                    if(ms > 86400000) return 'warn';
+                    return 'ink-60';
                   };
-                  // Rij klikbaar maken; zie de toelichting bij de Matter-kaart.
-                  var klik = function(devId, entId, inner){
-                    var doel = devId ? ('/config/devices/device/' + devId) : null;
-                    var actie = doel
-                      ? `history.pushState(null,'','${doel}');window.dispatchEvent(new CustomEvent('location-changed'));`
-                      : `this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${entId}'},bubbles:true,composed:true}));`;
-                    return `<a href="${doel || ('/history?entity_id=' + entId)}"
-                      style="display:block;color:inherit;text-decoration:none;cursor:pointer;pointer-events:auto"
-                      onpointerdown="event.stopPropagation()"
-                      onpointerup="event.stopPropagation();${actie}"
-                      onclick="event.preventDefault();event.stopPropagation()">${inner}</a>`;
-                  };
+                  var n = storing.entiteiten;
+                  var k = n === 0 ? 'ok' : (n > 10 ? 'bad' : 'warn');
+                  var badge = n === 0 ? S.pil('ok', 'geen storingen') : S.pil(k, n + (n === 1 ? ' entiteit' : ' entiteiten'));
+                  var groot = S.grootMetRegels(
+                    {waarde: S.nl(storing.apparaten), k: k,
+                     eenheid: storing.apparaten === 1 ? 'apparaat' : 'apparaten',
+                     sub: S.nl(alles) + ' onbeschikbaar totaal'},
+                    [{naam: 'Weesentiteiten', waarde: S.nl(wees.entiteiten)},
+                     {naam: 'Afgeleid', waarde: S.nl(afg.entiteiten)},
+                     {naam: 'Komen en gaan', waarde: S.nl(rs.entiteiten)}]);
                   var limiet = variables.max_per_groep || 25;
                   // Storingen: langst weg bovenaan, want dat is meestal het
                   // apparaat dat echt aandacht nodig heeft.
                   var blokken = storing.per.slice()
                     .sort(function(a,b){ return (b.apparaten[0].duur||0) - (a.apparaten[0].duur||0); })
                     .map(function(grp){
-                    var app = grp.apparaten;
-                    var teveel = Math.max(0, app.length - limiet);
-                    var rijen = app.slice(0, limiet).map(function(x){
-                      var plek = x.gebied ? `<span style="color:var(--ov-ink-35)"> · ${x.gebied}</span>` : '';
-                      var aantal = x.aantal > 1
-                        ? `<span style="font-size:11.5px;color:var(--ov-ink-45);white-space:nowrap">${x.aantal} entiteiten</span>` : '';
-                      return klik(x.dev_id, x.ent, `<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-top:1px solid var(--ov-ink-4)">
-                        <span style="flex:1;text-align:left;font-size:13.5px;color:var(--ov-ink-85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
-                        ${aantal}
-                        <span style="font-size:13px;font-weight:600;white-space:nowrap;color:${duurKleur(x.duur)}">${duurTxt(x.duur)}</span></div>`);
+                      var app = grp.apparaten;
+                      var teveel = Math.max(0, app.length - limiet);
+                      var rijen = app.slice(0, limiet).map(function(x){
+                        var plek = x.gebied ? '<span style="color:var(--ov-ink-35)"> · ' + esc(x.gebied) + '</span>' : '';
+                        var aantal = x.aantal > 1 ? '<span style="color:var(--ov-ink-45);font-size:11.5px"> · ' + x.aantal + ' entiteiten</span>' : '';
+                        return {klik: x.dev_id ? '/config/devices/device/' + x.dev_id : x.ent,
+                                naam: esc(x.naam) + plek + aantal, waarde: duurTxt(x.duur), k: duurKleur(x.duur), vol: true};
+                      });
+                      if(teveel) rijen.push({naam: '<span style="color:var(--ov-ink-45)">+ ' + teveel + (teveel === 1 ? ' apparaat' : ' apparaten') + ' meer</span>', waarde: '', vol: true});
+                      var ents = grp.entiteiten + (grp.entiteiten === 1 ? ' entiteit' : ' entiteiten');
+                      var tel = app.every(function(x){ return x.los; })
+                        ? ents
+                        : app.length + (app.length === 1 ? ' apparaat' : ' apparaten') + ' · ' + ents;
+                      return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:700;margin:10px 0 2px 0">'
+                        + '<span style="color:var(--ov-info)">' + esc(grp.naam) + '</span>'
+                        + '<span style="font-weight:600;color:var(--ov-ink-45)">' + tel + '</span></div>'
+                        + S.rijen(rijen, 1, 0);
                     }).join('');
-                    return `<div style="margin-bottom:12px">
-                      <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:2px;text-align:left">
-                        <span style="font-size:12.5px;font-weight:700;color:var(--ov-info)">${grp.naam}</span>
-                        <span style="font-size:11.5px;color:var(--ov-ink-40)">${app.every(function(x){ return x.los; })
-                          ? `${grp.entiteiten} entiteiten`
-                          : `${app.length} ${app.length === 1 ? 'apparaat' : 'apparaten'} · ${grp.entiteiten} entiteiten`}</span></div>
-                      ${rijen}
-                      ${teveel ? `<div style="padding:5px 0;font-size:12px;color:var(--ov-ink-45);text-align:left">+ ${teveel} ${teveel === 1 ? 'apparaat' : 'apparaten'} meer</div>` : ''}</div>`;
-                  }).join('');
-                  if(!storing.entiteiten) blokken = `<div style="font-size:14px;color:var(--ov-ok);text-align:left">Geen storingen.</div>`;
-                  // De rest verdwijnt niet uit beeld, maar telt niet mee: één
-                  // regel per bak met de uitsplitsing per integratie erachter.
-                  var voet = function(kop, uitleg, t){
+                  if(!n) blokken = '<div style="font-size:13px;color:var(--ov-ok);padding-top:10px">Geen storingen.</div>';
+                  // De rest verdwijnt niet uit beeld maar telt niet mee: per bak
+                  // een regel met de uitsplitsing per integratie.
+                  var uitsplitsing = function(kop, uitleg, t){
                     if(!t.entiteiten) return '';
-                    var stukjes = t.per.map(function(p){
-                      return `<span style="white-space:nowrap"><span style="color:var(--ov-ink-70)">${p.naam}</span> <span style="color:var(--ov-ink-45)">${p.entiteiten}</span></span>`;
-                    }).join('<span style="color:var(--ov-ink-20)"> · </span>');
-                    return `<div style="border-top:1px solid var(--ov-ink-8);padding-top:10px;margin-top:8px">
-                      <div style="display:flex;align-items:baseline;gap:8px;text-align:left">
-                        <span style="font-size:12.5px;font-weight:700;color:var(--ov-ink-55)">${kop}</span>
-                        <span style="font-size:11.5px;color:var(--ov-ink-40)">${t.entiteiten} entiteiten</span></div>
-                      <div style="font-size:11.5px;color:var(--ov-ink-30);text-align:left;padding:1px 0 3px">${uitleg}</div>
-                      <div style="font-size:12.5px;line-height:1.7;text-align:left">${stukjes}</div></div>`;
+                    return '<div style="margin-top:6px"><b style="color:var(--ov-ink-55)">' + kop + '</b> · ' + uitleg + '<br>'
+                      + t.per.map(function(p){ return '<span style="white-space:nowrap"><span style="color:var(--ov-ink-70)">' + esc(p.naam) + '</span> ' + p.entiteiten + '</span>'; }).join(' · ')
+                      + '</div>';
                   };
-                  var overig = voet('weesentiteiten', 'integratie bestaat niet meer — op te ruimen in het entiteitenregister', telVan(bakken.wees))
-                    + voet('afgeleide sensoren', 'spiegelen een andere entiteit; vallen om als hun bron omvalt', telVan(bakken.afgeleid))
-                    + voet('komen en gaan', 'clients die niet altijd aanwezig zijn — weg is hier normaal', telVan(bakken.ruis));
-                  var waarschuwing = reg ? '' : `<div style="font-size:11.5px;color:var(--ov-warn);padding-bottom:8px">Entiteitenregister niet beschikbaar — gegroepeerd op domein in plaats van integratie.</div>`;
-                  return `<div style="max-height:calc(100vh - 190px);overflow-y:auto">${waarschuwing}${blokken}${overig}</div>`;
+                  var overig = uitsplitsing('Weesentiteiten', 'integratie bestaat niet meer, op te ruimen in het entiteitenregister', wees)
+                    + uitsplitsing('Afgeleid', 'spiegelen een andere entiteit en vallen om met hun bron', afg)
+                    + uitsplitsing('Komen en gaan', 'clients die niet altijd aanwezig zijn, weg is hier normaal', rs);
+                  var waarschuwing = reg ? '' : '<div style="font-size:11.5px;color:var(--ov-warn);padding-top:8px">Entiteitenregister niet beschikbaar: gegroepeerd op domein in plaats van integratie.</div>';
+                  return S.kop('STORINGEN', badge) + groot + waarschuwing
+                    + '<div style="max-height:calc(100vh - 290px);overflow-y:auto;margin-top:4px">' + blokken
+                    + (overig ? S.voet(overig) : '') + '</div>';
                 ]]]
 
-          # =============== BIJNA LEGE BATTERIJEN ===============
-          # Deze kaart gaat over batterijen die je zelf vervangt. Omvormers en
-          # thuisaccu's melden hun laadtoestand óók als `device_class: battery`,
-          # dus die staan elke nacht op een paar procent en maken de kaart dan
-          # onterecht rood. Zelfde valkuil als "veelgebruikers" op het Overzicht:
-          # de device_class zegt niet wat je denkt dat hij zegt.
-          - type: custom:button-card
-            entity: sensor.time
-            triggers_update: sensor.time
-            show_icon: false
-            show_name: false
-            show_state: false
-            tap_action:
-              action: none
-            variables:
-              drempel: 25
-              # Integraties die alleen laadtoestand van accu's leveren.
-              negeer_integraties:
-                - sems
-                - goodwe
-                - anker_solix
-                # `solarman` sinds 20 september 2026, in plaats van `marstek`:
-                # de Deye komt via die integratie binnen (sinds 4 november 2026
-                # weer, na zes weken MarkeDroid) en `sensor.inverter_battery`
-                # draagt device_class `battery`. Zonder deze regel verschijnt de
-                # thuisaccu hier als "bijna lege batterij" zodra hij onder de
-                # 25% zakt - wat voor een accu die 's nachts leegloopt precies
-                # de bedoeling is en dus elke nacht vals alarm geeft.
-                # Let op: de zonnepanelen-omvormers lopen óók via solarman, maar
-                # die hebben geen enkele sensor met device_class battery, dus
-                # deze regel kost verder niets.
-                - solarman
-              # Vangnet voor accu's die via een andere integratie binnenkomen
-              # (denk aan een omvormer achter MQTT).
-              negeer_namen: "omvormer|inverter|thuisbatterij|accu|zonneplan"
-            styles:
-              card:
-                - background: var(--ov-panel-bg)
-                - border: var(--ov-panel-border)
-                - border-radius: 20px
-                - box-shadow: none
-                - padding: 16px 18px
-              grid:
-                - grid-template-areas: '"t" "lijst"'
-                - row-gap: 12px
-              custom_fields:
-                t:
-                  - justify-self: stretch
-                lijst:
-                  - justify-self: stretch
-            custom_fields:
-              t: |
-                [[[
-                  // TWEE GETALLEN, GEEN EEN
-                  // Hier stond één telling onder het kopje "onder 25% of stil".
-                  // Dat "of" is precies het probleem: bijna leeg en niet meer
-                  // melden zijn verschillende storingen met verschillende
-                  // oplossingen (een kabel versus gaan kijken), en bij een getal
-                  // als 3 wist je niet welke van de twee je voor je had. Zie ook
-                  // de kopbalk van het Overzicht, die `batterijen_stil` en
-                  // `kritieke_batterijen` al los noemt - deze kaart liep daar
-                  // achter.
-                  //
-                  // GETELD PER APPARAAT, NET ALS DE LIJST HIERONDER
-                  // De oude telling telde entiteiten terwijl de lijst per
-                  // apparaat groepeert. Een apparaat met zowel een
-                  // percentagesensor als een 'bijna leeg'-binarysensor telde dan
-                  // voor twee en gaf één rij: een badge die niet klopte met wat
-                  // je eronder zag. Zelfde sleutel en zelfde voorrang als daar
-                  // (stil wint van bijna leeg).
-                  var d = variables.drempel;
-                  var reg = (hass && hass.entities) ? hass.entities : null;
-                  var negeerInt = variables.negeer_integraties || [];
-                  var negeerNaam = variables.negeer_namen ? new RegExp(variables.negeer_namen, 'i') : null;
-                  var per = {};
-                  Object.keys(states).forEach(function(id){
-                    var s = states[id];
-                    if(!s || !s.attributes || s.attributes.device_class !== 'battery') return;
-                    // Alleen sensoren MÉTEN een batterij. Een number of select met
-                    // device_class battery is een instelling: de Megane heeft
-                    // `minimum_charge_level` op 20 en `target_charge_level` op 100
-                    // staan, en die eerste kwam hier binnen als "bijna lege
-                    // batterij" terwijl de auto gewoon op 99% stond.
-                    if(id.lastIndexOf('sensor.', 0) !== 0 && id.lastIndexOf('binary_sensor.', 0) !== 0) return;
-                    var e = reg ? reg[id] : null;
-                    if(e && (e.hidden || e.hidden_by)) return;
-                    if(negeerInt.indexOf((e && e.platform) ? e.platform : '') !== -1) return;
-                    if(negeerNaam && negeerNaam.test(s.attributes.friendly_name || id)) return;
-                    // Een batterijapparaat op `unavailable` telt mee: die kun je
-                    // niet met een schakelaar hebben uitgezet, dus stil betekent
-                    // lege batterij of stuk. De pil in de kopbalk noemt precies
-                    // dit aantal ("N apparaten stil") en linkt hierheen; stonden
-                    // ze hier niet, dan kwam je op een lege lijst uit.
-                    var soort = null;
-                    if(s.state === 'unavailable') soort = 'stil';
-                    else if(id.lastIndexOf('binary_sensor.', 0) === 0){ if(s.state === 'on') soort = 'leeg'; }
-                    else { var v = Number(s.state); if(!isNaN(v) && v <= d) soort = 'leeg'; }
-                    if(!soort) return;
-                    var sleutel = (e && e.device_id) ? e.device_id : ('los:' + id);
-                    if(per[sleutel] !== 'stil') per[sleutel] = soort;
-                  });
-                  var leeg = 0, stil = 0;
-                  Object.keys(per).forEach(function(k){ if(per[k] === 'stil') stil++; else leeg++; });
-                  var chip = function(txt, kleur){
-                    return `<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:${kleur};background:var(--ov-ink-6)">${txt}</span>`;
-                  };
-                  var chips = '';
-                  if(leeg === 0 && stil === 0){
-                    chips = chip('alles in orde', 'var(--ov-ok)');
-                  } else {
-                    if(leeg > 0) chips += chip(leeg + ' onder ' + d + '%', leeg > 5 ? 'var(--ov-bad)' : 'var(--ov-warn)');
-                    if(stil > 0) chips += chip(stil + ' stil', 'var(--ov-bad)');
-                  }
-                  // De uitleg staat er alleen als er ook echt iets stil is: een
-                  // legenda die er altijd hangt lees je na een week niet meer.
-                  var uitleg = stil > 0
-                    ? `<span style="margin-left:auto;font-size:11.5px;color:var(--ov-ink-40)">stil = meldt zich niet meer</span>`
-                    : '';
-                  return `<span style="display:flex;align-items:baseline;gap:10px;width:100%;flex-wrap:wrap">
-                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">BATTERIJEN</span>
-                    ${chips}${uitleg}</span>`;
-                ]]]
-              lijst: |
-                [[[
-                  var drempel = variables.drempel;
-                  var reg = (hass && hass.entities) ? hass.entities : null;
-                  var apparaten = (hass && hass.devices) ? hass.devices : null;
-                  var gebieden = (hass && hass.areas) ? hass.areas : null;
-                  var negeerInt = variables.negeer_integraties || [];
-                  var negeerNaam = variables.negeer_namen ? new RegExp(variables.negeer_namen, 'i') : null;
-                  // Ook hier per apparaat: een apparaat kan zowel een
-                  // percentagesensor als een 'bijna leeg'-binarysensor hebben.
-                  var groepen = {};
-                  Object.keys(states).forEach(function(id){
-                    var s = states[id];
-                    if(!s || !s.attributes || s.attributes.device_class !== 'battery') return;
-                    // Zelfde reden als bij de teller hierboven: instellingen zijn
-                    // geen metingen.
-                    if(id.lastIndexOf('sensor.', 0) !== 0 && id.lastIndexOf('binary_sensor.', 0) !== 0) return;
-                    if(negeerNaam && negeerNaam.test(s.attributes.friendly_name || id)) return;
-                    var niveau = null, binair = false, stil = false, sinds = null;
-                    if(s.state === 'unavailable'){
-                      stil = true;
-                      // Wanneer viel hij stil? Dat is de vraag die de rij moet
-                      // beantwoorden - "stil" alleen zegt niet of het vijf
-                      // minuten of drie weken is, en dat is het hele verschil
-                      // tussen "even kijken" en "kabel pakken".
-                      sinds = s.last_changed ? new Date(s.last_changed).getTime() : null;
-                    } else if(id.lastIndexOf('binary_sensor.', 0) === 0){
-                      if(s.state !== 'on') return;
-                      binair = true;
-                    } else {
-                      var v = Number(s.state);
-                      if(isNaN(v) || v > drempel) return;
-                      niveau = v;
-                    }
-                    var e = reg ? reg[id] : null;
-                    if(e && (e.hidden || e.hidden_by)) return;
-                    var integratie = (e && e.platform) ? e.platform : id.split('.')[0];
-                    if(negeerInt.indexOf(integratie) !== -1) return;
-                    var devId = (e && e.device_id) ? e.device_id : null;
-                    var dev = (devId && apparaten) ? apparaten[devId] : null;
-                    var sleutel = devId || ('los:' + id);
-                    var gebiedId = (e && e.area_id) || (dev && dev.area_id) || null;
-                    var gebied = (gebiedId && gebieden && gebieden[gebiedId]) ? gebieden[gebiedId].name : null;
-                    var naam = dev ? (dev.name_by_user || dev.name || devId)
-                      : ((s.attributes.friendly_name || id).replace(/ ?batter[iy][j]?[ -]?(level|niveau|low|laag)?/i, '').trim() || id);
-                    if(!groepen[integratie]) groepen[integratie] = {};
-                    var g = groepen[integratie];
-                    if(!g[sleutel]) g[sleutel] = {naam: naam, gebied: gebied, niveau: niveau, binair: binair, stil: stil, sinds: sinds, dev_id: devId, ent: id};
-                    else {
-                      // percentage wint van een enkel 'laag'-signaal; anders de laagste
-                      if(stil) g[sleutel].stil = true;
-                      // De JONGSTE van de stille entiteiten telt: zolang er nog
-                      // eentje meldde was het apparaat niet weg. De oudste nemen
-                      // zou de storing ouder maken dan hij is.
-                      if(sinds !== null && (g[sleutel].sinds === null || sinds > g[sleutel].sinds)) g[sleutel].sinds = sinds;
-                      if(niveau !== null && (g[sleutel].niveau === null || niveau < g[sleutel].niveau)) {
-                        g[sleutel].niveau = niveau; g[sleutel].binair = false;
-                      }
-                    }
-                  });
-                  var namen = Object.keys(groepen);
-                  if(!namen.length) return `<span style="font-size:14px;color:var(--ov-ok)">Geen bijna lege of stille batterijen.</span>`;
-                  // Stil bovenaan (-2), dan een kaal 'laag'-signaal (-1), dan op percentage.
-                  var sleutelVan = function(x){ return x.stil ? -2 : (x.niveau === null ? -1 : x.niveau); };
-                  var kleurVan = function(x){
-                    if(x.stil || x.niveau === null) return 'var(--ov-bad)';
-                    return x.niveau <= 10 ? 'var(--ov-bad)' : (x.niveau <= 20 ? 'var(--ov-warn)' : 'var(--ov-ink-70)');
-                  };
-                  // Zelfde tekstvorm en dezelfde herstartcorrectie als de
-                  // Matter-kaart hieronder: na een herstart staat elke
-                  // last_changed op het herstartmoment, dus zonder die
-                  // correctie lijkt ieder stil apparaat precies zo lang stil
-                  // als HA draait.
-                  var nu = Date.now();
-                  var startS = states['sensor.home_assistant_gestart'];
-                  var startMs = startS ? new Date(startS.state).getTime() : NaN;
-                  var uptime = isNaN(startMs) ? null : nu - startMs;
-                  var duurTxt = function(ts){
-                    if(ts === null) return 'onbekend hoe lang';
-                    var ms = nu - ts;
-                    if(uptime !== null && Math.abs(ms - uptime) < 180000) return 'sinds de herstart';
-                    var m = Math.floor(ms / 60000);
-                    if(m < 1) return 'net';
-                    if(m < 60) return m + ' min';
-                    var u = Math.floor(m / 60);
-                    if(u < 48) return u + ' uur';
-                    var dg = Math.floor(u / 24);
-                    return dg + ' ' + (dg === 1 ? 'dag' : 'dagen');
-                  };
-                  var lijstVan = {};
-                  namen.forEach(function(g){
-                    lijstVan[g] = Object.keys(groepen[g]).map(function(k){ return groepen[g][k]; })
-                      .sort(function(a,b){ return sleutelVan(a) - sleutelVan(b); });
-                  });
-                  namen.sort(function(a,b){ return sleutelVan(lijstVan[a][0]) - sleutelVan(lijstVan[b][0]); });
-                  // Rij klikbaar maken; zie de toelichting bij de Matter-kaart.
-                  var klik = function(devId, entId, inner){
-                    var doel = devId ? ('/config/devices/device/' + devId) : null;
-                    var actie = doel
-                      ? `history.pushState(null,'','${doel}');window.dispatchEvent(new CustomEvent('location-changed'));`
-                      : `this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${entId}'},bubbles:true,composed:true}));`;
-                    return `<a href="${doel || ('/history?entity_id=' + entId)}"
-                      style="display:block;color:inherit;text-decoration:none;cursor:pointer;pointer-events:auto"
-                      onpointerdown="event.stopPropagation()"
-                      onpointerup="event.stopPropagation();${actie}"
-                      onclick="event.preventDefault();event.stopPropagation()">${inner}</a>`;
-                  };
-                  var blokken = namen.map(function(g){
-                    var rijen = lijstVan[g].map(function(x){
-                      var plek = x.gebied ? `<span style="color:var(--ov-ink-35)"> · ${x.gebied}</span>` : '';
-                      // Bij een stil apparaat staat er hoe lang al; bij een bijna
-                      // lege batterij zegt het percentage rechts het al.
-                      var wanneer = x.stil ? `<span style="color:var(--ov-ink-35)"> · ${duurTxt(x.sinds)} niets gehoord</span>` : '';
-                      var pct = x.niveau === null ? 100 : Math.max(2, x.niveau);
-                      var waarde = x.stil ? 'stil' : (x.niveau === null ? 'laag' : x.niveau + '%');
-                      return klik(x.dev_id, x.ent, `<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-top:1px solid var(--ov-ink-4)">
-                        <span style="flex:1;text-align:left;font-size:13.5px;color:var(--ov-ink-85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}${wanneer}</span>
-                        <span style="width:56px;height:6px;border-radius:3px;background:var(--ov-ink-7);overflow:hidden;flex:0 0 auto">
-                          <span style="display:block;width:${pct}%;height:100%;background:${kleurVan(x)}"></span></span>
-                        <span style="width:44px;text-align:right;font-size:13px;font-weight:600;color:${kleurVan(x)}">${waarde}</span></div>`);
-                    }).join('');
-                    return `<div style="margin-bottom:12px">
-                      <div style="display:flex;align-items:baseline;gap:8px;padding-bottom:2px;text-align:left">
-                        <span style="font-size:12.5px;font-weight:700;color:var(--ov-info)">${g}</span>
-                        <span style="font-size:11.5px;color:var(--ov-ink-40)">${lijstVan[g].length}</span></div>
-                      ${rijen}</div>`;
-                  }).join('');
-                  return `<div style="max-height:calc(100vh - 190px);overflow-y:auto">${blokken}</div>`;
-                ]]]
+          # =============== BIJNA LEGE BATTERIJEN + WAAKHOND ===============
+          - type: vertical-stack
+            cards:
+              # Deze kaart gaat over batterijen die je zelf vervangt. Omvormers en
+              # thuisaccu's melden hun laadtoestand óók als `device_class: battery`,
+              # dus die staan elke nacht op een paar procent en maken de kaart dan
+              # onterecht rood. Zelfde valkuil als "veelgebruikers" op het Overzicht:
+              # de device_class zegt niet wat je denkt dat hij zegt.
+              #
+              # TWEE GETALLEN, GEEN EEN: bijna leeg en stil (meldt zich niet meer)
+              # zijn verschillende storingen met verschillende oplossingen (een
+              # batterij versus gaan kijken). De kopbalk van het Overzicht noemt
+              # `batterijen_stil` en `kritieke_batterijen` ook los.
+              # GETELD PER APPARAAT, net als de lijst: een apparaat met zowel een
+              # percentagesensor als een 'bijna leeg'-binarysensor is één apparaat
+              # (stil wint van bijna leeg, het laagste percentage wint).
+              - type: custom:button-card
+                template: sv_paneel
+                entity: sensor.time
+                triggers_update: sensor.time
+                variables:
+                  kaart: batterijen
+                  drempel: 25
+                  # Integraties die alleen laadtoestand van accu's leveren.
+                  negeer_integraties:
+                    - sems
+                    - goodwe
+                    - anker_solix
+                    # `solarman` sinds 20 september 2026, in plaats van `marstek`:
+                    # de Deye komt via die integratie binnen (sinds 4 november 2026
+                    # weer, na zes weken MarkeDroid) en `sensor.inverter_battery`
+                    # draagt device_class `battery`. Zonder deze regel verschijnt de
+                    # thuisaccu hier als "bijna lege batterij" zodra hij onder de
+                    # 25% zakt - wat voor een accu die 's nachts leegloopt precies
+                    # de bedoeling is en dus elke nacht vals alarm geeft.
+                    # De zonnepanelen-omvormers lopen óók via solarman, maar hebben
+                    # geen sensor met device_class battery: deze regel kost verder niets.
+                    - solarman
+                  # Vangnet voor accu's die via een andere integratie binnenkomen
+                  # (denk aan een omvormer achter MQTT).
+                  negeer_namen: "omvormer|inverter|thuisbatterij|accu|zonneplan"
+                custom_fields:
+                  x: |
+                    [[[
+                      var S = window.svKit && window.svKit(states);
+                      if(!S) return '';
+                      var esc = S.esc, nu = Date.now();
+                      var drempel = variables.drempel;
+                      var reg = (hass && hass.entities) ? hass.entities : null;
+                      var apparaten = (hass && hass.devices) ? hass.devices : null;
+                      var gebieden = (hass && hass.areas) ? hass.areas : null;
+                      var negeerInt = variables.negeer_integraties || [];
+                      var negeerNaam = variables.negeer_namen ? new RegExp(variables.negeer_namen, 'i') : null;
+                      var groepen = {}, gemeten = 0;
+                      Object.keys(states).forEach(function(id){
+                        var s = states[id];
+                        if(!s || !s.attributes || s.attributes.device_class !== 'battery') return;
+                        // Alleen sensoren MÉTEN een batterij. Een number of select met
+                        // device_class battery is een instelling: de Megane heeft
+                        // `minimum_charge_level` op 20, en die kwam hier binnen als
+                        // "bijna lege batterij" terwijl de auto op 99% stond.
+                        if(id.lastIndexOf('sensor.', 0) !== 0 && id.lastIndexOf('binary_sensor.', 0) !== 0) return;
+                        if(negeerNaam && negeerNaam.test(s.attributes.friendly_name || id)) return;
+                        var e = reg ? reg[id] : null;
+                        if(e && (e.hidden || e.hidden_by)) return;
+                        var integratie = (e && e.platform) ? e.platform : id.split('.')[0];
+                        if(negeerInt.indexOf(integratie) !== -1) return;
+                        gemeten++;
+                        // Een batterijapparaat op `unavailable` telt mee: stil betekent
+                        // lege batterij of stuk. De pil in de kopbalk van het Overzicht
+                        // noemt dit aantal ("N apparaten stil") en linkt hierheen.
+                        var niveau = null, stil = false, sinds = null;
+                        if(s.state === 'unavailable'){
+                          stil = true;
+                          // Wanneer viel hij stil? Vijf minuten of drie weken is het
+                          // verschil tussen "even kijken" en "kabel pakken".
+                          var t = s.last_changed ? new Date(s.last_changed).getTime() : NaN;
+                          sinds = isNaN(t) ? null : t;
+                        } else if(id.lastIndexOf('binary_sensor.', 0) === 0){
+                          if(s.state !== 'on') return;
+                        } else {
+                          var v = Number(s.state);
+                          if(s.state === '' || isNaN(v) || v > drempel) return;
+                          niveau = v;
+                        }
+                        var devId = (e && e.device_id) ? e.device_id : null;
+                        var dev = (devId && apparaten) ? apparaten[devId] : null;
+                        var sleutel = devId || ('los:' + id);
+                        var gebiedId = (e && e.area_id) || (dev && dev.area_id) || null;
+                        var gebied = (gebiedId && gebieden && gebieden[gebiedId]) ? gebieden[gebiedId].name : null;
+                        var naam = dev ? (dev.name_by_user || dev.name || devId)
+                          : ((s.attributes.friendly_name || id).replace(/ ?batter[iy][j]?[ -]?(level|niveau|low|laag)?/i, '').trim() || id);
+                        if(!groepen[integratie]) groepen[integratie] = {};
+                        var g = groepen[integratie];
+                        if(!g[sleutel]) g[sleutel] = {naam: naam, gebied: gebied, niveau: niveau, stil: stil, sinds: sinds, dev_id: devId, ent: id};
+                        else {
+                          if(stil) g[sleutel].stil = true;
+                          // De JONGSTE van de stille entiteiten telt: zolang er nog
+                          // eentje meldde was het apparaat niet weg.
+                          if(sinds !== null && (g[sleutel].sinds === null || sinds > g[sleutel].sinds)) g[sleutel].sinds = sinds;
+                          if(niveau !== null && (g[sleutel].niveau === null || niveau < g[sleutel].niveau)) g[sleutel].niveau = niveau;
+                        }
+                      });
+                      var namen = Object.keys(groepen);
+                      var leeg = 0, stilN = 0;
+                      namen.forEach(function(g){ Object.keys(groepen[g]).forEach(function(k){ if(groepen[g][k].stil) stilN++; else leeg++; }); });
+                      var problemen = [];
+                      if(leeg) problemen.push({k: leeg > 5 ? 'bad' : 'warn', t: leeg + ' onder ' + drempel + '%'});
+                      if(stilN) problemen.push({k: 'bad', t: stilN + ' stil'});
+                      var badge = problemen.length === 2
+                        ? S.pil(problemen[0].k, problemen[0].t) + ' ' + S.pil('bad', problemen[1].t)
+                        : S.oordeel(problemen, 'alles in orde');
+                      var tegels = S.tegels([
+                        {label: 'ONDER ' + drempel + '%', waarde: S.nl(leeg), k: leeg ? (leeg > 5 ? 'bad' : 'warn') : 'ok', sub: 'bijna leeg'},
+                        {label: 'STIL', waarde: S.nl(stilN), k: stilN ? 'bad' : 'ok', sub: 'meldt zich niet meer'},
+                        {label: 'GEMETEN', waarde: S.nl(gemeten), k: 'ink-80', sub: 'batterijsensoren'}
+                      ], {marge: 2});
+                      if(!namen.length) return S.kop('BATTERIJEN', badge) + tegels
+                        + '<div style="font-size:13px;color:var(--ov-ok);padding-top:10px">Geen bijna lege of stille batterijen.</div>';
+                      // Zelfde herstartcorrectie als de Matter-kaart: na een herstart
+                      // staat elke last_changed op het herstartmoment.
+                      var startS = states['sensor.home_assistant_gestart'];
+                      var startMs = startS ? new Date(startS.state).getTime() : NaN;
+                      var uptime = isNaN(startMs) ? null : nu - startMs;
+                      var duurTxt = function(ts){
+                        if(ts === null) return 'onbekend hoe lang';
+                        var ms = nu - ts;
+                        if(uptime !== null && Math.abs(ms - uptime) < 180000) return 'sinds de herstart';
+                        var m = Math.floor(ms / 60000);
+                        if(m < 1) return 'net';
+                        if(m < 60) return m + ' min';
+                        var u = Math.floor(m / 60);
+                        if(u < 48) return u + ' uur';
+                        var dg = Math.floor(u / 24);
+                        return dg + ' ' + (dg === 1 ? 'dag' : 'dagen');
+                      };
+                      // Stil bovenaan (-2), dan een kaal 'laag'-signaal (-1), dan op percentage.
+                      var sleutelVan = function(x){ return x.stil ? -2 : (x.niveau === null ? -1 : x.niveau); };
+                      var kleurVan = function(x){
+                        if(x.stil || x.niveau === null) return 'bad';
+                        return x.niveau <= 10 ? 'bad' : (x.niveau <= 20 ? 'warn' : 'ink-70');
+                      };
+                      var lijstVan = {};
+                      namen.forEach(function(g){
+                        lijstVan[g] = Object.keys(groepen[g]).map(function(k){ return groepen[g][k]; })
+                          .sort(function(a,b){ return sleutelVan(a) - sleutelVan(b); });
+                      });
+                      namen.sort(function(a,b){ return sleutelVan(lijstVan[a][0]) - sleutelVan(lijstVan[b][0]); });
+                      var blokken = namen.map(function(g){
+                        var rijen = lijstVan[g].map(function(x){
+                          var plek = x.gebied ? '<span style="color:var(--ov-ink-35)"> · ' + esc(x.gebied) + '</span>' : '';
+                          var wanneer = x.stil ? '<span style="color:var(--ov-ink-35)"> · ' + duurTxt(x.sinds) + ' niets gehoord</span>' : '';
+                          var pct = x.niveau === null ? 100 : Math.max(2, x.niveau);
+                          var k = kleurVan(x);
+                          var balkje = '<span style="display:inline-block;vertical-align:middle;width:48px;height:6px;border-radius:3px;background:var(--ov-ink-7);overflow:hidden;margin-right:8px">'
+                            + '<span style="display:block;width:' + pct + '%;height:100%;background:var(--ov-' + k + ')"></span></span>';
+                          return {klik: x.dev_id ? '/config/devices/device/' + x.dev_id : x.ent,
+                                  naam: esc(x.naam) + plek + wanneer,
+                                  waarde: balkje + (x.stil ? 'stil' : (x.niveau === null ? 'laag' : S.nl(x.niveau) + '%')), k: k, vol: true};
+                        });
+                        return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;font-weight:700;margin:10px 0 2px 0">'
+                          + '<span style="color:var(--ov-info)">' + esc(g) + '</span>'
+                          + '<span style="font-weight:600;color:var(--ov-ink-45)">' + lijstVan[g].length + '</span></div>'
+                          + S.rijen(rijen, 1, 0);
+                      }).join('');
+                      return S.kop('BATTERIJEN', badge) + tegels
+                        + '<div style="max-height:calc(100vh - 470px);min-height:120px;overflow-y:auto;margin-top:4px">' + blokken + '</div>';
+                    ]]]
+
+              # =============== WAAKHOND ===============
+              # De kaarten hierboven tellen álle entiteiten en slaan pas aan bij
+              # een hoop tegelijk. Deze twee sensoren kijken juist naar een korte
+              # lijst met naam en toenaam - één weggevallen lux-meter valt
+              # daarboven weg, maar maakt de zonwering wel blind. Zie
+              # packages/9 - Other/Watchdog.yaml (melding na een uur weg, en bij
+              # een back-up ouder dan `max_dagen` = 3 dagen).
+              - type: custom:button-card
+                template: sv_paneel
+                entity: sensor.watchdog_kritieke_sensoren
+                triggers_update:
+                  - sensor.watchdog_kritieke_sensoren
+                  - sensor.watchdog_backup_leeftijd
+                variables:
+                  kaart: waakhond
+                  backup_max_dagen: 3
+                custom_fields:
+                  x: |
+                    [[[
+                      var S = window.svKit && window.svKit(states);
+                      if(!S) return '';
+                      var K = 'sensor.watchdog_kritieke_sensoren', B = 'sensor.watchdog_backup_leeftijd';
+                      var n = S.num(K), dagen = S.num(B);
+                      var namen = S.attr(K, 'namen');
+                      var laatste = S.attr(B, 'laatste_backup');
+                      var max = variables.backup_max_dagen || 3;
+                      var problemen = [];
+                      if(n === null) problemen.push({k: 'warn', t: 'waakhond stil'});
+                      else if(n > 0) problemen.push({k: 'bad', t: S.nl(n) + ' kritiek weg'});
+                      var bk = dagen === null ? 'bad' : (dagen > max ? 'bad' : (dagen > 1.5 ? 'warn' : null));
+                      if(bk) problemen.push({k: bk, t: dagen === null ? 'back-up onbekend' : 'back-up oud'});
+                      var rijen = [
+                        {klik: K, naam: 'Kritieke sensoren onbereikbaar', waarde: n === null ? '—' : S.nl(n), k: n ? 'bad' : (n === null ? 'ink-40' : 'ok')}
+                      ];
+                      if(n && namen) rijen.push({klik: K, naam: '<span style="color:var(--ov-ink-55)">Welke</span>', waarde: '<span style="white-space:normal">' + S.esc(namen) + '</span>', k: 'bad', vol: true});
+                      rijen.push({klik: B, naam: 'Laatste back-up',
+                        waarde: dagen === null ? 'onbekend' : (dagen < 1 ? 'vandaag' : S.nl(dagen, 1) + ' dagen geleden'), k: bk});
+                      if(laatste) rijen.push({klik: B, naam: 'Gemaakt op', waarde: S.esc(String(laatste).replace(/:\d\d([+-]\d\d:\d\d)?$/, ''))});
+                      return S.kop('WAAKHOND', S.oordeel(problemen)) + S.rijen(rijen, 1, 2);
+                    ]]]
 
           # =============== MATTER APPARATEN ===============
           # Matter kent in de frontend geen 'laatst gezien'-veld; het dichtste
@@ -531,71 +468,43 @@ cards:
           # Apparaten die sinds de laatste herstart niets hebben gestuurd zeggen
           # 'sinds herstart' in plaats van een leeftijd die toevallig gelijk is
           # aan de uptime: die twee zijn niet hetzelfde en zagen er wel zo uit.
+          # De badge telt alleen onbereikbare apparaten als probleem; "stil"
+          # (langer dan stil_uren niets gehoord) staat als tegel, want een
+          # deurcontact mag dat.
           - type: custom:button-card
+            template: sv_paneel
             entity: sensor.time
             triggers_update: sensor.time
-            show_icon: false
-            show_name: false
-            show_state: false
-            tap_action:
-              action: none
             variables:
+              kaart: matter
               # Vanaf hier vindt de kaart het de moeite waard om te kleuren
               oud_uren: 6
               stil_uren: 24
               herstart_marge_min: 3
-            styles:
-              card:
-                - background: var(--ov-panel-bg)
-                - border: var(--ov-panel-border)
-                - border-radius: 20px
-                - box-shadow: none
-                - padding: 16px 18px
-              grid:
-                - grid-template-areas: '"t" "lijst"'
-                - row-gap: 12px
-              custom_fields:
-                t:
-                  - justify-self: stretch
-                lijst:
-                  - justify-self: stretch
             custom_fields:
-              t: |
+              x: |
                 [[[
-                  var reg = (hass && hass.entities) ? hass.entities : null;
-                  var devs = {};
-                  if(reg) Object.keys(states).forEach(function(id){
-                    var e = reg[id];
-                    if(!e || e.platform !== 'matter') return;
-                    if(e.hidden || e.hidden_by) return;
-                    devs[e.device_id || ('los:' + id)] = true;
-                  });
-                  var n = Object.keys(devs).length;
-                  return `<span style="display:flex;align-items:baseline;gap:12px;width:100%">
-                    <span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">MATTER</span>
-                    <span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;color:var(--ov-ink-70);background:var(--ov-ink-6)">${n}</span>
-                    <span style="margin-left:auto;font-size:11.5px;color:var(--ov-ink-40)">oudste eerst</span></span>`;
-                ]]]
-              lijst: |
-                [[[
-                  var nu = Date.now();
+                  var S = window.svKit && window.svKit(states);
+                  if(!S) return '';
+                  var esc = S.esc, nu = Date.now();
                   var reg = (hass && hass.entities) ? hass.entities : null;
                   var apparaten = (hass && hass.devices) ? hass.devices : null;
                   var gebieden = (hass && hass.areas) ? hass.areas : null;
-                  if(!reg) return `<span style="font-size:12.5px;color:var(--ov-warn)">Entiteitenregister niet beschikbaar — Matter-apparaten zijn niet te herkennen.</span>`;
+                  if(!reg) return S.kop('MATTER', S.pil('warn', 'geen register'))
+                    + S.tekst('Entiteitenregister niet beschikbaar: Matter-apparaten zijn niet te herkennen.');
                   // Na een herstart staat elke last_updated op het herstartmoment,
                   // dus zonder deze correctie lijkt ieder stil apparaat precies zo
-                  // lang stil als HA draait. Zie de kaart hierboven.
+                  // lang stil als HA draait.
                   var startS = states['sensor.home_assistant_gestart'];
                   var startMs = startS ? new Date(startS.state).getTime() : NaN;
                   var uptime = isNaN(startMs) ? null : nu - startMs;
                   var marge = (variables.herstart_marge_min || 3) * 60000;
                   var groepen = {};
                   Object.keys(states).forEach(function(id){
-                    var s = states[id];
                     var e = reg[id];
-                    if(!s || !e || e.platform !== 'matter') return;
-                    if(e.hidden || e.hidden_by) return;
+                    if(!e || e.platform !== 'matter') return;
+                    var s = states[id];
+                    if(!s || e.hidden || e.hidden_by) return;
                     var devId = e.device_id || null;
                     var dev = (devId && apparaten) ? apparaten[devId] : null;
                     var sleutel = devId || ('los:' + id);
@@ -603,16 +512,17 @@ cards:
                     var gebied = (gebiedId && gebieden && gebieden[gebiedId]) ? gebieden[gebiedId].name : null;
                     var naam = dev ? (dev.name_by_user || dev.name || devId)
                                    : ((s.attributes && s.attributes.friendly_name) || id);
-                    var tijd = s.last_updated ? new Date(s.last_updated).getTime() : null;
-                    if(!groepen[sleutel]) groepen[sleutel] = {naam: naam, gebied: gebied, aantal: 0, laatst: null, weg: 0, dev_id: devId, ent: id};
+                    var tijd = s.last_updated ? new Date(s.last_updated).getTime() : NaN;
+                    if(!groepen[sleutel]) groepen[sleutel] = {naam: String(naam), gebied: gebied, aantal: 0, laatst: null, weg: 0, dev_id: devId, ent: id};
                     var g = groepen[sleutel];
                     g.aantal++;
                     if(s.state === 'unavailable' || s.state === 'unknown') g.weg++;
                     // nieuwste rapportage van dit apparaat telt
-                    if(tijd !== null && (g.laatst === null || tijd > g.laatst)) g.laatst = tijd;
+                    if(!isNaN(tijd) && (g.laatst === null || tijd > g.laatst)) g.laatst = tijd;
                   });
                   var lijst = Object.keys(groepen).map(function(k){ return groepen[k]; });
-                  if(!lijst.length) return `<span style="font-size:14px;color:var(--ov-ink-60)">Geen Matter-apparaten gevonden.</span>`;
+                  if(!lijst.length) return S.kop('MATTER', S.pil('grijs', 'geen apparaten'))
+                    + S.tekst('Geen Matter-apparaten gevonden.');
                   // Oudste eerst; apparaten zonder tijdstempel helemaal bovenaan
                   lijst.sort(function(a,b){
                     if(a.laatst === b.laatst) return a.naam.localeCompare(b.naam);
@@ -634,71 +544,33 @@ cards:
                   var oud = (variables.oud_uren || 6) * 3600000;
                   var stil = (variables.stil_uren || 24) * 3600000;
                   var kleurVan = function(ms){
-                    if(ms === null) return 'var(--ov-bad)';
-                    if(ms > stil) return 'var(--ov-bad)';
-                    if(ms > oud) return 'var(--ov-warn)';
-                    return 'var(--ov-ink-60)';
+                    if(ms === null) return 'bad';
+                    if(ms > stil) return 'bad';
+                    if(ms > oud) return 'warn';
+                    return 'ink-60';
                   };
-                  // Rij klikbaar maken. Drie dingen zitten een gewone link hier
-                  // in de weg, dus alle drie afgevangen:
-                  //  - button-card vangt de tik zelf af op de kaart, daarom
-                  //    stopPropagation op pointerdown/-up en navigeren we op
-                  //    pointerup in plaats van op click;
-                  //  - een ouder-element met pointer-events:none, daarom
-                  //    expliciet pointer-events:auto op de link zelf;
-                  //  - een <a href> zou de hele frontend herladen, daarom
-                  //    history.pushState + 'location-changed' (de HA-router
-                  //    luistert daarop) en een preventDefault op de click.
-                  // Draait inline JS niet, dan doet die preventDefault het ook
-                  // niet en navigeert de href alsnog — trager, maar het werkt.
-                  // Losse entiteiten hebben geen apparaatpagina; die openen hun
-                  // more-info-dialoog via een event dat uit de kaart omhoog bubbelt.
-                  var klik = function(devId, entId, inner){
-                    var doel = devId ? ('/config/devices/device/' + devId) : null;
-                    var actie = doel
-                      ? `history.pushState(null,'','${doel}');window.dispatchEvent(new CustomEvent('location-changed'));`
-                      : `this.dispatchEvent(new CustomEvent('hass-more-info',{detail:{entityId:'${entId}'},bubbles:true,composed:true}));`;
-                    return `<a href="${doel || ('/history?entity_id=' + entId)}"
-                      style="display:block;color:inherit;text-decoration:none;cursor:pointer;pointer-events:auto"
-                      onpointerdown="event.stopPropagation()"
-                      onpointerup="event.stopPropagation();${actie}"
-                      onclick="event.preventDefault();event.stopPropagation()">${inner}</a>`;
-                  };
+                  var onbereikbaar = 0, stilN = 0;
                   var rijen = lijst.map(function(x){
                     var sinds = x.laatst === null ? null : nu - x.laatst;
-                    var plek = x.gebied ? `<span style="color:var(--ov-ink-35)"> · ${x.gebied}</span>` : '';
+                    var helemaalWeg = x.weg === x.aantal;
+                    if(helemaalWeg) onbereikbaar++;
+                    if(sinds === null || sinds > stil) stilN++;
+                    var plek = x.gebied ? '<span style="color:var(--ov-ink-35)"> · ' + esc(x.gebied) + '</span>' : '';
                     // Alleen melden als het hele apparaat weg is; losse entiteiten
                     // die op unavailable staan zeggen te weinig om te tonen.
-                    var status = x.weg === x.aantal
-                      ? `<span style="font-size:11.5px;font-weight:600;color:var(--ov-bad);white-space:nowrap">niet bereikbaar</span>`
-                      : `<span style="font-size:11.5px;color:var(--ov-ink-45);white-space:nowrap">${x.aantal} ${x.aantal === 1 ? 'entiteit' : 'entiteiten'}</span>`;
-                    return klik(x.dev_id, x.ent, `<div style="display:flex;align-items:baseline;gap:10px;padding:5px 0;border-top:1px solid var(--ov-ink-4)">
-                      <span style="flex:1;text-align:left;font-size:13.5px;color:var(--ov-ink-85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${x.naam}${plek}</span>
-                      ${status}
-                      <span style="font-size:13px;font-weight:600;white-space:nowrap;color:${kleurVan(sinds)}">${duurTxt(sinds)}</span></div>`);
-                  }).join('');
-                  return `<div style="max-height:calc(100vh - 190px);overflow-y:auto">${rijen}</div>`;
+                    var status = helemaalWeg
+                      ? '<span style="font-size:11.5px;font-weight:600;color:var(--ov-bad)"> · niet bereikbaar</span>'
+                      : '<span style="font-size:11.5px;color:var(--ov-ink-45)"> · ' + x.aantal + (x.aantal === 1 ? ' entiteit' : ' entiteiten') + '</span>';
+                    return {klik: x.dev_id ? '/config/devices/device/' + x.dev_id : x.ent,
+                            naam: esc(x.naam) + plek + status, waarde: duurTxt(sinds), k: kleurVan(sinds), vol: true};
+                  });
+                  var badge = onbereikbaar ? S.pil('bad', onbereikbaar + ' niet bereikbaar') : S.pil('ok', 'alles bereikbaar');
+                  var tegels = S.tegels([
+                    {label: 'APPARATEN', waarde: S.nl(lijst.length), k: 'ink-80', sub: 'via Matter'},
+                    {label: 'ONBEREIKBAAR', waarde: S.nl(onbereikbaar), k: onbereikbaar ? 'bad' : 'ok', sub: 'alle entiteiten weg'},
+                    {label: 'STIL', waarde: S.nl(stilN), k: stilN ? 'warn' : 'ok', sub: '> ' + (variables.stil_uren || 24) + ' uur niets'}
+                  ], {marge: 2});
+                  return S.kop('MATTER', badge) + tegels
+                    + S.subkop('OUDSTE RAPPORTAGE EERST', '')
+                    + '<div style="max-height:calc(100vh - 300px);overflow-y:auto">' + S.rijen(rijen, 1, 0) + '</div>';
                 ]]]
-
-      # =============== WAAKHOND ===============
-      # De kaarten hierboven tellen álle entiteiten en slaan pas aan bij een
-      # hoop tegelijk. Deze twee sensoren kijken juist naar een korte lijst met
-      # naam en toenaam - één weggevallen lux-meter valt daarboven weg, maar
-      # maakt de zonwering wel blind. Zie packages/9 - Other/Watchdog.yaml.
-      - type: entities
-        title: Waakhond
-        state_color: true
-        entities:
-          - entity: sensor.watchdog_kritieke_sensoren
-            name: Kritieke sensoren onbereikbaar
-          - entity: sensor.watchdog_kritieke_sensoren
-            type: attribute
-            attribute: namen
-            name: Welke
-          - type: divider
-          - entity: sensor.watchdog_backup_leeftijd
-            name: Laatste backup (dagen geleden)
-          - entity: sensor.watchdog_backup_leeftijd
-            type: attribute
-            attribute: laatste_backup
-            name: Backup gemaakt op

@@ -1,584 +1,1248 @@
-# Klimaatregie: bedienen en meekijken.
+# Klimaat: bedienen en meekijken - in Server-stijl sinds 7 november 2026.
 #
-# Deze weergave is bewust met standaardkaarten gebouwd (geen button-card of
-# card-mod): het is een instel- en controlepagina, geen wandpaneel, en hij moet
-# het ook doen als de custom cards een keer niet laden.
+# WAT. De klimaatregie (docs/klimaatregie.md) in één scherm: wat het regime is,
+# wat elke zone wil en waarom, wat de airco's doen, en hoe de lucht in Maxi's
+# kamer is. Alles wat je hier vroeger kon instellen kan nog steeds: de
+# schakelaars en het regime direct met een knop, de getallen (grenzen,
+# gevelrichtingen, airco-delta's) in de pop-up INSTELLINGEN, de handmatig-
+# vlaggen per zone in de pop-up UITZONDERINGEN.
 #
-# In de eerste week is de kolom "Wat wil elke zone" de belangrijkste: daar zie
-# je wat het systeem zou doen terwijl de hoofdschakelaar nog uit staat.
-type: sections
-max_columns: 3
+# WAAROM ZO. Tot 7-11-2026 stond hier een sections-weergave met standaard
+# entities-kaarten, bewust zonder button-card/card-mod zodat hij ook werkte als
+# de custom cards niet laadden. Robin koos ervoor alle weergaven (behalve
+# Overzicht, Nest Hub, Kalender en Camera's) in de stijl van het Server-
+# dashboard te zetten; dat principe is daarmee losgelaten. Stijlgids:
+# docs/dashboard-stijl.md, bouwstenen: www/sv-kit.js.
+#
+# OPBOUW (3 kolommen, schil uit dashboards/server.yaml):
+#   kolom 1  REGELAAR        regime groot, schakelaars, regimeknoppen, knoppen
+#                            naar INSTELLINGEN en UITZONDERINGEN
+#            KAMERLUCHT MAXI temperatuur, vocht, CO2, fijnstof, beweging,
+#                            slaaptijd, schermpje (+ knop), 24-uursgrafiek CO2
+#   kolom 2  ZONWERING       per zone: advies, waarom, blokkade, werkelijke
+#                            stand, handbediening/handmatig als label
+#   kolom 3  AIRCO WOONKAMER / AIRCO BOVEN  advies, reden, blokkade, kamer nu,
+#                            staat nu, timers als chips, starttemp, storingen,
+#                            knoppen handmatig/storing
+#            ZON EN BUITEN   buiten, wind, zonstand, licht, zon per gevel, KNMI
+#   pop-ups  #klimaat-temperatuur  binnen + buiten, 4 en 24 uur
+#            #klimaat-maxi         CO2 + temperatuur Maxi, 4 en 24 uur
+#            #klimaat-zon          zonstand tegen het licht (kalibratie gevels)
+#            #klimaat-instellingen alle input_number's (tik = schuif in more-info)
+#            #klimaat-uitzonderingen handbedieningstimers + zone op handmatig
+#
+# DE ZONES EN UNITS STAAN MET DE HAND IN `variables` (naam, slug, cover).
+# tests/test_klimaat.py controleert dat elke zone uit klimaat.jinja (advies-
+# sensor en cover) en elke airco-unit hier in de tekst staat; tests/
+# test_klimaat_pagina.py draait de JS van de panelen in node.
+#
+# BRONNEN
+#   sensor.zonwering_advies_<zone>  advies + attributen reden, blokkade, positie
+#   sensor.airco_advies_<unit>      advies + reden, blokkade, doel
+#   input_*/timer.*/counter.*       packages/9 - Other/Klimaat *.yaml
+#   sensor.knmi_temperatuur, weather.knmi_thuis, binary_sensor.knmi_waarschuwing
+#   sensor.slaapkamer_logan_slaapkamer_maxi_*  multisensor in Maxi's kamer
+#
+# VEILIGHEID. Tekst uit een state (reden, blokkade, advies, KNMI-tekst) gaat
+# door S.esc(); klikdoelen controleert sv-kit zelf.
 title: Klimaat
 path: klimaat
 icon: mdi:home-thermometer
-dense_section_placement: true
-sections:
-  #############################################################################
-  ## Bediening
-  #############################################################################
-  - type: grid
+panel: true
+background: "var(--primary-background-color)"
+cards:
+  - type: vertical-stack
+    card_mod:
+      style: |
+        :host { height: 100% !important; }
+        #root {
+          /* Kleurtokens komen uit www/ov-tokens.js, zie overzicht.yaml. */
+          --ov-panel-border: 1px solid var(--ov-ink-6);
+          /* 0: na de kolommen volgen alleen de (verborgen) pop-ups. */
+          gap: 0 !important;
+          min-height: calc(100vh - 8px) !important;
+          margin: 0 !important;
+          padding: 12px 16px !important;
+          background: var(--primary-background-color) !important;
+          box-sizing: border-box !important;
+        }
     cards:
-      - type: heading
-        heading: Regelaar
-        heading_style: title
-        icon: mdi:tune-variant
+      - type: horizontal-stack
+        card_mod:
+          style: |
+            #root {
+              display: grid !important;
+              grid-template-columns: 1fr 1fr 1fr !important;
+              gap: 12px !important;
+              align-items: start !important;
+            }
+            @media (max-width: 1500px) {
+              #root { grid-template-columns: 1fr 1fr !important; }
+            }
+            @media (max-width: 1000px) {
+              #root { grid-template-columns: 1fr !important; }
+            }
+        cards:
+          # ===================== KOLOM 1: REGELAAR, KAMERLUCHT =====================
+          - type: vertical-stack
+            cards:
+              - type: custom:mod-card
+                card_mod:
+                  style: &paneel |
+                    ha-card {
+                      background: var(--ov-panel-bg) !important;
+                      border: var(--ov-panel-border) !important;
+                      border-radius: 16px !important;
+                      box-shadow: none !important;
+                      padding: 12px 16px !important;
+                    }
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: sv_html
+                      entity: input_select.klimaat_regime
+                      triggers_update:
+                        - input_select.klimaat_regime
+                        - input_boolean.klimaat_regime_handmatig
+                        - input_boolean.klimaatregie_actief
+                        - input_boolean.aircoregie_actief
+                        - input_boolean.klimaat_nachtspui
+                        - input_boolean.klimaat_wakker
+                        - input_number.klimaat_verwachte_max
+                        - sensor.knmi_temperatuur
+                      variables:
+                        kaart: regelaar
+                      custom_fields:
+                        x: |
+                          [[[
+                            var S = window.svKit && window.svKit(states);
+                            if(!S) return '';
+                            var aan = function(id){ var s = S.st(id); return s && s.state === 'on'; };
+                            var janee = function(id){ return S.weg(id) ? '—' : (aan(id) ? 'aan' : 'uit'); };
+                            var regime = S.st('input_select.klimaat_regime');
+                            var r = S.weg(regime) ? null : regime.state;
+                            var rk = r === 'Koelen' ? 'info' : (r === 'Verwarmen' ? 'warn' : 'ink-80');
+                            var badge = S.weg('input_boolean.klimaatregie_actief') ? S.pil('bad', 'onbekend')
+                              : (aan('input_boolean.klimaatregie_actief') ? S.pil('ok', 'regie aan') : S.pil('grijs', 'regie uit'));
+                            var buiten = S.num('sensor.knmi_temperatuur');
+                            return S.kop('REGELAAR', badge)
+                              + S.grootMetRegels({klik: 'input_select.klimaat_regime', waarde: r === null ? '—' : S.esc(r), k: rk,
+                                  sub: aan('input_boolean.klimaat_regime_handmatig') ? 'regime handmatig vastgezet' : 'regime automatisch'},
+                                [{klik: 'input_number.klimaat_verwachte_max', naam: 'Verwachte max', waarde: S.waarde('input_number.klimaat_verwachte_max', 1, ' °C')},
+                                 {klik: '#klimaat-temperatuur', naam: 'Buiten nu', waarde: buiten === null ? '—' : S.nl(buiten, 1) + ' °C'},
+                                 {klik: 'input_boolean.klimaat_wakker', naam: 'Huis wakker', waarde: S.weg('input_boolean.klimaat_wakker') ? '—' : (aan('input_boolean.klimaat_wakker') ? 'ja' : 'nee')},
+                                 {klik: 'input_boolean.aircoregie_actief', naam: 'Airco\'s', waarde: janee('input_boolean.aircoregie_actief'), k: aan('input_boolean.aircoregie_actief') ? 'ok' : null}])
+                              + '<div style="height:10px"></div>';
+                          ]]]
+                    # Schakelaars: tik = omzetten, vasthouden = more-info.
+                    - type: grid
+                      columns: 3
+                      square: false
+                      cards:
+                        - type: custom:button-card
+                          entity: input_boolean.klimaatregie_actief
+                          name: Zonwering
+                          <<: &schakel
+                            show_icon: false
+                            show_state: false
+                            tap_action:
+                              action: toggle
+                            hold_action:
+                              action: more-info
+                            styles:
+                              card:
+                                - background: var(--ov-ink-6)
+                                - border: none
+                                - box-shadow: none
+                                - border-radius: 12px
+                                - padding: 6px 2px
+                              name:
+                                - font-size: 13px
+                                - font-weight: "600"
+                                - color: var(--ov-ink-58)
+                            state:
+                              - value: "on"
+                                styles:
+                                  card:
+                                    - background: var(--ov-ok-15)
+                                  name:
+                                    - color: var(--ov-ok)
+                        - type: custom:button-card
+                          entity: input_boolean.klimaat_nachtspui
+                          name: Nachtspui
+                          <<: *schakel
+                        # Staat deze uit, dan blijven de slaapzones ná 07:00
+                        # staan tot iemand op de slaapkamerknop drukt (of tot
+                        # 10:00). Hier zichtbaar én met de hand te zetten.
+                        - type: custom:button-card
+                          entity: input_boolean.klimaat_wakker
+                          name: Huis wakker
+                          <<: *schakel
+                        - type: custom:button-card
+                          entity: input_boolean.aircoregie_actief
+                          name: Airco's
+                          <<: *schakel
+                        - type: custom:button-card
+                          entity: input_boolean.klimaat_regime_handmatig
+                          name: Regime vast
+                          <<: *schakel
+                        - type: custom:button-card
+                          name: Instellingen
+                          tap_action:
+                            action: navigate
+                            navigation_path: "#klimaat-instellingen"
+                          <<: &knop
+                            show_icon: false
+                            show_state: false
+                            hold_action:
+                              action: none
+                            styles:
+                              card:
+                                - background: var(--ov-ink-6)
+                                - border: none
+                                - box-shadow: none
+                                - border-radius: 12px
+                                - padding: 6px 2px
+                              name:
+                                - font-size: 13px
+                                - font-weight: "600"
+                                - color: var(--primary-text-color)
+                    # Regime kiezen. Zonder "Regime vast" zet de automatisering
+                    # het om 05:30 en 12:00 weer zelf (zie docs/klimaatregie.md).
+                    - type: grid
+                      columns: 3
+                      square: false
+                      cards:
+                        - type: custom:button-card
+                          entity: input_select.klimaat_regime
+                          name: Neutraal
+                          tap_action:
+                            action: perform-action
+                            perform_action: input_select.select_option
+                            target:
+                              entity_id: input_select.klimaat_regime
+                            data:
+                              option: Neutraal
+                          <<: &regimeknop
+                            show_icon: false
+                            show_state: false
+                            hold_action:
+                              action: more-info
+                            styles:
+                              card:
+                                - background: var(--ov-ink-4)
+                                - border: 1px solid var(--ov-ink-6)
+                                - box-shadow: none
+                                - border-radius: 12px
+                                - padding: 5px 2px
+                              name:
+                                - font-size: 12.5px
+                                - font-weight: "600"
+                                - color: var(--ov-ink-58)
+                          state:
+                            - value: Neutraal
+                              styles:
+                                card: [{background: var(--ov-ink-12)}]
+                                name: [{color: var(--primary-text-color)}]
+                        - type: custom:button-card
+                          entity: input_select.klimaat_regime
+                          name: Koelen
+                          tap_action:
+                            action: perform-action
+                            perform_action: input_select.select_option
+                            target:
+                              entity_id: input_select.klimaat_regime
+                            data:
+                              option: Koelen
+                          <<: *regimeknop
+                          state:
+                            - value: Koelen
+                              styles:
+                                card: [{background: var(--ov-info-15)}]
+                                name: [{color: var(--ov-info)}]
+                        - type: custom:button-card
+                          entity: input_select.klimaat_regime
+                          name: Verwarmen
+                          tap_action:
+                            action: perform-action
+                            perform_action: input_select.select_option
+                            target:
+                              entity_id: input_select.klimaat_regime
+                            data:
+                              option: Verwarmen
+                          <<: *regimeknop
+                          state:
+                            - value: Verwarmen
+                              styles:
+                                card: [{background: var(--ov-warn-15)}]
+                                name: [{color: var(--ov-warn)}]
+                    - type: grid
+                      columns: 1
+                      square: false
+                      cards:
+                        - type: custom:button-card
+                          name: Uitzonderingen (handbediening, zone op handmatig)
+                          tap_action:
+                            action: navigate
+                            navigation_path: "#klimaat-uitzonderingen"
+                          <<: *knop
 
-      - type: entities
-        title: Aan en uit
-        state_color: true
-        entities:
-          - entity: input_boolean.klimaatregie_actief
-            name: Klimaatregie stuurt de zonwering
-            secondary_info: last-changed
-          - entity: input_boolean.klimaat_nachtspui
-            name: Nachtspui toestaan
-          # Staat deze uit, dan blijven de slaapzones ná 07:00 staan waar ze
-          # staan tot iemand op de slaapkamerknop drukt (of tot 10:00). Hier
-          # zichtbaar én met de hand te zetten, want anders stuurt hij gedrag
-          # dat je nergens kunt zien of overrulen.
-          - entity: input_boolean.klimaat_wakker
-            name: Het huis is wakker
-            secondary_info: last-changed
-          - type: divider
-          - entity: input_select.klimaat_regime
-            name: Regime vandaag
-          - entity: input_boolean.klimaat_regime_handmatig
-            name: Regime handmatig vastzetten
-          - entity: input_number.klimaat_verwachte_max
-            name: Verwachte max vandaag
+              # ------------------------------------------- KAMERLUCHT MAXI
+              # Juist een kinderkamer met de deur dicht loopt 's nachts vol
+              # CO2, en dat zie je aan de temperatuur niet. Het schermpje
+              # staat erbij mét de slaaptijd: zo zie je of het uit staat
+              # omdat het hoort (packages/1 - First Floor/Bedroom Maxi/
+              # Multisensor.yaml) of omdat iemand het uitzette.
+              - type: custom:mod-card
+                card_mod:
+                  style: *paneel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: sv_html
+                      entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide
+                      triggers_update:
+                        - sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur
+                        - sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide
+                        - sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtvochtigheid
+                        - sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5
+                        - sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtkwaliteit
+                        - binary_sensor.slaapkamer_logan_slaapkamer_maxi_beweging_bezetting
+                        - switch.slaapkamer_logan_slaapkamer_maxi_multisensor_display
+                        - binary_sensor.slaapkamer_maxi_slaaptijd
+                        - sensor.time
+                      variables:
+                        kaart: maxi
+                        p: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_
+                        # CO2 (ppm): boven 1200 bedompt, boven 2000 slecht.
+                        co2_warn: 1200
+                        co2_bad: 2000
+                      custom_fields:
+                        x: |
+                          [[[
+                            var S = window.svKit && window.svKit(states);
+                            if(!S) return '';
+                            var P = variables.p;
+                            var t = S.num(P + 'temperatuur'), co2 = S.num(P + 'kooldioxide');
+                            var ck = S.drempel(co2, variables.co2_warn, variables.co2_bad);
+                            var lk = S.st(P + 'luchtkwaliteit');
+                            var LK = {excellent: 'uitstekend', good: 'goed', moderate: 'redelijk', fair: 'matig', poor: 'slecht', very_poor: 'zeer slecht', extremely_poor: 'extreem slecht'};
+                            var lkt = S.weg(lk) ? '—' : (LK[lk.state] || S.esc(lk.state));
+                            var problemen = [];
+                            if(t === null && co2 === null) problemen.push({k: 'bad', t: 'geen meting'});
+                            else if(co2 !== null && co2 >= variables.co2_warn) problemen.push({k: ck, t: 'CO₂ ' + S.nl(co2)});
+                            var since = function(id){
+                              var s = S.st(id); if(!s || !s.last_changed) return '';
+                              var ms = Date.now() - new Date(s.last_changed).getTime();
+                              return isNaN(ms) ? '' : ' · ' + S.duur(Math.max(0, ms)) + ' geleden';
+                            };
+                            var bew = S.st('binary_sensor.slaapkamer_logan_slaapkamer_maxi_beweging_bezetting');
+                            var slaap = S.st('binary_sensor.slaapkamer_maxi_slaaptijd');
+                            var scherm = S.st('switch.slaapkamer_logan_slaapkamer_maxi_multisensor_display');
+                            var bed = S.attr('binary_sensor.slaapkamer_maxi_slaaptijd', 'bedtijd_vandaag');
+                            return S.kop('KAMERLUCHT · MAXI', S.oordeel(problemen, 'fris'))
+                              + S.grootMetRegels({klik: '#klimaat-temperatuur', waarde: t === null ? '—' : S.nl(t, 1) + '°', sub: 'temperatuur'},
+                                [{klik: P + 'kooldioxide', naam: 'CO₂', waarde: co2 === null ? '—' : S.nl(co2) + ' ppm', k: co2 === null || co2 < variables.co2_warn ? null : ck},
+                                 {klik: P + 'luchtvochtigheid', naam: 'Vocht', waarde: S.waarde(P + 'luchtvochtigheid', 0, '%')},
+                                 {klik: P + 'pm2_5', naam: 'Fijnstof PM2.5', waarde: S.waarde(P + 'pm2_5', 0, ' µg/m³')},
+                                 {klik: P + 'luchtkwaliteit', naam: 'Luchtkwaliteit', waarde: lkt}])
+                              + S.rijen([
+                                  {klik: 'binary_sensor.slaapkamer_logan_slaapkamer_maxi_beweging_bezetting', naam: 'Beweging',
+                                   waarde: S.weg(bew) ? '—' : (bew.state === 'on' ? 'nu' : 'geen') + since('binary_sensor.slaapkamer_logan_slaapkamer_maxi_beweging_bezetting')},
+                                  {klik: 'sensor.slaapkamer_logan_slaapkamer_maxi_beweging_licht', naam: 'Licht', waarde: S.waarde('sensor.slaapkamer_logan_slaapkamer_maxi_beweging_licht', 0, ' lx')},
+                                  {klik: 'binary_sensor.slaapkamer_maxi_slaaptijd', naam: 'Slaaptijd', waarde: S.weg(slaap) ? '—' : (slaap.state === 'on' ? 'ja' : 'nee') + since('binary_sensor.slaapkamer_maxi_slaaptijd')},
+                                  {klik: 'binary_sensor.slaapkamer_maxi_slaaptijd', naam: 'Bedtijd vandaag', waarde: bed ? S.esc(String(bed).slice(0, 5)) : '—'},
+                                  {klik: 'switch.slaapkamer_logan_slaapkamer_maxi_multisensor_display', naam: 'Schermpje', waarde: S.weg(scherm) ? '—' : (scherm.state === 'on' ? 'aan' : 'uit')},
+                                  // Springt alleen in als de multisensor uitvalt (custom_templates/kamers.jinja).
+                                  {klik: '#klimaat-temperatuur', naam: 'Terugval-thermometer', waarde: S.waarde('sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur', 1, ' °C')}
+                                ], 2, 8);
+                          ]]]
+                    # De nacht is hier het interessante stuk: CO2 loopt op tot
+                    # iemand 's ochtends de deur opendoet. Tik op de kop voor 4 uur.
+                    - type: custom:apexcharts-card
+                      graph_span: 24h
+                      update_interval: 5min
+                      card_mod:
+                        style: &grafiek |
+                          ha-card { background: none !important; box-shadow: none !important; border: none !important; }
+                      header:
+                        show: false
+                      yaxis: &as_maxi
+                        - id: co2
+                          decimals: 0
+                          apex_config:
+                            tickAmount: 4
+                        - id: temp
+                          opposite: true
+                          decimals: 0
+                          apex_config:
+                            tickAmount: 4
+                      apex_config: &grafiek_apex
+                        chart:
+                          height: 135
+                          toolbar:
+                            show: false
+                        grid:
+                          borderColor: "var(--ov-ink-6)"
+                          padding:
+                            left: 4
+                            right: 8
+                            top: -10
+                            bottom: 0
+                        legend:
+                          show: true
+                          position: top
+                          horizontalAlign: left
+                          fontSize: 11px
+                          labels:
+                            colors: "var(--ov-ink-58)"
+                          markers:
+                            size: 4
+                        tooltip:
+                          x:
+                            format: HH:mm
+                        xaxis:
+                          labels:
+                            datetimeUTC: false
+                            style:
+                              colors: "var(--ov-ink-45)"
+                      all_series_config:
+                        curve: smooth
+                        stroke_width: 2
+                        group_by:
+                          duration: 10min
+                          func: max
+                        show:
+                          legend_value: false
+                      series: &reeks_maxi
+                        - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide
+                          name: CO₂
+                          yaxis_id: co2
+                          color: "var(--ov-warn)"
+                          float_precision: 0
+                        - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur
+                          name: temperatuur
+                          yaxis_id: temp
+                          color: "var(--ov-info)"
+                          float_precision: 1
+                    - type: grid
+                      columns: 2
+                      square: false
+                      cards:
+                        - type: custom:button-card
+                          entity: switch.slaapkamer_logan_slaapkamer_maxi_multisensor_display
+                          name: Schermpje
+                          <<: *schakel
+                        - type: custom:button-card
+                          name: Grafiek 4 en 24 uur
+                          tap_action:
+                            action: navigate
+                            navigation_path: "#klimaat-maxi"
+                          <<: *knop
 
-      - type: heading
-        heading: Instellingen
-        heading_style: subtitle
-        icon: mdi:sliders
+          # ============================ KOLOM 2: ZONWERING ============================
+          # Wat wil elke zone, waarom, en wordt het uitgevoerd? Eén regel per
+          # zone met alles bij elkaar: advies (+ positie), werkelijke stand,
+          # eronder de reden en - als die er is - waarom het niet uitgevoerd
+          # wordt. Handbediening (timer) en "zone op handmatig" staan als
+          # label achter de naam; aan- en uitzetten in #klimaat-uitzonderingen.
+          - type: custom:button-card
+            template: sv_paneel
+            entity: input_boolean.klimaatregie_actief
+            triggers_update:
+              - sensor.time
+              - input_boolean.klimaatregie_actief
+              - sensor.zonwering_advies_keuken_screens
+              - sensor.zonwering_advies_keuken_rolgordijn_groot
+              - sensor.zonwering_advies_keuken_rolgordijn_klein
+              - sensor.zonwering_advies_kantoor_links
+              - sensor.zonwering_advies_kantoor_rechts
+              - sensor.zonwering_advies_badkamer
+              - sensor.zonwering_advies_slaapkamer
+              - sensor.zonwering_advies_slaapkamer_logan
+              - sensor.zonwering_advies_slaapkamer_emma
+              - sensor.zonwering_advies_zonnescherm
+            variables:
+              kaart: zonwering
+              # Zelfde zones als in custom_templates/klimaat.jinja (zones_json).
+              # `omgekeerd`: het zonnescherm is omgekeerd bedraad, 'open' is
+              # daar uitgeschoven (docs/klimaatregie.md).
+              zones:
+                - {naam: Keuken screens, z: keuken_screens, cover: cover.covers_kitchen_screens}
+                - {naam: Keuken rolgordijn groot, z: keuken_rolgordijn_groot, cover: cover.rollerblind_0001}
+                - {naam: Keuken rolgordijn klein, z: keuken_rolgordijn_klein, cover: cover.rollerblind_0002}
+                - {naam: Kantoor links, z: kantoor_links, cover: cover.kantoor_links_langzaam}
+                - {naam: Kantoor rechts, z: kantoor_rechts, cover: cover.kantoor_rechts_langzaam}
+                - {naam: Badkamer, z: badkamer, cover: cover.badkamer_rolluik_langzaam}
+                - {naam: Slaapkamer, z: slaapkamer, cover: cover.slaapkamer_rolluik_langzaam}
+                - {naam: Slaapkamer Logan, z: slaapkamer_logan, cover: cover.covers_bedroom_maxi}
+                - {naam: Slaapkamer Emma, z: slaapkamer_emma, cover: cover.slaapkamer_mini}
+                - {naam: Zonnescherm achtertuin, z: zonnescherm, cover: cover.achtertuin_zonnescherm, omgekeerd: true}
+            custom_fields:
+              x: |
+                [[[
+                  var S = window.svKit && window.svKit(states);
+                  if(!S) return '';
+                  var timer = function(id){
+                    var s = S.st(id); if(!s) return null;
+                    if(s.state === 'active'){ var f = new Date((s.attributes || {}).finishes_at).getTime(); return isNaN(f) ? 'loopt' : 'nog ' + S.duur(Math.max(0, f - Date.now())); }
+                    return s.state === 'paused' ? 'gepauzeerd' : null;
+                  };
+                  var label = function(k, t){ return ' <span style="font-size:10.5px;font-weight:600;padding:1px 7px;margin-left:4px;border-radius:10px;white-space:nowrap;color:var(--ov-' + k + ');background:var(--ov-' + k + '-15)">' + t + '</span>'; };
+                  var regie = S.st('input_boolean.klimaatregie_actief');
+                  var geblokt = 0, hand = 0, onbekend = 0;
+                  var kol = 'display:grid;grid-template-columns:minmax(0,1fr) 84px 92px;column-gap:10px;align-items:baseline';
+                  var rijen = (variables.zones || []).map(function(z){
+                    var aid = 'sensor.zonwering_advies_' + z.z;
+                    var a = S.st(aid), c = S.st(z.cover);
+                    var at = (a && a.attributes) || {};
+                    var adv = S.weg(a) ? '—' : S.esc(a.state) + (Number(at.positie) >= 0 && a.state !== 'rust' ? ' · ' + S.nl(Number(at.positie)) + '%' : '');
+                    if(S.weg(a)) onbekend++;
+                    var pos = c && c.attributes ? Number(c.attributes.current_position) : NaN;
+                    var stand = S.weg(c) ? '—' : (z.omgekeerd ? (c.state === 'open' ? 'uitgeschoven' : (c.state === 'closed' ? 'ingetrokken' : S.esc(c.state)))
+                      : (isNaN(pos) ? S.esc(c.state) : (pos >= 100 ? 'open' : (pos <= 0 ? 'dicht' : S.nl(pos) + '%'))));
+                    var tags = '';
+                    var tm = timer('timer.override_' + z.z);
+                    if(tm) { hand++; tags += label('info', 'hand · ' + tm); }
+                    var hm = S.st('input_boolean.zonwering_handmatig_' + z.z);
+                    if(hm && hm.state === 'on') { hand++; tags += label('warn', 'handmatig'); }
+                    var blok = at.blokkade ? String(at.blokkade) : '';
+                    var echt = blok && !(a && a.state === 'rust');
+                    if(echt) geblokt++;
+                    return '<div' + S.klik(aid) + ' style="cursor:pointer;padding:4px 0;border-top:1px solid var(--ov-ink-6)">'
+                      + '<div style="' + kol + ';font-size:13px">'
+                        + '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="font-weight:600">' + S.esc(z.naam) + '</span>' + tags + '</span>'
+                        + '<span style="text-align:right;white-space:nowrap;color:' + (a && a.state === 'rust' ? 'var(--ov-ink-50)' : 'var(--ov-info)') + '">' + adv + '</span>'
+                        + '<span' + S.klik(z.cover).replace('onclick="', 'onclick="event.stopPropagation();') + ' style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">' + stand + '</span></div>'
+                      + (at.reden ? '<div style="font-size:11.5px;line-height:1.35;color:var(--ov-ink-55);margin-top:1px">' + S.esc(at.reden) + '</div>' : '')
+                      // Bij advies "rust" zegt de blokkade alleen "advies is rust": weglaten.
+                      + (echt ? '<div style="font-size:11.5px;line-height:1.35;margin-top:1px;color:var(--ov-warn)">niet uitgevoerd: ' + S.esc(blok) + '</div>' : '')
+                      + '</div>';
+                  });
+                  var problemen = [];
+                  if(onbekend) problemen.push({k: 'bad', t: onbekend + ' zonder advies'});
+                  if(geblokt) problemen.push({k: 'warn', t: geblokt + ' niet uitgevoerd'});
+                  var badge = regie && regie.state === 'off' ? S.pil('grijs', 'regie uit') : S.oordeel(problemen, 'volgt advies');
+                  var vraag = S.st('timer.zonnescherm_vraag');
+                  return S.kop('ZONWERING', badge)
+                    + '<div style="' + kol + ';font-size:10.5px;font-weight:700;letter-spacing:.8px;color:var(--ov-ink-45);padding-bottom:4px">'
+                      + '<span>ZONE</span><span style="text-align:right">ADVIES</span><span style="text-align:right">STAND</span></div>'
+                    + rijen.join('')
+                    + S.voet((hand ? hand + ' zone' + (hand === 1 ? '' : 's') + ' met de hand bediend. ' : '')
+                      + (vraag && vraag.state === 'active' ? 'Vraag over het zonnescherm is gesteld en wacht op antwoord. ' : '')
+                      + 'Tik op een zone voor het advies, op de stand voor de cover.');
+                ]]]
 
-      - type: entities
-        title: Grenzen
-        entities:
-          - entity: input_number.klimaat_koelen_vanaf
-            name: Koelen vanaf
-          - entity: input_number.klimaat_verwarmen_tot
-            name: Verwarmen tot
-          - entity: input_number.klimaat_hittedag_vanaf
-            name: Hittedag vanaf
-          - type: divider
-          - entity: input_number.klimaat_kamer_warm
-            name: Kamer is warm boven
-          - entity: input_number.klimaat_spui_delta
-            name: Spuien vanaf verschil
-          - entity: input_number.klimaat_kier_positie
-            name: Stand van een kier
-          - entity: input_number.klimaat_override_uren
-            name: Handbediening geldt
-          - entity: input_number.klimaat_screen_max_wind
-            name: Screens in boven windsnelheid
-          - entity: input_number.klimaat_screen_max_regen
-            name: Screens in boven verwachte neerslag
-          - type: divider
-          - entity: input_number.klimaat_voorgevel_richting
-            name: Voorgevel kijkt op
-          - entity: input_number.klimaat_zijgevel_richting
-            name: Zijgevel kijkt op
-          - entity: input_number.klimaat_gevel_breedte
-            name: Hoek waarover een gevel zon vangt
-          - entity: input_number.klimaat_zon_lux_drempel
-            name: Zon lux drempel
-          - entity: input_number.klimaat_zon_min_elevatie
-            name: Zon minimale hoogte
+          # ===================== KOLOM 3: AIRCO'S, ZON EN BUITEN =====================
+          # Eén paneel per unit, met alles wat over die unit gaat bij elkaar.
+          # De JS staat één keer (anker &airco_x) en leest de unit uit
+          # `variables`. Een derde unit = dit blok kopiëren.
+          - type: vertical-stack
+            cards:
+              - type: custom:mod-card
+                card_mod:
+                  style: *paneel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: sv_html
+                      entity: sensor.airco_advies_woonkamer
+                      triggers_update: &airco_triggers
+                        - sensor.time
+                        - sensor.airco_advies_woonkamer
+                        - sensor.airco_advies_zolder
+                        - climate.airco_woonkamer
+                        - climate.airco_zolder
+                        - sensor.woonkamer_woonkamer_multisensor_temperatuur
+                        - sensor.temperatuur_boven_gemiddeld
+                      variables:
+                        kaart: airco_woonkamer
+                        unit: woonkamer
+                        titel: AIRCO WOONKAMER
+                        climate: climate.airco_woonkamer
+                        temp: sensor.woonkamer_woonkamer_multisensor_temperatuur
+                        temp_naam: Kamer nu
+                      custom_fields:
+                        x: &airco_x |
+                          [[[
+                            var S = window.svKit && window.svKit(states);
+                            if(!S) return '';
+                            var u = variables.unit, adv = S.st('sensor.airco_advies_' + u);
+                            var at = (adv && adv.attributes) || {};
+                            var aan = function(id){ var s = S.st(id); return s && s.state === 'on'; };
+                            var timer = function(id){
+                              var s = S.st(id); if(!s) return null;
+                              if(s.state === 'active'){ var f = new Date((s.attributes || {}).finishes_at).getTime(); return isNaN(f) ? 'loopt' : 'nog ' + S.duur(Math.max(0, f - Date.now())); }
+                              return s.state === 'paused' ? 'gepauzeerd' : null;
+                            };
+                            var t = S.num(variables.temp), doel = Number(at.doel);
+                            var cl = S.st(variables.climate);
+                            var cla = (cl && cl.attributes) || {};
+                            var staat = S.weg(cl) ? '—' : S.esc(cl.state) + (cl.state !== 'off' && cla.temperature !== undefined && cla.temperature !== null ? ' · ' + S.nl(Number(cla.temperature), 1) + '°' : '');
+                            var problemen = [];
+                            if(aan('input_boolean.airco_storing_' + u)) problemen.push({k: 'bad', t: 'storing'});
+                            if(timer('timer.airco_kansloos_' + u)) problemen.push({k: 'warn', t: 'kwam niet vooruit'});
+                            if(S.weg(adv)) problemen.push({k: 'bad', t: 'geen advies'});
+                            var badge = problemen.length ? S.oordeel(problemen)
+                              : (aan('input_boolean.airco_handmatig_' + u) ? S.pil('grijs', 'handmatig') : S.pil(adv.state === 'rust' || adv.state === 'off' ? 'grijs' : 'info', S.esc(adv.state)));
+                            var start = S.num('input_number.airco_start_temp_' + u);
+                            var tijden = [['minimaal_aan', 'minimaal aan'], ['rust', 'rustpauze'], ['override', 'handbediening'], ['voortgang', 'voortgang'], ['kansloos', 'kwam niet vooruit']]
+                              .map(function(x){ var id = 'timer.airco_' + x[0] + '_' + u, r = timer(id);
+                                return {klik: id, naam: x[1], toel: r || '—', k: r ? (x[0] === 'kansloos' ? 'warn' : 'info') : 'ink-25'}; });
+                            var stor = S.num('counter.airco_storingen_' + u);
+                            return S.kop(variables.titel, badge)
+                              + S.grootMetRegels({klik: '#klimaat-temperatuur', waarde: t === null ? '—' : S.nl(t, 1) + '°', sub: S.esc(variables.temp_naam) + (isNaN(doel) ? '' : ' · doel ' + S.nl(doel, 1) + '°')},
+                                [{klik: variables.climate, naam: 'Staat nu', waarde: staat},
+                                 {klik: 'sensor.airco_advies_' + u, naam: 'Advies', waarde: S.weg(adv) ? '—' : S.esc(adv.state)},
+                                 {klik: 'input_number.airco_start_temp_' + u, naam: 'Temp. bij start', waarde: start === null || start <= -20 ? '—' : S.nl(start, 1) + ' °C'},
+                                 {klik: 'counter.airco_storingen_' + u, naam: 'Mislukte starts', waarde: stor === null ? '—' : S.nl(stor), k: stor ? 'warn' : null}])
+                              + '<div style="margin-top:8px">'
+                              + (at.reden ? S.tekst('<span style="color:var(--ov-ink-50)">Waarom:</span> ' + S.esc(at.reden)) : '')
+                              + (at.blokkade ? S.tekst('<span style="color:var(--ov-ink-50)">Niet uitgevoerd omdat:</span> <span style="color:var(--ov-warn)">' + S.esc(at.blokkade) + '</span>') : '')
+                              + '</div>'
+                              + S.chips(tijden) + '<div style="height:8px"></div>';
+                          ]]]
+                    - type: grid
+                      columns: 2
+                      square: false
+                      cards:
+                        - type: custom:button-card
+                          entity: input_boolean.airco_handmatig_woonkamer
+                          name: Op handmatig
+                          <<: *schakel
+                        - type: custom:button-card
+                          entity: input_boolean.airco_storing_woonkamer
+                          name: Storing
+                          <<: &schakel_fout
+                            show_icon: false
+                            show_state: false
+                            tap_action:
+                              action: toggle
+                            hold_action:
+                              action: more-info
+                            styles:
+                              card:
+                                - background: var(--ov-ink-6)
+                                - border: none
+                                - box-shadow: none
+                                - border-radius: 12px
+                                - padding: 6px 2px
+                              name:
+                                - font-size: 13px
+                                - font-weight: "600"
+                                - color: var(--ov-ink-58)
+                            state:
+                              - value: "on"
+                                styles:
+                                  card:
+                                    - background: var(--ov-bad-15)
+                                  name:
+                                    - color: var(--ov-bad)
 
-      #########################################################################
-      ## Laag 5 - de airco's
-      ##
-      ## Deze kaarten stonden eerst in een eigen sectie, en dat was precies één
-      ## sectie te veel: met `max_columns: 3` wrapt de vierde naar een nieuwe
-      ## rij, waarna er een gat valt onder de twee kortste kolommen. Ze horen
-      ## hier ook inhoudelijk thuis - dit is de kolom waarin je iets instelt.
-      ##
-      ## Anders opgezet dan de zones hiernaast, en met reden: tien zones lees je
-      ## het makkelijkst als kolommen (alle adviezen onder elkaar, alle redenen
-      ## onder elkaar), maar bij twee units levert dat zeven kaartjes van twee
-      ## regels op waarin je steeds heen en weer moet springen. Eén kaart per
-      ## unit dus, met alles wat over die unit gaat bij elkaar.
-      #########################################################################
+              # Deze unit blaast op de overloop en bedient de hele verdieping,
+              # dus hij regelt op het gemiddelde boven en niet op één kamer.
+              - type: custom:mod-card
+                card_mod:
+                  style: *paneel
+                card:
+                  type: vertical-stack
+                  cards:
+                    - type: custom:button-card
+                      template: sv_html
+                      entity: sensor.airco_advies_zolder
+                      triggers_update: *airco_triggers
+                      variables:
+                        kaart: airco_zolder
+                        unit: zolder
+                        titel: AIRCO BOVEN
+                        climate: climate.airco_zolder
+                        temp: sensor.temperatuur_boven_gemiddeld
+                        temp_naam: Boven nu (gemiddeld)
+                      custom_fields:
+                        x: *airco_x
+                    - type: grid
+                      columns: 2
+                      square: false
+                      cards:
+                        - type: custom:button-card
+                          entity: input_boolean.airco_handmatig_zolder
+                          name: Op handmatig
+                          <<: *schakel
+                        - type: custom:button-card
+                          entity: input_boolean.airco_storing_zolder
+                          name: Storing
+                          <<: *schakel_fout
 
-      - type: heading
-        heading: Airco's
-        heading_style: title
-        icon: mdi:air-conditioner
+              # ------------------------------------------------ ZON EN BUITEN
+              - type: custom:button-card
+                template: sv_paneel
+                entity: sensor.knmi_temperatuur
+                triggers_update:
+                  - sensor.knmi_temperatuur
+                  - weather.knmi_thuis
+                  - binary_sensor.knmi_waarschuwing
+                  - sensor.klimaat_zon_azimut
+                  - sensor.klimaat_zon_elevatie
+                  - binary_sensor.zon_op_voorgevel
+                  - binary_sensor.zon_op_zijgevel
+                  - binary_sensor.zon_op_achtergevel
+                  - binary_sensor.zon_richting_voorgevel
+                  - binary_sensor.zon_richting_zijgevel
+                  - binary_sensor.zon_richting_achtergevel
+                variables:
+                  kaart: zon
+                custom_fields:
+                  x: |
+                    [[[
+                      var S = window.svKit && window.svKit(states);
+                      if(!S) return '';
+                      var aan = function(id){ var s = S.st(id); return s && s.state === 'on'; };
+                      var w = S.st('weather.knmi_thuis'), wa = (w && w.attributes) || {};
+                      var WEER = {'clear-night': 'helder', cloudy: 'bewolkt', fog: 'mist', hail: 'hagel', lightning: 'onweer', 'lightning-rainy': 'onweer en regen',
+                        partlycloudy: 'half bewolkt', pouring: 'stortregen', rainy: 'regen', snowy: 'sneeuw', 'snowy-rainy': 'natte sneeuw', sunny: 'zon', windy: 'wind', 'windy-variant': 'wind', exceptional: 'uitzonderlijk'};
+                      var kn = S.st('binary_sensor.knmi_waarschuwing'), ka = (kn && kn.attributes) || {};
+                      // De sensor staat vaak op "onveilig" zonder dat er iets is;
+                      // de code (groen/geel/oranje/rood) is wat telt.
+                      var code = String(ka.code || '').toLowerCase();
+                      var badge = S.weg(kn) ? S.pil('grijs', 'KNMI onbekend')
+                        : (code && code !== 'groen' ? S.pil(code === 'geel' ? 'warn' : 'bad', 'code ' + S.esc(code)) : S.pil('ok', 'geen waarschuwing'));
+                      var t = S.num('sensor.knmi_temperatuur');
+                      var gevel = function(naam, kant, g){
+                        var op = aan('binary_sensor.zon_op_' + g), naar = aan('binary_sensor.zon_richting_' + g);
+                        return {klik: 'binary_sensor.zon_op_' + g, label: naam, waarde: S.weg('binary_sensor.zon_op_' + g) ? '—' : (op ? 'zon' : 'geen zon'),
+                          k: op ? 'clip' : 'ink-45', sub: kant + (naar ? ' · zon komt' : '')};
+                      };
+                      var wind = Number(wa.wind_speed);
+                      return S.kop('ZON EN BUITEN', badge, {klik: '#klimaat-zon'})
+                        + S.grootMetRegels({klik: '#klimaat-temperatuur', waarde: t === null ? '—' : S.nl(t, 1) + '°', sub: S.weg(w) ? 'buiten' : 'buiten · ' + (WEER[w.state] || S.esc(w.state))},
+                          [{klik: 'weather.knmi_thuis', naam: 'Wind', waarde: isNaN(wind) ? '—' : S.nl(wind) + ' ' + S.esc(wa.wind_speed_unit || 'km/h')},
+                           {klik: 'sensor.klimaat_zon_elevatie', naam: 'Zon hoogte', waarde: S.waarde('sensor.klimaat_zon_elevatie', 1, '°')},
+                           {klik: 'sensor.klimaat_zon_azimut', naam: 'Zon kompas', waarde: S.waarde('sensor.klimaat_zon_azimut', 0, '°')}])
+                        + S.tegels([gevel('VOORGEVEL', 'oost', 'voorgevel'), gevel('ZIJGEVEL', 'zuid', 'zijgevel'), gevel('ACHTERGEVEL', 'west', 'achtergevel')])
+                        + S.rijen([
+                            {klik: 'sensor.voortuin_zon_luminance', naam: 'Licht voortuin', waarde: S.waarde('sensor.voortuin_zon_luminance', 0, ' lx')},
+                            {klik: 'sensor.achtertuin_zon_luminance', naam: 'Licht achtertuin', waarde: S.waarde('sensor.achtertuin_zon_luminance', 0, ' lx')},
+                            {klik: 'binary_sensor.knmi_waarschuwing', naam: 'KNMI', waarde: S.weg(kn) ? '—' : S.esc(ka.title || (kn.state === 'on' ? 'waarschuwing' : 'geen')), vol: true},
+                            (ka.description && ka.description !== '-') ? {klik: 'binary_sensor.knmi_waarschuwing', naam: 'Waarschuwing zegt', waarde: S.esc(ka.description), vol: true} : null,
+                            {klik: '#klimaat-zon', naam: 'Zonstand tegen het licht (kalibratie gevels)', waarde: 'grafiek', vol: true}
+                          ], 2, 8);
+                    ]]]
 
-      - type: entities
-        title: Airco woonkamer
-        state_color: true
-        # Zonder dit staat er een schakelaar in de kaartkop die alles tegelijk
-        # omzet - inclusief de storingsvlag. Dat is geen knop die iemand bewust
-        # zoekt en wel een die je per ongeluk raakt.
-        show_header_toggle: false
-        entities:
-          - entity: sensor.airco_advies_woonkamer
-            name: Advies
-            secondary_info: last-changed
-          - entity: sensor.airco_advies_woonkamer
-            type: attribute
-            attribute: reden
-            name: Waarom
-          - entity: sensor.airco_advies_woonkamer
-            type: attribute
-            attribute: blokkade
-            name: Niet uitgevoerd omdat
-          - entity: sensor.airco_advies_woonkamer
-            type: attribute
-            attribute: doel
-            name: Doeltemperatuur
-          - type: divider
-          - entity: climate.airco_woonkamer
-            name: Staat nu
-          - entity: sensor.woonkamer_woonkamer_multisensor_temperatuur
-            name: Kamer nu
-          - type: divider
-          - entity: timer.airco_minimaal_aan_woonkamer
-            name: Minimale looptijd
-          - entity: timer.airco_rust_woonkamer
-            name: Rustpauze
-          - entity: timer.airco_override_woonkamer
-            name: Handbediening
-          - type: divider
-          # Komt hij vooruit? Het venster loopt zolang hij draait en wordt bij
-          # elke geslaagde controle opnieuw gestart. Lukt het niet, dan gaat
-          # "kwam niet vooruit" lopen en staat hij twee uur uit.
-          - entity: input_number.airco_start_temp_woonkamer
-            name: Temperatuur bij starten
-          - entity: timer.airco_voortgang_woonkamer
-            name: Voortgangsvenster
-          - entity: timer.airco_kansloos_woonkamer
-            name: Kwam niet vooruit
-          - type: divider
-          - entity: input_boolean.airco_handmatig_woonkamer
-            name: Op handmatig (doet niet mee)
-          - entity: input_boolean.airco_storing_woonkamer
-            name: Storing, niet automatisch starten
-          - entity: counter.airco_storingen_woonkamer
-            name: Mislukte starts vandaag
+      # ============================== POP-UPS ===============================
+      # Grafieken: 4 uur ruw, 24 uur max per 10 minuten (een piek mag niet
+      # wegmiddelen) - zelfde opzet als de pop-ups van server.yaml.
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#klimaat-temperatuur"
+        name: Temperatuur binnen en buiten
+        icon: mdi:thermometer
+        width_desktop: 760px
+        styles: &popup |
+          .bubble-pop-up, .bubble-pop-up-background {
+            background: var(--ov-popup-bg, var(--primary-background-color)) !important;
+          }
+          .bubble-pop-up {
+            border: 1px solid var(--ov-ink-6) !important;
+            --ha-card-background: var(--ov-panel-bg);
+            --card-background-color: var(--ov-panel-bg);
+          }
+          .bubble-header { background: transparent !important; }
+          .bubble-header .bubble-button-card-container,
+          .bubble-close, .bubble-close-container {
+            background: var(--ov-ink-5) !important;
+            border: 1px solid var(--ov-ink-6) !important;
+            box-shadow: none !important;
+          }
+          .bubble-name, .bubble-header-name { color: var(--primary-text-color) !important; }
+        cards:
+          - type: custom:apexcharts-card
+            graph_span: 4h
+            update_interval: 1min
+            card_mod: &popup_kaart
+              style: |
+                ha-card {
+                  background: var(--ov-panel-bg) !important;
+                  border: 1px solid var(--ov-ink-6) !important;
+                  border-radius: 16px !important;
+                  box-shadow: none !important;
+                  padding: 4px 6px !important;
+                }
+            header: &kop_4u
+              show: true
+              title: Laatste 4 uur
+              show_states: true
+              colorize_states: true
+            all_series_config: &ruw
+              curve: smooth
+              stroke_width: 2
+              float_precision: 1
+              show:
+                legend_value: false
+            yaxis: &as_temp
+              - decimals: 0
+                apex_config:
+                  tickAmount: 4
+            apex_config: &popup_apex
+              chart:
+                height: 220
+                toolbar:
+                  show: false
+              grid:
+                borderColor: "var(--ov-ink-6)"
+              legend:
+                show: true
+                position: top
+                horizontalAlign: left
+                fontSize: 11px
+                labels:
+                  colors: "var(--ov-ink-58)"
+                markers:
+                  size: 4
+              tooltip:
+                x:
+                  format: HH:mm
+              xaxis:
+                labels:
+                  datetimeUTC: false
+                  style:
+                    colors: "var(--ov-ink-45)"
+            series: &reeks_temp
+              - entity: sensor.woonkamer_woonkamer_multisensor_temperatuur
+                name: woonkamer
+                color: "var(--ov-warn)"
+              - entity: sensor.temperatuur_boven_gemiddeld
+                name: boven (gemiddeld)
+                color: "var(--ov-accent)"
+              - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur
+                name: Maxi
+                color: "var(--ov-ok)"
+              - entity: sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur
+                name: Maxi (terugval)
+                color: "var(--ov-ink-45)"
+              - entity: sensor.knmi_temperatuur
+                name: buiten
+                color: "var(--ov-info)"
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            update_interval: 5min
+            card_mod: *popup_kaart
+            header: &kop_24u
+              show: true
+              title: Laatste 24 uur
+              show_states: false
+            all_series_config: &per_10min
+              curve: smooth
+              stroke_width: 2
+              float_precision: 1
+              group_by:
+                duration: 10min
+                func: max
+              show:
+                legend_value: false
+            yaxis: *as_temp
+            apex_config: *popup_apex
+            series: *reeks_temp
 
-      - type: entities
-        title: Airco boven
-        state_color: true
-        show_header_toggle: false
-        entities:
-          - entity: sensor.airco_advies_zolder
-            name: Advies
-            secondary_info: last-changed
-          - entity: sensor.airco_advies_zolder
-            type: attribute
-            attribute: reden
-            name: Waarom
-          - entity: sensor.airco_advies_zolder
-            type: attribute
-            attribute: blokkade
-            name: Niet uitgevoerd omdat
-          - entity: sensor.airco_advies_zolder
-            type: attribute
-            attribute: doel
-            name: Doeltemperatuur
-          - type: divider
-          - entity: climate.airco_zolder
-            name: Staat nu
-          # Deze unit blaast op de overloop en bedient de hele verdieping, dus
-          # hij regelt op dit gemiddelde en niet op één kamer.
-          - entity: sensor.temperatuur_boven_gemiddeld
-            name: Boven nu (gemiddelde)
-          - type: divider
-          - entity: timer.airco_minimaal_aan_zolder
-            name: Minimale looptijd
-          - entity: timer.airco_rust_zolder
-            name: Rustpauze
-          - entity: timer.airco_override_zolder
-            name: Handbediening
-          - type: divider
-          # Komt hij vooruit? Het venster loopt zolang hij draait en wordt bij
-          # elke geslaagde controle opnieuw gestart. Lukt het niet, dan gaat
-          # "kwam niet vooruit" lopen en staat hij twee uur uit.
-          - entity: input_number.airco_start_temp_zolder
-            name: Temperatuur bij starten
-          - entity: timer.airco_voortgang_zolder
-            name: Voortgangsvenster
-          - entity: timer.airco_kansloos_zolder
-            name: Kwam niet vooruit
-          - type: divider
-          - entity: input_boolean.airco_handmatig_zolder
-            name: Op handmatig (doet niet mee)
-          - entity: input_boolean.airco_storing_zolder
-            name: Storing, niet automatisch starten
-          - entity: counter.airco_storingen_zolder
-            name: Mislukte starts vandaag
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#klimaat-maxi"
+        name: Kamerlucht Maxi
+        icon: mdi:molecule-co2
+        width_desktop: 760px
+        styles: *popup
+        cards:
+          - type: custom:apexcharts-card
+            graph_span: 4h
+            update_interval: 1min
+            card_mod: *popup_kaart
+            header: *kop_4u
+            all_series_config: *ruw
+            yaxis: *as_maxi
+            apex_config: *popup_apex
+            series: *reeks_maxi
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            update_interval: 5min
+            card_mod: *popup_kaart
+            header: *kop_24u
+            all_series_config: *per_10min
+            yaxis: *as_maxi
+            apex_config: *popup_apex
+            series: *reeks_maxi
 
-      #########################################################################
-      ## Kamerlucht
-      #########################################################################
-      ## Twee kamers hebben een multisensor die verder kijkt dan temperatuur.
-      ## De woonkamer heeft die al langer (en staat hierboven al als "Kamer nu"
-      ## bij de airco); Maxi's kamer sinds 4 september 2026. Juist een
-      ## kinderkamer met de deur dicht loopt 's nachts vol CO2, en dat zie je
-      ## aan de temperatuur niet.
-      ##
-      ## Het schermpje staat hier bewust mét zijn slaaptijd-sensor erbij: zo is
-      ## in één oogopslag te zien of het uit staat omdat het hoort, of omdat
-      ## iemand het uitzette. De automatisering staat in
-      ## packages/1 - First Floor/Bedroom Maxi/Multisensor.yaml.
-
-      - type: heading
-        heading: Kamerlucht
-        heading_style: title
-        icon: mdi:air-filter
-
-      - type: entities
-        title: Slaapkamer Maxi
-        state_color: true
-        show_header_toggle: false
-        entities:
-          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur
-            name: Temperatuur
-          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtvochtigheid
-            name: Luchtvochtigheid
-          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide
-            name: CO₂
-          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_pm2_5
-            name: Fijnstof PM2.5
-          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_luchtkwaliteit
-            name: Luchtkwaliteit
-          - type: divider
-          - entity: binary_sensor.slaapkamer_logan_slaapkamer_maxi_beweging_bezetting
-            name: Beweging
-            secondary_info: last-changed
-          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_beweging_licht
-            name: Licht in de kamer
-          - type: divider
-          - entity: switch.slaapkamer_logan_slaapkamer_maxi_multisensor_display
-            name: Schermpje
-          - entity: binary_sensor.slaapkamer_maxi_slaaptijd
-            name: Slaaptijd (dan hoort het scherm uit)
-            secondary_info: last-changed
-          - entity: binary_sensor.slaapkamer_maxi_slaaptijd
-            type: attribute
-            attribute: bedtijd_vandaag
-            name: Bedtijd vandaag
-          - type: divider
-          # Hangt er nog en meet dezelfde kamer. Springt alleen in als de
-          # multisensor uitvalt; zie custom_templates/kamers.jinja.
-          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_temperatuur_temperatuur
-            name: Terugval-thermometer
-
-      # De nacht is hier het interessante stuk: met de deur dicht loopt CO2 op
-      # tot iemand 's ochtends de deur opendoet. Standaardkaart, zoals de rest
-      # van deze weergave.
-      - type: history-graph
-        title: Slaapkamer Maxi - afgelopen 24 uur
-        hours_to_show: 24
-        entities:
-          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_kooldioxide
-            name: CO₂
-          - entity: sensor.slaapkamer_logan_slaapkamer_maxi_multisensor_temperatuur
-            name: Temperatuur
-
-      - type: entities
-        title: Instellingen airco
-        state_color: true
-        show_header_toggle: false
-        entities:
-          - entity: input_boolean.aircoregie_actief
-            name: Airco's automatisch regelen
-            secondary_info: last-changed
-          - type: divider
-          # De comfortband: kamer_warm is de bovenkant (die staat hierboven bij
-          # de zonweringgrenzen, want de rolluiken gebruiken hem ook),
-          # kamer_koud de onderkant. De twee delta's eromheen zijn de dode zone
-          # die het pendelen tegenhoudt: aan op 23,5°, uit op 21,5°.
-          - entity: input_number.klimaat_kamer_koud
-            name: Kamer is koud onder
-          - entity: input_number.klimaat_airco_aan_delta
-            name: Aanzetten vanaf grens +
-          - entity: input_number.klimaat_airco_uit_delta
-            name: Uitzetten bij grens -
-          - type: divider
-          - entity: input_number.klimaat_airco_voorkoelen_min
-            name: Voorkoelen vanaf reistijd
-          - entity: sensor.robin_reistijd_naar_huis
-            name: Reistijd Robin
-          - entity: sensor.samantha_reistijd_naar_huis
-            name: Reistijd Samantha
-
-  #############################################################################
-  ## Wat wil elke zone
-  #############################################################################
-  - type: grid
-    cards:
-      - type: heading
-        heading: Wat wil elke zone
-        heading_style: title
-        icon: mdi:window-shutter-auto
-
-      - type: entities
-        title: Advies
-        state_color: true
-        entities:
-          - entity: sensor.zonwering_advies_keuken_screens
-            name: Keuken screens
-          - entity: sensor.zonwering_advies_keuken_rolgordijn_groot
-            name: Keuken rolgordijn groot
-          - entity: sensor.zonwering_advies_keuken_rolgordijn_klein
-            name: Keuken rolgordijn klein
-          - entity: sensor.zonwering_advies_kantoor_links
-            name: Kantoor links
-          - entity: sensor.zonwering_advies_kantoor_rechts
-            name: Kantoor rechts
-          - entity: sensor.zonwering_advies_badkamer
-            name: Badkamer
-          - entity: sensor.zonwering_advies_slaapkamer
-            name: Slaapkamer
-          - entity: sensor.zonwering_advies_slaapkamer_logan
-            name: Slaapkamer Logan
-          - entity: sensor.zonwering_advies_slaapkamer_emma
-            name: Slaapkamer Emma
-          - entity: sensor.zonwering_advies_zonnescherm
-            name: Zonnescherm achtertuin
-
-      - type: entities
-        title: Waarom
-        entities:
-          - entity: sensor.zonwering_advies_keuken_screens
-            type: attribute
-            attribute: reden
-            name: Keuken screens
-          - entity: sensor.zonwering_advies_keuken_rolgordijn_groot
-            type: attribute
-            attribute: reden
-            name: Keuken rolgordijn groot
-          - entity: sensor.zonwering_advies_keuken_rolgordijn_klein
-            type: attribute
-            attribute: reden
-            name: Keuken rolgordijn klein
-          - entity: sensor.zonwering_advies_kantoor_links
-            type: attribute
-            attribute: reden
-            name: Kantoor links
-          - entity: sensor.zonwering_advies_kantoor_rechts
-            type: attribute
-            attribute: reden
-            name: Kantoor rechts
-          - entity: sensor.zonwering_advies_badkamer
-            type: attribute
-            attribute: reden
-            name: Badkamer
-          - entity: sensor.zonwering_advies_slaapkamer
-            type: attribute
-            attribute: reden
-            name: Slaapkamer
-          - entity: sensor.zonwering_advies_slaapkamer_logan
-            type: attribute
-            attribute: reden
-            name: Slaapkamer Logan
-          - entity: sensor.zonwering_advies_slaapkamer_emma
-            type: attribute
-            attribute: reden
-            name: Slaapkamer Emma
-          - entity: sensor.zonwering_advies_zonnescherm
-            type: attribute
-            attribute: reden
-            name: Zonnescherm achtertuin
-
-      # Staat hier een reden, dan voert de klimaatregie het advies niet uit.
-      # Zonder deze kaart zou dat stil gebeuren.
-      - type: entities
-        title: Wordt niet uitgevoerd omdat
-        entities:
-          - entity: sensor.zonwering_advies_keuken_screens
-            type: attribute
-            attribute: blokkade
-            name: Keuken screens
-          - entity: sensor.zonwering_advies_keuken_rolgordijn_groot
-            type: attribute
-            attribute: blokkade
-            name: Keuken rolgordijn groot
-          - entity: sensor.zonwering_advies_keuken_rolgordijn_klein
-            type: attribute
-            attribute: blokkade
-            name: Keuken rolgordijn klein
-          - entity: sensor.zonwering_advies_kantoor_links
-            type: attribute
-            attribute: blokkade
-            name: Kantoor links
-          - entity: sensor.zonwering_advies_kantoor_rechts
-            type: attribute
-            attribute: blokkade
-            name: Kantoor rechts
-          - entity: sensor.zonwering_advies_badkamer
-            type: attribute
-            attribute: blokkade
-            name: Badkamer
-          - entity: sensor.zonwering_advies_slaapkamer
-            type: attribute
-            attribute: blokkade
-            name: Slaapkamer
-          - entity: sensor.zonwering_advies_slaapkamer_logan
-            type: attribute
-            attribute: blokkade
-            name: Slaapkamer Logan
-          - entity: sensor.zonwering_advies_slaapkamer_emma
-            type: attribute
-            attribute: blokkade
-            name: Slaapkamer Emma
-          - entity: sensor.zonwering_advies_zonnescherm
-            type: attribute
-            attribute: blokkade
-            name: Zonnescherm achtertuin
-
-      - type: entities
-        title: Werkelijke stand
-        state_color: true
-        entities:
-          - entity: cover.covers_kitchen_screens
-            name: Keuken screens
-          - entity: cover.rollerblind_0001
-            name: Keuken rolgordijn groot
-          - entity: cover.rollerblind_0002
-            name: Keuken rolgordijn klein
-          - entity: cover.kantoor_links_langzaam
-            name: Kantoor links
-          - entity: cover.kantoor_rechts_langzaam
-            name: Kantoor rechts
-          - entity: cover.badkamer_rolluik_langzaam
-            name: Badkamer
-          - entity: cover.slaapkamer_rolluik_langzaam
-            name: Slaapkamer
-          - entity: cover.covers_bedroom_maxi
-            name: Slaapkamer Logan
-          - entity: cover.slaapkamer_mini
-            name: Slaapkamer Emma
-          # Let op: deze cover is omgekeerd bedraad, 'open' betekent hier
-          # uitgeschoven. Zie docs/klimaatregie.md.
-          - entity: cover.achtertuin_zonnescherm
-            name: Zonnescherm achtertuin
-
-  #############################################################################
-  ## Waarnemingen en uitzonderingen
-  #############################################################################
-  - type: grid
-    cards:
-      - type: heading
-        heading: Zon en buiten
-        heading_style: title
+      # Voor het kalibreren van de gevelsectoren, zie docs/klimaatregie.md:
+      # bij welke kompasrichting van de zon schiet het licht aan elke kant omhoog?
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#klimaat-zon"
+        name: Zonstand tegen het licht buiten
         icon: mdi:weather-sunny
+        width_desktop: 760px
+        styles: *popup
+        cards:
+          - type: custom:apexcharts-card
+            graph_span: 4h
+            update_interval: 1min
+            card_mod: *popup_kaart
+            header: *kop_4u
+            all_series_config:
+              curve: smooth
+              stroke_width: 2
+              float_precision: 0
+              show:
+                legend_value: false
+            yaxis: &as_zon
+              - id: graden
+                min: 0
+                max: 360
+                decimals: 0
+                apex_config:
+                  tickAmount: 4
+              - id: lux
+                opposite: true
+                min: 0
+                decimals: 0
+                apex_config:
+                  tickAmount: 4
+            apex_config: *popup_apex
+            series: &reeks_zon
+              - entity: sensor.klimaat_zon_azimut
+                name: zon kompas (°)
+                yaxis_id: graden
+                color: "var(--ov-clip)"
+              - entity: sensor.voortuin_zon_luminance
+                name: licht voortuin (lx)
+                yaxis_id: lux
+                color: "var(--ov-info)"
+              - entity: sensor.achtertuin_zon_luminance
+                name: licht achtertuin (lx)
+                yaxis_id: lux
+                color: "var(--ov-warn)"
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            update_interval: 5min
+            card_mod: *popup_kaart
+            header: *kop_24u
+            all_series_config:
+              curve: smooth
+              stroke_width: 2
+              float_precision: 0
+              group_by:
+                duration: 10min
+                func: avg
+              show:
+                legend_value: false
+            yaxis: *as_zon
+            apex_config: *popup_apex
+            series: *reeks_zon
 
-      - type: entities
-        title: Staat de zon op de gevel
-        state_color: true
-        entities:
-          - entity: binary_sensor.zon_op_voorgevel
-            name: Zon op voorgevel (oost)
-          - entity: binary_sensor.zon_op_zijgevel
-            name: Zon op zijgevel (zuid)
-          - entity: binary_sensor.zon_op_achtergevel
-            name: Zon op achtergevel (west)
-          - type: divider
-          - entity: binary_sensor.zon_richting_voorgevel
-            name: Zon draait naar de voorgevel
-          - entity: binary_sensor.zon_richting_zijgevel
-            name: Zon draait naar de zijgevel
-          - entity: binary_sensor.zon_richting_achtergevel
-            name: Zon draait naar de achtergevel
+      # INSTELLINGEN: elke regel is een button-card; tik = more-info van het
+      # input_number, met de schuif/het invoerveld om hem te zetten.
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#klimaat-instellingen"
+        name: Instellingen klimaatregie
+        icon: mdi:sliders
+        width_desktop: 760px
+        styles: *popup
+        cards:
+          - type: custom:mod-card
+            card_mod:
+              style: *paneel
+            card:
+              type: vertical-stack
+              cards:
+                - type: custom:button-card
+                  template: sv_html
+                  variables:
+                    kaart: instellingen_kop
+                  custom_fields:
+                    x: |
+                      [[[
+                        var S = window.svKit && window.svKit(states);
+                        if(!S) return '';
+                        return S.kop('GRENZEN ZONWERING', S.pil('grijs', 'tik om te wijzigen'))
+                          + S.tekst('Kamer is warm boven is ook de bovenkant van de comfortband van de airco\'s.');
+                      ]]]
+                - type: grid
+                  columns: 2
+                  square: false
+                  cards:
+                    - type: custom:button-card
+                      entity: input_number.klimaat_koelen_vanaf
+                      name: Koelen vanaf
+                      <<: &instelling
+                        show_icon: false
+                        show_name: true
+                        show_state: true
+                        tap_action:
+                          action: more-info
+                        hold_action:
+                          action: more-info
+                        styles:
+                          card:
+                            - background: none
+                            - border: none
+                            - border-top: 1px solid var(--ov-ink-6)
+                            - border-radius: 0
+                            - box-shadow: none
+                            - padding: 5px 2px
+                          grid:
+                            - grid-template-areas: '"n s"'
+                            - grid-template-columns: minmax(0, 1fr) auto
+                            - column-gap: 10px
+                          name:
+                            - justify-self: start
+                            - font-size: 13px
+                            - color: var(--ov-ink-80)
+                            - white-space: nowrap
+                            - overflow: hidden
+                            - text-overflow: ellipsis
+                          state:
+                            - justify-self: end
+                            - font-size: 13px
+                            - font-weight: "600"
+                            - white-space: nowrap
+                    - type: custom:button-card
+                      entity: input_number.klimaat_verwarmen_tot
+                      name: Verwarmen tot
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_hittedag_vanaf
+                      name: Hittedag vanaf
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_kamer_warm
+                      name: Kamer is warm boven
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_spui_delta
+                      name: Spuien vanaf verschil
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_kier_positie
+                      name: Stand van een kier
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_override_uren
+                      name: Handbediening geldt
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_screen_max_wind
+                      name: Screens in boven wind
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_screen_max_regen
+                      name: Screens in boven neerslag
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_verwachte_max
+                      name: Verwachte max vandaag
+                      <<: *instelling
+                - type: custom:button-card
+                  template: sv_html
+                  variables:
+                    kaart: instellingen_gevels
+                  custom_fields:
+                    x: |
+                      [[[
+                        var S = window.svKit && window.svKit(states);
+                        if(!S) return '';
+                        return '<div style="height:10px"></div>' + S.kop('GEVELS EN ZON', '');
+                      ]]]
+                - type: grid
+                  columns: 2
+                  square: false
+                  cards:
+                    - type: custom:button-card
+                      entity: input_number.klimaat_voorgevel_richting
+                      name: Voorgevel kijkt op
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_zijgevel_richting
+                      name: Zijgevel kijkt op
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_gevel_breedte
+                      name: Hoek zon op gevel
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_zon_lux_drempel
+                      name: Zon lux drempel
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_zon_min_elevatie
+                      name: Zon minimale hoogte
+                      <<: *instelling
+                # De comfortband van de airco's: kamer_warm (hierboven) is de
+                # bovenkant, kamer_koud de onderkant. De twee delta's eromheen
+                # zijn de dode zone die het pendelen tegenhoudt.
+                - type: custom:button-card
+                  template: sv_html
+                  variables:
+                    kaart: instellingen_airco
+                  custom_fields:
+                    x: |
+                      [[[
+                        var S = window.svKit && window.svKit(states);
+                        if(!S) return '';
+                        return '<div style="height:10px"></div>' + S.kop('AIRCO\'S', '');
+                      ]]]
+                - type: grid
+                  columns: 2
+                  square: false
+                  cards:
+                    - type: custom:button-card
+                      entity: input_number.klimaat_kamer_koud
+                      name: Kamer is koud onder
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_airco_aan_delta
+                      name: Aanzetten vanaf grens +
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_airco_uit_delta
+                      name: Uitzetten bij grens -
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: input_number.klimaat_airco_voorkoelen_min
+                      name: Voorkoelen vanaf reistijd
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: sensor.robin_reistijd_naar_huis
+                      name: Reistijd Robin
+                      <<: *instelling
+                    - type: custom:button-card
+                      entity: sensor.samantha_reistijd_naar_huis
+                      name: Reistijd Samantha
+                      <<: *instelling
 
-      - type: entities
-        title: Meetwaarden
-        entities:
-          - entity: sensor.klimaat_zon_azimut
-            name: Zon azimut (kompas)
-          - entity: sensor.klimaat_zon_elevatie
-            name: Zon hoogte
-          - entity: sensor.voortuin_zon_luminance
-            name: Licht voortuin
-          - entity: sensor.achtertuin_zon_luminance
-            name: Licht achtertuin
-          - type: divider
-          - entity: sensor.knmi_temperatuur
-            name: Buiten
-          - entity: weather.knmi_thuis
-            type: attribute
-            attribute: wind_speed
-            name: Windsnelheid
-          - entity: binary_sensor.knmi_waarschuwing
-            name: Weerwaarschuwing
-          # De sensor staat vaak op "onveilig" zonder dat er iets is; deze
-          # tekst is wat er echt telt voor de screens.
-          - entity: binary_sensor.knmi_waarschuwing
-            type: attribute
-            attribute: description
-            name: Waarschuwing zegt
-
-      # Voor het kalibreren van de gevelsectoren, zie docs/klimaatregie.md.
-      - type: history-graph
-        title: Zonstand tegen het licht buiten (voor kalibratie)
-        hours_to_show: 24
-        entities:
-          - entity: sensor.klimaat_zon_azimut
-          - entity: sensor.voortuin_zon_luminance
-          - entity: sensor.achtertuin_zon_luminance
-
-      - type: heading
-        heading: Uitzonderingen
-        heading_style: title
+      # UITZONDERINGEN: de handbedieningstimers (tik = more-info, daar kun je
+      # een timer annuleren) en per zone "op handmatig" (tik = omzetten).
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#klimaat-uitzonderingen"
+        name: Uitzonderingen zonwering
         icon: mdi:hand-back-right
-
-      - type: entities
-        title: Handbediening actief
-        state_color: true
-        entities:
-          - entity: timer.override_keuken_screens
-            name: Keuken screens
-          - entity: timer.override_keuken_rolgordijn_groot
-            name: Keuken rolgordijn groot
-          - entity: timer.override_keuken_rolgordijn_klein
-            name: Keuken rolgordijn klein
-          - entity: timer.override_kantoor_links
-            name: Kantoor links
-          - entity: timer.override_kantoor_rechts
-            name: Kantoor rechts
-          - entity: timer.override_badkamer
-            name: Badkamer
-          - entity: timer.override_slaapkamer
-            name: Slaapkamer
-          - entity: timer.override_slaapkamer_logan
-            name: Slaapkamer Logan
-          - entity: timer.override_slaapkamer_emma
-            name: Slaapkamer Emma
-          - entity: timer.override_zonnescherm
-            name: Zonnescherm achtertuin
-          - type: divider
-          # Loopt deze, dan is de vraag "zal ik het zonnescherm uitzetten?" al
-          # gesteld en wacht de klimaatregie op een antwoord (of op het
-          # aflopen van deze timer).
-          - entity: timer.zonnescherm_vraag
-            name: Zonnescherm - vraag gesteld
-
-      - type: entities
-        title: Zone op handmatig
-        state_color: true
-        entities:
-          - entity: input_boolean.zonwering_handmatig_keuken_screens
-            name: Keuken screens
-          - entity: input_boolean.zonwering_handmatig_keuken_rolgordijn_groot
-            name: Keuken rolgordijn groot
-          - entity: input_boolean.zonwering_handmatig_keuken_rolgordijn_klein
-            name: Keuken rolgordijn klein
-          - entity: input_boolean.zonwering_handmatig_kantoor_links
-            name: Kantoor links
-          - entity: input_boolean.zonwering_handmatig_kantoor_rechts
-            name: Kantoor rechts
-          - entity: input_boolean.zonwering_handmatig_badkamer
-            name: Badkamer
-          - entity: input_boolean.zonwering_handmatig_slaapkamer
-            name: Slaapkamer
-          - entity: input_boolean.zonwering_handmatig_slaapkamer_logan
-            name: Slaapkamer Logan
-          - entity: input_boolean.zonwering_handmatig_slaapkamer_emma
-            name: Slaapkamer Emma
-          - entity: input_boolean.zonwering_handmatig_zonnescherm
-            name: Zonnescherm achtertuin
+        width_desktop: 760px
+        styles: *popup
+        cards:
+          - type: custom:mod-card
+            card_mod:
+              style: *paneel
+            card:
+              type: vertical-stack
+              cards:
+                - type: custom:button-card
+                  template: sv_html
+                  triggers_update:
+                    - sensor.time
+                  variables:
+                    kaart: uitzonderingen
+                    zones:
+                      - {naam: Keuken screens, z: keuken_screens}
+                      - {naam: Keuken rolgordijn groot, z: keuken_rolgordijn_groot}
+                      - {naam: Keuken rolgordijn klein, z: keuken_rolgordijn_klein}
+                      - {naam: Kantoor links, z: kantoor_links}
+                      - {naam: Kantoor rechts, z: kantoor_rechts}
+                      - {naam: Badkamer, z: badkamer}
+                      - {naam: Slaapkamer, z: slaapkamer}
+                      - {naam: Slaapkamer Logan, z: slaapkamer_logan}
+                      - {naam: Slaapkamer Emma, z: slaapkamer_emma}
+                      - {naam: Zonnescherm achtertuin, z: zonnescherm}
+                  custom_fields:
+                    x: |
+                      [[[
+                        var S = window.svKit && window.svKit(states);
+                        if(!S) return '';
+                        var timer = function(id){
+                          var s = S.st(id); if(!s) return null;
+                          if(s.state === 'active'){ var f = new Date((s.attributes || {}).finishes_at).getTime(); return isNaN(f) ? 'loopt' : 'nog ' + S.duur(Math.max(0, f - Date.now())); }
+                          return s.state === 'paused' ? 'gepauzeerd' : null;
+                        };
+                        var n = 0;
+                        var r = (variables.zones || []).map(function(z){
+                          var t = timer('timer.override_' + z.z); if(t) n++;
+                          return {klik: 'timer.override_' + z.z, naam: S.esc(z.naam), waarde: t || '—', k: t ? 'info' : null};
+                        });
+                        // Loopt deze, dan is de vraag "zal ik het zonnescherm uitzetten?"
+                        // gesteld en wacht de regie op een antwoord (of op het aflopen).
+                        var v = timer('timer.zonnescherm_vraag');
+                        r.push({klik: 'timer.zonnescherm_vraag', naam: 'Zonnescherm - vraag gesteld', waarde: v || '—', k: v ? 'info' : null, vol: true});
+                        return S.kop('HANDBEDIENING ACTIEF', n ? S.pil('info', n + ' actief') : S.pil('grijs', 'geen'))
+                          + S.rijen(r, 2, 0)
+                          + '<div style="height:12px"></div>'
+                          + S.kop('ZONE OP HANDMATIG', S.pil('grijs', 'tik om om te zetten'))
+                          + S.tekst('Een zone op handmatig doet niet mee met de klimaatregie.');
+                      ]]]
+                - type: grid
+                  columns: 2
+                  square: false
+                  cards:
+                    - type: custom:button-card
+                      entity: input_boolean.zonwering_handmatig_keuken_screens
+                      name: Keuken screens
+                      <<: &schakel_hand
+                        show_icon: false
+                        show_state: false
+                        tap_action:
+                          action: toggle
+                        hold_action:
+                          action: more-info
+                        styles:
+                          card:
+                            - background: var(--ov-ink-6)
+                            - border: none
+                            - box-shadow: none
+                            - border-radius: 12px
+                            - padding: 6px 2px
+                          name:
+                            - font-size: 13px
+                            - font-weight: "600"
+                            - color: var(--ov-ink-58)
+                        state:
+                          - value: "on"
+                            styles:
+                              card:
+                                - background: var(--ov-warn-15)
+                              name:
+                                - color: var(--ov-warn)
+                    - type: custom:button-card
+                      entity: input_boolean.zonwering_handmatig_keuken_rolgordijn_groot
+                      name: Keuken rolgordijn groot
+                      <<: *schakel_hand
+                    - type: custom:button-card
+                      entity: input_boolean.zonwering_handmatig_keuken_rolgordijn_klein
+                      name: Keuken rolgordijn klein
+                      <<: *schakel_hand
+                    - type: custom:button-card
+                      entity: input_boolean.zonwering_handmatig_kantoor_links
+                      name: Kantoor links
+                      <<: *schakel_hand
+                    - type: custom:button-card
+                      entity: input_boolean.zonwering_handmatig_kantoor_rechts
+                      name: Kantoor rechts
+                      <<: *schakel_hand
+                    - type: custom:button-card
+                      entity: input_boolean.zonwering_handmatig_badkamer
+                      name: Badkamer
+                      <<: *schakel_hand
+                    - type: custom:button-card
+                      entity: input_boolean.zonwering_handmatig_slaapkamer
+                      name: Slaapkamer
+                      <<: *schakel_hand
+                    - type: custom:button-card
+                      entity: input_boolean.zonwering_handmatig_slaapkamer_logan
+                      name: Slaapkamer Logan
+                      <<: *schakel_hand
+                    - type: custom:button-card
+                      entity: input_boolean.zonwering_handmatig_slaapkamer_emma
+                      name: Slaapkamer Emma
+                      <<: *schakel_hand
+                    - type: custom:button-card
+                      entity: input_boolean.zonwering_handmatig_zonnescherm
+                      name: Zonnescherm achtertuin
+                      <<: *schakel_hand

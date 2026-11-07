@@ -1,290 +1,159 @@
 # Kamers: hoe staat het ervoor in elke ruimte.
 #
-# Deze weergave tekent alleen. Alle drempels, kleuren en teksten komen uit
-# `sensor.kamers`, dat gevuld wordt door custom_templates/kamers.jinja via
-# packages/9 - Other/Kamers.yaml. Wil je weten waarom een tegel oranje is, kijk
-# dan daar - hier staat geen enkel getal.
+# Sinds 7 november 2026 in de Server-stijl (docs/dashboard-stijl.md): panelen
+# in drie kolommen, per verdieping één paneel met een badge rechtsboven, en
+# per kamer drie compacte regels. Past op één 1080p-scherm.
 #
-# Bewust een `sections`-weergave met native kolommen en zonder card-mod: de
-# tegels brengen hun eigen achtergrond mee (button-card `styles`), dus als
-# card-mod een keer niet laadt blijft dit gewoon leesbaar. Dat maakt hem ook
-# bruikbaar op de Nest Hub, waar card-mod helemaal niet draait.
+# OPBOUW
+#   kolom 1  BEGANE GROND        (7 kamers)
+#   kolom 2  EERSTE VERDIEPING   (5) en TWEEDE VERDIEPING (2)
+#   kolom 3  BUITEN              (3) en ONDERHOUD (niet gekoppelde sensoren)
+# Een kamer aantikken opent zijn pop-up (#kamer-<slug>, met `_` als `-`):
+# reden en advies, elke meting met de entiteit die hem levert (aantikken =
+# more-info met historie), beweging en ramen/deuren, wat er niet gemeten
+# wordt, en een lijst van de bewegings- en contactsensoren in die area.
 #
-# Elke tegel opent een pop-up met `kamer_detail`: die laat zien WELKE entiteit
-# elke waarde geleverd heeft. Klopt een cijfer niet, dan wijs je in de tabel in
-# custom_templates/kamers.jinja de juiste sensor aan - een kamer meet sinds
-# 2026-08-03 alleen nog wat daar staat. Onderaan deze weergave staat de
-# tegenhanger: sensoren die er wél hangen maar nergens gekoppeld zijn.
+# DEZE WEERGAVE TEKENT ALLEEN. Alle drempels, kleuren en teksten komen uit
+# `sensor.kamers`, gevuld door custom_templates/kamers.jinja via
+# packages/9 - Other/Kamers.yaml. Wil je weten waarom een kamer oranje is,
+# kijk dan daar - hier staat geen enkel getal. De kaarten zijn templates in
+# dashboards/home/overzicht_templates.yaml (`kamer_verdieping`,
+# `kamer_detail`, `kamer_onderhoud`, `kamer_onderhoud_lijst`).
+#
+# WELKE KAMER WAAR STAAT bepaalt `verdieping` in de KAMERS-tabel van
+# kamers.jinja: het paneel toont elke kamer met die verdieping, in de volgorde
+# van de tabel. Een nieuwe kamer verschijnt dus vanzelf; alleen zijn pop-up
+# moet hieronder bij (kopieer er één en vervang slug, naam, icoon en area).
+# tests/test_kamers_pagina.py faalt tegen een live states-dump als een kamer
+# geen pop-up heeft.
+#
+# WAAROM GEEN SECTIONS EN GEEN TEGELS MEER. Tot 7 november 2026 was dit een
+# sections-weergave met één button-card-tegel per kamer en bewust zonder
+# card-mod, zodat hij ook op de Nest Hub zou werken. Hij wordt niet naar de Hub
+# gecast (alleen `mini-dashboard`, zie Livingroom/Cast.yaml), en Robin koos
+# voor één stijl over alle beheerpagina's. Wat van de tegels bleef: de kleur
+# per status, alleen de metingen die er écht zijn, en de platte regel voor een
+# kamer zonder sensor (geen temperatuur, de reden zegt waarom).
+#
+# POP-UPS ZONDER HISTORIE (sinds 2026-08-03). Een pop-up is verborgen, niet
+# afwezig: zeventien history-graphs of apexcharts in deze weergave vuurden bij
+# elk openen zeventien historie-queries af. De historie zit achter de
+# meetregels in de pop-up (more-info), en op de Klimaat-weergave.
 #
 # LET OP bij het bewerken van de auto-entities-filters: `device_class` is geen
 # filtersleutel, die hoort onder `attributes:`. Met device_class op het hoogste
 # niveau gaf elke pop-up "Configuratiefout".
 #
-# DRIE KOLOMMEN, NIET VIER (2026-08-03)
-# Met vier kolommen paste de reden-en-advies-regel van een tegel niet meer en
-# werd hij afgekapt met een beletselteken - precies de regel waarvoor je naar
-# deze pagina kijkt. De eerste en tweede verdieping delen daarom één kolom, met
-# twee koppen onder elkaar: samen zeven tegels, evenveel als de begane grond.
-#
-# GEEN SAMENVATTINGSBALK MEER (2026-08-03)
-# Bovenaan stond een balk die de ruimtes met een probleem als chips herhaalde
-# ("3 ruimtes vragen aandacht"). Die is eruit: sinds de tegels compact zijn pas
-# het hele huis op één scherm, en dan doen de gekleurde randen datzelfde werk
-# al - de balk noemde precies de tegels die je er tegelijk naast zag staan.
-#
-# Wat die balk óók deed was melden dat `sensor.kamers` nog geen waarde had. Dat
-# blijft zichtbaar zonder hem: `kamer_tegel` zet dan op elke tegel een rode
-# "? <slug>" waar de kamernaam hoort. Zeventien rode vraagtekens zijn een
-# duidelijker signaal dan één regel bovenaan, dus daar is niets voor in de
-# plaats gekomen.
-type: sections
-max_columns: 3
+# Test: tests/test_kamers_pagina.py (de JS van de panelen in node) en
+# tests/test_kamers.py (de jinja erachter).
 title: Kamers
 path: kamers
 icon: mdi:home-heart
-dense_section_placement: true
-sections:
-  #############################################################################
-  ## Begane grond
-  #############################################################################
-  - type: grid
+panel: true
+background: "var(--primary-background-color)"
+cards:
+  - type: vertical-stack
+    card_mod:
+      style: |
+        :host { height: 100% !important; }
+        #root {
+          /* Kleurtokens komen uit www/ov-tokens.js, zie overzicht.yaml. */
+          --ov-panel-border: 1px solid var(--ov-ink-6);
+          /* 0: na de kolommen volgen alleen de (verborgen) pop-ups; een gap
+             zou onderaan ruimte maken en het scherm laten scrollen. */
+          gap: 0 !important;
+          min-height: calc(100vh - 8px) !important;
+          margin: 0 !important;
+          padding: 12px 16px !important;
+          background: var(--primary-background-color) !important;
+          box-sizing: border-box !important;
+        }
     cards:
-      - type: heading
-        heading: Begane grond
-        heading_style: title
-        icon: mdi:home-floor-g
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: woonkamer
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-woonkamer"
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: keuken
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-keuken"
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: entree
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-entree"
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: toilet
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-toilet"
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: speelkamer
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-speelkamer"
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: garage
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-garage"
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: meterkast
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-meterkast"
+      - type: horizontal-stack
+        card_mod:
+          style: |
+            #root {
+              display: grid !important;
+              grid-template-columns: 1fr 1fr 1fr !important;
+              gap: 12px !important;
+              align-items: start !important;
+            }
+            @media (max-width: 1500px) {
+              #root { grid-template-columns: 1fr 1fr !important; }
+            }
+            @media (max-width: 1000px) {
+              #root { grid-template-columns: 1fr !important; }
+            }
+        cards:
+          # ===================== KOLOM 1: BEGANE GROND ======================
+          - type: custom:button-card
+            template: kamer_verdieping
+            variables:
+              kaart: begane_grond
+              verdieping: Begane grond
 
-  #############################################################################
-  ## Eerste en tweede verdieping
-  #############################################################################
-  # Eén kolom met twee koppen: de tweede verdieping is twee tegels groot en zou
-  # als eigen kolom vooral witruimte zijn.
-  - type: grid
-    cards:
-      - type: heading
-        heading: Eerste verdieping
-        heading_style: title
-        icon: mdi:home-floor-1
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: slaapkamer
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-slaapkamer"
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: slaapkamer_logan
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-slaapkamer_logan"
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: badkamer
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-badkamer"
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: kantoor
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-kantoor"
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: overloop
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-overloop"
+          # ============ KOLOM 2: EERSTE EN TWEEDE VERDIEPING ===============
+          # Samen in één kolom: de tweede verdieping is twee kamers groot en
+          # zou als eigen kolom vooral witruimte zijn.
+          - type: vertical-stack
+            cards:
+              - type: custom:button-card
+                template: kamer_verdieping
+                variables:
+                  kaart: eerste_verdieping
+                  verdieping: Eerste verdieping
+              - type: custom:button-card
+                template: kamer_verdieping
+                variables:
+                  kaart: tweede_verdieping
+                  verdieping: Tweede verdieping
 
-      - type: heading
-        heading: Tweede verdieping
-        heading_style: title
-        icon: mdi:home-floor-2
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: slaapkamer_emma
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-slaapkamer_emma"
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: zolder
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-zolder"
+          # ===================== KOLOM 3: BUITEN, ONDERHOUD =================
+          # Onderhoud: meetsensoren die in een ruimte hangen maar nergens zijn
+          # aangewezen. Staat er iets dat er hoort, zet het dan bij `klimaat`
+          # of `voorkeur` in custom_templates/kamers.jinja; hoort het er nooit
+          # bij (koelkast, espressomachine), zet het dan in `negeer`.
+          - type: vertical-stack
+            cards:
+              - type: custom:button-card
+                template: kamer_verdieping
+                variables:
+                  kaart: buiten
+                  verdieping: Buiten
+              - type: custom:button-card
+                template: kamer_onderhoud
+                variables:
+                  kaart: onderhoud
 
-  #############################################################################
-  ## Buiten
-  #############################################################################
-  - type: grid
-    cards:
-      - type: heading
-        heading: Buiten
-        heading_style: title
-        icon: mdi:tree-outline
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: schuur
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-schuur"
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: achtertuin
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-achtertuin"
-      - type: custom:button-card
-        template: kamer_tegel
-        variables:
-          slug: voortuin
-        tap_action:
-          action: navigate
-          navigation_path: "#kamer-voortuin"
-
-  #############################################################################
-  ## Pop-ups
-  #############################################################################
-  # Onzichtbaar tot je een tegel aantikt. De opmaak staat één keer bij de
-  # eerste pop-up (&kamer_popup) en wordt door de rest hergebruikt; hetzelfde
-  # blok als op Overzicht, maar YAML-ankers werken niet over bestanden heen.
-  #
-  # WAT HIER OP 2026-08-03 UIT IS GEHAALD, EN WAAROM
-  # Elke pop-up had een markdown-kaart, twee `auto-entities`-lijsten en een
-  # `history-graph` met 24 uur historie. Die staan alle zeventien ín de weergave
-  # - een pop-up is verborgen, niet afwezig - dus bij het openen van deze pagina
-  # vuurde de browser zeventien historie-queries op de recorder af en hielden
-  # eenenvijftig auto-entities-kaarten hun filter bij over de hele state
-  # machine. De pagina was daardoor traag op het wandpaneel.
-  #
-  # Wat overblijft per pop-up:
-  #   - `kamer_detail`, die uit `sensor.kamers` leest wat er aan de hand is en
-  #     welke entiteit elke waarde geleverd heeft. Rekent in de browser.
-  #   - één auto-entities met beweging, ramen en deuren. Die blijft area-based,
-  #     want dat is de kant waar automatisch zoeken wél mag (zie de kop van
-  #     custom_templates/kamers.jinja).
-  # De lijst "alle metingen in deze ruimte" is niet meer nodig nu de koppeling
-  # vastligt: `kamer_detail` noemt de bron per waarde, en wat er niet in zit
-  # staat onderaan deze weergave. Historie zie je via hold op een tegel
-  # (more-info) of op de Klimaat-weergave.
-  - type: grid
-    column_span: 3
-    cards:
+      # ============================ POP-UPS =================================
+      # Onzichtbaar tot je een kamer aantikt. De opmaak staat één keer bij de
+      # eerste pop-up (&kamer_popup, dezelfde als de pop-ups van server.yaml)
+      # en wordt door de rest hergebruikt.
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#kamer-woonkamer"
         name: Woonkamer
         icon: mdi:sofa-outline
         styles: &kamer_popup |
-          .bubble-pop-up {
+          .bubble-pop-up, .bubble-pop-up-background {
             background: var(--ov-popup-bg, var(--primary-background-color)) !important;
-            backdrop-filter: blur(18px) !important;
+          }
+          .bubble-pop-up {
             border: 1px solid var(--ov-ink-6) !important;
-            --ha-card-background: var(--ov-panel-bg-2);
-            --card-background-color: var(--ov-panel-bg-2);
-            --ha-card-border-color: var(--ov-ink-7);
-            --ha-card-border-width: 1px;
+            --ha-card-background: var(--ov-panel-bg);
+            --card-background-color: var(--ov-panel-bg);
+            --ha-card-border-color: var(--ov-ink-6);
             --ha-card-border-radius: 16px;
-            /* Hier stond "--primary-text-color: #ffffff" om witte tekst in de
-               popup te forceren toen die altijd donker was. Weggehaald: de
-               popup erft nu de tekstkleur van het thema, en dat is precies
-               wat een lichte variant nodig heeft. Terugzetten als var(--...)
-               mag NIET - dat is een cyclus en maakt de property ongeldig. */
             --secondary-text-color: var(--ov-ink-55);
           }
-          /* Dit is de eigen achtergrondlaag van de popup, NIET de waas over
-             het dashboard. Hier stond ov-scrim: in licht een donkere waas
-             over de hele popup, dus alles grijs (24 oktober 2026). */
-          .bubble-pop-up-background {
-            backdrop-filter: blur(4px) !important;
-            background: var(--ov-popup-bg, var(--primary-background-color)) !important;
-          }
-          .bubble-header {
-            background: transparent !important;
-          }
+          .bubble-header { background: transparent !important; }
           .bubble-header .bubble-button-card-container,
-          .bubble-button-card-container {
+          .bubble-close, .bubble-close-container {
             background: var(--ov-ink-5) !important;
             border: 1px solid var(--ov-ink-6) !important;
             box-shadow: none !important;
           }
-          .bubble-icon-container {
-            background: var(--ov-ink-8) !important;
-          }
-          .bubble-icon {
-            color: var(--ov-ink-90) !important;
-          }
-          .bubble-name,
-          .bubble-header-name {
-            color: var(--primary-text-color) !important;
-          }
-          .bubble-close,
-          .bubble-close-container {
-            background: var(--ov-ink-5) !important;
-            border: 1px solid var(--ov-ink-6) !important;
-            box-shadow: none !important;
-          }
-          .bubble-close {
-            color: var(--ov-ink-85) !important;
-          }
+          .bubble-name, .bubble-header-name { color: var(--primary-text-color) !important; }
         cards:
           - type: custom:button-card
             template: kamer_detail
@@ -298,34 +167,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Woonkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Woonkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Woonkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Woonkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Woonkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Woonkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Woonkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Woonkamer, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Woonkamer, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Woonkamer, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Woonkamer, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Woonkamer, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Woonkamer, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Woonkamer, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -347,34 +195,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Keuken
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Keuken
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Keuken
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Keuken
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Keuken
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Keuken
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Keuken
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Keuken, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Keuken, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Keuken, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Keuken, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Keuken, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Keuken, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Keuken, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -396,34 +223,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Entree
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Entree
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Entree
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Entree
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Entree
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Entree
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Entree
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Entree, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Entree, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Entree, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Entree, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Entree, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Entree, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Entree, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -445,34 +251,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Toilet
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Toilet
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Toilet
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Toilet
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Toilet
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Toilet
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Toilet
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Toilet, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Toilet, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Toilet, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Toilet, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Toilet, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Toilet, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Toilet, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -494,34 +279,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Speelkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Speelkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Speelkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Speelkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Speelkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Speelkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Speelkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Speelkamer, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Speelkamer, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Speelkamer, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Speelkamer, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Speelkamer, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Speelkamer, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Speelkamer, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -543,34 +307,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Garage
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Garage
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Garage
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Garage
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Garage
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Garage
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Garage
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Garage, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Garage, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Garage, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Garage, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Garage, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Garage, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Garage, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -592,34 +335,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Meterkast
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Meterkast
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Meterkast
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Meterkast
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Meterkast
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Meterkast
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Meterkast
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Meterkast, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Meterkast, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Meterkast, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Meterkast, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Meterkast, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Meterkast, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Meterkast, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -641,39 +363,18 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Slaapkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Slaapkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Slaapkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Slaapkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Slaapkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Slaapkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Slaapkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Slaapkamer, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Slaapkamer, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Slaapkamer, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Slaapkamer, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Slaapkamer, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Slaapkamer, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Slaapkamer, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
         card_type: pop-up
-        hash: "#kamer-slaapkamer_logan"
+        hash: "#kamer-slaapkamer-logan"
         name: Slaapkamer Logan
         icon: mdi:bed-single-outline
         styles: *kamer_popup
@@ -690,34 +391,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Slaapkamer Logan
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Slaapkamer Logan
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Slaapkamer Logan
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Slaapkamer Logan
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Slaapkamer Logan
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Slaapkamer Logan
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Slaapkamer Logan
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Slaapkamer Logan, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Slaapkamer Logan, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Slaapkamer Logan, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Slaapkamer Logan, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Slaapkamer Logan, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Slaapkamer Logan, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Slaapkamer Logan, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -739,34 +419,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Badkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Badkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Badkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Badkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Badkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Badkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Badkamer
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Badkamer, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Badkamer, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Badkamer, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Badkamer, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Badkamer, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Badkamer, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Badkamer, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -788,34 +447,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Kantoor
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Kantoor
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Kantoor
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Kantoor
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Kantoor
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Kantoor
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Kantoor
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Kantoor, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Kantoor, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Kantoor, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Kantoor, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Kantoor, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Kantoor, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Kantoor, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -837,39 +475,18 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Overloop
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Overloop
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Overloop
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Overloop
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Overloop
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Overloop
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Overloop
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Overloop, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Overloop, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Overloop, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Overloop, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Overloop, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Overloop, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Overloop, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
         card_type: pop-up
-        hash: "#kamer-slaapkamer_emma"
+        hash: "#kamer-slaapkamer-emma"
         name: Slaapkamer Emma
         icon: mdi:bed-single-outline
         styles: *kamer_popup
@@ -886,34 +503,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Slaapkamer Emma
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Slaapkamer Emma
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Slaapkamer Emma
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Slaapkamer Emma
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Slaapkamer Emma
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Slaapkamer Emma
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Slaapkamer Emma
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Slaapkamer Emma, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Slaapkamer Emma, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Slaapkamer Emma, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Slaapkamer Emma, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Slaapkamer Emma, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Slaapkamer Emma, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Slaapkamer Emma, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -935,34 +531,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Zolder
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Zolder
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Zolder
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Zolder
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Zolder
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Zolder
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Zolder
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Zolder, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Zolder, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Zolder, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Zolder, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Zolder, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Zolder, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Zolder, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -984,34 +559,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Schuur
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Schuur
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Schuur
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Schuur
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Schuur
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Schuur
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Schuur
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Schuur, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Schuur, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Schuur, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Schuur, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Schuur, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Schuur, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Schuur, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1033,34 +587,13 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Achtertuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Achtertuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Achtertuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Achtertuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Achtertuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Achtertuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Achtertuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Achtertuin, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Achtertuin, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Achtertuin, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Achtertuin, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Achtertuin, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Achtertuin, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Achtertuin, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
       - type: custom:bubble-card
@@ -1082,62 +615,15 @@ sections:
               state_color: true
             filter:
               include:
-                - area: Voortuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: motion
-                - area: Voortuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: occupancy
-                - area: Voortuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: presence
-                - area: Voortuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: door
-                - area: Voortuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: window
-                - area: Voortuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: opening
-                - area: Voortuin
-                  domain: binary_sensor
-                  attributes:
-                    device_class: garage_door
+                - {area: Voortuin, domain: binary_sensor, attributes: {device_class: motion}}
+                - {area: Voortuin, domain: binary_sensor, attributes: {device_class: occupancy}}
+                - {area: Voortuin, domain: binary_sensor, attributes: {device_class: presence}}
+                - {area: Voortuin, domain: binary_sensor, attributes: {device_class: door}}
+                - {area: Voortuin, domain: binary_sensor, attributes: {device_class: window}}
+                - {area: Voortuin, domain: binary_sensor, attributes: {device_class: opening}}
+                - {area: Voortuin, domain: binary_sensor, attributes: {device_class: garage_door}}
             sort:
               method: friendly_name
-
-  #############################################################################
-  ## Onderhoud: wat hangt er wél, maar is niet gekoppeld
-  #############################################################################
-  # De keerzijde van een vaste koppeling is dat een nieuwe sensor niet vanzelf
-  # verschijnt. Deze lijst is het tegengif: `sensor.kamers_niet_gekoppeld`
-  # loopt één keer per uur de areas af en meldt elke meetsensor die nergens is
-  # aangewezen. Staat hier iets dat er hoort, zet het dan bij `klimaat` of
-  # `voorkeur` in custom_templates/kamers.jinja; staat er iets dat er nooit bij
-  # hoort (koelkast, espressomachine), zet het dan in `negeer` bij die kamer.
-  #
-  # Sinds 2026-08-03 één regel met een pop-up erachter in plaats van een
-  # uitgeklapte markdown-lijst: met negenenveertig entiteiten was dat het
-  # langste blok van de pagina, terwijl je er hooguit een paar keer per jaar
-  # iets mee doet. De inhoud staat in `kamer_onderhoud_lijst`; die rekent in de
-  # browser en houdt dus geen `render_template`-abonnement op de server aan.
-  - type: grid
-    column_span: 3
-    cards:
-      - type: custom:button-card
-        template: kamer_onderhoud_knop
-        grid_options:
-          columns: full
-        tap_action:
-          action: navigate
-          navigation_path: "#kamers-onderhoud"
       - type: custom:bubble-card
         card_type: pop-up
         hash: "#kamers-onderhoud"

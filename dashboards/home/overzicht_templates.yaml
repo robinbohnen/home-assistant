@@ -685,506 +685,283 @@ ov_sonos:
       - media_player.slaapkamer_mini_sonos
 
 #############################################################################
-## Kamers - tegelraster
+## Kamers (dashboards/home/kamers.yaml) - Server-stijl sinds 7 november 2026
 #############################################################################
-# Alle tegels lezen dezelfde entiteit, `sensor.kamers`, en zoeken daarin hun
-# eigen kamer op via `variables.slug`. Dat is geen omweg maar de reden dat het
-# werkt: een button-card rendert alleen opnieuw als zijn `entity` verandert, en
-# zo ververst het hele raster in één keer. Zie packages/9 - Other/Kamers.yaml.
+# Alle kaarten lezen dezelfde entiteit, `sensor.kamers` (custom_templates/
+# kamers.jinja via packages/9 - Other/Kamers.yaml), en rekenen in de browser.
+# Ze bevatten geen enkele drempel: goed/let op/slecht komt kant en klaar uit
+# de jinja. Wil je de grenzen bijstellen, dan is dit niet het bestand dat je
+# zoekt. De bouwstenen (kop, badge, regel) komen uit www/sv-kit.js, de
+# paneelstijl uit `sv_paneel`; zie docs/dashboard-stijl.md.
 #
-# De kaarten bevatten geen enkele drempel; groen/oranje/rood komt kant en klaar
-# uit custom_templates/kamers.jinja. Wil je de grenzen bijstellen, dan is dit
-# niet het bestand dat je zoekt.
+# Kleuren per status (staan in elke kaart opnieuw, button-card kent geen
+# gedeelde JS buiten sv-kit): goed ok · let op warn · slecht bad · geen meting
+# grijs (ink-25). "Geen meting" telt bewust niet als probleem in de badge:
+# dat is een lege batterij of een kamer zonder sensor, en die staat met reden
+# en advies gewoon op zijn regel.
+#
+# Tekst uit `sensor.kamers` (naam, reden, advies, entity-id's, namen van
+# ramen) gaat door S.esc(): het is onze eigen jinja, maar een friendly_name
+# komt van een integratie.
 
-# --- Gedeelde kleuren en tekst ---------------------------------------------
-# button-card kent geen JS-includes, dus de kleurentabel staat in elk veld dat
-# hem nodig heeft opnieuw. Verander je er één, verander ze dan allemaal:
-#   goed var(--ov-ok) · let op var(--ov-warn) · slecht var(--ov-bad) · geen meting wit op 32%
-
-# --- Kamertegel -------------------------------------------------------------
-# Eén sjabloon, twee maten. Een kamer met een aangewezen sensor krijgt de volle
-# tegel: temperatuur groot, de overige metingen klein eronder, en een voetregel
-# met beweging en contacten. Een kamer waar niets is aangewezen (`gekoppeld`
-# is 0) krijgt een platte regel van twee tekstregels hoog, met beweging en
-# contacten rechts in plaats van in een eigen voetregel.
+# --- Paneel per verdieping -------------------------------------------------
+# Eén paneel per `verdieping` uit de KAMERS-tabel in kamers.jinja; de kamers
+# komen in de volgorde van die tabel. Een nieuwe kamer verschijnt dus vanzelf
+# op de juiste verdieping - alleen zijn pop-up (#kamer-<slug>, `_` wordt `-`)
+# moet in kamers.yaml bij (tests/test_kamers_pagina.py bewaakt dat).
 #
-# WAT HIER OP 2026-08-03 UIT IS GEHAALD, EN WAAROM
-# Elke tegel had een strip van vier vaste kolommen (RV, CO2, PM2.5, licht),
-# met een streepje in de vakjes zonder meting. De redenering was dat zo'n leeg
-# vakje informatie is: daar hangt geen sensor. Dat klopt bij één ontbrekende
-# meting, maar in dit huis meet precies één kamer CO2 en meet er geen enkele
-# licht - dus stonden er over de hele muur drie streepjes per tegel en één
-# getal, en was een tegel 146 pixels hoog waar 94 volstaat. Wat er níét gemeten
-# wordt staat nu op de plek waar je die vraag ook echt stelt: in de pop-up,
-# waar `kamer_detail` per waarde de bron noemt, en in de onderhoudsregel
-# onderaan de weergave.
-#
-# De slimme/volle keuze hangt aan `gekoppeld === 0` en bewust niet aan
-# `aantal_metingen === 0`: een kamer met een aangewezen sensor die niets
-# doorgeeft (lege batterij) hoort juist een volle tegel te houden, anders
-# verdwijnt een storing in de kleine regels.
-kamer_tegel:
+# Per kamer drie korte regels:
+#   1. stip in de statuskleur, icoon, naam, temperatuur (gekleurd als hij
+#      zelf de uitschieter is, half doorzichtig als de meting oud is)
+#   2. reden · advies (in de statuskleur), rechts de overige metingen
+#      (CO₂, PM2.5, RV, licht - alleen wat er écht gemeten wordt)
+#   3. beweging links, ramen/deuren rechts
+# Een kamer zonder aangewezen sensor (`gekoppeld` 0) heeft geen temperatuur;
+# zijn regel 2 legt uit waarom (dat zegt de jinja in `reden`).
+kamer_verdieping:
+  template: sv_paneel
   entity: sensor.kamers
-  show_icon: false
-  show_name: false
-  show_state: false
+  triggers_update:
+    - sensor.kamers
   variables:
-    slug: ""
-  hold_action:
-    action: more-info
-  styles:
-    card:
-      - background: var(--ov-ink-4)
-      - border: 1px solid var(--ov-ink-7)
-      - border-radius: 16px
-      - padding: 12px 15px 11px 15px
-      - height: 100%
-      # Smalle gekleurde rand links, zodat je van een meter afstand ziet welke
-      # kamer eruit springt zonder de cijfers te lezen.
-      - box-shadow: |
-          [[[
-            var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
-            var k = L.find(function(x){ return x.slug === variables.slug; });
-            var C = {'goed':'var(--ov-ok)','let op':'var(--ov-warn)','slecht':'var(--ov-bad)'};
-            var c = C[k ? k.status : ''] || 'var(--ov-ink-10)';
-            return 'inset 3px 0 0 ' + c;
-          ]]]
-    grid:
-      # De voetrij staat er altijd in. Bij een platte tegel is hij leeg en
-      # halen de stijlen hieronder zijn marge, padding en scheidingslijn weg,
-      # zodat de rij op nul pixels uitkomt. Zou het gebied uit deze opsomming
-      # verdwijnen, dan plaatst de browser dat lege blok alsnog in een eigen
-      # impliciete rij - inclusief streep.
-      - grid-template-areas: '"ic naam waarde" "ic sub waarde" "voet voet voet"'
-      - grid-template-columns: |
-          [[[
-            var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
-            var k = L.find(function(x){ return x.slug === variables.slug; });
-            return (k && k.gekoppeld === 0) ? '34px 1fr auto' : '44px 1fr auto';
-          ]]]
-      - align-items: center
-      - column-gap: 12px
-    custom_fields:
-      ic:
-        - grid-area: ic
-      naam:
-        - grid-area: naam
-        - justify-self: start
-        - align-self: end
-      sub:
-        - grid-area: sub
-        - justify-self: start
-        - align-self: start
-        - padding-top: 2px
-        # Op een wandpaneel bestaat geen tooltip, dus een lange reden moet hier
-        # netjes afbreken in plaats van de tegel op te rekken.
-        - overflow: hidden
-        - max-width: 100%
-      waarde:
-        - grid-area: waarde
-        - justify-self: end
-        - align-self: center
-        - text-align: right
-      voet:
-        - grid-area: voet
-        - width: 100%
-        - margin-top: |
-            [[[
-              var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
-              var k = L.find(function(x){ return x.slug === variables.slug; });
-              return (k && k.gekoppeld === 0) ? '0' : '9px';
-            ]]]
-        - padding-top: |
-            [[[
-              var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
-              var k = L.find(function(x){ return x.slug === variables.slug; });
-              return (k && k.gekoppeld === 0) ? '0' : '8px';
-            ]]]
-        - border-top: |
-            [[[
-              var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
-              var k = L.find(function(x){ return x.slug === variables.slug; });
-              return (k && k.gekoppeld === 0) ? 'none' : '1px solid var(--ov-ink-6)';
-            ]]]
+    verdieping: ""
+    titel: ""
   custom_fields:
-    ic: |
+    x: |
       [[[
-        var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
-        var k = L.find(function(x){ return x.slug === variables.slug; });
-        if(!k) return '';
-        var C = {'goed':['var(--ov-ok)','var(--ov-ok-14)'],
-                 'let op':['var(--ov-warn)','var(--ov-warn-14)'],
-                 'slecht':['var(--ov-bad)','var(--ov-bad-14)']};
-        var c = C[k.status] || ['var(--ov-ink-32)','var(--ov-ink-5)'];
-        // Platte tegel krijgt een kleiner vlak; icoon en ronding schalen mee,
-        // zodat de twee maten dezelfde verhouding houden (52% en een derde).
-        var vlak = k.gekoppeld === 0 ? 34 : 44;
-        return `<div style="width:${vlak}px;height:${vlak}px;border-radius:${Math.round(vlak / 3)}px;background:${c[1]};display:flex;align-items:center;justify-content:center"><ha-icon icon="${k.icoon}" style="--mdc-icon-size:${Math.round(vlak * 0.52)}px;color:${c[0]}"></ha-icon></div>`;
-      ]]]
-    naam: |
-      [[[
-        var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
-        var k = L.find(function(x){ return x.slug === variables.slug; });
-        if(!k) return `<span style="font-size:15px;color:var(--ov-bad)">? ${variables.slug}</span>`;
-        return `<span style="font-size:15.5px;font-weight:600;color:var(--primary-text-color)">${k.naam}</span>`;
-      ]]]
-    sub: |
-      [[[
-        var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
-        var k = L.find(function(x){ return x.slug === variables.slug; });
-        if(!k) return '';
-        var C = {'let op':'var(--ov-warn)','slecht':'var(--ov-bad)'};
-        var c = C[k.status] || 'var(--ov-ink-50)';
-        var t = k.reden || '';
-        if(k.advies) t += ' · ' + k.advies;
-        return `<span style="display:block;font-size:12.5px;color:${c};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t}</span>`;
-      ]]]
-    waarde: |
-      [[[
-        var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
-        var k = L.find(function(x){ return x.slug === variables.slug; });
-        if(!k) return '';
-        var stil = 'var(--ov-ink-20)';
-        var grijs = 'var(--ov-ink-45)';
-        // ICONEN IN DE TEKSTFLOW: `vertical-align:middle` en een expliciete
-        // box. Een `ha-icon` is zelf een inline-flex; met een offset in
-        // pixels gok je op de regelhoogte en rekt het icoon die regel
-        // ondertussen op. Dat ging op 18 augustus 2026 twee keer zichtbaar
-        // mis (de brandweermelding op de Hub, de radioregel op het paneel).
-        // Zelfde vorm in `ic()` hieronder, in `ico()` in kolom_midden.yaml
-        // en in tijdlijn.yaml.
-        function ic(naam, kleur, maat){
-          return `<ha-icon icon="${naam}" style="--mdc-icon-size:${maat}px;width:${maat}px;height:${maat}px;vertical-align:middle;color:${kleur}"></ha-icon> `;
-        }
-        // Beweging en contacten in tekstvorm; de volle tegel zet ze naast
-        // elkaar in de voetregel, de platte tegel onder elkaar hier rechts.
-        var b = k.beweging || {};
-        var bew;
-        if(!b.gemeten) bew = ic('mdi:motion-sensor-off', stil, 13) + `<span style="color:${stil}">geen melder</span>`;
-        else if(b.actief) bew = ic('mdi:motion-sensor', 'var(--ov-ok)', 13) + `<span style="color:var(--ov-ok)">nu aanwezig</span>`;
-        else {
-          var mi = b.minuten;
-          var t = mi === null ? 'onbekend'
-                : (mi < 1 ? 'net nog'
-                : (mi < 60 ? mi + ' min geleden'
-                : (mi < 1440 ? Math.round(mi / 60) + ' uur geleden' : Math.round(mi / 1440) + ' dagen geleden')));
-          bew = ic('mdi:motion-sensor', grijs, 13) + `<span style="color:${grijs}">${t}</span>`;
-        }
-        var ct = k.contacten || {};
-        var con;
-        if(!ct.gemeten) con = `<span style="color:${stil}">geen contact</span>`;
-        else if(ct.open === 0) con = `<span style="color:${grijs}">alles dicht</span>`;
-        else con = `<span style="color:var(--ov-info)">${ct.open} open</span> ` + ic('mdi:window-open-variant', 'var(--ov-info)', 13);
-        if(k.gekoppeld === 0){
-          return `<div style="font-size:11.5px;line-height:1.55;white-space:nowrap">${bew}<br>${con}</div>`;
-        }
-        var t2 = (k.metingen || []).find(function(m){ return m.k === 'temp'; });
-        var kop;
-        if(!t2 || t2.w === null) kop = `<span style="font-size:17px;color:var(--ov-ink-18)">–</span>`;
-        else {
-          // Alleen de uitschieters kleuren; anders is de hele muur bont.
-          var c = t2.score >= 2 ? 'var(--ov-bad)' : (t2.score === 1 ? 'var(--ov-warn)' : 'var(--primary-text-color)');
-          var v = t2.w.toFixed(1).replace('.', ',');
-          kop = `<span style="font-size:24px;font-weight:600;letter-spacing:-0.5px;color:${c}${t2.oud ? ';opacity:0.45' : ''}">${v}<span style="font-size:15px;opacity:0.5">°</span></span>`;
-        }
-        // Alleen wat er écht gemeten wordt, in de volgorde waarin het ertoe
-        // doet: lucht voor comfort. Zit er niets bij, dan blijft deze regel
-        // helemaal weg in plaats van vier streepjes te tonen.
-        var orde = ['co2', 'pm25', 'rv', 'lux'];
-        var delen = orde.map(function(key){
-          var m = (k.metingen || []).find(function(x){ return x.k === key; });
-          if(!m || m.w === null) return '';
-          var c2 = m.score >= 2 ? 'var(--ov-bad)' : (m.score === 1 ? 'var(--ov-warn)' : 'var(--ov-ink-72)');
-          var v2, lab;
-          if(key === 'rv'){ v2 = Math.round(m.w) + '%'; lab = 'RV'; }
-          else if(key === 'co2'){ v2 = Math.round(m.w); lab = 'CO₂'; }
-          else if(key === 'lux'){ v2 = Math.round(m.w); lab = 'lx'; }
-          else { v2 = (Math.round(m.w * 10) / 10).toString().replace('.', ','); lab = 'PM2.5'; }
-          return `<span style="color:${c2}${m.oud ? ';opacity:0.45' : ''}">${v2}</span><span style="color:var(--ov-ink-34)"> ${lab}</span>`;
-        }).filter(function(x){ return x !== ''; });
-        var strip = delen.length
-          ? `<div style="font-size:11.5px;margin-top:1px;white-space:nowrap">${delen.join('<span style="color:var(--ov-ink-18)"> · </span>')}</div>`
-          : '';
-        return kop + strip;
-      ]]]
-    voet: |
-      [[[
-        var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
-        var k = L.find(function(x){ return x.slug === variables.slug; });
-        // Bij een platte tegel staan beweging en contacten al rechtsboven; de
-        // stijlen hierboven vouwen deze rij dan tot nul pixels dicht.
-        if(!k || k.gekoppeld === 0) return '';
-        var stil = 'var(--ov-ink-20)';
-        var grijs = 'var(--ov-ink-45)';
-        function ic(naam, kleur){
-          return `<ha-icon icon="${naam}" style="--mdc-icon-size:14px;width:14px;height:14px;vertical-align:middle;color:${kleur}"></ha-icon> `;
-        }
-        var b = k.beweging || {};
-        var links;
-        if(!b.gemeten) links = ic('mdi:motion-sensor-off', stil) + `<span style="color:${stil}">geen melder</span>`;
-        else if(b.actief) links = ic('mdi:motion-sensor', 'var(--ov-ok)') + `<span style="color:var(--ov-ok)">nu aanwezig</span>`;
-        else {
-          var m = b.minuten;
-          var t = m === null ? 'onbekend'
-                : (m < 1 ? 'net nog'
-                : (m < 60 ? m + ' min geleden'
-                : (m < 1440 ? Math.round(m / 60) + ' uur geleden' : Math.round(m / 1440) + ' dagen geleden')));
-          links = ic('mdi:motion-sensor', grijs) + `<span style="color:${grijs}">${t}</span>`;
-        }
-        var ct = k.contacten || {};
-        var rechts;
-        if(!ct.gemeten) rechts = `<span style="color:${stil}">geen contact</span>` + ' ' + ic('mdi:door-closed', stil);
-        else if(ct.open === 0) rechts = `<span style="color:${grijs}">alles dicht</span>` + ' ' + ic('mdi:door-closed', grijs);
-        else rechts = `<span style="color:var(--ov-info)">${ct.open} open</span>` + ' ' + ic('mdi:window-open-variant', 'var(--ov-info)');
-        return `<div style="display:grid;grid-template-columns:1fr auto;width:100%;font-size:12px"><div style="text-align:left">${links}</div><div style="text-align:right">${rechts}</div></div>`;
+        var S = window.svKit && window.svKit(states);
+        if(!S) return '';
+        var bron = states['sensor.kamers'];
+        var L = (bron && bron.attributes && bron.attributes.kamers) || [];
+        var titel = S.esc(variables.titel || variables.verdieping || '').toUpperCase();
+        if(!L.length) return S.kop(titel, S.pil('bad', 'geen data'))
+          + S.tekst('<span style="color:var(--ov-bad)">sensor.kamers heeft nog geen waarde</span> - zie packages/9 - Other/Kamers.yaml.');
+        var K = {'goed': 'ok', 'let op': 'warn', 'slecht': 'bad'};
+        var hier = L.filter(function(k){ return k && k.verdieping === variables.verdieping; });
+        var problemen = hier.filter(function(k){ return k.status === 'let op' || k.status === 'slecht'; });
+        var badge;
+        if(!hier.length) badge = S.pil(null, 'geen kamers');
+        else if(!problemen.length) badge = S.pil('ok', 'in orde');
+        else if(problemen.length === 1) badge = S.pil(K[problemen[0].status], S.esc(problemen[0].naam || problemen[0].slug).toLowerCase());
+        else badge = S.pil(problemen.some(function(k){ return k.status === 'slecht'; }) ? 'bad' : 'warn', problemen.length + ' kamers');
+        var getal = function(w){ return typeof w === 'number' && isFinite(w); };
+        var scoreKleur = function(sc, rust){ return sc >= 2 ? 'var(--ov-bad)' : (sc === 1 ? 'var(--ov-warn)' : rust); };
+        // Icoon in de tekstflow: vertical-align en een vaste box, zie de
+        // opmerking over ha-icon in kolom_midden.yaml.
+        var ic = function(naam, kleur, maat){
+          return '<ha-icon icon="' + S.esc(naam) + '" style="--mdc-icon-size:' + maat + 'px;width:' + maat + 'px;height:' + maat + 'px;vertical-align:middle;color:' + kleur + '"></ha-icon> ';
+        };
+        var blok = function(k){
+          var kk = K[k.status] || 'ink-25';
+          var M = k.metingen || [];
+          var t = M.filter(function(m){ return m.k === 'temp'; })[0];
+          var temp = '';
+          if(t && getal(t.w)) temp = '<span style="color:' + scoreKleur(t.score, 'var(--primary-text-color)') + (t.oud ? ';opacity:0.45' : '') + '">' + S.nl(t.w, 1) + '°</span>';
+          else if(k.gekoppeld !== 0) temp = '<span style="color:var(--ov-ink-25)">—</span>';
+          var strip = ['co2', 'pm25', 'rv', 'lux'].map(function(key){
+            var m = M.filter(function(x){ return x.k === key; })[0];
+            if(!m || !getal(m.w)) return '';
+            var v = key === 'pm25' ? S.nl(m.w, Math.round(m.w * 10) % 10 ? 1 : 0) : S.nl(m.w, 0) + (key === 'rv' ? '%' : '');
+            var lab = {co2: 'CO₂', pm25: 'PM2.5', rv: 'RV', lux: 'lx'}[key];
+            return '<span style="color:' + scoreKleur(m.score, 'var(--ov-ink-72)') + (m.oud ? ';opacity:0.45' : '') + '">' + v + '</span><span style="color:var(--ov-ink-34)"> ' + lab + '</span>';
+          }).filter(function(x){ return x; }).join('<span style="color:var(--ov-ink-18)"> · </span>');
+          var rk = kk === 'warn' || kk === 'bad' ? 'var(--ov-' + kk + ')' : 'var(--ov-ink-50)';
+          var reden = S.esc(k.reden || '') + (k.advies ? ' · ' + S.esc(k.advies) : '');
+          var stil = 'var(--ov-ink-25)', grijs = 'var(--ov-ink-45)';
+          var b = k.beweging || {}, bew;
+          if(!b.gemeten) bew = ic('mdi:motion-sensor-off', stil, 13) + '<span style="color:' + stil + '">geen melder</span>';
+          else if(b.actief) bew = ic('mdi:motion-sensor', 'var(--ov-ok)', 13) + '<span style="color:var(--ov-ok)">nu aanwezig</span>';
+          else {
+            var mi = b.minuten;
+            var tt = !getal(mi) ? 'onbekend' : (mi < 1 ? 'net nog' : (mi < 60 ? Math.round(mi) + ' min geleden'
+              : (mi < 1440 ? Math.round(mi / 60) + ' uur geleden' : Math.round(mi / 1440) + ' dagen geleden')));
+            bew = ic('mdi:motion-sensor', grijs, 13) + '<span style="color:' + grijs + '">' + tt + '</span>';
+          }
+          var ct = k.contacten || {}, con;
+          if(!ct.gemeten) con = '<span style="color:' + stil + '">geen contact</span>';
+          else if(!ct.open) con = '<span style="color:' + grijs + '">alles dicht</span>';
+          else con = ic('mdi:window-open-variant', 'var(--ov-info)', 13) + '<span style="color:var(--ov-info)">' + S.nl(ct.open) + ' open</span>';
+          var slug = String(k.slug || '').replace(/_/g, '-');
+          var klik = S.klik('#kamer-' + slug);
+          return '<div' + klik + ' style="' + (klik ? 'cursor:pointer;' : '') + 'padding:6px 0 5px 0;border-top:1px solid var(--ov-ink-6);min-width:0">'
+            + '<div style="display:flex;align-items:center;gap:8px;min-width:0">' + S.stip(kk)
+              + ic(k.icoon || 'mdi:help', 'var(--ov-ink-55)', 16)
+              + '<span style="flex:1;min-width:0;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + S.esc(k.naam || k.slug || '?') + '</span>'
+              + '<span style="font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap">' + temp + '</span></div>'
+            + '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;line-height:1.35;margin-top:1px;padding-left:16px;min-width:0">'
+              + '<span style="min-width:0;color:' + rk + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + reden + '</span>'
+              + '<span style="flex:none;font-size:11.5px;white-space:nowrap;font-variant-numeric:tabular-nums">' + strip + '</span></div>'
+            + '<div style="display:flex;justify-content:space-between;gap:10px;font-size:11.5px;line-height:1.35;margin-top:1px;padding-left:16px;white-space:nowrap">'
+              + '<span>' + bew + '</span><span>' + con + '</span></div>'
+            + '</div>';
+        };
+        return S.kop(titel, badge) + hier.map(blok).join('');
       ]]]
 
-# --- Detailkaart in de pop-up ----------------------------------------------
-# Vervangt sinds 2026-08-03 de markdown-kaart die hier stond. Reden is niet de
-# opmaak maar de kosten: een markdown-kaart is een `render_template`-abonnement
-# op de server, en met zeventien pop-ups in één weergave zijn dat zeventien
-# abonnementen die állemaal opnieuw renderen zodra `sensor.kamers` verandert -
-# elke minuut. Een button-card rekent in de browser en leest dezelfde entiteit
-# die de tegels toch al lezen.
-#
-# Deze kaart is de enige plek waar je ziet WELKE entiteit een waarde geleverd
-# heeft. Klopt een cijfer niet, dan hoort de juiste sensor als `klimaat` of
-# `voorkeur` in de tabel in custom_templates/kamers.jinja.
-kamer_detail:
-  entity: sensor.kamers
-  show_icon: false
-  show_name: false
-  show_state: false
-  tap_action:
-    action: none
-  variables:
-    slug: ""
-  styles:
-    card:
-      - background: var(--ov-ink-4)
-      - border: 1px solid var(--ov-ink-7)
-      - border-radius: 16px
-      - padding: 16px 18px
-    grid:
-      - grid-template-areas: '"kop" "bronnen"'
-      # Zonder dit is de enige kolom `auto`, dus zo breed als zijn inhoud, en
-      # dan is de `width: 100%` hieronder een cirkel: 100% van een kolom die
-      # zich naar de inhoud voegt. De lange entity-id's liepen daardoor de kaart
-      # uit in plaats van af te kappen.
-      - grid-template-columns: minmax(0, 1fr)
-      - row-gap: 10px
-    custom_fields:
-      kop:
-        - grid-area: kop
-        - justify-self: start
-        - text-align: left
-      bronnen:
-        - grid-area: bronnen
-        - justify-self: start
-        - width: 100%
-        - text-align: left
-  custom_fields:
-    kop: |
-      [[[
-        var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
-        var k = L.find(function(x){ return x.slug === variables.slug; });
-        if(!k) return `<span style="font-size:14px;color:var(--ov-warn)">sensor.kamers heeft nog geen waarde</span>`;
-        var C = {'goed':'var(--ov-ok)','let op':'var(--ov-warn)','slecht':'var(--ov-bad)'};
-        var c = C[k.status] || 'var(--ov-ink-45)';
-        var r = `<div style="font-size:16px;font-weight:600;color:${c}">${k.status} — ${k.reden}</div>`;
-        if(k.advies) r += `<div style="font-size:13px;color:var(--ov-ink-55);margin-top:3px">${k.advies}</div>`;
-        return r;
-      ]]]
-    bronnen: |
-      [[[
-        var L = (states['sensor.kamers'] && states['sensor.kamers'].attributes.kamers) || [];
-        var k = L.find(function(x){ return x.slug === variables.slug; });
-        if(!k) return '';
-        var m = (k.metingen || []).filter(function(x){ return x.w !== null; });
-        if(!m.length){
-          // Geen cijfer heeft twee heel verschillende oorzaken en die moeten
-          // hier uit elkaar te houden zijn, anders ga je de verkeerde kant op
-          // zoeken.
-          var t = k.gekoppeld === 0
-            ? 'Aan deze ruimte is geen sensor gekoppeld. Wijs er één aan bij <code>klimaat</code> in <code>custom_templates/kamers.jinja</code>.'
-            : 'De aangewezen sensor geeft geen waarde door — batterij of verbinding.';
-          return `<div style="font-size:13px;color:var(--ov-ink-45);line-height:1.5">${t}</div>`;
-        }
-        var r = m.map(function(x){
-          var C = {2:'var(--ov-bad)', 1:'var(--ov-warn)'};
-          var c = C[x.score] || 'var(--ov-ink-88)';
-          var v = (Math.round(x.w * 10) / 10).toString().replace('.', ',') + x.eenheid;
-          return `<div style="display:grid;grid-template-columns:56px auto 1fr;align-items:baseline;column-gap:10px;padding:5px 0;border-top:1px solid var(--ov-ink-5)">`
-            + `<div style="font-size:10px;letter-spacing:0.6px;text-transform:uppercase;color:var(--ov-ink-36)">${x.label}</div>`
-            + `<div style="font-size:14px;font-weight:600;color:${c}${x.oud ? ';opacity:0.45' : ''}">${v}${x.oud ? ' ·&nbsp;oud' : ''}</div>`
-            + `<div style="font-size:11px;color:var(--ov-ink-30);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right">${x.id}</div>`
-            + `</div>`;
-        }).join('');
-        // De tegel toont sinds 2026-08-03 alleen de metingen die er zijn. Wat
-        // er niet is, is daarmee niet onbelangrijk geworden - het staat hier,
-        // op de plek waar je die vraag ook echt stelt. Zonder deze regel zou
-        // "geen CO2 in de slaapkamer" nergens meer op het dashboard staan.
-        var mist = (k.metingen || []).filter(function(x){ return x.w === null; })
-                                     .map(function(x){ return x.label; });
-        var staart = mist.length
-          ? `<div style="font-size:11.5px;color:var(--ov-ink-28);padding:7px 0 0 0;border-top:1px solid var(--ov-ink-5)">niet gemeten: ${mist.join(', ')}</div>`
-          : '';
-        return `<div style="width:100%">${r}${staart}</div>`;
-      ]]]
-
-#############################################################################
-## Kamers - onderhoud: wat hangt er wél, maar is nergens gekoppeld
-#############################################################################
-# De keerzijde van aanwijzen in plaats van zoeken: een nieuwe sensor verschijnt
-# niet vanzelf op een tegel. `sensor.kamers_niet_gekoppeld` loopt daarom één
-# keer per uur de areas af (zie packages/9 - Other/Kamers.yaml).
-#
-# Dat is onderhoud en geen overzicht, dus het staat onderaan de weergave als
-# één regel die een pop-up opent. Uitgeklapt was het een blok van tien regels
-# onder een muur die juist korter moest.
+# --- Detail in de pop-up ---------------------------------------------------
+# De enige plek waar je ziet WELKE entiteit een waarde geleverd heeft. Klopt
+# een cijfer niet, dan hoort de juiste sensor als `klimaat` of `voorkeur` in
+# de tabel in custom_templates/kamers.jinja. Een regel aantikken opent het
+# more-info-venster van die sensor, met zijn historie.
 #
 # Bewust button-card en geen markdown: een markdown-kaart is een
-# `render_template`-abonnement op de server, en deze staat permanent (verborgen)
-# in de weergave. Dezelfde afweging als bij `kamer_detail` hierboven.
-
-# --- De regel die de pop-up opent ------------------------------------------
-kamer_onderhoud_knop:
-  entity: sensor.kamers_niet_gekoppeld
-  show_icon: false
-  show_name: false
-  show_state: false
-  styles:
-    card:
-      - background: var(--ov-ink-3)
-      - border: 1px solid var(--ov-ink-6)
-      - border-radius: 14px
-      - padding: 11px 16px
-    grid:
-      - grid-template-areas: '"regel"'
-      - grid-template-columns: minmax(0, 1fr)
-    custom_fields:
-      regel:
-        - grid-area: regel
-        - width: 100%
-        - text-align: left
+# `render_template`-abonnement op de server, en zeventien verborgen pop-ups
+# zouden er zeventien openhouden die elke minuut opnieuw renderen.
+#
+# Wat er NIET gemeten wordt staat onderaan ("niet gemeten: CO₂, licht"): de
+# kamerregels tonen alleen wat er is, dus anders stond "geen CO₂ in de
+# slaapkamer" nergens meer.
+kamer_detail:
+  template: sv_paneel
+  entity: sensor.kamers
+  variables:
+    slug: ""
   custom_fields:
-    regel: |
+    x: |
       [[[
-        var s = states['sensor.kamers_niet_gekoppeld'];
-        var n = s ? ((s.attributes.sensoren || []).length) : 0;
-        var grijs = 'var(--ov-ink-45)';
-        function ic(naam, kleur){
-          return `<ha-icon icon="${naam}" style="--mdc-icon-size:15px;width:15px;height:15px;vertical-align:middle;color:${kleur}"></ha-icon> `;
+        var S = window.svKit && window.svKit(states);
+        if(!S) return '';
+        var bron = states['sensor.kamers'];
+        var L = (bron && bron.attributes && bron.attributes.kamers) || [];
+        var k = L.filter(function(x){ return x && x.slug === variables.slug; })[0];
+        if(!k) return S.kop('METINGEN', S.pil('warn', 'geen data'))
+          + S.tekst('sensor.kamers heeft nog geen waarde voor ' + S.esc(variables.slug) + '.');
+        var K = {'goed': 'ok', 'let op': 'warn', 'slecht': 'bad'};
+        var kk = K[k.status] || null;
+        var getal = function(w){ return typeof w === 'number' && isFinite(w); };
+        var uit = S.kop('METINGEN', S.pil(kk, S.esc(k.status || '?')))
+          + '<div style="font-size:15px;font-weight:600;line-height:1.35;color:' + (kk ? 'var(--ov-' + kk + ')' : 'var(--ov-ink-55)') + '">' + S.esc(k.reden || '') + '</div>'
+          + (k.advies ? S.tekst(S.esc(k.advies)) : '');
+        var M = k.metingen || [];
+        var er = M.filter(function(x){ return getal(x.w); });
+        if(!er.length) {
+          // Geen cijfer heeft twee heel verschillende oorzaken; die moeten uit
+          // elkaar te houden zijn, anders zoek je de verkeerde kant op.
+          uit += S.tekst(k.gekoppeld === 0
+            ? 'Aan deze ruimte is geen sensor gekoppeld. Wijs er één aan bij <code>klimaat</code> in <code>custom_templates/kamers.jinja</code>.'
+            : 'De aangewezen sensor geeft geen waarde door - batterij of verbinding.');
+        } else {
+          uit += S.rijen(er.map(function(x){
+            var c = x.score >= 2 ? 'bad' : (x.score === 1 ? 'warn' : null);
+            var v = S.nl(x.w, Math.round(x.w * 10) % 10 ? 1 : 0) + S.esc(x.eenheid || '');
+            return {klik: x.id, k: c,
+              naam: '<span style="display:inline-block;width:58px;font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--ov-ink-45)">' + S.esc(x.label || x.k) + '</span>'
+                + '<span style="font-family:monospace;font-size:11px;color:var(--ov-ink-35)">' + S.esc(x.id || '') + '</span>',
+              waarde: '<span' + (x.oud ? ' style="opacity:0.45"' : '') + '>' + v + (x.oud ? ' · oud' : '') + '</span>'};
+          }), 1);
         }
-        if(!s) return `<span style="font-size:13px;color:var(--ov-warn)">${ic('mdi:help-circle-outline','var(--ov-warn)')}sensor.kamers_niet_gekoppeld bestaat nog niet</span>`;
-        if(n === 0) return `<span style="font-size:13px;color:${grijs}">${ic('mdi:check', 'var(--ov-ok)')}Alle meetsensoren zijn gekoppeld</span>`;
-        return `<div style="display:grid;grid-template-columns:1fr auto;align-items:center;font-size:13px">`
-          + `<div style="text-align:left;color:${grijs}">${ic('mdi:link-variant-off', grijs)}${n} sensor${n > 1 ? 'en' : ''} niet gekoppeld</div>`
-          + `<div style="text-align:right;color:var(--ov-ink-28)">bekijken ›</div></div>`;
+        // Beweging en ramen/deuren: hier met de namen van wat er open staat.
+        var b = k.beweging || {}, ct = k.contacten || {};
+        var bew = !b.gemeten ? 'geen melder' : (b.actief ? 'nu aanwezig'
+          : (getal(b.minuten) ? S.duur(b.minuten * 60000) + ' geleden' : 'onbekend'));
+        var open = !ct.gemeten ? 'geen contact' : (!ct.open ? 'alles dicht' + (getal(ct.totaal) ? ' (' + S.nl(ct.totaal) + ')' : '')
+          : S.nl(ct.open) + ' open' + ((ct.namen || []).length ? ': ' + ct.namen.map(S.esc).join(', ') : ''));
+        uit += S.subkop('AANWEZIGHEID EN OPENINGEN', '')
+          + S.rijen([{naam: 'Beweging', waarde: bew, k: b.actief ? 'ok' : null},
+                     {naam: 'Ramen en deuren', waarde: open, k: ct.open ? 'info' : null}], 1, 0);
+        var mist = M.filter(function(x){ return !getal(x.w); }).map(function(x){ return S.esc(x.label || x.k); });
+        if(mist.length) uit += S.voet('Niet gemeten: ' + mist.join(', ') + '.');
+        return uit;
       ]]]
 
-# --- De lijst in de pop-up --------------------------------------------------
-kamer_onderhoud_lijst:
+# --- Onderhoud: wat hangt er wél, maar is nergens gekoppeld ------------------
+# De keerzijde van aanwijzen in plaats van zoeken: een nieuwe sensor verschijnt
+# niet vanzelf op een kamer. `sensor.kamers_niet_gekoppeld` loopt daarom één
+# keer per uur de areas af (packages/9 - Other/Kamers.yaml). Op de pagina een
+# klein paneel met het aantal per kamer; de lijst zelf staat in een pop-up.
+kamer_onderhoud:
+  template: sv_paneel
   entity: sensor.kamers_niet_gekoppeld
-  show_icon: false
-  show_name: false
-  show_state: false
-  tap_action:
-    action: none
-  styles:
-    card:
-      - background: var(--ov-ink-4)
-      - border: 1px solid var(--ov-ink-7)
-      - border-radius: 16px
-      - padding: 16px 18px
-    grid:
-      - grid-template-areas: '"uitleg" "lijst"'
-      - grid-template-columns: minmax(0, 1fr)
-      - row-gap: 10px
-    custom_fields:
-      uitleg:
-        - grid-area: uitleg
-        - width: 100%
-        - text-align: left
-      lijst:
-        - grid-area: lijst
-        - width: 100%
-        - text-align: left
+  triggers_update:
+    - sensor.kamers_niet_gekoppeld
   custom_fields:
-    uitleg: |
+    x: |
       [[[
+        var S = window.svKit && window.svKit(states);
+        if(!S) return '';
         var s = states['sensor.kamers_niet_gekoppeld'];
-        var L = s ? (s.attributes.sensoren || []) : [];
-        if(!L.length) return `<div style="font-size:14px;color:var(--ov-ok)">Alle meetsensoren zijn gekoppeld.</div>`;
-        return `<div style="font-size:13px;color:var(--ov-ink-50);line-height:1.55">`
-          + `Deze hangen in een ruimte van dit overzicht maar leveren er geen waarde voor. `
-          + `Bewust? Zet ze in <code>negeer</code>. Anders in <code>klimaat</code> of <code>voorkeur</code>, `
-          + `in <code>custom_templates/kamers.jinja</code>.</div>`;
-      ]]]
-    lijst: |
-      [[[
-        var s = states['sensor.kamers_niet_gekoppeld'];
-        var L = s ? (s.attributes.sensoren || []) : [];
-        if(!L.length) return '';
+        if(!s) return S.kop('ONDERHOUD', S.pil('warn', 'geen data'))
+          + S.tekst('sensor.kamers_niet_gekoppeld bestaat nog niet.');
+        var L = (s.attributes && s.attributes.sensoren) || [];
+        if(!L.length) return S.kop('ONDERHOUD', S.pil('ok', 'alles gekoppeld'))
+          + S.tekst('Elke meetsensor in een ruimte van deze pagina levert er ook een waarde voor.');
         var per = {};
-        L.forEach(function(x){
-          if(!per[x.kamer]) per[x.kamer] = [];
-          per[x.kamer].push(x.id);
-        });
-        var r = Object.keys(per).sort().map(function(kamer){
-          var ids = per[kamer].sort().map(function(id){
-            return `<div style="font-family:monospace;font-size:11px;color:var(--ov-ink-32);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${id}</div>`;
-          }).join('');
-          return `<div style="padding:8px 0;border-top:1px solid var(--ov-ink-5)">`
-            + `<div style="font-size:13px;font-weight:600;color:var(--primary-text-color);margin-bottom:3px">${kamer} <span style="font-weight:400;color:var(--ov-ink-30)">· ${per[kamer].length}</span></div>`
-            + `${ids}</div>`;
-        }).join('');
-        return `<div style="width:100%">${r}</div>`;
+        L.forEach(function(x){ var n = String(x.kamer || '?'); per[n] = (per[n] || 0) + 1; });
+        return S.kop('ONDERHOUD', S.pil(null, L.length + ' niet gekoppeld'), {klik: '#kamers-onderhoud'})
+          + S.rijen(Object.keys(per).sort().map(function(n){
+              return {klik: '#kamers-onderhoud', naam: S.esc(n), waarde: S.nl(per[n])};
+            }), 2, 0)
+          + S.voet('Sensoren die in een ruimte hangen maar nergens zijn aangewezen. Tik voor de lijst.');
       ]]]
 
-# --- Uitlegtabel: naam, waarde en een zin uitleg per regel -------------------
-# Voor de Omvormer-pagina (dashboards/home/omvormer.yaml): ruim honderd
-# sensoren met uitleg. Eén button-card per groep en niet één per regel -
+# --- De lijst in de pop-up ---------------------------------------------------
+kamer_onderhoud_lijst:
+  template: sv_paneel
+  entity: sensor.kamers_niet_gekoppeld
+  custom_fields:
+    x: |
+      [[[
+        var S = window.svKit && window.svKit(states);
+        if(!S) return '';
+        var s = states['sensor.kamers_niet_gekoppeld'];
+        var L = s && s.attributes ? (s.attributes.sensoren || []) : [];
+        if(!L.length) return S.kop('NIET GEKOPPELD', S.pil('ok', 'alles gekoppeld'))
+          + S.tekst('Alle meetsensoren zijn gekoppeld.');
+        var per = {};
+        L.forEach(function(x){ var n = String(x.kamer || '?'); (per[n] = per[n] || []).push(x); });
+        return S.kop('NIET GEKOPPELD', S.pil(null, L.length + ' sensor' + (L.length > 1 ? 'en' : '')))
+          + S.tekst('Deze hangen in een ruimte van dit overzicht maar leveren er geen waarde voor. '
+            + 'Bewust? Zet ze in <code>negeer</code>. Anders in <code>klimaat</code> of <code>voorkeur</code>, '
+            + 'in <code>custom_templates/kamers.jinja</code>.')
+          + Object.keys(per).sort().map(function(n){
+              var lijst = per[n].slice().sort(function(a, b){ return String(a.id) < String(b.id) ? -1 : 1; });
+              return S.subkop(S.esc(n).toUpperCase(), S.nl(lijst.length))
+                + S.rijen(lijst.map(function(x){
+                    return {klik: x.id, naam: S.esc(x.naam || x.id || '?'),
+                      waarde: '<span style="font-family:monospace;font-size:11px;font-weight:400;color:var(--ov-ink-35)">' + S.esc(x.id || '') + '</span>'};
+                  }), 1, 0);
+            }).join('');
+      ]]]
+
+# --- Uitlegtabel in Server-stijl ---------------------------------------------
+# Voor de Omvormer-pagina (dashboards/home/omvormer.yaml): ruim vijftig ruwe
+# Solarman-waarden in panelen. Eén button-card per groep en niet één per regel -
 # honderd kaarten die elk om de vijf seconden hertekenen merk je op een
-# wandpaneel.
+# wandpaneel. Was tot 7 november 2026 `ov_uitlegtabel` (één kolom, eigen
+# opmaak); nu een paneel (sv_paneel) met regels uit www/sv-kit.js, standaard in
+# twee kolommen, en rechtsboven een badge: `in orde`, of hoeveel waarden weg
+# (unavailable) of onleesbaar zijn.
 #
 # `variables.rijen` is een lijst van:
 #   e    entity_id, of een LIJST entity_id's (bijv. L1/L2/L3): die komen dan
 #        als "2 · 4 · 1 W" op één regel, met de eenheid één keer achteraan
 #   n    naam op de regel
-#   u    uitleg (mag HTML; mag weg)
 #   a    optioneel: toon dit attribuut in plaats van de state
 #   s    optioneel: vermenigvuldig met dit getal (Wh -> kWh = 0.001)
 #   eh   optioneel: eenheid die de sensor-eenheid vervangt
 #   d    optioneel: maximaal aantal decimalen (standaard 1)
 #   min  optioneel: minimaal aantal decimalen (50,00 Hz i.p.v. 50 Hz)
 #   m    optioneel: vertaaltabel voor tekststanden, {charging: laden}
-#   (variables.titel: kop boven de tabel. Staat die in de tabel zelf en niet
-#   in een losse ov_title, dan verdwijnt hij mee: bestaat GEEN ENKELE entiteit
-#   uit de tabel meer - een integratie die eruit is gehaald - dan klapt de hele
-#   kaart dicht in plaats van een rij "bestaat niet" te tonen.)
 #   tag  optioneel: kort label achter de naam voor een valkuil ("teken
 #        omgekeerd", "niet het huis"); `tk` kiest de kleur (warn|info|bad)
+# `variables.titel`: kop van het paneel; `variables.kolommen`: 1 of 2.
+# Bestaat GEEN ENKELE entiteit uit de tabel meer (een integratie die eruit is
+# gehaald), dan klapt het hele paneel dicht in plaats van rijen "bestaat niet".
 #
 # De instantie moet zelf `triggers_update` zetten met dezelfde entiteiten:
 # zonder `entity` hertekent button-card anders nooit, en `all` zou hem bij elke
 # statuswissel van het hele huis laten rekenen.
 #
-# Een regel aanklikken opent het more-info-venster (met historie) van de
-# eerste entiteit op die regel, via hetzelfde event dat HA zelf gebruikt.
-ov_uitlegtabel:
-  show_icon: false
-  show_name: false
-  show_state: false
-  tap_action:
-    action: none
+# Een regel aanklikken opent more-info (met historie) van de eerste entiteit
+# op die regel. Tekst uit een state gaat door S.esc() (een select of
+# foutmelding van de omvormer kan alles bevatten).
+sv_uitlegtabel:
+  template: sv_paneel
   variables:
     rijen: []
     titel: ""
+    kolommen: 2
   styles:
-    grid:
-      - grid-template-areas: '"tabel"'
-      - grid-template-columns: minmax(0, 1fr)
     card:
       - display: |
           [[[
@@ -1192,52 +969,45 @@ ov_uitlegtabel:
               return (Array.isArray(r.e) ? r.e : [r.e]).some(function(id){ return !!states[id]; }); });
             return er ? 'block' : 'none';
           ]]]
-      # tap_action none = button-card zet `pointer-events: none` op de kaart
-      # (class `disabled`) en dan doen de onclicks per rij niets. Inline wint
-      # van die class (7 november 2026, zie ook dashboards/server.yaml).
+      # Zie sv_html: zonder dit doen de onclicks per regel niets.
       - pointer-events: auto
-      - background: none
-      - border: none
-      - box-shadow: none
-      - padding: 0 2px 6px 2px
-    custom_fields:
-      tabel:
-        - justify-self: stretch
-        - text-align: left
-        - min-width: 0
   custom_fields:
-    tabel: |
+    x: |
       [[[
+        var S = window.svKit && window.svKit(states);
+        if(!S) return '';
         var grijs = function(t){ return '<span style="color:var(--ov-ink-40);font-weight:400">' + t + '</span>'; };
+        var weg = 0, fout = 0;
         // Eén waarde: {t: tekst, eh: eenheid} of {t: html} als er niets te rekenen valt.
         var een = function(r, id){
           var s = states[id];
           if(!s) return {t: grijs('bestaat niet')};
-          var v = r.a ? s.attributes[r.a] : s.state;
+          var v = r.a ? (s.attributes || {})[r.a] : s.state;
           if(v === undefined || v === null || v === 'unknown' || v === '') return {t: grijs('—')};
-          if(v === 'unavailable') return {t: '<span style="color:var(--ov-bad)">weg</span>'};
+          if(v === 'unavailable') { weg++; return {t: '<span style="color:var(--ov-bad)">weg</span>'}; }
           if(!r.a && id.indexOf('binary_sensor.') === 0) return {t: v === 'on' ? 'aan' : 'uit'};
           var n = Number(v);
           if(typeof v !== 'boolean' && !isNaN(n)){
+            var eh0 = (s.attributes || {}).unit_of_measurement;
             // Leesfouten van ha-solarman (21-9 in de historie gevonden): een
             // negatief vermogen dat zonder teken binnenkomt (65.286 = -250 W),
             // en af en toe onzin in de miljarden. Alleen voor watts; de
             // omvormer kan er 20.000 aan.
-            if(!r.a && s.attributes.unit_of_measurement === 'W'){
+            if(!r.a && eh0 === 'W'){
               if(n >= 32768 && n < 65536) n = n - 65536;
-              if(Math.abs(n) > 100000) return {t: grijs('leesfout')};
+              if(Math.abs(n) > 100000) { fout++; return {t: grijs('leesfout')}; }
             }
             // Frequentie 0 terwijl er spanning staat is ook een leesfout.
-            if(!r.a && s.attributes.unit_of_measurement === 'Hz' && n < 40) return {t: grijs('—')};
+            if(!r.a && eh0 === 'Hz' && n < 40) return {t: grijs('—')};
             if(r.s) n = n * r.s;
             return {
               t: n.toLocaleString('nl-NL', {minimumFractionDigits: r.min || 0,
                                             maximumFractionDigits: Math.max(r.d !== undefined ? r.d : 1, r.min || 0)}),
-              eh: (r.eh !== undefined) ? r.eh : (r.a ? '' : (s.attributes.unit_of_measurement || ''))
+              eh: S.esc((r.eh !== undefined) ? r.eh : (r.a ? '' : (eh0 || '')))
             };
           }
           v = String(v);
-          return {t: (r.m && r.m[v] !== undefined) ? r.m[v] : v};
+          return {t: (r.m && r.m[v] !== undefined) ? r.m[v] : S.esc(v)};
         };
         var waarde = function(r){
           var ids = Array.isArray(r.e) ? r.e : [r.e];
@@ -1249,24 +1019,68 @@ ov_uitlegtabel:
           if(gelijk) return w.map(function(x){ return x.t; }).join(grijs(' · ')) + (ehs.length ? ' ' + ehs[0] : '');
           return w.map(function(x){ return x.t + (x.eh ? ' ' + x.eh : ''); }).join(grijs(' · '));
         };
-        // Zelfde opmaak als ov_title, zodat een tabel met eigen kop er niet
-        // anders uitziet dan een losse titelkaart erboven.
-        var html = variables.titel
-          ? '<div style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55);padding:2px 0 10px 0">' + variables.titel + '</div>'
-          : '';
-        (variables.rijen || []).forEach(function(r, i){
+        var lijst = (variables.rijen || []).map(function(r){
           var eerste = Array.isArray(r.e) ? r.e[0] : r.e;
-          html += '<div onclick="this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + eerste + '\'},bubbles:true,composed:true}))"'
-            + ' style="cursor:pointer;padding:8px 0;' + (i ? 'border-top:1px solid var(--ov-ink-6);' : '') + '">'
-            + '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">'
-            +   '<span style="font-size:14px;color:var(--ov-ink-80)">' + r.n
-            +     (r.tag ? ' <span style="font-size:10.5px;font-weight:600;padding:1px 7px;margin-left:4px;border-radius:10px;white-space:nowrap;'
-                           + 'color:var(--ov-' + (r.tk || 'warn') + ');background:var(--ov-' + (r.tk || 'warn') + '-12)">' + r.tag + '</span>' : '')
-            +   '</span>'
-            +   '<span style="font-size:15px;font-weight:600;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--primary-text-color)">' + waarde(r) + '</span>'
-            + '</div>'
-            + (r.u ? '<div style="font-size:12px;line-height:1.4;color:var(--ov-ink-50);margin-top:3px;white-space:normal">' + r.u + '</div>' : '')
-            + '</div>';
+          var tag = r.tag ? ' <span style="font-size:10px;font-weight:600;padding:1px 6px;margin-left:2px;border-radius:10px;white-space:nowrap;'
+            + 'color:var(--ov-' + (r.tk || 'warn') + ');background:var(--ov-' + (r.tk || 'warn') + '-12)">' + r.tag + '</span>' : '';
+          return {klik: eerste, naam: r.n + tag, waarde: waarde(r)};
         });
-        return html;
+        var problemen = [];
+        if(weg) problemen.push({k: 'bad', t: weg + ' weg'});
+        if(fout) problemen.push({k: 'warn', t: fout + ' leesfout' + (fout > 1 ? 'en' : '')});
+        return S.kop(variables.titel || '', S.oordeel(problemen))
+          + S.rijen(lijst, variables.kolommen || 2, 0);
       ]]]
+
+# =============================================================================
+# SERVER-STIJL (7 november 2026) - zie docs/dashboard-stijl.md
+# =============================================================================
+# `sv_html`   een button-card die alleen HTML tekent (custom field `x`), zonder
+#             eigen achtergrond: voor binnen een paneel (custom:mod-card met
+#             de paneelstijl) naast bv. een apexcharts-grafiek.
+# `sv_paneel` hetzelfde, maar de kaart IS het paneel (achtergrond, rand,
+#             ronde hoeken): voor panelen die alleen uit HTML bestaan.
+# De HTML komt uit window.svKit (www/sv-kit.js). Zet in de kaart zelf:
+#   custom_fields:
+#     x: |
+#       [[[ var S = window.svKit && window.svKit(states); if(!S) return '';
+#           return S.kop('TITEL', S.pil('ok', 'in orde')) + ...; ]]]
+#
+# pointer-events: auto MOET blijven: met tap_action none zet button-card
+# `pointer-events: none` op de kaart en doet geen enkele onclick in de HTML
+# nog iets (tests/test_button_card_klikbaar.py).
+sv_html:
+  show_icon: false
+  show_name: false
+  show_state: false
+  tap_action:
+    action: none
+  hold_action:
+    action: none
+  styles:
+    card:
+      - pointer-events: auto
+      - background: none
+      - border: none
+      - box-shadow: none
+      - padding: 0 2px 4px 2px
+    grid:
+      - grid-template-areas: '"x"'
+      - grid-template-columns: minmax(0, 1fr)
+    custom_fields:
+      x:
+        - justify-self: stretch
+        - text-align: left
+        - min-width: "0"
+        - white-space: normal
+
+sv_paneel:
+  template: sv_html
+  styles:
+    card:
+      - pointer-events: auto
+      - background: var(--ov-panel-bg)
+      - border: 1px solid var(--ov-ink-6)
+      - border-radius: 16px
+      - box-shadow: none
+      - padding: 12px 16px

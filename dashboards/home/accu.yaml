@@ -1,5 +1,17 @@
 # Thuisaccu: wat hij doet, of hij gezond is, en of het goede momenten waren.
 #
+# OPBOUW (Server-stijl sinds 7 november 2026, zie docs/dashboard-stijl.md)
+#   kolom 1  DE ACCU     lading groot en in kleur (groen laden, oranje leveren),
+#                        vermogen en inhoud ernaast, tegels VANDAAG IN / UIT
+#            STAAT       temperatuur, gezondheid (SoH + cycli), meldingen van
+#                        omvormer/BMS, en wat MarkeDroid met de accu doet
+#   kolom 2  LADING EN PRIJS  de lading van vandaag over de kwartierprijzen
+#   kolom 3  NOODSTROOM  of het net er is, hoe lang de accu het huis houdt
+# Lading, vermogen en temperatuur openen een pop-up met 4 en 24 uur
+# (#accu-lading, #accu-vermogen, #accu-temp, onderaan dit bestand); de rest
+# opent more-info. De HTML komt uit www/sv-kit.js (templates sv_paneel /
+# sv_html in overzicht_templates.yaml). Test: tests/test_accu_pagina.py.
+#
 # VAN PLAN NAAR VERANTWOORDING (20 september 2026)
 # Deze pagina liet tot vandaag zien wat de kwartierregie van plan was: welke
 # blokken laden, welke ontladen, en waarom hij nu niets deed. Die regie stuurde
@@ -10,8 +22,8 @@
 # schrijft waar MarkeDroid ook aan draait, geeft een accu met twee bazen - en
 # die ruzie zie je pas terug in een rekening. Alles wat je hier ziet is
 # gelezen. De vraag die de pagina beantwoordt is niet "wat gaat hij doen" maar
-# "heeft hij het goed gedaan", en dat lees je af aan de grafiek onderaan: de
-# lading van vandaag over de kwartierprijzen heen.
+# "heeft hij het goed gedaan", en dat lees je af aan de grafiek: de lading van
+# vandaag over de kwartierprijzen heen.
 #
 # DE METINGEN KOMEN VAN SOLARMAN, DE REGIE VAN MARKEDROID (4 november 2026).
 # Lading, vermogen, status, inhoud, temperatuur en de dagtellers
@@ -21,485 +33,611 @@
 # exportbegrenzer, flex) leest nog `sensor.markedroid_*`. Tussen 22 september
 # en 4 november kwam alles van MarkeDroid en ontbraken de meldingen van de
 # omvormer; zie de kop van Battery.yaml voor de hele geschiedenis.
+#
+# EÉN BRON VOOR DE RICHTING: sensor.accu_status (met zijn eigen dode zone in
+# Battery.yaml). Deze pagina had vroeger een eigen dode zone van 20 W, de Nest
+# Hub 15, de klok ook 20 - drie waarheden over dezelfde accu.
 title: Accu
 path: accu
 icon: mdi:home-battery
-
+panel: true
+background: "var(--primary-background-color)"
 cards:
-  # ---------------------------------------------------------------- de accu
   - type: vertical-stack
+    card_mod:
+      style: |
+        :host { height: 100% !important; }
+        #root {
+          /* Kleurtokens komen uit www/ov-tokens.js. Schil = dashboards/server.yaml. */
+          --ov-panel-border: 1px solid var(--ov-ink-6);
+          /* 0: na de kolommen volgen alleen de (verborgen) pop-ups. */
+          gap: 0 !important;
+          min-height: calc(100vh - 8px) !important;
+          margin: 0 !important;
+          padding: 12px 16px !important;
+          background: var(--primary-background-color) !important;
+          box-sizing: border-box !important;
+        }
     cards:
-      - type: custom:button-card
-        template: ov_title
-        variables:
-          title: DE ACCU
+      - type: horizontal-stack
+        card_mod:
+          style: |
+            #root {
+              display: grid !important;
+              grid-template-columns: 1fr 1fr 1fr !important;
+              gap: 12px !important;
+              align-items: start !important;
+            }
+            @media (max-width: 1500px) {
+              #root { grid-template-columns: 1fr 1fr !important; }
+            }
+            @media (max-width: 1000px) {
+              #root { grid-template-columns: 1fr !important; }
+            }
+        cards:
+          # ======================= KOLOM 1: DE ACCU, STAAT =======================
+          - type: vertical-stack
+            cards:
+              # Lading groot, richting en inhoud ernaast. Inhoud in kWh en niet
+              # alleen procenten: bij het afwegen of je de droger nog aanzet zegt
+              # "13 kWh" iets en "44%" niet.
+              - type: custom:button-card
+                template: sv_paneel
+                entity: sensor.accu_lading
+                triggers_update:
+                  - sensor.accu_lading
+                  - sensor.accu_vermogen
+                  - sensor.accu_status
+                  - sensor.accu_inhoud
+                  - sensor.accu_capaciteit
+                  - sensor.accu_vandaag_geladen
+                  - sensor.accu_vandaag_ontladen
+                  - sensor.accu_temperatuur
+                  - binary_sensor.omvormer_storing
+                variables:
+                  kaart: accu
+                custom_fields:
+                  x: |
+                    [[[
+                      var S = window.svKit && window.svKit(states);
+                      if(!S) return '';
+                      var ld = S.num('sensor.accu_lading'), pw = S.num('sensor.accu_vermogen');
+                      var st = S.st('sensor.accu_status'), stand = st ? st.state : '';
+                      var weg = S.weg('sensor.accu_lading');
+                      var k = weg ? 'ink-35' : (stand === 'laden' ? 'ok' : (stand === 'ontladen' ? 'warn' : null));
+                      // Boven de kilowatt leest een kaal wattgetal slecht.
+                      var fmt = function(w){ var a = Math.abs(w); return a >= 1000 ? S.nl(a / 1000, 1) + ' kW' : S.nl(a) + ' W'; };
+                      var richting = (pw === null || !st || S.weg(st)) ? '—'
+                        : (stand === 'laden' ? 'laadt met ' + fmt(pw) : (stand === 'ontladen' ? 'levert ' + fmt(pw) : 'staat stil'));
+                      var inh = S.num('sensor.accu_inhoud'), cap = S.num('sensor.accu_capaciteit');
+                      var inhoud = inh === null ? '—' : S.nl(inh, 1) + (cap === null ? '' : ' / ' + S.nl(cap, 1)) + ' kWh';
 
-      # Lading, richting en inhoud in één regel. Zelfde opzet als de
-      # accukaart die hier stond, maar zonder de ondergrens-badge (die was een
-      # instelling van de regie) - er staat nu wat er in zit.
-      - type: custom:button-card
-        entity: sensor.accu_lading
-        triggers_update:
-          - sensor.accu_vermogen
-          - sensor.accu_status
-          - sensor.accu_inhoud
-        show_icon: false
-        show_name: false
-        show_state: false
-        tap_action:
-          action: more-info
-        styles:
-          grid:
-            - grid-template-areas: '"ic t badge" "ic sub badge"'
-            - grid-template-columns: 34px 1fr auto
-            - align-items: center
-            - column-gap: 12px
-          card:
-            - background: none
-            - border: none
-            - box-shadow: none
-            - padding: 11px 2px
-          custom_fields:
-            ic:
-              - grid-area: ic
-            t:
-              - grid-area: t
-              - justify-self: start
-              - font-size: 14.5px
-              - font-weight: "600"
-              - color: var(--primary-text-color)
-            sub:
-              - grid-area: sub
-              - justify-self: start
-              - font-size: 12.5px
-              - color: var(--ov-ink-58)
-              - padding-top: 2px
-            badge:
-              - grid-area: badge
-              - justify-self: end
-        custom_fields:
-          ic: |
-            [[[
-              var st = states['sensor.accu_status'];
-              var m = {laden:   ['mdi:battery-arrow-up','var(--ov-ok)'],
-                       ontladen:['mdi:battery-arrow-down','var(--ov-warn)'],
-                       rust:    ['mdi:battery-clock','var(--ov-ink-35)']};
-              var v = m[st ? st.state : ''] || ['mdi:help-circle-outline','var(--ov-ink-25)'];
-              return `<ha-icon icon="${v[0]}" style="--mdc-icon-size:22px;color:${v[1]}"></ha-icon>`;
-            ]]]
-          t: |
-            [[[
-              if(!entity || ['unavailable','unknown'].indexOf(entity.state) !== -1)
-                return 'Accu niet bereikbaar';
-              return 'Lading ' + Math.round(Number(entity.state)) + '%';
-            ]]]
-          sub: |
-            [[[
-              // Eén bron voor de richting: sensor.accu_status. Deze kaart had
-              // vroeger een eigen dode zone van 20 W, de nest hub 15, de klok
-              // ook 20 - drie waarheden over dezelfde accu.
-              var st = states['sensor.accu_status'];
-              var pwE = states['sensor.accu_vermogen'];
-              if(!st || !pwE) return '';
-              var pw = Number(pwE.state);
-              if(isNaN(pw)) return '';
-              // Boven de kilowatt leest een kaal wattgetal slecht; dit is een
-              // accu die duizenden watts kan.
-              var fmt = Math.abs(pw) >= 1000
-                ? (Math.abs(pw)/1000).toFixed(1).replace('.',',') + ' kW'
-                : Math.round(Math.abs(pw)) + ' W';
-              if(st.state === 'laden')    return 'laadt met ' + fmt;
-              if(st.state === 'ontladen') return 'levert ' + fmt + ' aan het huis';
-              return 'staat stil';
-            ]]]
-          badge: |
-            [[[
-              // Kilowatturen en niet procenten: bij het afwegen of je de droger
-              // nog aanzet zegt "13 kWh" iets en "44%" niet, zeker niet bij een
-              // accu van deze omvang.
-              var i = states['sensor.accu_inhoud'], c = states['sensor.accu_capaciteit'];
-              if(!i || isNaN(Number(i.state))) return '';
-              var t = Number(i.state).toFixed(1).replace('.',',');
-              if(c && !isNaN(Number(c.state)))
-                t += ' / ' + Number(c.state).toFixed(1).replace('.',',');
-              return `<span style="font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:20px;color:var(--ov-ink-60);background:var(--ov-ink-8)">${t} kWh</span>`;
-            ]]]
+                      var problemen = [];
+                      if(weg) problemen.push({k: 'bad', t: 'niet bereikbaar'});
+                      var sg = S.st('binary_sensor.omvormer_storing');
+                      if(sg && sg.state === 'on') problemen.push({k: 'bad', t: 'storing'});
+                      var ta = S.num('sensor.accu_temperatuur');
+                      if(ta !== null && (ta < 5 || ta > 40)) problemen.push({k: (ta < 0 || ta > 45) ? 'bad' : 'warn', t: 'temperatuur'});
+                      var woord = stand === 'laden' ? 'laadt' : (stand === 'ontladen' ? 'levert' : 'rust');
+                      var badge = problemen.length ? S.oordeel(problemen) : S.pil(k || 'grijs', woord);
 
-  # ------------------------------------------------------------- noodstroom
-  # Alle groepen hangen aan de backup-uitgang van de Deye, behalve de
-  # laadpaal. Hoe er wordt vastgesteld dat het huis op de accu draait, en
-  # waarom dat drie lagen nodig heeft, staat in de NOODSTROOM-kop van
-  # packages/9 - Other/Battery.yaml. Deze kaart rekent zelf niets uit: de duur,
-  # de bruikbare kilowatturen en de last komen uit `sensor.noodstroom_resterend`,
-  # zodat de pil op het Overzicht precies hetzelfde getal noemt.
-  - type: vertical-stack
-    cards:
-      - type: custom:button-card
-        template: ov_title
-        variables:
-          title: NOODSTROOM
+                      var inn = S.num('sensor.accu_vandaag_geladen'), uit = S.num('sensor.accu_vandaag_ontladen');
+                      // HET RENDEMENT IS EEN DAGCIJFER, GEEN MOMENTOPNAME: halverwege
+                      // de ochtend is 0,2 van 4 kWh onzin. Pas met genoeg aan beide
+                      // kanten; geen zuiver rendement (begin- en eindlading verschillen).
+                      var ruit = (inn !== null && uit !== null && inn >= 2 && uit >= 2) ? S.nl(uit / inn * 100) + '% van wat erin ging' : 'ontladen';
+                      return S.kop('DE ACCU', badge)
+                        + S.grootMetRegels({klik: '#accu-lading', waarde: ld === null ? '—' : S.nl(ld) + '%', k: k, sub: 'lading'}, [
+                            {klik: '#accu-vermogen', naam: 'Vermogen', waarde: richting},
+                            {klik: 'sensor.accu_inhoud', naam: 'Inhoud', waarde: inhoud},
+                            {klik: 'sensor.accu_status', naam: 'Stand', waarde: st && !S.weg(st) ? S.esc(st.state) : '—'}])
+                        + S.balk(ld === null ? 0 : ld, k || 'info', 8)
+                        + S.tegels([
+                            {klik: 'sensor.accu_vandaag_geladen', label: 'VANDAAG IN', waarde: inn === null ? '—' : S.nl(inn, 1) + ' kWh', k: inn ? 'ok' : 'ink-80', sub: 'geladen'},
+                            {klik: 'sensor.accu_vandaag_ontladen', label: 'VANDAAG UIT', waarde: uit === null ? '—' : S.nl(uit, 1) + ' kWh', k: uit ? 'warn' : 'ink-80', sub: ruit}]);
+                    ]]]
 
-      # Wat er NU aan de hand is. Vier standen, en de twee storingsstanden
-      # hebben een andere oplossing: bij een stroomstoring wacht je op de
-      # netbeheerder, bij een omvormer die zichzelf losgekoppeld heeft ga je
-      # naar de meterkast.
-      - type: custom:button-card
-        template: ov_listrow
-        entity: binary_sensor.huis_op_accu
-        triggers_update:
-          - binary_sensor.accu_geinstalleerd
-          - sensor.time
-        custom_fields:
-          ic: |
-            [[[
-              var inst = states['binary_sensor.accu_geinstalleerd'];
-              var aan = entity && entity.state === 'on';
-              var storing = aan && entity.attributes.oorzaak === 'stroomstoring';
-              var v = !inst || inst.state !== 'on' ? ['mdi:transmission-tower-off','var(--ov-ink-35)']
-                    : (!entity || entity.state === 'unavailable') ? ['mdi:help-circle-outline','var(--ov-ink-35)']
-                    : storing ? ['mdi:flash-off','var(--ov-bad)']
-                    : aan ? ['mdi:home-battery','var(--ov-warn)']
-                    : ['mdi:transmission-tower','var(--ov-ok)'];
-              return `<ha-icon icon="${v[0]}" style="--mdc-icon-size:22px;color:${v[1]}"></ha-icon>`;
-            ]]]
-          t: |
-            [[[
-              var inst = states['binary_sensor.accu_geinstalleerd'];
-              if(!inst || inst.state !== 'on') return 'Nog niet actief';
-              if(!entity || entity.state === 'unavailable') return 'Omvormer niet bereikbaar';
-              if(entity.state !== 'on') return 'Het net is er';
-              // Tijdstip plus hoe lang: om tien uur 's avonds wil je allebei
-              // weten - wanneer het begon en of je al moet gaan rekenen.
-              var d = new Date(entity.last_changed);
-              var min = Math.max(0, Math.round((Date.now() - d.getTime()) / 60000));
-              var klok = ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
-              var duur = min < 60 ? min + ' min' : Math.floor(min/60) + ' u ' + (min % 60) + ' min';
-              var wat = entity.attributes.oorzaak === 'stroomstoring'
-                ? 'Stroomstoring' : 'Omvormer los van het net';
-              return wat + ' · sinds ' + klok + ' (' + duur + ')';
-            ]]]
-          s: |
-            [[[
-              var inst = states['binary_sensor.accu_geinstalleerd'];
-              if(!inst || inst.state !== 'on')
-                return 'de omvormer heeft nog nooit netspanning gezien; dit gaat vanzelf aan na de installatie';
-              if(!entity || entity.state === 'unavailable')
-                return 'HA weet niet of het net er is';
-              if(entity.state !== 'on')
-                return 'valt het uit, dan neemt de accu het hele huis over, behalve de laadpaal';
-              if(entity.attributes.oorzaak === 'stroomstoring')
-                return 'het huis draait op de accu · de laadpaal ligt stil';
-              // De meter praat nog, dus er ís net. De Deye heeft zichzelf
-              // losgemaakt - daar is iets aan te doen, en dat moet er staan.
-              return 'de meter heeft wél stroom · kijk naar de groep van de omvormer of zijn netbeveiliging · het huis draait zolang op de accu';
-            ]]]
+              # Temperatuur, gezondheid en meldingen van omvormer en BMS (via
+              # Solarman, sinds 4 november weer), en wat MarkeDroid doet.
+              - type: custom:button-card
+                template: sv_paneel
+                entity: sensor.accu_capaciteit
+                triggers_update:
+                  - sensor.accu_temperatuur
+                  - sensor.accu_capaciteit
+                  - binary_sensor.omvormer_storing
+                  - binary_sensor.markedroid_verbinding
+                  - sensor.markedroid_regie
+                  - sensor.markedroid_exportbegrenzer
+                variables:
+                  kaart: staat
+                custom_fields:
+                  x: |
+                    [[[
+                      var S = window.svKit && window.svKit(states);
+                      if(!S) return '';
+                      var problemen = [];
+                      // LFP laadt niet onder 0 °C en houdt niet van boven 45 °C;
+                      // binnen 5-40 °C is er niets om over na te denken.
+                      var t = S.num('sensor.accu_temperatuur');
+                      var tk = t === null ? 'ink-35' : ((t < 0 || t > 45) ? 'bad' : ((t < 5 || t > 40) ? 'warn' : 'ok'));
+                      if(tk === 'warn' || tk === 'bad') problemen.push({k: tk, t: 'temperatuur'});
+                      // Wat het BMS over de cellen zegt (attributen van
+                      // sensor.accu_capaciteit). Een LFP-pakket is na 6.000 cycli op
+                      // ~80%; onder 90% is het een gesprek met de installateur waard.
+                      var a = (S.st('sensor.accu_capaciteit') || {}).attributes || {};
+                      var soh = (a.gezondheid_procent === null || a.gezondheid_procent === undefined) ? null : Number(a.gezondheid_procent);
+                      if(soh !== null && isNaN(soh)) soh = null;
+                      var cyc = (a.cycli === null || a.cycli === undefined || isNaN(Number(a.cycli))) ? null : Number(a.cycli);
+                      if(soh !== null && soh < 90) problemen.push({k: 'warn', t: 'gezondheid'});
 
-      # Hoe lang nog. Buiten een storing is het "als het nu uitvalt", tijdens
-      # een storing "nog te gaan" - zelfde getal, andere vraag, en de sensor
-      # rekent in die twee standen ook met een andere last (zie Battery.yaml).
-      - type: custom:button-card
-        template: ov_listrow
-        entity: sensor.noodstroom_resterend
-        triggers_update:
-          - binary_sensor.huis_op_accu
-        custom_fields:
-          ic: |
-            [[[
-              var op = states['binary_sensor.huis_op_accu'];
-              var kleur = (op && op.state === 'on') ? 'var(--ov-warn)' : 'var(--ov-info-strong)';
-              return `<ha-icon icon="mdi:timer-sand" style="--mdc-icon-size:22px;color:${kleur}"></ha-icon>`;
-            ]]]
-          t: |
-            [[[
-              var op = states['binary_sensor.huis_op_accu'];
-              var tijdens = op && op.state === 'on';
-              if(!entity || entity.state === 'unavailable')
-                return tijdens ? 'Nog te gaan' : 'Als het nu uitvalt';
-              var a = entity.attributes || {};
-              var h = Number(entity.state);
-              var duur;
-              if(a.stand === 'laadt_bij') duur = 'de zon vult hem bij';
-              else if(a.stand === 'geen_last' || isNaN(h)) duur = 'nauwelijks last';
-              else {
-                // Eerst naar hele minuten, dan splitsen: `h % 1` afronden gaf
-                // bij 5,995 uur "5 uur 60 min".
-                var m = Math.round(h * 60);
-                duur = m >= 60 ? Math.floor(m / 60) + ' uur' + (m % 60 ? ' ' + (m % 60) + ' min' : '')
-                               : m + ' minuten';
-              }
-              return (tijdens ? 'Nog te gaan: ' : 'Als het nu uitvalt: ') + duur;
-            ]]]
-          s: |
-            [[[
-              if(!entity || entity.state === 'unavailable') return 'pas te berekenen na de installatie';
-              var a = entity.attributes || {};
-              var kwh = Number(a.bruikbaar_kwh);
-              var w = Number(a.last_w);
-              var t = (isNaN(kwh) ? '—' : kwh.toFixed(1).replace('.',',')) + ' kWh bruikbaar';
-              // `last_w` is wat de accu AFGEEFT, dus negatief betekent dat hij
-              // tijdens de storing oplaadt. Dat stond er eerst als "gaf 800 W"
-              // - precies de verkeerde kant op.
-              if(!isNaN(w) && Math.abs(w) >= 50)
-                t += a.basis !== 'accu_kwartier'
-                  ? ' · huis trok het laatste uur gemiddeld ' + Math.round(w) + ' W'
-                  : (w > 0 ? ' · accu gaf het laatste kwartier ' + Math.round(w) + ' W'
-                           : ' · zon laadt hem op met ' + Math.round(-w) + ' W');
-              // HET HERSTARTPUNT HOORT ERBIJ ZODRA HET ERTOE DOET. Is de accu
-              // eenmaal op zijn afslagpunt, dan gaat de uitgang pas weer aan
-              // als hij terug op dit niveau is - bij een 28,8 kWh-accu ruim
-              // 11 kWh zon. Buiten een storing is dat ruis; tijdens een storing
-              // is het het verschil tussen "even donker" en "tot morgenmiddag".
-              var op = states['binary_sensor.huis_op_accu'];
-              if(op && op.state === 'on' && a.stand === 'loopt_leeg' && a.herstart_procent !== undefined)
-                t += ' · daarna uit tot hij weer op ' + a.herstart_procent + '% is';
-              return t;
-            ]]]
+                      var sg = S.st('binary_sensor.omvormer_storing'), melding, mk = null;
+                      if(!sg || S.weg(sg)) { melding = 'omvormer niet bereikbaar'; mk = 'ink-55'; }
+                      else if(sg.state === 'on') { melding = S.esc(sg.attributes.omschrijving || 'probleem'); mk = 'bad'; problemen.push({k: 'bad', t: 'melding'}); }
+                      else melding = 'geen';
 
-      - type: custom:button-card
-        template: ov_listrow
-        entity: binary_sensor.accu_geinstalleerd
-        variables:
-          mdi: mdi:ev-station
-          kleur: "var(--ov-ink-45)"
-          title: De laadpaal hangt er niet aan
-        custom_fields:
-          # Staat er zodat niemand bij een storing gaat zoeken waarom de auto
-          # niet laadt. De reden erbij, want "waarom niet?" is de volgende vraag.
-          s: "auto laden uit de accu is twee keer omzettingsverlies, dus die blijft aan de netkant"
+                      // WAT MARKEDROID MET DE ACCU DOET: zijn stand, en alleen als
+                      // het iets zegt de exportbegrenzer erachter.
+                      var vb = S.st('binary_sensor.markedroid_verbinding'), md, mdk = null;
+                      if(!vb) md = '—';
+                      else if(vb.state !== 'on') { md = 'geen berichten meer'; mdk = 'bad'; problemen.push({k: 'bad', t: 'MarkeDroid stil'}); }
+                      else {
+                        var r = S.st('sensor.markedroid_regie'), e = S.st('sensor.markedroid_exportbegrenzer');
+                        var delen = [(r && r.state !== 'niet_geleverd' && r.attributes.omschrijving) ? S.esc(r.attributes.omschrijving) : 'verbonden'];
+                        if(r && r.attributes.flex_w !== null && r.attributes.flex_w !== undefined) delen.push('flex ' + S.esc(r.attributes.flex_w) + ' W');
+                        if(e && e.state === 'actief') delen.push('teruglevering dicht');
+                        if(e && e.state === 'storing') { delen.push('exportbegrenzer in storing'); mdk = 'bad'; problemen.push({k: 'bad', t: 'exportbegrenzer'}); }
+                        md = delen.join(' · ');
+                      }
+                      return S.kop('STAAT VAN DE ACCU', S.oordeel(problemen))
+                        + S.tegels([
+                            {klik: '#accu-temp', label: 'TEMPERATUUR', waarde: t === null ? '—' : S.nl(t, 1) + '°', k: tk, sub: 'cellen (BMS)'},
+                            {klik: 'sensor.accu_capaciteit', label: 'GEZONDHEID', waarde: soh === null ? '—' : S.nl(soh, 1) + '%', k: soh === null ? 'ink-35' : (soh < 90 ? 'warn' : 'ok'),
+                              sub: cyc === null ? 'state of health' : S.nl(cyc) + ' cycli'}], {marge: 0})
+                        + S.rijen([
+                            {klik: 'binary_sensor.omvormer_storing', naam: 'Meldingen', waarde: melding, k: mk},
+                            {klik: 'sensor.markedroid_regie', naam: 'MarkeDroid', waarde: md, k: mdk}], 1, 8);
+                    ]]]
 
-  # ------------------------------------------------------------- vandaag
-  - type: vertical-stack
-    cards:
-      - type: custom:button-card
-        template: ov_title
-        variables:
-          title: VANDAAG
-      # Utility_meters op de eigen kWh-tellers van de Deye, elke nacht op nul
-      # (Battery.yaml). Die tellers lopen door terwijl HA plat ligt, dus na een
-      # herstart klopt de dag weer. 0,1 kWh nauwkeurig, ~elke tien minuten
-      # ververst.
-      - type: custom:button-card
-        template: ov_listrow
-        entity: sensor.accu_vandaag_geladen
-        variables:
-          mdi: mdi:battery-arrow-up
-          kleur: "var(--ov-ok)"
-          title: Geladen
-        custom_fields:
-          s: |
-            [[[
-              var v = entity && !isNaN(Number(entity.state)) ? Number(entity.state) : null;
-              return v === null ? '—' : v.toFixed(1).replace('.',',') + ' kWh erin';
-            ]]]
-      # HET RENDEMENT IS EEN DAGCIJFER EN GEEN MOMENTOPNAME. Halverwege de
-      # ochtend staat er 4 kWh in en 0,2 kWh uit, en dan is "5%" onzin. Daarom
-      # pas een verhouding zodra er aan beide kanten genoeg staat. Het is geen
-      # zuiver rendement: de lading aan het begin en eind van de dag verschilt.
-      - type: custom:button-card
-        template: ov_listrow
-        entity: sensor.accu_vandaag_ontladen
-        triggers_update:
-          - sensor.accu_vandaag_geladen
-        variables:
-          mdi: mdi:battery-arrow-down
-          kleur: "var(--ov-warn)"
-          title: Ontladen
-        custom_fields:
-          s: |
-            [[[
-              var num = function(id){ var s = states[id];
-                return (s && !isNaN(Number(s.state))) ? Number(s.state) : null; };
-              var uit = num('sensor.accu_vandaag_ontladen'), inn = num('sensor.accu_vandaag_geladen');
-              if(uit === null) return '—';
-              var t = uit.toFixed(1).replace('.',',') + ' kWh eruit';
-              if(inn !== null && inn >= 2 && uit >= 2)
-                t += ' · ' + Math.round(uit / inn * 100) + '% van wat erin ging';
-              return t;
-            ]]]
+          # ======================== KOLOM 2: LADING EN PRIJS ========================
+          # DE KERNVRAAG VAN DEZE PAGINA. MarkeDroid bepaalt wanneer er geladen
+          # en ontladen wordt, en er is geen kaart die vertelt wat het opleverde.
+          # Dit is de goedkoopste benadering: de lading van vandaag over de
+          # kwartierprijzen heen. Loopt de lijn omhoog onder de lage balken en
+          # omlaag onder de hoge, dan doet de appliance zijn werk.
+          #
+          # VENSTER = DE DAG en niet "de laatste 24 uur": de prijzen komen uit
+          # `raw_today`, dat precies 00:00-24:00 dekt. Met een schuivend venster
+          # zou de linkerhelft van de balken van gisteren moeten komen, en die
+          # bewaart de integratie niet.
+          - type: custom:mod-card
+            card_mod:
+              style: &paneel |
+                ha-card {
+                  background: var(--ov-panel-bg) !important;
+                  border: var(--ov-panel-border) !important;
+                  border-radius: 16px !important;
+                  box-shadow: none !important;
+                  padding: 12px 16px !important;
+                }
+            card:
+              type: vertical-stack
+              cards:
+                - type: custom:button-card
+                  template: sv_html
+                  entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
+                  triggers_update:
+                    - sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
+                  variables:
+                    kaart: prijs
+                  custom_fields:
+                    x: |
+                      [[[
+                        var S = window.svKit && window.svKit(states);
+                        if(!S) return '';
+                        var p = S.num('sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier');
+                        var badge = p === null ? S.pil('grijs', 'geen prijs') : S.pil('grijs', '€ ' + S.nl(p, 2) + ' nu');
+                        return S.kop('LADING EN PRIJS', badge, {klik: 'sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier'})
+                          + S.tekst('De lading van vandaag over de kwartierprijzen. Goed is: omhoog onder de lage balken, omlaag onder de hoge.');
+                      ]]]
+                - type: custom:apexcharts-card
+                  graph_span: 24h
+                  span:
+                    start: day
+                  now:
+                    show: true
+                    label: nu
+                    color: var(--primary-text-color)
+                  card_mod:
+                    style: |
+                      ha-card { background: none !important; box-shadow: none !important; border: none !important; }
+                  header:
+                    show: false
+                  yaxis:
+                    - id: kwh_prijs
+                      min: ~0
+                      max: ~0.4
+                      decimals: 2
+                      apex_config:
+                        tickAmount: 4
+                        title:
+                          text: €/kWh
+                    - id: procent
+                      opposite: true
+                      min: 0
+                      max: 100
+                      decimals: 0
+                      apex_config:
+                        tickAmount: 4
+                        title:
+                          text: lading %
+                  apex_config:
+                    chart:
+                      height: 330
+                      toolbar:
+                        show: false
+                    grid:
+                      borderColor: "var(--ov-ink-6)"
+                    legend:
+                      show: true
+                      position: top
+                      horizontalAlign: left
+                      fontSize: 11px
+                      labels:
+                        colors: "var(--ov-ink-58)"
+                      markers:
+                        size: 4
+                    tooltip:
+                      x:
+                        show: false
+                    xaxis:
+                      labels:
+                        datetimeUTC: false
+                        style:
+                          colors: "var(--ov-ink-45)"
+                    plotOptions:
+                      bar:
+                        # 96 balken op een dag; met de standaardbreedte streept
+                        # dat. Zelfde keuze als de stroomprijskaart op het Overzicht.
+                        columnWidth: 96%
+                  series:
+                    - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
+                      name: Prijs
+                      stroke_width: 0
+                      float_precision: 3
+                      type: column
+                      color: "#3f5a70"
+                      show:
+                        legend_value: false
+                      yaxis_id: kwh_prijs
+                      data_generator: |
+                        const blokken = (ent, key) => (ent && ent.attributes && ent.attributes[key]) || [];
+                        const st = (typeof hass !== 'undefined' && hass.states) ? hass.states : {};
+                        const vandaag = blokken(entity, 'raw_today').length
+                          ? blokken(entity, 'raw_today')
+                          : blokken(st['sensor.slimhuys_zonneplan_prijzen_vandaag'], 'raw_today');
+                        return vandaag
+                          .map((e) => {
+                            const s = new Date(e.start).getTime();
+                            const t = new Date(e.end).getTime();
+                            const p = Number(e.value);
+                            // ApexCharts centreert een kolom op zijn timestamp; plotten op
+                            // het midden van [start, end) laat de balk zijn eigen blok
+                            // dekken in plaats van een half blok ernaast.
+                            return [isFinite(t) ? (s + t) / 2 : s, isNaN(p) ? null : p];
+                          })
+                          .filter((d) => isFinite(d[0]))
+                          .sort((a, b) => a[0] - b[0]);
+                    - entity: sensor.accu_lading
+                      name: Lading
+                      type: line
+                      curve: smooth
+                      stroke_width: 2
+                      color: "var(--ov-ok)"
+                      float_precision: 0
+                      yaxis_id: procent
+                      # Vijf minuten en niet ruw: de laadtoestand komt per procent
+                      # binnen en springt dus toch al trapsgewijs.
+                      group_by:
+                        duration: 5min
+                        func: avg
+                      show:
+                        legend_value: true
 
-  # ------------------------------------------------------- lading vs. prijs
-  # DE KERNVRAAG VAN DEZE PAGINA
-  # MarkeDroid bepaalt wanneer er geladen en ontladen wordt, en er is geen
-  # kaart die vertelt wat het opleverde. Dit is de goedkoopste benadering: de
-  # lading van vandaag over de kwartierprijzen heen. Loopt de lijn omhoog onder
-  # de lage balken en omlaag onder de hoge, dan doet de appliance zijn werk.
-  #
-  # VENSTER = DE DAG en niet "de laatste 24 uur": de prijzen komen uit
-  # `raw_today`, dat precies 00:00-24:00 dekt. Met een schuivend venster van 24
-  # uur zou de linkerhelft van de balken van gisteren moeten komen, en die
-  # bewaart de integratie niet - dan hangt de ladingslijn boven een lege helft.
-  - type: custom:apexcharts-card
-    graph_span: 24h
-    span:
-      start: day
-    now:
-      show: true
-      label: nu
-      color: var(--primary-text-color)
-    header:
-      show: true
-      title: Lading van vandaag over de kwartierprijzen
-    yaxis:
-      - id: kwh_prijs
-        min: ~0
-        max: ~0.4
-        decimals: 2
-        apex_config:
-          title:
-            text: Prijs €/kWh
-      - id: procent
-        opposite: true
-        min: 0
-        max: 100
-        decimals: 0
-        apex_config:
-          title:
-            text: Lading %
-    apex_config:
-      tooltip:
-        x:
-          show: false
-      plotOptions:
-        bar:
-          # 96 balken op een dag; met de standaardbreedte streept dat. Zelfde
-          # keuze als de stroomprijskaart op het Overzicht.
-          columnWidth: 96%
-    series:
-      - entity: sensor.slimhuys_zonneplan_prijzen_vandaag_kwartier
-        name: Prijs
-        stroke_width: 0
-        float_precision: 3
-        type: column
-        color: "#3f5a70"
-        show:
-          legend_value: false
-        yaxis_id: kwh_prijs
-        data_generator: |
-          const blokken = (ent, key) => (ent && ent.attributes && ent.attributes[key]) || [];
-          const st = (typeof hass !== 'undefined' && hass.states) ? hass.states : {};
-          const vandaag = blokken(entity, 'raw_today').length
-            ? blokken(entity, 'raw_today')
-            : blokken(st['sensor.slimhuys_zonneplan_prijzen_vandaag'], 'raw_today');
-          return vandaag
-            .map((e) => {
-              const s = new Date(e.start).getTime();
-              const t = new Date(e.end).getTime();
-              const p = Number(e.value);
-              // ApexCharts centreert een kolom op zijn timestamp; plotten op
-              // het midden van [start, end) laat de balk zijn eigen blok
-              // dekken in plaats van een half blok ernaast.
-              return [isFinite(t) ? (s + t) / 2 : s, isNaN(p) ? null : p];
-            })
-            .filter((d) => isFinite(d[0]))
-            .sort((a, b) => a[0] - b[0]);
-      - entity: sensor.accu_lading
-        name: Lading
-        type: line
-        curve: smooth
-        stroke_width: 2
-        color: "var(--ov-ok)"
-        float_precision: 0
-        yaxis_id: procent
-        # Vijf minuten en niet ruw: de laadtoestand komt per procent binnen en
-        # springt dus toch al trapsgewijs. Ruw uitlezen kost alleen punten.
-        group_by:
-          duration: 5min
-          func: avg
-        show:
-          legend_value: true
+          # ========================== KOLOM 3: NOODSTROOM ==========================
+          # Alle groepen hangen aan de backup-uitgang van de Deye, behalve de
+          # laadpaal. Hoe er wordt vastgesteld dat het huis op de accu draait
+          # (drie lagen), staat in de NOODSTROOM-kop van Battery.yaml. Dit paneel
+          # rekent zelf niets uit: duur, bruikbare kWh en last komen uit
+          # `sensor.noodstroom_resterend`, zodat de pil op het Overzicht precies
+          # hetzelfde getal noemt.
+          #
+          # Vier standen, en de twee storingsstanden hebben een andere oplossing:
+          # bij een stroomstoring wacht je op de netbeheerder, bij een omvormer
+          # die zichzelf losgekoppeld heeft ga je naar de meterkast.
+          - type: custom:button-card
+            template: sv_paneel
+            entity: sensor.noodstroom_resterend
+            triggers_update:
+              - binary_sensor.huis_op_accu
+              - binary_sensor.accu_geinstalleerd
+              - sensor.noodstroom_resterend
+              - sensor.time
+            variables:
+              kaart: noodstroom
+            custom_fields:
+              x: |
+                [[[
+                  var S = window.svKit && window.svKit(states);
+                  if(!S) return '';
+                  var inst = S.st('binary_sensor.accu_geinstalleerd');
+                  var op = S.st('binary_sensor.huis_op_accu');
+                  var actief = inst && inst.state === 'on';
+                  var tijdens = !!op && op.state === 'on';
+                  var storing = tijdens && (op.attributes || {}).oorzaak === 'stroomstoring';
+                  var badge, titel, uitleg;
+                  if(!actief) {
+                    badge = S.pil('grijs', 'nog niet actief'); titel = 'Nog niet actief';
+                    uitleg = 'De omvormer heeft nog nooit netspanning gezien; dit gaat vanzelf aan na de installatie.';
+                  } else if(!op || S.weg(op)) {
+                    badge = S.pil('warn', 'onbekend'); titel = 'Omvormer niet bereikbaar';
+                    uitleg = 'HA weet niet of het net er is.';
+                  } else if(!tijdens) {
+                    badge = S.pil('ok', 'net is er'); titel = 'Het net is er';
+                    uitleg = 'Valt het uit, dan neemt de accu het hele huis over, behalve de laadpaal.';
+                  } else {
+                    // Tijdstip plus hoe lang: om tien uur 's avonds wil je allebei
+                    // weten - wanneer het begon en of je al moet gaan rekenen.
+                    var d = new Date(op.last_changed);
+                    var min = isNaN(d.getTime()) ? null : Math.max(0, Math.round((Date.now() - d.getTime()) / 60000));
+                    var sinds = min === null ? '' : ' · sinds ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2)
+                      + ' (' + (min < 60 ? min + ' min' : Math.floor(min / 60) + ' u ' + (min % 60) + ' min') + ')';
+                    if(storing) {
+                      badge = S.pil('bad', 'stroomstoring'); titel = 'Stroomstoring' + sinds;
+                      uitleg = 'Het huis draait op de accu · de laadpaal ligt stil.';
+                    } else {
+                      // De meter praat nog, dus er ís net. De Deye heeft zichzelf
+                      // losgemaakt - daar is iets aan te doen, en dat moet er staan.
+                      badge = S.pil('warn', 'los van het net'); titel = 'Omvormer los van het net' + sinds;
+                      uitleg = 'De meter heeft wél stroom · kijk naar de groep van de omvormer of zijn netbeveiliging · het huis draait zolang op de accu.';
+                    }
+                  }
 
-  # -------------------------------------------------------------- gezondheid
-  # Temperatuur, gezondheid en meldingen van de omvormer en het BMS, via
-  # Solarman (sinds 4 november weer; daarvoor stuurde MarkeDroid ze niet).
-  - type: vertical-stack
-    cards:
-      - type: custom:button-card
-        template: ov_title
-        variables:
-          title: STAAT VAN DE ACCU
-      - type: custom:button-card
-        template: ov_listrow
-        entity: sensor.accu_temperatuur
-        variables:
-          mdi: mdi:thermometer
-          title: Temperatuur
-        custom_fields:
-          s: |
-            [[[
-              if(!entity || isNaN(Number(entity.state))) return '—';
-              var t = Number(entity.state);
-              var txt = t.toFixed(1).replace('.',',') + ' °C';
-              // LFP laadt niet onder 0 °C en houdt niet van boven 45 °C; binnen
-              // 5-40 °C is er niets om over na te denken.
-              if(t < 5 || t > 40) return '<span style="color:var(--ov-warn)">' + txt + ' · buiten het comfortgebied van de cellen</span>';
-              return txt;
-            ]]]
-      # Wat het BMS over de cellen zegt (attributen van sensor.accu_capaciteit,
-      # Battery.yaml). Een LFP-pakket is na 6.000 cycli op ~80%; onder 90%
-      # is het een gesprek met de installateur waard.
-      - type: custom:button-card
-        template: ov_listrow
-        entity: sensor.accu_capaciteit
-        variables:
-          mdi: mdi:battery-heart-variant
-          title: Gezondheid
-        custom_fields:
-          s: |
-            [[[
-              if(!entity) return '—';
-              var a = entity.attributes || {};
-              var soh = Number(a.gezondheid_procent), cyc = Number(a.cycli);
-              var delen = [];
-              if(a.gezondheid_procent !== null && a.gezondheid_procent !== undefined && !isNaN(soh)){
-                var t = soh.toFixed(1).replace('.',',') + '%';
-                delen.push(soh < 90 ? '<span style="color:var(--ov-warn)">' + t + '</span>' : t);
-              }
-              if(a.cycli !== null && a.cycli !== undefined && !isNaN(cyc))
-                delen.push(cyc.toFixed(0) + ' cycli');
-              return delen.length ? delen.join(' · ') : '—';
-            ]]]
-      # Melding of fout van de omvormer of het BMS (binary_sensor.omvormer_storing).
-      - type: custom:button-card
-        template: ov_listrow
-        entity: binary_sensor.omvormer_storing
-        variables:
-          mdi: mdi:alert-outline
-          title: Meldingen
-        custom_fields:
-          s: |
-            [[[
-              if(!entity || entity.state === 'unavailable' || entity.state === 'unknown')
-                return '<span style="color:var(--ov-ink-55)">omvormer niet bereikbaar</span>';
-              if(entity.state === 'on')
-                return '<span style="color:var(--ov-bad)">' + (entity.attributes.omschrijving || 'probleem') + '</span>';
-              return 'geen';
-            ]]]
-      # WAT MARKEDROID MET DE ACCU DOET
-      # Eén regel: de stand die hij gekozen heeft, en alleen als het iets zegt
-      # de exportbegrenzer erachter. Zonder regie-veld in de berichten (nog
-      # niet uitgerold, zie Battery.yaml) staat er gewoon dat hij praat.
-      - type: custom:button-card
-        template: ov_listrow
-        entity: binary_sensor.markedroid_verbinding
-        triggers_update:
-          - sensor.markedroid_regie
-          - sensor.markedroid_exportbegrenzer
-        variables:
-          mdi: mdi:robot-outline
-          title: MarkeDroid
-        custom_fields:
-          s: |
-            [[[
-              if(!entity) return '—';
-              if(entity.state !== 'on') return '<span style="color:var(--ov-bad)">geen berichten meer van MarkeDroid</span>';
-              var r = states['sensor.markedroid_regie'];
-              var e = states['sensor.markedroid_exportbegrenzer'];
-              var delen = [];
-              delen.push((r && r.state !== 'niet_geleverd' && r.attributes.omschrijving)
-                ? r.attributes.omschrijving : 'verbonden');
-              if(r && r.attributes.flex_w !== null && r.attributes.flex_w !== undefined)
-                delen.push('flex ' + r.attributes.flex_w + ' W');
-              if(e && e.state === 'actief') delen.push('teruglevering dicht');
-              if(e && e.state === 'storing') delen.push('<span style="color:var(--ov-bad)">exportbegrenzer in storing</span>');
-              return delen.join(' · ');
-            ]]]
+                  // Hoe lang nog. Buiten een storing "als het nu uitvalt", tijdens
+                  // een storing "nog te gaan" - zelfde getal, andere vraag.
+                  var ns = S.st('sensor.noodstroom_resterend');
+                  var a = (ns && ns.attributes) || {};
+                  var h = S.num('sensor.noodstroom_resterend');
+                  var duur;
+                  if(!ns || S.weg(ns)) duur = '—';
+                  else if(a.stand === 'laadt_bij') duur = 'zon vult bij';
+                  else if(a.stand === 'geen_last' || h === null) duur = 'geen last';
+                  else {
+                    // Eerst naar hele minuten, dan splitsen: `h % 1` afronden gaf
+                    // bij 5,995 uur "5 uur 60 min".
+                    var m = Math.round(h * 60);
+                    duur = m >= 60 ? Math.floor(m / 60) + ' u' + (m % 60 ? ' ' + (m % 60) + ' min' : '') : m + ' min';
+                  }
+                  var r = [];
+                  var kwh = Number(a.bruikbaar_kwh), w = Number(a.last_w);
+                  if(a.bruikbaar_kwh !== undefined && !isNaN(kwh)) r.push({klik: 'sensor.noodstroom_resterend', naam: 'Bruikbaar', waarde: S.nl(kwh, 1) + ' kWh'});
+                  // `last_w` is wat de accu AFGEEFT: negatief = hij laadt tijdens de
+                  // storing op. Dat stond er eerst als "gaf 800 W" - verkeerde kant op.
+                  if(a.last_w !== undefined && !isNaN(w) && Math.abs(w) >= 50)
+                    r.push({klik: 'sensor.noodstroom_resterend',
+                      naam: a.basis !== 'accu_kwartier' ? 'Huis, laatste uur' : (w > 0 ? 'Accu gaf, kwartier' : 'Zon laadt op'),
+                      waarde: S.nl(Math.abs(w)) + ' W'});
+                  // HET HERSTARTPUNT HOORT ERBIJ ZODRA HET ERTOE DOET: op zijn
+                  // afslagpunt gaat de uitgang pas weer aan op dit niveau - bij een
+                  // grote accu ruim 11 kWh zon. Tijdens een storing is dat het
+                  // verschil tussen "even donker" en "tot morgenmiddag".
+                  if(tijdens && a.stand === 'loopt_leeg' && a.herstart_procent !== undefined)
+                    r.push({klik: 'sensor.noodstroom_resterend', naam: 'Daarna uit tot', waarde: S.esc(a.herstart_procent) + '%', k: 'warn'});
+                  return S.kop('NOODSTROOM', badge, {klik: 'binary_sensor.huis_op_accu'})
+                    + S.groot({klik: 'sensor.noodstroom_resterend', waarde: duur, k: tijdens ? 'warn' : 'info',
+                        sub: tijdens ? 'nog te gaan' : 'als het nu uitvalt'})
+                    + '<div style="font-size:13.5px;font-weight:600;margin-top:10px">' + titel + '</div>'
+                    + S.tekst(uitleg)
+                    + S.rijen(r, 2, 2)
+                    // Staat er zodat niemand bij een storing gaat zoeken waarom de
+                    // auto niet laadt. De reden erbij: "waarom niet?" is de volgende vraag.
+                    + S.voet('De laadpaal hangt er niet aan: auto laden uit de accu is twee keer omzettingsverlies, dus die blijft aan de netkant.');
+                ]]]
+
+      # =================== POP-UPS: LADING, VERMOGEN, TEMPERATUUR ===================
+      # Zelfde opzet als de pop-ups van dashboards/server.yaml: 4 uur ruw, 24 uur
+      # per 10 minuten (vermogen en lading gemiddeld, temperatuur max: een piek
+      # mag niet wegmiddelen). Geopend via sv-kit (`klik: '#accu-…'`).
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#accu-lading"
+        name: Accu · lading
+        icon: mdi:battery-high
+        width_desktop: 760px
+        styles: &popup |
+          .bubble-pop-up, .bubble-pop-up-background {
+            background: var(--ov-popup-bg, var(--primary-background-color)) !important;
+          }
+          .bubble-pop-up {
+            border: 1px solid var(--ov-ink-6) !important;
+            --ha-card-background: var(--ov-panel-bg);
+            --card-background-color: var(--ov-panel-bg);
+          }
+          .bubble-header { background: transparent !important; }
+          .bubble-header .bubble-button-card-container,
+          .bubble-close, .bubble-close-container {
+            background: var(--ov-ink-5) !important;
+            border: 1px solid var(--ov-ink-6) !important;
+            box-shadow: none !important;
+          }
+          .bubble-name, .bubble-header-name { color: var(--primary-text-color) !important; }
+        cards:
+          - type: custom:apexcharts-card
+            graph_span: 4h
+            update_interval: 1min
+            card_mod: &popup_kaart
+              style: |
+                ha-card {
+                  background: var(--ov-panel-bg) !important;
+                  border: 1px solid var(--ov-ink-6) !important;
+                  border-radius: 16px !important;
+                  box-shadow: none !important;
+                  padding: 4px 6px !important;
+                }
+            header: &kop_4u
+              show: true
+              title: Laatste 4 uur
+              show_states: true
+              colorize_states: true
+            all_series_config: &ruw
+              curve: smooth
+              stroke_width: 2
+              float_precision: 0
+              show:
+                legend_value: false
+            yaxis: &as_procent
+              - min: 0
+                max: 100
+                decimals: 0
+                apex_config:
+                  tickAmount: 4
+            apex_config: &popup_apex
+              chart:
+                height: 220
+                toolbar:
+                  show: false
+              grid:
+                borderColor: "var(--ov-ink-6)"
+              legend:
+                show: true
+                position: top
+                horizontalAlign: left
+                fontSize: 11px
+                labels:
+                  colors: "var(--ov-ink-58)"
+                markers:
+                  size: 4
+              tooltip:
+                x:
+                  format: HH:mm
+              xaxis:
+                labels:
+                  datetimeUTC: false
+                  style:
+                    colors: "var(--ov-ink-45)"
+            series: &reeks_lading
+              - entity: sensor.accu_lading
+                name: lading
+                color: "var(--ov-ok)"
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            update_interval: 5min
+            card_mod: *popup_kaart
+            header: &kop_24u
+              show: true
+              title: Laatste 24 uur
+              show_states: false
+            all_series_config: &gem_10min
+              curve: smooth
+              stroke_width: 2
+              float_precision: 0
+              group_by:
+                duration: 10min
+                func: avg
+              show:
+                legend_value: false
+            yaxis: *as_procent
+            apex_config: *popup_apex
+            series: *reeks_lading
+
+      # sensor.accu_vermogen: negatief = ontladen (zie Battery.yaml).
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#accu-vermogen"
+        name: Accu · vermogen
+        icon: mdi:battery-charging
+        width_desktop: 760px
+        styles: *popup
+        cards:
+          - type: custom:apexcharts-card
+            graph_span: 4h
+            update_interval: 1min
+            card_mod: *popup_kaart
+            header: *kop_4u
+            all_series_config: *ruw
+            yaxis: &as_vrij
+              - decimals: 0
+                apex_config:
+                  tickAmount: 4
+            apex_config: &apex_nullijn
+              <<: *popup_apex
+              annotations:
+                yaxis:
+                  - y: 0
+                    borderColor: "var(--ov-ink-25)"
+            series: &reeks_vermogen
+              - entity: sensor.accu_vermogen
+                name: vermogen (− = levert)
+                color: "var(--ov-warn)"
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            update_interval: 5min
+            card_mod: *popup_kaart
+            header: *kop_24u
+            all_series_config: *gem_10min
+            yaxis: *as_vrij
+            apex_config: *apex_nullijn
+            series: *reeks_vermogen
+
+      - type: custom:bubble-card
+        card_type: pop-up
+        hash: "#accu-temp"
+        name: Accu · temperatuur
+        icon: mdi:thermometer
+        width_desktop: 760px
+        styles: *popup
+        cards:
+          - type: custom:apexcharts-card
+            graph_span: 4h
+            update_interval: 1min
+            card_mod: *popup_kaart
+            header: *kop_4u
+            all_series_config: &ruw_1
+              curve: smooth
+              stroke_width: 2
+              float_precision: 1
+              show:
+                legend_value: false
+            yaxis: *as_vrij
+            # Streeplijn op 40° = rand van het comfortgebied van de cellen.
+            apex_config: &apex_temp
+              <<: *popup_apex
+              annotations:
+                yaxis:
+                  - y: 40
+                    borderColor: "var(--ov-warn)"
+                    strokeDashArray: 4
+            series: &reeks_temp
+              - entity: sensor.accu_temperatuur
+                name: accu
+                color: "var(--ov-warn)"
+              - entity: sensor.inverter_temperature
+                name: omvormer
+                color: "var(--ov-info)"
+          - type: custom:apexcharts-card
+            graph_span: 24h
+            update_interval: 5min
+            card_mod: *popup_kaart
+            header: *kop_24u
+            all_series_config: &max_10min
+              curve: smooth
+              stroke_width: 2
+              float_precision: 1
+              group_by:
+                duration: 10min
+                func: max
+              show:
+                legend_value: false
+            yaxis: *as_vrij
+            apex_config: *apex_temp
+            series: *reeks_temp
