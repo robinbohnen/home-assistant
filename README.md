@@ -36,9 +36,9 @@ UI editors happy. Everything is YAML, split per room.
 | `packages/` | Grouped per floor and room, e.g. `0 - Ground Floor/Livingroom/Lights.yaml`. `9 - Other/` holds the house-wide packages: climate, energy, presence, alarm, ventilation, watchdog. |
 | `blueprints/automation/robin/` | Own blueprints. `motion_light.yaml` drives the motion lighting in nine rooms; a room package only supplies the sensor, the lamp and its exceptions. |
 | `custom_templates/` | Jinja macro libraries. `klimaat.jinja` is the single decision table for all sun shading — the one place to change behaviour; `brandweer.jinja` is the single place where the quirks of the PreCom staffing webhook are handled. Note: edits here need a **full restart**, a YAML reload is not enough. |
-| `dashboards/` | Lovelace in YAML mode. `overzicht/` is the wall panel (split per column), plus separate views for Woning, Klimaat, Systeem, Camera's, Kalender and a Nest Hub cast target. `server.yaml` is a dashboard of its own (*Server*: NUC, server rack, NAS, VMs, backups). |
+| `dashboards/` | Lovelace in YAML mode. `overzicht/` is the wall panel (split per column), plus separate views for Kamers, School, Klimaat, Accu, Omvormer, Systeem, Camera's, Kalender and a Nest Hub cast target. Since 7-11-2026 Kamers, School, Klimaat, Accu, Omvormer and Systeem share the look of the Server dashboard (see `docs/dashboard-stijl.md`). `server.yaml` is a dashboard of its own (*Server*: NUC, server rack, NAS, VMs, backups). |
 | `custom_sentences/nl/` | The sentences behind the house's own Assist intents. Matched literally — what isn't in there isn't understood. Needs a **full restart** as well. |
-| `docs/` | Design notes. `klimaatregie.md` explains the five layers of the climate control and why each rule exists; `spraak.md` does the same for the voice satellite. |
+| `docs/` | Design notes. `klimaatregie.md` explains the five layers of the climate control and why each rule exists; `spraak.md` does the same for the voice satellite; `dashboard-stijl.md` is the style guide of the dashboards in Server style. |
 | `tests/` | Offline tests that run without Home Assistant. |
 
 Run the tests before restarting after a climate change:
@@ -90,7 +90,7 @@ because then the browser runs card-mod or kiosk-mode twice.
 of `overzicht_templates.yaml` resolved. button-card puts `pointer-events: none` on a card
 whose tap, hold and double-tap actions are all `none`, and then every `onclick` in its
 HTML (more-info, opening a pop-up) silently does nothing. That broke the Server
-dashboard, the Omvormer page and the `ov_uitlegtabel` template. The test fails on such a
+dashboard, the Omvormer page and the old `ov_uitlegtabel` template (now `sv_uitlegtabel`). The test fails on such a
 card unless it sets `- pointer-events: auto` under `styles: card:` (inline wins over the
 class), or every clickable element sets `pointer-events:auto` itself, as
 `dashboards/home/systeem.yaml` does.
@@ -135,11 +135,56 @@ moment and they always add up; the fallback to the P1 meter when Solarman is sil
 (then a new value only every 5 s, state and attributes held in between), the battery
 hiccup hold, the one-second trigger, and that the 120 s average is gone.
 
-`tests/test_omvormer_pagina.py` runs the NU and IN ORDE? cards of the Omvormer page
-in node: both strings on the solar tile, grid voltage, frequency and inverter
-temperature from the Deye, the inverter alarm line, which source went silent
-(Solarman and/or MarkeDroid), and that no MarkeDroid measurement is left on the page
-(only its control mode, export limiter, flex and connection).
+### Dashboards in Server style (7-11-2026)
+
+Kamers, School, Klimaat, Accu, Omvormer and Systeem look like the Server dashboard: a
+panel view with three columns of panels, each with a small uppercase title and a status
+badge, one large coloured number, tiles and compact two-column rows; temperatures and
+power open a Bubble Card pop-up with the last 4 and 24 hours. The building blocks live in
+`www/sv-kit.js` (loaded through `frontend.extra_module_url` *and* `resources.yaml`, same
+URL; bump `?v=` after a change) and the button-card templates `sv_html` / `sv_paneel`;
+the style guide is `docs/dashboard-stijl.md`. Overzicht, Nest Hub, Kalender and Camera's
+are deliberately left as they were. `tests/test_sv_kit.py` covers the kit (only an entity
+id, `#hash` or `/path` ever becomes an `onclick`; escaping; same markup as server.yaml),
+and `tests/sv_render.py` is the shared helper that runs a panel's JavaScript in node with
+the kit and the templates loaded. Per page:
+
+`tests/test_kamers_pagina.py` covers Kamers: one panel per floor (template
+`kamer_verdieping`, rooms taken from `verdieping` in the KAMERS table of
+`custom_templates/kamers.jinja`, so a new room appears by itself) with a badge per floor
+and three compact lines per room, plus a maintenance panel for unlinked sensors. Tapping
+a room opens its pop-up `#kamer-<slug>` (underscores become hyphens) with every reading
+and the entity that supplied it. Room temperatures deliberately get no 4/24-hour graph
+pop-ups: seventeen hidden graphs would fire history queries on every page load. The test
+checks that every floor has a panel and every room a pop-up, the badge and colouring
+rules, the behaviour without `sensor.kamers`, and escaping.
+
+`tests/test_klimaat_pagina.py` and `tests/test_school_pagina.py` cover Klimaat and School.
+Klimaat: regime and switches, the zones (advice, reason, blocking, actual position), one
+panel per air conditioner, Maxi's room air, and sun and outside; pop-ups hold the 4/24-hour
+graphs, every `input_number` (`#klimaat-instellingen`) and the per-zone manual flags
+(`#klimaat-uitzonderingen`). The test checks that every entity of the old view is still
+shown and still controllable. School keeps one block per child (`school/logan.yaml`)
+next to a shared column; rosters, homework, grades and absences are still rendered by the
+macros in `custom_templates/school.jinja` (tested by `tests/test_school.py`), now inside
+Server-style panels, and the page test checks that every macro, entity, calendar and
+visibility condition survived.
+
+`tests/test_accu_pagina.py` and `tests/test_omvormer_pagina.py` cover Accu and Omvormer
+(both read-only). Accu shows the charge large in the colour of its direction, the state of
+the cells, today's charge over the quarter-hour prices and the backup-power estimate.
+Omvormer shows NU and IN ORDE? in one panel (both strings on the solar tile, grid voltage,
+frequency and inverter temperature from the Deye, the alarm line, which source went
+silent), MarkeDroid's decisions, the phases, and the raw Solarman values in two-column
+tables (template `sv_uitlegtabel`). No MarkeDroid measurement is left on the page. The
+tests check every pop-up hash exists with matching 4 h and 24 h series and, with
+`/tmp/states.json` present, that every entity used exists.
+
+`tests/test_systeem_pagina.py` covers Systeem: STORINGEN (unavailable entities in four
+buckets; only faults count in the badge, grouped per device, "since restart" correction via
+`sensor.home_assistant_gestart`), BATTERIJEN (nearly empty and silent per device),
+WAAKHOND (critical sensors and backup age) and MATTER (oldest report first). Device rows
+link to the device page, loose entities to more-info; names from the registry are escaped.
 
 `tests/test_accu_stroommeting.py` checks `binary_sensor.accu_stroommeting_verdacht`
 and the notification behind it (since 29-10-2026): MarkeDroid is on `eigen_verbruik`,

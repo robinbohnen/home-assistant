@@ -48,7 +48,8 @@ def test_oude_binary_sensor_nergens_meer():
     for map_, mappen, bestanden in os.walk(CONFIG):
         mappen[:] = [m for m in mappen if not m.startswith(".") and m != "tests"]
         for b in bestanden:
-            if b.endswith((".yaml", ".jinja", ".md")):
+            # README.md legt de overstap uit en noemt de oude id dus bewust.
+            if b.endswith((".yaml", ".jinja", ".md")) and b != "README.md":
                 pad = os.path.join(map_, b)
                 with open(pad, encoding="utf-8") as f:
                     if OUD in f.read():

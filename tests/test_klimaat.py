@@ -1241,6 +1241,12 @@ if naamloos or dubbel:
         print(f"FAIL  dubbele naam op de Klimaat-weergave: {f}")
     FOUTEN.extend([f"rij zonder naam: {f}" for f in naamloos]
                   + [f"dubbele naam: {f}" for f in dubbel])
+elif not kaarten:
+    # Sinds 7-11-2026 is de Klimaat-weergave in Server-stijl en heeft hij geen
+    # entities-kaarten meer: deze controle heeft dan niets te doen. De namen en
+    # de volledigheid van de zones bewaakt tests/test_klimaat_pagina.py.
+    print(f"SKIP  {'elke rij heeft een eigen, unieke naam':52} "
+          f"(geen entities-kaarten meer, zie test_klimaat_pagina.py)")
 else:
     rijen = sum(len(k["rijen"]) for k in kaarten)
     print(f"PASS  {'elke rij heeft een eigen, unieke naam':52} "
