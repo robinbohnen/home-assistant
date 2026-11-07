@@ -729,7 +729,10 @@ kamer_verdieping:
   custom_fields:
     x: |
       [[[
-        var S = window.svKit && window.svKit(states);
+        // Zelf laden als de module er (nog) niet is, dan opnieuw tekenen;
+        // zie docs/dashboard-stijl.md ("Laden").
+        var S = window.svKit ? window.svKit(states) : null;
+        if(!S){ var svEl = this; (window.svKitLaden = window.svKitLaden || import('/local/sv-kit.js?v=1')).then(function(){ if(svEl && svEl.requestUpdate) svEl.requestUpdate(); }); }
         if(!S) return '';
         var bron = states['sensor.kamers'];
         var L = (bron && bron.attributes && bron.attributes.kamers) || [];
@@ -819,7 +822,10 @@ kamer_detail:
   custom_fields:
     x: |
       [[[
-        var S = window.svKit && window.svKit(states);
+        // Zelf laden als de module er (nog) niet is, dan opnieuw tekenen;
+        // zie docs/dashboard-stijl.md ("Laden").
+        var S = window.svKit ? window.svKit(states) : null;
+        if(!S){ var svEl = this; (window.svKitLaden = window.svKitLaden || import('/local/sv-kit.js?v=1')).then(function(){ if(svEl && svEl.requestUpdate) svEl.requestUpdate(); }); }
         if(!S) return '';
         var bron = states['sensor.kamers'];
         var L = (bron && bron.attributes && bron.attributes.kamers) || [];
@@ -877,7 +883,10 @@ kamer_onderhoud:
   custom_fields:
     x: |
       [[[
-        var S = window.svKit && window.svKit(states);
+        // Zelf laden als de module er (nog) niet is, dan opnieuw tekenen;
+        // zie docs/dashboard-stijl.md ("Laden").
+        var S = window.svKit ? window.svKit(states) : null;
+        if(!S){ var svEl = this; (window.svKitLaden = window.svKitLaden || import('/local/sv-kit.js?v=1')).then(function(){ if(svEl && svEl.requestUpdate) svEl.requestUpdate(); }); }
         if(!S) return '';
         var s = states['sensor.kamers_niet_gekoppeld'];
         if(!s) return S.kop('ONDERHOUD', S.pil('warn', 'geen data'))
@@ -901,7 +910,10 @@ kamer_onderhoud_lijst:
   custom_fields:
     x: |
       [[[
-        var S = window.svKit && window.svKit(states);
+        // Zelf laden als de module er (nog) niet is, dan opnieuw tekenen;
+        // zie docs/dashboard-stijl.md ("Laden").
+        var S = window.svKit ? window.svKit(states) : null;
+        if(!S){ var svEl = this; (window.svKitLaden = window.svKitLaden || import('/local/sv-kit.js?v=1')).then(function(){ if(svEl && svEl.requestUpdate) svEl.requestUpdate(); }); }
         if(!S) return '';
         var s = states['sensor.kamers_niet_gekoppeld'];
         var L = s && s.attributes ? (s.attributes.sensoren || []) : [];
@@ -974,7 +986,10 @@ sv_uitlegtabel:
   custom_fields:
     x: |
       [[[
-        var S = window.svKit && window.svKit(states);
+        // Zelf laden als de module er (nog) niet is, dan opnieuw tekenen;
+        // zie docs/dashboard-stijl.md ("Laden").
+        var S = window.svKit ? window.svKit(states) : null;
+        if(!S){ var svEl = this; (window.svKitLaden = window.svKitLaden || import('/local/sv-kit.js?v=1')).then(function(){ if(svEl && svEl.requestUpdate) svEl.requestUpdate(); }); }
         if(!S) return '';
         var grijs = function(t){ return '<span style="color:var(--ov-ink-40);font-weight:400">' + t + '</span>'; };
         var weg = 0, fout = 0;
@@ -1043,8 +1058,12 @@ sv_uitlegtabel:
 # De HTML komt uit window.svKit (www/sv-kit.js). Zet in de kaart zelf:
 #   custom_fields:
 #     x: |
-#       [[[ var S = window.svKit && window.svKit(states); if(!S) return '';
+#       [[[ var S = window.svKit ? window.svKit(states) : null;
+#           if(!S){ var svEl = this; (window.svKitLaden = window.svKitLaden || import('/local/sv-kit.js?v=1')).then(function(){ if(svEl && svEl.requestUpdate) svEl.requestUpdate(); }); }
+#           if(!S) return '';
 #           return S.kop('TITEL', S.pil('ok', 'in orde')) + ...; ]]]
+# De tweede regel is NIET optioneel: zonder hem bleef elk paneel leeg zolang
+# HA na het toevoegen van sv-kit niet herstart was (7-11-2026).
 #
 # pointer-events: auto MOET blijven: met tap_action none zet button-card
 # `pointer-events: none` op de kaart en doet geen enkele onclick in de HTML

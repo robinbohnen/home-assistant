@@ -78,6 +78,28 @@ def test_geladen_voor_lovelace():
     assert len(kit) == 1 and kit[0] in res
 
 
+def test_elke_kaart_laadt_de_kit_zelf():
+    # Zonder herstart van HA zijn extra_module_url en resources nog oud en is
+    # window.svKit er niet: dan moet de kaart de module zelf laden (7-11-2026),
+    # met precies de URL uit extra_module_url (anders twee keer uitgevoerd).
+    import glob
+    import re
+    extra = laad(os.path.join(CONFIG, "configuration.yaml"))["frontend"]["extra_module_url"]
+    url = next(u for u in extra if u.startswith("/local/sv-kit.js"))
+    kaarten = 0
+    for pad in glob.glob(os.path.join(CONFIG, "dashboards", "**", "*.yaml"), recursive=True):
+        with open(pad, encoding="utf-8") as f:
+            tekst = f.read()
+        code = [r for r in tekst.splitlines() if not r.lstrip().startswith("#")]
+        gebruik = sum("window.svKit(states)" in r for r in code)
+        laden = [r for r in code if "import(" in r and "sv-kit" in r]
+        kaarten += gebruik
+        assert len(laden) == gebruik, f"{pad}: {gebruik} kaarten met svKit, {len(laden)} met de lader"
+        for r in laden:
+            assert re.search(r"import\('([^']+)'\)", r).group(1) == url, f"{pad}: andere URL dan extra_module_url"
+    assert kaarten > 20
+
+
 def test_templates():
     for naam in ("sv_html", "sv_paneel"):
         stijl = {kk: v for d in TPL[naam]["styles"]["card"] for kk, v in d.items()}

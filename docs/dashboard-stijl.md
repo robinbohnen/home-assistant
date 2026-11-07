@@ -40,7 +40,8 @@ temperatuur/vermogen naar een pop-up met een grafiek over 4 en 24 uur.
 
 ```js
 [[[
-  var S = window.svKit && window.svKit(states);
+  var S = window.svKit ? window.svKit(states) : null;
+  if(!S){ var svEl = this; (window.svKitLaden = window.svKitLaden || import('/local/sv-kit.js?v=1')).then(function(){ if(svEl && svEl.requestUpdate) svEl.requestUpdate(); }); }
   if(!S) return '';
   var t = S.num('sensor.binnen_temperatuur');
   var k = S.drempel(t, 25, 28);
@@ -51,6 +52,16 @@ temperatuur/vermogen naar een pop-up met een grafiek over 4 en 24 uur.
     + S.rijen([{klik: 'sensor.x', naam: 'Iets', waarde: '12'}], 2);
 ]]]
 ```
+
+### Laden
+
+`sv-kit.js` staat in `frontend.extra_module_url` en in `resources.yaml`, maar beide
+lijsten worden pas bij een **herstart** van Home Assistant opnieuw gelezen. Zonder de
+tweede regel hierboven bleef daarom elk paneel leeg (7-11-2026). Die regel laadt de
+module zelf met `import()` als hij ontbreekt en tekent de kaart daarna opnieuw (`this` is
+in een button-card-template de kaart zelf). Gebruik exact dezelfde URL als in
+`extra_module_url` (inclusief `?v=`), anders voert de browser de module twee keer uit;
+`tests/test_sv_kit.py` controleert dat in elk dashboard.
 
 | Bouwsteen | Wat |
 |---|---|
