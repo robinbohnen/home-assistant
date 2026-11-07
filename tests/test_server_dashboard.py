@@ -520,6 +520,18 @@ def test_popups_bestaan():
     assert "sensor.proxmox_nuc_intel_nvme_temperatuur" in reeksen(pp["#temp-nuc"])
 
 
+def test_klikken_komt_aan():
+    # button-card: kaart zonder eigen actie = class `disabled` = pointer-events: none,
+    # en dan doet geen enkele onclick in de HTML iets. Elke HTML-kaart met onclicks
+    # moet dat dus zelf weer aanzetten.
+    for k in ALLE:
+        x = (k.get("custom_fields") or {}).get("x", "")
+        if "onclick" not in x:
+            continue
+        stijl = {kk: v for d in (k.get("styles") or {}).get("card", []) for kk, v in d.items()}
+        assert stijl.get("pointer-events") == "auto", (k.get("variables") or {}).get("kaart")
+
+
 def test_temperaturen_klikbaar():
     # NUC: CPU- en NVMe-tegel openen de pop-up, belasting en geheugen nog more-info.
     h = render("nuc", NUC)

@@ -191,7 +191,10 @@ missing sensors, and guards the compact layout (fans inside the rack panel, low 
 detail rows in two columns). Every temperature on the page (rack card, NUC CPU/NVMe tiles, NAS CPU tile,
 each drive bay) opens a Bubble Card pop-up (`#temp-rack`, `#temp-nuc`, `#temp-nas`) with
 that group over the last 4 hours (raw) and 24 hours (max per 10 min); the test checks that
-every hash has a pop-up and, against a live dump, that every NAS drive is in it. It needs `node` next to `pyyaml` and `jinja2`.
+every hash has a pop-up and, against a live dump, that every NAS drive is in it.
+Note: button-card sets `pointer-events: none` on a card without an action of its own
+(`tap_action: none`), which silently kills every `onclick` in its HTML; the HTML panels
+therefore set `pointer-events: auto` on the card, and a test guards that. It needs `node` next to `pyyaml` and `jinja2`.
 
 ## <a name="hubs">Hubs</a>
 
