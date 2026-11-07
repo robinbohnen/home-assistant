@@ -20,7 +20,10 @@ Bewaakt wordt:
 7. het hele dashboard tegen een live /api/states-dump als die in
    /tmp/states.json staat (overgeslagen als het bestand er niet is);
 8. (7 november 2026) de compacte opbouw die het dashboard op één scherm houdt:
-   Ventileren in het rackpaneel, lage grafieken, detailregels in twee kolommen.
+   Ventileren in het rackpaneel, lage grafieken, detailregels in twee kolommen;
+9. (7 november 2026) elke temperatuur opent een pop-up met grafieken over 4 en
+   24 uur: elke gebruikte hash heeft een pop-up, elke pop-up dezelfde reeksen
+   in beide grafieken, en (live) elke schijf van de NAS staat erin.
 """
 import json
 import os
@@ -477,8 +480,8 @@ def test_past_op_een_scherm():
     rackpaneel = next(p for p in panelen if "rack" in namen(p))
     assert "ventileren" in namen(rackpaneel)
     assert len(panelen) == 5, "rack+ventileren, NAS, NUC, gasten, back-ups"
-    # Grafieken laag genoeg.
-    for g in (k for k in ALLE if k.get("type") == "custom:apexcharts-card"):
+    # Grafieken op de panelen laag genoeg (die in de pop-ups mogen hoger).
+    for g in (k for k in kaarten(DOC["views"][0]["cards"][0]["cards"][0]) if k.get("type") == "custom:apexcharts-card"):
         assert g["apex_config"]["chart"]["height"] <= 140
     # Detailregels in twee kolommen; balken van de NUC over de volle breedte.
     for naam in ("nas", "nuc_details"):
@@ -486,6 +489,46 @@ def test_past_op_een_scherm():
     h = render("nuc_details", {"sensor.node_intel_disk_used": st(33), "sensor.node_intel_disk_total": st(101),
                                "sensor.node_intel_swap_used": st(53)})
     assert h.count("grid-column:1/-1") == 1
+
+
+# ------------------------------------------------- 9. temperatuur-pop-ups
+def popups():
+    return {k["hash"]: k for k in ALLE if k.get("type") == "custom:bubble-card" and k.get("card_type") == "pop-up"}
+
+
+def reeksen(popup):
+    return [s["entity"] for s in popup["cards"][0]["series"]]
+
+
+def test_popups_bestaan():
+    pp = popups()
+    assert set(pp) == {"#temp-rack", "#temp-nuc", "#temp-nas"}
+    for h, p in pp.items():
+        # De hash gaat letterlijk een onclick in: alleen veilige tekens.
+        assert re.fullmatch(r"#[a-z-]+", h), h
+        spans = [c["graph_span"] for c in p["cards"]]
+        assert spans == ["4h", "24h"], h
+        assert p["cards"][0]["series"] == p["cards"][1]["series"], f"{h}: 4 en 24 uur tonen verschillende reeksen"
+        assert all("temperat" in e for e in reeksen(p)), h
+        # 24 uur: max per 10 min, een piek mag niet wegmiddelen.
+        assert p["cards"][1]["all_series_config"]["group_by"]["func"] == "max"
+    # Elke verwijzing vanaf een paneel heeft een pop-up.
+    assert kaart("rack")["tap_action"] == {"action": "navigate", "navigation_path": "#temp-rack"}
+    assert kaart("nuc")["variables"]["grafiek"] in pp
+    assert kaart("nas")["variables"]["grafiek"] in pp
+    assert "sensor.garage_serverrack_temperatuur_temperature" in reeksen(pp["#temp-rack"])
+    assert "sensor.proxmox_nuc_intel_nvme_temperatuur" in reeksen(pp["#temp-nuc"])
+
+
+def test_temperaturen_klikbaar():
+    # NUC: CPU- en NVMe-tegel openen de pop-up, belasting en geheugen nog more-info.
+    h = render("nuc", NUC)
+    assert h.count("'#temp-nuc'") == 2 and "location-changed" in h
+    assert "entityId:'sensor.node_intel_memory_used_percentage'" in h
+    # NAS: CPU-tegel en elk gevuld schijfvak (4), lege vakken niet.
+    h = render("nas", nas_states())
+    assert h.count("'#temp-nas'") == 1 + 4
+    assert "entityId:'" + U + "memory_usage'" in h
 
 
 def test_live_states():
@@ -498,6 +541,13 @@ def test_live_states():
     for naam in ("rack", "ventileren", "nas", "nuc", "nuc_details", "gasten", "backups"):
         h = render(naam, states)
         assert h and "undefined" not in h and "NaN" not in h, naam
+    # Pop-ups: elke reeks bestaat, en elke schijf van de NAS staat erin.
+    pp = popups()
+    for h, p in pp.items():
+        for e in reeksen(p):
+            assert e in states, f"{h}: {e} bestaat niet"
+    schijven = {e for e in states if re.fullmatch(re.escape(U) + r"hdd_\d+_temperature", e)}
+    assert schijven and schijven <= set(reeksen(pp["#temp-nas"])), "nieuwe schijf: zet hem bij #temp-nas"
 
 
 if __name__ == "__main__":

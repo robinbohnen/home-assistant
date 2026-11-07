@@ -22,6 +22,11 @@
 # twee kolommen (de balken van NUC over de volle breedte). Wie iets toevoegt:
 # kolom 1 is de langste, houd die onder ~950 px.
 #
+# TEMPERATUREN ZIJN KLIKBAAR (07-11-2026): rackkaart, NUC-tegels CPU/NVMe,
+# NAS-tegel CPU en elk schijfvak openen een Bubble Card-pop-up (#temp-rack,
+# #temp-nuc, #temp-nas, onderaan dit bestand) met de groep over 4 en 24 uur.
+# De andere tegels en regels openen nog gewoon more-info.
+#
 # BRONNEN
 #   sensor.proxmox_nuc_intel_*   MQTT van de host zelf (packages/9 - Other/Proxmox NUC.yaml)
 #   sensor.node_intel_*          Proxmox VE-integratie (UI), de host
@@ -74,7 +79,9 @@ views:
             #root {
               /* Kleurtokens komen uit www/ov-tokens.js, zie overzicht.yaml. */
               --ov-panel-border: 1px solid var(--ov-ink-6);
-              gap: 12px !important;
+              /* 0: na de kolommen volgen alleen de (verborgen) pop-ups; een gap
+                 zou onderaan ruimte maken en het scherm laten scrollen. */
+              gap: 0 !important;
               min-height: calc(100vh - 8px) !important;
               margin: 0 !important;
               padding: 12px 16px !important;
@@ -119,8 +126,10 @@ views:
                           show_icon: false
                           show_name: false
                           show_state: false
+                          # Tik = pop-up met rack en garage over 4 en 24 uur.
                           tap_action:
-                            action: more-info
+                            action: navigate
+                            navigation_path: "#temp-rack"
                           triggers_update:
                             - sensor.garage_serverrack_temperatuur_temperature
                             - sensor.garage_serverrack_temperatuur_humidity
@@ -418,6 +427,7 @@ views:
                         - sensor.time
                       variables:
                         kaart: nas
+                        grafiek: "#temp-nas"
                         p: sensor.garage_unas_garage_
                         vakken: 8
                         # Drempels (°C). HDD: fabrikanten noemen 55-60 als max,
@@ -443,8 +453,12 @@ views:
                               var u = String((states[id].attributes || {}).unit_of_measurement || 'TB');
                               return n * ({GB: 0.001, GiB: 0.001073741824, TiB: 1.099511627776, PB: 1000}[u] || 1);
                             };
+                            // Temperatuur: open de pop-up met de grafiek (4 en 24 uur), zie onderaan het
+                            // bestand. Zo navigeert HA zelf ook; Bubble Card luistert naar location-changed.
+                            var graf = function(hash){ return 'history.pushState(null,\'\',\'' + hash + '\');window.dispatchEvent(new CustomEvent(\'location-changed\',{detail:{replace:false}}))'; };
+                            // id met # = een pop-up (temperatuur), anders more-info van die entiteit.
                             var tegel = function(id, label, waarde, k, sub){
-                              return '<div onclick="' + info(id) + '" style="cursor:pointer;flex:1 1 76px;min-width:0;background:var(--ov-ink-4);border-radius:12px;padding:6px 11px">'
+                              return '<div onclick="' + (id.charAt(0) === '#' ? graf(id) : info(id)) + '" style="cursor:pointer;flex:1 1 76px;min-width:0;background:var(--ov-ink-4);border-radius:12px;padding:6px 11px">'
                                 + '<div style="font-size:10.5px;font-weight:700;letter-spacing:1px;color:var(--ov-ink-55)">' + label + '</div>'
                                 + '<div style="font-size:20px;font-weight:700;line-height:1.2;margin-top:1px;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--ov-' + k + ')">' + waarde + '</div>'
                                 + '<div style="font-size:11.5px;color:var(--ov-ink-58);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + sub + '</div></div>';
@@ -495,7 +509,7 @@ views:
                             if(ct !== null && ct >= V.cpu_warm) problemen.push({k: ck, t: 'CPU ' + nl(ct) + '°'});
                             var mk = mp === null ? 'ink-35' : (mp >= 95 ? 'bad' : (mp >= 85 ? 'warn' : 'ok'));
                             var tegels = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">'
-                              + tegel(P + 'cpu_temperature', 'CPU', ct === null ? '—' : nl(ct) + '°', ck, cu === null ? 'temperatuur' : nl(cu) + '% belast')
+                              + tegel(V.grafiek, 'CPU', ct === null ? '—' : nl(ct) + '°', ck, cu === null ? 'temperatuur' : nl(cu) + '% belast')
                               + tegel(P + 'memory_usage', 'GEHEUGEN', mp === null ? '—' : nl(mp) + '%', mk, mu === null || !mt ? 'in gebruik' : nl(mu, 1) + ' van ' + nl(mt) + ' GB')
                               + tegel(P + 'fan_speed_percent', 'VENTILATOR', fp === null ? '—' : nl(fp) + '%', fp === null ? 'ink-35' : 'ink-80',
                                   weg(fm) ? 'snelheid' : (fm.state === 'UNAS Managed' ? 'automatisch' : esc(fm.state)))
@@ -520,7 +534,7 @@ views:
                             var vak = function(v, i){
                               var basis = 'border-radius:9px;padding:5px 0 4px 0;text-align:center;min-width:0;';
                               if(!v) return '<div style="' + basis + 'border:1px dashed var(--ov-ink-12);color:var(--ov-ink-25);font-size:10.5px">' + (i + 1) + '</div>';
-                              return '<div title="' + v.titel + '" onclick="' + info(v.id) + '" style="' + basis + 'cursor:pointer;background:var(--ov-ink-6)">'
+                              return '<div title="' + v.titel + '" onclick="' + graf(V.grafiek) + '" style="' + basis + 'cursor:pointer;background:var(--ov-ink-6)">'
                                 + '<div style="width:6px;height:6px;border-radius:50%;margin:0 auto 3px auto;background:var(--ov-' + v.led + ')' + (v.led === 'ok' ? '' : ';box-shadow:0 0 6px var(--ov-' + v.led + ')') + '"></div>'
                                 + '<div style="font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:' + (v.tk ? 'var(--ov-' + v.tk + ')' : 'var(--primary-text-color)') + '">' + (v.t === null ? '—' : nl(v.t) + '°') + '</div>'
                                 + '<div style="font-size:10px;color:var(--ov-ink-45);white-space:nowrap">' + (v.gr === null ? v.i : nl(v.gr) + ' TB') + '</div></div>';
@@ -600,6 +614,7 @@ views:
                         - sensor.node_intel_status
                       variables:
                         kaart: nuc
+                        grafiek: "#temp-nuc"
                       styles: *html_kaart
                       custom_fields:
                         x: |
@@ -610,8 +625,12 @@ views:
                             var nl = function(n, d){ d = d || 0; return n.toLocaleString('nl-NL', {minimumFractionDigits: d, maximumFractionDigits: d}); };
                             var pil = function(k, t){ return '<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;white-space:nowrap;color:var(--ov-' + k + ');background:var(--ov-' + k + '-15)">' + t + '</span>'; };
                             var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + id + '\'},bubbles:true,composed:true}))'; };
+                            // Temperatuur: open de pop-up met de grafiek (4 en 24 uur), zie onderaan het
+                            // bestand. Zo navigeert HA zelf ook; Bubble Card luistert naar location-changed.
+                            var graf = function(hash){ return 'history.pushState(null,\'\',\'' + hash + '\');window.dispatchEvent(new CustomEvent(\'location-changed\',{detail:{replace:false}}))'; };
+                            // id met # = een pop-up (temperatuur), anders more-info van die entiteit.
                             var tegel = function(id, label, waarde, k, sub){
-                              return '<div onclick="' + info(id) + '" style="cursor:pointer;flex:1 1 76px;min-width:0;background:var(--ov-ink-4);border-radius:12px;padding:6px 11px">'
+                              return '<div onclick="' + (id.charAt(0) === '#' ? graf(id) : info(id)) + '" style="cursor:pointer;flex:1 1 76px;min-width:0;background:var(--ov-ink-4);border-radius:12px;padding:6px 11px">'
                                 + '<div style="font-size:10.5px;font-weight:700;letter-spacing:1px;color:var(--ov-ink-55)">' + label + '</div>'
                                 + '<div style="font-size:20px;font-weight:700;line-height:1.2;margin-top:1px;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--ov-' + k + ')">' + waarde + '</div>'
                                 + '<div style="font-size:11.5px;color:var(--ov-ink-58);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + sub + '</div></div>';
@@ -636,8 +655,8 @@ views:
                             return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 0 6px 0">'
                                 + '<span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">NUC · PROXMOX</span>' + badge + '</div>'
                               + '<div style="display:flex;flex-wrap:wrap;gap:8px">'
-                                + tegel('sensor.proxmox_nuc_intel_cpu_temperatuur', 'CPU', cpu === null ? '—' : nl(cpu) + '°', ck, watt === null ? 'temperatuur' : nl(watt) + ' W')
-                                + tegel('sensor.proxmox_nuc_intel_nvme_temperatuur', 'NVME', nvme === null ? '—' : nl(nvme) + '°', nk, 'temperatuur')
+                                + tegel(variables.grafiek, 'CPU', cpu === null ? '—' : nl(cpu) + '°', ck, watt === null ? 'temperatuur' : nl(watt) + ' W')
+                                + tegel(variables.grafiek, 'NVME', nvme === null ? '—' : nl(nvme) + '°', nk, 'temperatuur')
                                 + tegel('sensor.node_intel_cpu_used', 'BELASTING', last === null ? '—' : nl(last) + '%', lk, 'CPU')
                                 + tegel('sensor.node_intel_memory_used_percentage', 'GEHEUGEN', mem === null ? '—' : nl(mem) + '%', mk, 'in gebruik')
                               + '</div>';
@@ -948,3 +967,214 @@ views:
                                 + (slecht ? pil('bad', slecht === 1 ? '1 probleem' : slecht + ' problemen') : pil('ok', 'bij')) + '</div>'
                               + r.join('') + volgende;
                           ]]]
+
+          # ====================== POP-UPS: TEMPERATUUR ======================
+          # Tik op een temperatuur (rackkaart, NUC-tegels CPU/NVMe, NAS-tegel
+          # CPU, een schijfvak) = een Bubble Card-pop-up met dezelfde groep
+          # sensoren over de laatste 4 uur (ruwe metingen, elke tik zichtbaar)
+          # en de laatste 24 uur (max per 10 min, zoals de grafiek op het
+          # paneel: een piek mag niet wegmiddelen). Per groep één pop-up, dus
+          # een tik op schijf 3 toont alle schijven: dan zie je meteen of het
+          # die ene schijf is of het hele rack.
+          #
+          # Openen gaat via de hash (#temp-rack, #temp-nuc, #temp-nas); de
+          # HTML-panelen doen dat met history.pushState + location-changed
+          # (zie `graf` in hun JS), de rackkaart met een navigate-actie.
+          #
+          # NIEUWE SCHIJF in de NAS: één regel bij de reeksen van #temp-nas
+          # (de test controleert dit tegen een live states-dump).
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: "#temp-rack"
+            name: Serverrack · temperatuur
+            icon: mdi:thermometer
+            width_desktop: 760px
+            styles: &popup |
+              .bubble-pop-up, .bubble-pop-up-background {
+                background: var(--ov-popup-bg, var(--primary-background-color)) !important;
+              }
+              .bubble-pop-up {
+                border: 1px solid var(--ov-ink-6) !important;
+                --ha-card-background: var(--ov-panel-bg);
+                --card-background-color: var(--ov-panel-bg);
+              }
+              .bubble-header { background: transparent !important; }
+              .bubble-header .bubble-button-card-container,
+              .bubble-close, .bubble-close-container {
+                background: var(--ov-ink-5) !important;
+                border: 1px solid var(--ov-ink-6) !important;
+                box-shadow: none !important;
+              }
+              .bubble-name, .bubble-header-name { color: var(--primary-text-color) !important; }
+            cards:
+              - type: custom:apexcharts-card
+                graph_span: 4h
+                update_interval: 1min
+                card_mod: &popup_kaart
+                  style: |
+                    ha-card {
+                      background: var(--ov-panel-bg) !important;
+                      border: 1px solid var(--ov-ink-6) !important;
+                      border-radius: 16px !important;
+                      box-shadow: none !important;
+                      padding: 4px 6px !important;
+                    }
+                header: &kop_4u
+                  show: true
+                  title: Laatste 4 uur
+                  show_states: true
+                  colorize_states: true
+                all_series_config: &ruw
+                  curve: smooth
+                  stroke_width: 2
+                  float_precision: 1
+                  show:
+                    legend_value: false
+                yaxis: &as_rack
+                  - decimals: 0
+                    apex_config:
+                      tickAmount: 4
+                apex_config: &popup_apex
+                  chart:
+                    height: 220
+                    toolbar:
+                      show: false
+                  grid:
+                    borderColor: "var(--ov-ink-6)"
+                  legend:
+                    show: true
+                    position: top
+                    horizontalAlign: left
+                    fontSize: 11px
+                    labels:
+                      colors: "var(--ov-ink-58)"
+                    markers:
+                      size: 4
+                  tooltip:
+                    x:
+                      format: HH:mm
+                  xaxis:
+                    labels:
+                      datetimeUTC: false
+                      style:
+                        colors: "var(--ov-ink-45)"
+                series: &reeks_rack
+                  - entity: sensor.garage_serverrack_temperatuur_temperature
+                    name: rack
+                    color: "var(--ov-warn)"
+                  - entity: sensor.garage_garage_temperatuur_temperatuur
+                    name: garage
+                    color: "var(--ov-info)"
+              - type: custom:apexcharts-card
+                graph_span: 24h
+                update_interval: 5min
+                card_mod: *popup_kaart
+                header: &kop_24u
+                  show: true
+                  title: Laatste 24 uur
+                  show_states: false
+                all_series_config: &per_10min
+                  curve: smooth
+                  stroke_width: 2
+                  float_precision: 1
+                  group_by:
+                    duration: 10min
+                    func: max
+                  show:
+                    legend_value: false
+                yaxis: *as_rack
+                apex_config: *popup_apex
+                series: *reeks_rack
+
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: "#temp-nuc"
+            name: NUC · temperatuur
+            icon: mdi:thermometer
+            width_desktop: 760px
+            styles: *popup
+            cards:
+              - type: custom:apexcharts-card
+                graph_span: 4h
+                update_interval: 1min
+                card_mod: *popup_kaart
+                header: *kop_4u
+                all_series_config: *ruw
+                yaxis: &as_nuc
+                  - decimals: 0
+                    min: ~40
+                    max: ~95
+                    apex_config:
+                      tickAmount: 4
+                # Streeplijn op 85° = de meldingsgrens (Proxmox NUC.yaml).
+                apex_config: &apex_nuc
+                  <<: *popup_apex
+                  annotations:
+                    yaxis:
+                      - y: 85
+                        borderColor: "var(--ov-warn)"
+                        strokeDashArray: 4
+                series: &reeks_nuc
+                  - entity: sensor.proxmox_nuc_intel_cpu_temperatuur
+                    name: CPU
+                    color: "var(--ov-warn)"
+                  - entity: sensor.proxmox_nuc_intel_nvme_temperatuur
+                    name: NVMe
+                    color: "var(--ov-info)"
+              - type: custom:apexcharts-card
+                graph_span: 24h
+                update_interval: 5min
+                card_mod: *popup_kaart
+                header: *kop_24u
+                all_series_config: *per_10min
+                yaxis: *as_nuc
+                apex_config: *apex_nuc
+                series: *reeks_nuc
+
+          - type: custom:bubble-card
+            card_type: pop-up
+            hash: "#temp-nas"
+            name: NAS · temperatuur
+            icon: mdi:thermometer
+            width_desktop: 760px
+            styles: *popup
+            cards:
+              - type: custom:apexcharts-card
+                graph_span: 4h
+                update_interval: 1min
+                card_mod: *popup_kaart
+                header: *kop_4u
+                all_series_config: *ruw
+                yaxis: &as_nas
+                  - decimals: 0
+                    apex_config:
+                      tickAmount: 4
+                # Streeplijn op 45° = schijf warm (hdd_warm in het NAS-paneel).
+                apex_config: &apex_nas
+                  <<: *popup_apex
+                  annotations:
+                    yaxis:
+                      - y: 45
+                        borderColor: "var(--ov-warn)"
+                        strokeDashArray: 4
+                series: &reeks_nas
+                  - entity: sensor.garage_unas_garage_cpu_temperature
+                    name: CPU
+                    color: "var(--ov-warn)"
+                  - entity: sensor.garage_unas_garage_hdd_1_temperature
+                    name: schijf 1
+                  - entity: sensor.garage_unas_garage_hdd_2_temperature
+                    name: schijf 2
+                  - entity: sensor.garage_unas_garage_hdd_3_temperature
+                    name: schijf 3
+                  - entity: sensor.garage_unas_garage_hdd_4_temperature
+                    name: schijf 4
+              - type: custom:apexcharts-card
+                graph_span: 24h
+                update_interval: 5min
+                card_mod: *popup_kaart
+                header: *kop_24u
+                all_series_config: *per_10min
+                yaxis: *as_nas
+                apex_config: *apex_nas
+                series: *reeks_nas

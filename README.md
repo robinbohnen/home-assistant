@@ -188,7 +188,10 @@ overview always did). The test checks the hook-up, that every fan button passes
 `stand: aan` and an hour count the script accepts, renders the script's choice with
 Jinja, and runs the JavaScript of each panel in node against normal, hot, critical and
 missing sensors, and guards the compact layout (fans inside the rack panel, low graphs,
-detail rows in two columns). It needs `node` next to `pyyaml` and `jinja2`.
+detail rows in two columns). Every temperature on the page (rack card, NUC CPU/NVMe tiles, NAS CPU tile,
+each drive bay) opens a Bubble Card pop-up (`#temp-rack`, `#temp-nuc`, `#temp-nas`) with
+that group over the last 4 hours (raw) and 24 hours (max per 10 min); the test checks that
+every hash has a pop-up and, against a live dump, that every NAS drive is in it. It needs `node` next to `pyyaml` and `jinja2`.
 
 ## <a name="hubs">Hubs</a>
 
