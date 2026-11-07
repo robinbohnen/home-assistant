@@ -523,7 +523,7 @@ def test_popups_bestaan():
 def test_temperaturen_klikbaar():
     # NUC: CPU- en NVMe-tegel openen de pop-up, belasting en geheugen nog more-info.
     h = render("nuc", NUC)
-    assert h.count("'#temp-nuc'") == 2 and "location-changed" in h
+    assert h.count("'#temp-nuc'") == 2 and "hass-action" in h and "action:'navigate'" in h
     assert "entityId:'sensor.node_intel_memory_used_percentage'" in h
     # NAS: CPU-tegel en elk gevuld schijfvak (4), lege vakken niet.
     h = render("nas", nas_states())

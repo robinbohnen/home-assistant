@@ -454,8 +454,9 @@ views:
                               return n * ({GB: 0.001, GiB: 0.001073741824, TiB: 1.099511627776, PB: 1000}[u] || 1);
                             };
                             // Temperatuur: open de pop-up met de grafiek (4 en 24 uur), zie onderaan het
-                            // bestand. Zo navigeert HA zelf ook; Bubble Card luistert naar location-changed.
-                            var graf = function(hash){ return 'history.pushState(null,\'\',\'' + hash + '\');window.dispatchEvent(new CustomEvent(\'location-changed\',{detail:{replace:false}}))'; };
+                            // bestand. Via hass-action = dezelfde navigate-actie als de rackkaart; zelf
+                            // pushState + location-changed sturen opende de pop-up niet (07-11-2026).
+                            var graf = function(hash){ return 'this.dispatchEvent(new CustomEvent(\'hass-action\',{detail:{action:\'tap\',config:{tap_action:{action:\'navigate\',navigation_path:\'' + hash + '\'}}},bubbles:true,composed:true}))'; };
                             // id met # = een pop-up (temperatuur), anders more-info van die entiteit.
                             var tegel = function(id, label, waarde, k, sub){
                               return '<div onclick="' + (id.charAt(0) === '#' ? graf(id) : info(id)) + '" style="cursor:pointer;flex:1 1 76px;min-width:0;background:var(--ov-ink-4);border-radius:12px;padding:6px 11px">'
@@ -626,8 +627,9 @@ views:
                             var pil = function(k, t){ return '<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;white-space:nowrap;color:var(--ov-' + k + ');background:var(--ov-' + k + '-15)">' + t + '</span>'; };
                             var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + id + '\'},bubbles:true,composed:true}))'; };
                             // Temperatuur: open de pop-up met de grafiek (4 en 24 uur), zie onderaan het
-                            // bestand. Zo navigeert HA zelf ook; Bubble Card luistert naar location-changed.
-                            var graf = function(hash){ return 'history.pushState(null,\'\',\'' + hash + '\');window.dispatchEvent(new CustomEvent(\'location-changed\',{detail:{replace:false}}))'; };
+                            // bestand. Via hass-action = dezelfde navigate-actie als de rackkaart; zelf
+                            // pushState + location-changed sturen opende de pop-up niet (07-11-2026).
+                            var graf = function(hash){ return 'this.dispatchEvent(new CustomEvent(\'hass-action\',{detail:{action:\'tap\',config:{tap_action:{action:\'navigate\',navigation_path:\'' + hash + '\'}}},bubbles:true,composed:true}))'; };
                             // id met # = een pop-up (temperatuur), anders more-info van die entiteit.
                             var tegel = function(id, label, waarde, k, sub){
                               return '<div onclick="' + (id.charAt(0) === '#' ? graf(id) : info(id)) + '" style="cursor:pointer;flex:1 1 76px;min-width:0;background:var(--ov-ink-4);border-radius:12px;padding:6px 11px">'
@@ -978,8 +980,8 @@ views:
           # die ene schijf is of het hele rack.
           #
           # Openen gaat via de hash (#temp-rack, #temp-nuc, #temp-nas); de
-          # HTML-panelen doen dat met history.pushState + location-changed
-          # (zie `graf` in hun JS), de rackkaart met een navigate-actie.
+          # HTML-panelen sturen een hass-action met een navigate-actie (zie `graf`
+          # in hun JS), de rackkaart heeft die als tap_action.
           #
           # NIEUWE SCHIJF in de NAS: één regel bij de reeksen van #temp-nas
           # (de test controleert dit tegen een live states-dump).
