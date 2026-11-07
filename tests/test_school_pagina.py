@@ -87,10 +87,16 @@ def test_vorm():
     assert S.doc["panel"] is True
     raster = S.doc["cards"][0]["cards"][0]
     assert "!include school/logan.yaml" in open(SCHOOL, encoding="utf-8").read()
-    # De include laadt hier als None; de gedeelde kolom is de laatste kaart.
-    assert raster["cards"][0] is None and raster["cards"][-1]["type"] == "vertical-stack"
+    # Twee kaarten: links een stack met de kinderen (de include laadt hier als
+    # None), rechts de gedeelde kolom. Verhouding 2:1, en GEEN grid-column:
+    # span - die kwam in de browser niet aan (7-11-2026, Logan in één derde).
+    assert len(raster["cards"]) == 2
+    kinderen, gedeeld = raster["cards"]
+    assert kinderen["type"] == "vertical-stack" and kinderen["cards"][0] is None
+    assert gedeeld["type"] == "vertical-stack"
     stijl = raster["card_mod"]["style"]
-    assert "#root > *:not(:last-child) { grid-column: span 2" in stijl and "grid-auto-flow: dense" in stijl
+    assert "minmax(0, 2fr) minmax(0, 1fr)" in stijl
+    assert "grid-column" not in stijl.split("*/")[-1], "span op een stack-kind komt niet aan"
     assert L.doc["type"] == "horizontal-stack" and len(L.doc["cards"]) == 2
 
 

@@ -17,12 +17,12 @@
 # binnen een paneel. Kop, badge en tegels komen uit www/sv-kit.js en lezen
 # alleen tellers en tijden. Zie de kop van school/logan.yaml.
 #
-# OPBOUW. Panel-weergave met de schil uit dashboards/server.yaml: een raster
-# van drie kolommen. Elk kind-blok neemt er twee (`span 2`), de gedeelde
-# kolom de derde. `grid-auto-flow: dense` zet de gedeelde kolom naast het
-# eerste kind, ook als er een tweede kind onder staat. Onder 1500 px staat
-# alles onder elkaar in de volle breedte (kind-blok nog in twee kolommen),
-# onder 1000 px in één kolom.
+# OPBOUW. Panel-weergave met de schil uit dashboards/server.yaml, maar met
+# twee kolommen in de verhouding 2:1: links de kinderen onder elkaar (elk
+# kind-blok zelf twee kolommen, samen dus net zo breed als twee kolommen op
+# Server), rechts de gedeelde kolom. Onder 1000 px alles onder elkaar.
+# (Eerst was het een raster van drie met `grid-column: span 2` op het
+# kind-blok; die span kwam niet aan en Logan stond in één derde.)
 #
 # ---------------------------------------------------------------------------
 # EEN TWEEDE KIND ERBIJ
@@ -36,12 +36,12 @@
 #      vinden onder Ontwikkelhulpmiddelen -> Status, filter `magister_`),
 #      `naam: LOGAN` door zijn naam, en in de kaart ONDERWEG de vier
 #      entiteiten van zijn telefoon (persoon, GEO, reistijd, batterij).
-#   3. Zet hieronder de `!include` erbij, VOOR de gedeelde kolom (die moet de
-#      laatste kaart blijven: het raster herkent hem daaraan), en zijn
-#      Magister-kalender in de week-planner in de gedeelde kolom.
+#   3. Zet hieronder de `!include` erbij, onder die van Logan in de
+#      vertical-stack van de linker kolom, en zijn Magister-kalender in de
+#      week-planner in de gedeelde kolom.
 #
-# Het tweede kind komt op een eigen rij onder het eerste (twee kolommen
-# breed); de gedeelde kolom blijft rechts naast het eerste kind staan.
+# Het tweede kind komt onder het eerste in de brede linker kolom; de
+# gedeelde kolom blijft rechts staan.
 #
 # De regel "Vandaag in het kort" bovenaan de gedeelde kolom heeft stap 2 en 3
 # niet nodig: die leest de kinderlijst die de integratie zelf bijhoudt en toont
@@ -75,24 +75,27 @@ cards:
           style: |
             #root {
               display: grid !important;
-              grid-template-columns: 1fr 1fr 1fr !important;
-              grid-auto-flow: dense !important;
+              /* Links de kinderen (2 delen, elk kind-blok zelf twee kolommen),
+                 rechts de gedeelde kolom (1 deel). Bewust GEEN grid-column:
+                 span 2 op de kinderen: dat kwam niet aan (HA verpakt elke
+                 kaart in een tussenelement) en Logan stond samengeperst in
+                 één derde van het scherm (7-11-2026). */
+              grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) !important;
               gap: 12px !important;
               align-items: start !important;
             }
-            /* Elk kind-blok twee kolommen breed; de gedeelde kolom is de laatste. */
-            #root > *:not(:last-child) { grid-column: span 2 !important; }
-            @media (max-width: 1500px) {
-              #root { grid-template-columns: 1fr 1fr !important; }
-              #root > *:last-child { grid-column: span 2 !important; }
-            }
             @media (max-width: 1000px) {
               #root { grid-template-columns: 1fr !important; }
-              #root > * { grid-column: auto !important; }
             }
         cards:
-          - !include school/logan.yaml
-          # - !include school/emma.yaml
+          # Alle kinderen onder elkaar in de linker (brede) kolom.
+          - type: vertical-stack
+            card_mod:
+              style: |
+                #root { gap: 12px !important; }
+            cards:
+              - !include school/logan.yaml
+              # - !include school/emma.yaml
 
           # ===================== GEDEELD: ALLE KINDEREN =====================
           - type: vertical-stack
