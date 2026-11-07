@@ -258,6 +258,13 @@ Note: button-card sets `pointer-events: none` on a card without an action of its
 (`tap_action: none`), which silently kills every `onclick` in its HTML; the HTML panels
 therefore set `pointer-events: auto` on the card, and a test guards that. It needs `node` next to `pyyaml` and `jinja2`.
 
+On the wall panel (KLIMAAT, right column) the row *Server* (was *Serverrack*, since
+7-11-2026) sums up rack, NUC and NAS in one line: rack temperature, NUC CPU and free space
+on the NAS, with a badge that says `in orde` or the worst problem (`NAS RAID`,
+`schijf 3 +1`, `NUC heet`, …) using the same thresholds as the Server dashboard. A running
+manual fan override still shows (`hand · aan`). Tap opens the Server dashboard, hold is the
+fan override. `tests/test_server_mini.py` covers every problem and the empty case.
+
 ## <a name="hubs">Hubs</a>
 
 | [Menu](#menu) |
