@@ -54,6 +54,26 @@ def test_extra_modules_gelijk_aan_resources():
     assert not los, f"extra_module_url wijkt af van resources.yaml (dubbel geladen): {los}"
 
 
+def test_eigen_modules_gaan_mee_naar_de_server():
+    # .gitignore negeert alles behalve een allowlist. Een eigen module in www/
+    # zonder `!www/<bestand>` komt nooit op de server: sv-kit.js liet zo op
+    # 7-11-2026 elk paneel van zes weergaven leeg. HACS-bestanden
+    # (/local/community/) en bestanden die hier lokaal niet bestaan (de
+    # handmatige F1-kaart) vallen erbuiten.
+    import subprocess
+    urls = {r["url"] for r in resources()} | set(extra_modules())
+    eigen = []
+    for url in urls:
+        if not url.startswith("/local/") or url.startswith("/local/community/"):
+            continue
+        rel = "www/" + url[len("/local/"):].split("?")[0]
+        if os.path.exists(os.path.join(CONFIG, rel)):
+            eigen.append(rel)
+            r = subprocess.run(["git", "check-ignore", "-q", rel], cwd=CONFIG)
+            assert r.returncode == 1, f"{rel} wordt door .gitignore genegeerd: zet `!{rel}` erbij"
+    assert "www/sv-kit.js" in eigen and "www/ov-tokens.js" in eigen
+
+
 def test_resources_type_en_uniek():
     lijst = resources()
     assert all(r.get("type") == "module" for r in lijst)

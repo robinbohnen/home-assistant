@@ -84,7 +84,10 @@ they load from `/local/community/` instead of the old HACS path `/hacsfiles/` (t
 Marketplace only serves that for compatibility and raises a repair issue for it). The
 test fails on any `/hacsfiles/` URL, and on a module in `frontend.extra_module_url`
 whose URL differs from its entry in `dashboards/resources.yaml` by even one character,
-because then the browser runs card-mod or kiosk-mode twice.
+because then the browser runs card-mod or kiosk-mode twice. It also fails on an own module
+in `www/` that `.gitignore` ignores (everything is ignored except an allowlist): such a
+file never reaches the server, which is how `sv-kit.js` left every Server-style panel
+empty on 7-11-2026.
 
 `tests/test_button_card_klikbaar.py` (7-11-2026) walks every dashboard, with the templates
 of `overzicht_templates.yaml` resolved. button-card puts `pointer-events: none` on a card
