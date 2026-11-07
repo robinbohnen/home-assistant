@@ -174,7 +174,13 @@ sidebar entry *Server*, admins only, hooked in under `lovelace: dashboards:` in
 `configuration.yaml`). That page shows the Proxmox NUC (temperatures, CPU, memory, system
 disk, throttling, 24-hour temperature graph), the server rack in the garage (temperature
 at a glance plus a 24-hour graph of rack, garage and fan run time), the NAS, every VM and
-container, and the backups. Its *Ventileren* panel runs the rack fans for 1, 2, 4 or 8
+container, and the backups. Since 7-11-2026 the NAS panel (column 1, it sits in the same
+rack) reads the UniFi UNAS Pro 8 through the HACS integration
+[unifi_unas](https://github.com/cardouken/homeassistant-unifi-unas): free space and RAID
+health, CPU, memory and fan, the eight drive bays with temperature and status, and a few
+rows; rows that only report a problem (Immich mount, monitor scripts, a share above 80% of
+its quota) appear only when there is one. The UNAS backup tasks show up as chips under
+*Back-ups* and are found by prefix, so a new task appears by itself. Its *Ventileren* panel runs the rack fans for 1, 2, 4 or 8
 hours through `script.ventilation_serverrack_handbediening`, which since 6-11-2026 takes
 `stand: aan|uit` next to `uren` (without `stand` it still toggles, as the button on the
 overview always did). The test checks the hook-up, that every fan button passes

@@ -11,8 +11,10 @@
 # compact eronder - zie de kop van dashboards/home/omvormer.yaml):
 #   kolom 1  SERVERRACK  temperatuur in één oogopslag + 24-uursgrafiek
 #            VENTILEREN  1/2/4/8 uur aan, of terug naar automatisch
+#            NAS         vrije ruimte + RAID, CPU/geheugen/ventilator, de 8
+#                        schijfvakken, een paar regels (staat in hetzelfde rack)
 #   kolom 2  NUC         temperaturen, CPU, geheugen, schijf, grafiek, details
-#   kolom 3  NAS, VM'S EN CONTAINERS, BACK-UPS
+#   kolom 3  VM'S EN CONTAINERS, BACK-UPS (HA, Immich, de taken van de NAS)
 #
 # BRONNEN
 #   sensor.proxmox_nuc_intel_*   MQTT van de host zelf (packages/9 - Other/Proxmox NUC.yaml)
@@ -21,13 +23,18 @@
 #   sensor.garage_serverrack_*   Zigbee-thermometer in het rack
 #   ventilatie                   packages/9 - Other/Ventilation.yaml
 #   device_tracker.unas_pro_8    UniFi Network (is de NAS bereikbaar)
-#   sensor.immich_*              Immich (vrije ruimte op de NAS, back-up)
+#   sensor.garage_unas_garage_*  UniFi UNAS-integratie (HACS, cardouken/homeassistant-
+#                                unifi-unas, sinds 07-11-2026): opslag, RAID, schijven,
+#                                CPU, ventilator, shares, back-uptaken
+#   sensor.immich_*              Immich (back-up; of de NAS gekoppeld is)
 #
-# DE NAS (UniFi UNAS Pro 8) HEEFT NOG GEEN EIGEN INTEGRATIE. Bereikbaarheid
-# komt van UniFi Network, de vrije ruimte van Immich (die de NAS gemount
-# heeft). Schijven, RAID-status en temperaturen van de UNAS zelf zitten niet
-# in HA: SNMP staat uit op de UNAS (getest 06-11-2026) en voor UniFi Drive is
-# er geen HA-integratie. Komt die er, dan hoort hij in het NAS-paneel.
+# DE NAS (UniFi UNAS Pro 8). Tot 07-11-2026 zat er niets van de UNAS zelf in HA
+# (SNMP staat uit); nu levert de UNAS-integratie ~140 entiteiten. Bewust NIET op
+# het dashboard: de shares (alleen een regel als er één boven 80% van zijn quota
+# komt), de fan-instellingen, de knoppen (herstart/uitzetten horen niet onder
+# een vinger op een overzicht) en per schijf rpm/draaiuren. De back-uptaken
+# worden op prefix gevonden: een nieuwe taak op de UNAS verschijnt vanzelf.
+# Drempels NAS: CPU 80/90 °C, schijven 45/50 °C (variabelen in het paneel).
 #
 # DE ENTITY-ID'S VAN DE GASTEN KLOPPEN NIET MET HUN NAAM. De Proxmox-integratie
 # hield de oude id's toen VM's werden vervangen: `qemu_mqtt_100` is CT 100
@@ -85,7 +92,7 @@ views:
                   #root { grid-template-columns: 1fr !important; }
                 }
             cards:
-              # ======================= KOLOM 1: SERVERRACK =======================
+              # ==================== KOLOM 1: SERVERRACK, NAS =====================
               - type: vertical-stack
                 cards:
                   - type: custom:mod-card
@@ -381,6 +388,193 @@ views:
                                 perform_action: script.ventilation_serverrack_automatisch
                               <<: *knop
 
+                  # ------------------------------------------------------- NAS
+                  # De UNAS Pro 8 staat in hetzelfde rack, daarom in deze kolom.
+                  # Bovenaan wat ertoe doet: vrije ruimte en RAID, dan CPU,
+                  # geheugen en ventilator, dan de acht schijfvakken als een
+                  # voorkant van de NAS (leeg vak = gedimd). Daaronder een paar
+                  # regels; regels die alleen een probleem melden (Immich-mount,
+                  # monitorscripts, share bijna aan zijn quota) verschijnen pas
+                  # als er iets mis is. Shares en de fan-instellingen staan er
+                  # verder bewust niet op.
+                  - type: custom:mod-card
+                    card_mod:
+                      style: *paneel
+                    card:
+                      type: custom:button-card
+                      entity: device_tracker.unas_pro_8
+                      show_icon: false
+                      show_name: false
+                      show_state: false
+                      tap_action:
+                        action: none
+                      # Per minuut hertekenen: met ~40 UNAS-sensoren in
+                      # triggers_update zou elke MB/s-tik de kaart opnieuw tekenen.
+                      triggers_update:
+                        - device_tracker.unas_pro_8
+                        - sensor.garage_unas_garage_storage_pool_1_status
+                        - sensor.time
+                      variables:
+                        kaart: nas
+                        p: sensor.garage_unas_garage_
+                        vakken: 8
+                        # Drempels (°C). HDD: fabrikanten noemen 55-60 als max,
+                        # boven 45 is in een rack al opvallend warm.
+                        cpu_warm: 80
+                        cpu_heet: 90
+                        hdd_warm: 45
+                        hdd_heet: 50
+                      styles: *html_kaart
+                      custom_fields:
+                        x: |
+                          [[[
+                            // Tekst uit een state gaat de HTML in: escapen, een integratie kan alles sturen.
+                            var esc = function(v){ return String(v).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+                            var num = function(id){ var s = states[id]; if(!s) return null; var n = parseFloat(s.state); return isNaN(n) ? null : n; };
+                            var nl = function(n, d){ d = d || 0; return n.toLocaleString('nl-NL', {minimumFractionDigits: d, maximumFractionDigits: d}); };
+                            var pil = function(k, t){ return '<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;white-space:nowrap;color:var(--ov-' + k + ');background:var(--ov-' + k + '-15)">' + t + '</span>'; };
+                            var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + id + '\'},bubbles:true,composed:true}))'; };
+                            var weg = function(s){ return !s || ['unavailable', 'unknown'].indexOf(s.state) !== -1; };
+                            // Opslag altijd in TB, ongeacht de eenheid die de integratie kiest.
+                            var tb = function(id){
+                              var n = num(id); if(n === null) return null;
+                              var u = String((states[id].attributes || {}).unit_of_measurement || 'TB');
+                              return n * ({GB: 0.001, GiB: 0.001073741824, TiB: 1.099511627776, PB: 1000}[u] || 1);
+                            };
+                            var tegel = function(id, label, waarde, k, sub){
+                              return '<div onclick="' + info(id) + '" style="cursor:pointer;flex:1 1 76px;min-width:0;background:var(--ov-ink-4);border-radius:14px;padding:11px 13px">'
+                                + '<div style="font-size:10.5px;font-weight:700;letter-spacing:1px;color:var(--ov-ink-55)">' + label + '</div>'
+                                + '<div style="font-size:24px;font-weight:700;line-height:1.25;margin-top:3px;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--ov-' + k + ')">' + waarde + '</div>'
+                                + '<div style="font-size:11.5px;color:var(--ov-ink-58);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + sub + '</div></div>';
+                            };
+                            var rij = function(id, naam, waarde, k){
+                              return '<div onclick="' + info(id) + '" style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:8px 0;border-top:1px solid var(--ov-ink-6)">'
+                                + '<span style="color:var(--ov-ink-80)">' + naam + '</span>'
+                                + '<span style="font-weight:600;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;color:' + (k ? 'var(--ov-' + k + ')' : 'var(--primary-text-color)') + '">' + waarde + '</span></div>';
+                            };
+                            var P = variables.p, V = variables;
+                            var problemen = [];   // {k: 'bad'|'warn', t: tekst voor de badge}
+                            var online = entity && entity.state === 'home';
+                            if(!online) problemen.push({k: 'bad', t: 'onbereikbaar'});
+
+                            // ---- opslag en RAID
+                            var size = tb(P + 'storage_pool_1_size'), used = tb(P + 'storage_pool_1_used'), vrij = tb(P + 'storage_pool_1_available');
+                            if(vrij === null && size !== null && used !== null) vrij = size - used;
+                            var pst = states[P + 'storage_pool_1_status'], raid = states[P + 'storage_pool_1_raid_level'];
+                            var poolOk = pst && pst.state === 'fullyOperational';
+                            var poolBezig = pst && /rebuild|resync|sync|expand|repair|initiali/i.test(pst.state);
+                            if(online && weg(pst) && num(P + 'cpu_temperature') === null) problemen.push({k: 'warn', t: 'geen data'});
+                            else if(pst && !weg(pst) && !poolOk) problemen.push({k: poolBezig ? 'warn' : 'bad', t: 'RAID ' + esc(pst.state)});
+                            var pct = size ? used / size * 100 : num(P + 'storage_pool_1_usage');
+                            var bk = pct === null ? 'info' : (pct >= 90 ? 'bad' : (pct >= 80 ? 'warn' : 'info'));
+                            if(pct !== null && pct >= 80) problemen.push({k: bk, t: nl(pct) + '% vol'});
+                            var raidTekst = raid && !weg(raid) ? esc(raid.state).replace(/^raid/i, 'RAID ') : 'RAID';
+                            var poolTekst = weg(pst) ? '—' : (poolOk ? 'gezond' : esc(pst.state));
+                            var opslag = '<div onclick="' + info(P + 'storage_pool_1_available') + '" style="cursor:pointer">'
+                              + '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px">'
+                                + '<div><span style="font-size:40px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;color:'
+                                  + (vrij === null ? 'var(--ov-ink-35)' : (bk === 'info' ? 'var(--primary-text-color)' : 'var(--ov-' + bk + ')')) + '">'
+                                  + (vrij === null ? '—' : nl(vrij, vrij < 10 ? 1 : 0)) + '</span>'
+                                  + '<span style="font-size:16px;font-weight:600;color:var(--ov-ink-55);margin-left:5px">TB vrij</span></div>'
+                                + '<div style="text-align:right;font-size:12px;line-height:1.5;color:var(--ov-ink-55)">'
+                                  + '<div style="font-weight:700;color:var(--primary-text-color)">' + raidTekst + '</div>'
+                                  + '<div style="color:' + (weg(pst) ? 'var(--ov-ink-35)' : (poolOk ? 'var(--ov-ok)' : (poolBezig ? 'var(--ov-warn)' : 'var(--ov-bad)'))) + '">' + poolTekst + '</div></div></div>'
+                              + '<div style="height:8px;border-radius:4px;background:var(--ov-ink-6);margin-top:10px;overflow:hidden">'
+                                + '<div style="height:8px;border-radius:4px;min-width:4px;width:' + Math.max(0, Math.min(100, pct || 0)) + '%;background:var(--ov-' + bk + ')"></div></div>'
+                              + '<div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--ov-ink-50);margin-top:5px;font-variant-numeric:tabular-nums">'
+                                + '<span>' + (used === null ? '—' : nl(used, 1) + ' TB gebruikt') + (pct === null ? '' : ' · ' + nl(pct) + '%') + '</span>'
+                                + '<span>' + (size === null ? '' : 'van ' + nl(size, 1) + ' TB') + '</span></div></div>';
+
+                            // ---- CPU, geheugen, ventilator
+                            var ct = num(P + 'cpu_temperature'), cu = num(P + 'cpu_usage');
+                            var mp = num(P + 'memory_usage'), mu = num(P + 'memory_used'), mt = num(P + 'memory_total');
+                            var fp = num(P + 'fan_speed_percent'), fm = states['select.' + P.slice(7) + 'fan_mode'];
+                            var ck = ct === null ? 'ink-35' : (ct >= V.cpu_heet ? 'bad' : (ct >= V.cpu_warm ? 'warn' : 'ok'));
+                            if(ct !== null && ct >= V.cpu_warm) problemen.push({k: ck, t: 'CPU ' + nl(ct) + '°'});
+                            var mk = mp === null ? 'ink-35' : (mp >= 95 ? 'bad' : (mp >= 85 ? 'warn' : 'ok'));
+                            var tegels = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">'
+                              + tegel(P + 'cpu_temperature', 'CPU', ct === null ? '—' : nl(ct) + '°', ck, cu === null ? 'temperatuur' : nl(cu) + '% belast')
+                              + tegel(P + 'memory_usage', 'GEHEUGEN', mp === null ? '—' : nl(mp) + '%', mk, mu === null || !mt ? 'in gebruik' : nl(mu, 1) + ' van ' + nl(mt) + ' GB')
+                              + tegel(P + 'fan_speed_percent', 'VENTILATOR', fp === null ? '—' : nl(fp) + '%', fp === null ? 'ink-35' : 'ink-80',
+                                  weg(fm) ? 'snelheid' : (fm.state === 'UNAS Managed' ? 'automatisch' : esc(fm.state)))
+                              + '</div>';
+
+                            // ---- schijfvakken
+                            var vakken = [], schijven = 0;
+                            for(var i = 1; i <= V.vakken; i++){
+                              var b = P + 'hdd_' + i + '_';
+                              var t = num(b + 'temperature'), s = states[b + 'status'], bs = num(b + 'bad_sectors'), gr = num(b + 'total_size');
+                              if(!s && t === null) { vakken.push(null); continue; }
+                              schijven++;
+                              var goed = s && s.state === 'Optimal';
+                              var led = weg(s) ? 'ink-25' : (!goed ? 'bad' : (bs ? 'warn' : 'ok'));
+                              if(led === 'bad') problemen.push({k: 'bad', t: 'schijf ' + i + ' ' + esc(s.state)});
+                              else if(led === 'warn') problemen.push({k: 'warn', t: 'schijf ' + i + ': ' + nl(bs) + ' slechte sectoren'});
+                              var tk = t === null ? 'ink-35' : (t >= V.hdd_heet ? 'bad' : (t >= V.hdd_warm ? 'warn' : null));
+                              if(t !== null && t >= V.hdd_warm) problemen.push({k: tk, t: 'schijf ' + i + ' ' + nl(t) + '°'});
+                              vakken.push({i: i, id: b + 'status', led: led, t: t, tk: tk, gr: gr,
+                                titel: 'HDD ' + i + ': ' + (s ? esc(s.state) : '?') + (bs ? ', ' + nl(bs) + ' slechte sectoren' : '')});
+                            }
+                            var vak = function(v, i){
+                              var basis = 'border-radius:9px;padding:7px 0 6px 0;text-align:center;min-width:0;';
+                              if(!v) return '<div style="' + basis + 'border:1px dashed var(--ov-ink-12);color:var(--ov-ink-25);font-size:10.5px">' + (i + 1) + '</div>';
+                              return '<div title="' + v.titel + '" onclick="' + info(v.id) + '" style="' + basis + 'cursor:pointer;background:var(--ov-ink-6)">'
+                                + '<div style="width:6px;height:6px;border-radius:50%;margin:0 auto 5px auto;background:var(--ov-' + v.led + ')' + (v.led === 'ok' ? '' : ';box-shadow:0 0 6px var(--ov-' + v.led + ')') + '"></div>'
+                                + '<div style="font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:' + (v.tk ? 'var(--ov-' + v.tk + ')' : 'var(--primary-text-color)') + '">' + (v.t === null ? '—' : nl(v.t) + '°') + '</div>'
+                                + '<div style="font-size:10px;color:var(--ov-ink-45);white-space:nowrap">' + (v.gr === null ? v.i : nl(v.gr) + ' TB') + '</div></div>';
+                            };
+                            var bays = schijven === 0 ? '' : '<div style="display:flex;justify-content:space-between;font-size:10.5px;font-weight:700;letter-spacing:1px;color:var(--ov-ink-45);margin:14px 0 6px 0">'
+                                + '<span>SCHIJVEN</span><span style="font-weight:600;letter-spacing:0">' + schijven + ' van ' + V.vakken + ' vakken</span></div>'
+                              + '<div style="display:grid;grid-template-columns:repeat(' + V.vakken + ',minmax(0,1fr));gap:5px">' + vakken.map(vak).join('') + '</div>';
+
+                            // ---- regels
+                            var r = [];
+                            var rd = num(P + 'disk_read'), wr = num(P + 'disk_write');
+                            if(rd !== null || wr !== null) {
+                              var eh = esc(((states[P + 'disk_write'] || states[P + 'disk_read']).attributes || {}).unit_of_measurement || 'MB/s');
+                              r.push(rij(P + 'disk_write', 'Schijfverkeer', '↓ ' + (rd === null ? '—' : nl(rd, rd < 10 ? 1 : 0)) + ' · ↑ ' + (wr === null ? '—' : nl(wr, wr < 10 ? 1 : 0)) + ' ' + eh));
+                            }
+                            var smb = num(P + 'smb_connections'), nfs = num(P + 'nfs_mounts');
+                            if(smb !== null || nfs !== null) r.push(rij(P + 'smb_connections', 'Verbindingen', (smb === null ? '?' : nl(smb)) + ' SMB · ' + (nfs === null ? '?' : nl(nfs)) + ' NFS'));
+                            var up = states[P + 'uptime'], upt = up ? new Date(up.state).getTime() : NaN;
+                            if(!isNaN(upt)) {
+                              var sec = Math.max(0, (Date.now() - upt) / 1000), d = Math.floor(sec / 86400), u = Math.floor((sec % 86400) / 3600);
+                              r.push(rij(P + 'uptime', 'Aan sinds', (d ? d + ' d ' : '') + u + ' u'));
+                            }
+                            var os = states[P + 'unifi_os_version'], dv = states[P + 'unifi_drive_version'];
+                            if(os && !weg(os)) r.push(rij(P + 'unifi_os_version', 'UniFi OS', esc(os.state) + (dv && !weg(dv) ? ' · Drive ' + esc(dv.state) : '')));
+                            // update.unifi_unas is de HACS-integratie zelf, niet UniFi OS: geen probleem, wel een regel.
+                            var upd = states['update.unifi_unas'];
+                            if(upd && upd.state === 'on') r.push(rij('update.unifi_unas', 'UNAS-integratie', 'update klaar', 'warn'));
+                            // Alleen bij een probleem:
+                            var mount = states['binary_sensor.immich_nas'];
+                            if(mount && mount.state === 'off') { problemen.push({k: 'bad', t: 'Immich los'}); r.push(rij('binary_sensor.immich_nas', 'Gekoppeld aan Immich', 'nee', 'bad')); }
+                            ['monitor_service', 'fan_control_service'].forEach(function(n){
+                              var sv = states['binary_sensor.' + P.slice(7) + n];
+                              if(sv && sv.state === 'off') { problemen.push({k: 'warn', t: 'script gestopt'}); r.push(rij('binary_sensor.' + P.slice(7) + n, n === 'monitor_service' ? 'Monitorscript' : 'Ventilatorscript', 'gestopt', 'warn')); }
+                            });
+                            Object.keys(states).sort().forEach(function(id){
+                              var vp = P + 'share_';
+                              if(id.indexOf(vp) !== 0 || id.slice(-6) !== '_usage') return;
+                              var m = [id, id.slice(vp.length, -6)];
+                              var gebruik = tb(id), quota = tb(vp + m[1] + '_quota');
+                              if(gebruik === null || !quota) return;   // "Unlimited" geeft geen getal
+                              var sp = gebruik / quota * 100; if(sp < 80) return;
+                              var fn = String((states[id].attributes || {}).friendly_name || '').match(/Share: (.+) Usage$/);
+                              var sk = sp >= 90 ? 'bad' : 'warn';
+                              problemen.push({k: sk, t: 'share vol'});
+                              r.push(rij(id, 'Share ' + esc(fn ? fn[1] : m[1]), nl(sp) + '% van quota', sk));
+                            });
+
+                            var ergste = problemen.filter(function(p){ return p.k === 'bad'; }).length ? 'bad' : 'warn';
+                            var badge = !problemen.length ? pil('ok', 'in orde')
+                              : (problemen.length === 1 ? pil(problemen[0].k, problemen[0].t) : pil(ergste, problemen.length + ' meldingen'));
+                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 12px 0">'
+                                + '<span onclick="' + info('device_tracker.unas_pro_8') + '" style="cursor:pointer;font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">NAS · UNAS PRO 8</span>' + badge + '</div>'
+                              + opslag + tegels + bays
+                              + (r.length ? '<div style="margin-top:12px">' + r.join('') + '</div>' : '');
+                          ]]]
+
               # ========================== KOLOM 2: NUC ===========================
               - type: custom:mod-card
                 card_mod:
@@ -577,55 +771,9 @@ views:
                             return '<div style="padding-top:4px">' + r.join('') + '</div>';
                           ]]]
 
-              # ================== KOLOM 3: NAS, GASTEN, BACK-UPS ==================
+              # ==================== KOLOM 3: GASTEN, BACK-UPS =====================
               - type: vertical-stack
                 cards:
-                  - type: custom:mod-card
-                    card_mod:
-                      style: *paneel
-                    card:
-                      type: custom:button-card
-                      entity: device_tracker.unas_pro_8
-                      show_icon: false
-                      show_name: false
-                      show_state: false
-                      tap_action:
-                        action: none
-                      triggers_update:
-                        - device_tracker.unas_pro_8
-                        - sensor.immich_nas_vrij
-                        - binary_sensor.immich_nas
-                      variables:
-                        kaart: nas
-                      styles: *html_kaart
-                      custom_fields:
-                        x: |
-                          [[[
-                            var num = function(id){ var s = states[id]; if(!s) return null; var n = parseFloat(s.state); return isNaN(n) ? null : n; };
-                            var nl = function(n, d){ d = d || 0; return n.toLocaleString('nl-NL', {minimumFractionDigits: d, maximumFractionDigits: d}); };
-                            var pil = function(k, t){ return '<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;white-space:nowrap;color:var(--ov-' + k + ');background:var(--ov-' + k + '-15)">' + t + '</span>'; };
-                            var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + id + '\'},bubbles:true,composed:true}))'; };
-                            var rij = function(id, naam, waarde, k){
-                              return '<div onclick="' + info(id) + '" style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:8px 0;border-top:1px solid var(--ov-ink-6)">'
-                                + '<span style="color:var(--ov-ink-80)">' + naam + '</span>'
-                                + '<span style="font-weight:600;white-space:nowrap;color:' + (k ? 'var(--ov-' + k + ')' : 'var(--primary-text-color)') + '">' + waarde + '</span></div>';
-                            };
-                            var nas = entity;
-                            var online = nas && nas.state === 'home';
-                            var vrij = num('sensor.immich_nas_vrij');
-                            var mount = states['binary_sensor.immich_nas'];
-                            var vrijTekst = vrij === null ? '—' : (vrij >= 1000 ? nl(vrij / 1000, 1) + ' TB' : nl(vrij) + ' GB');
-                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 10px 0">'
-                                + '<span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">NAS · UNAS PRO 8</span>'
-                                + (online ? pil('ok', 'online') : pil('bad', 'onbereikbaar')) + '</div>'
-                              + '<div style="font-size:34px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums;color:'
-                                + (vrij === null ? 'var(--ov-ink-35)' : (vrij < 250 ? 'var(--ov-bad)' : (vrij < 1000 ? 'var(--ov-warn)' : 'var(--primary-text-color)'))) + '">' + vrijTekst + '</div>'
-                              + '<div style="font-size:12px;color:var(--ov-ink-50);margin:2px 0 8px 0">vrij</div>'
-                              + rij('device_tracker.unas_pro_8', 'Netwerk', online ? 'bereikbaar' : 'niet gezien', online ? null : 'bad')
-                              + (mount ? rij('binary_sensor.immich_nas', 'Gekoppeld aan Immich', mount.state === 'on' ? 'ja' : 'nee', mount.state === 'on' ? null : 'bad') : '')
-                              + '<div style="font-size:11.5px;color:var(--ov-ink-45);padding-top:8px">Schijven en RAID van de UNAS zelf zitten nog niet in Home Assistant.</div>';
-                          ]]]
-
                   # ---------------------------------- VM'S EN CONTAINERS
                   # Expliciete lijst, zie de kop: naam + prefix van de entiteiten.
                   - type: custom:mod-card
@@ -714,6 +862,9 @@ views:
                         - sensor.time
                       variables:
                         kaart: backups
+                        # Prefix van de back-uptaken van de UNAS; taken worden
+                        # hierop gevonden, dus een nieuwe taak verschijnt vanzelf.
+                        nas: sensor.garage_unas_garage_backup_
                       styles: *html_kaart
                       custom_fields:
                         x: |
@@ -747,6 +898,44 @@ views:
                               var ok = im.state === 'ok'; if(!ok) slecht++;
                               var l = iml ? Number(iml.state) : NaN;
                               r.push(rij('sensor.immich_backup', 'Immich (foto\'s)', ok ? (isNaN(l) ? 'ok' : uren(l * 3600000) + ' geleden') : esc(im.state), ok ? null : 'bad'));
+                            }
+                            // NAS: elke back-uptaak van de UNAS (ook later toegevoegde) als
+                            // chip onder één regel. Fout = niet `succeeded`, laatste run
+                            // ouder dan 36 uur, of het schema uitgezet.
+                            var P = variables.nas, taken = [];
+                            Object.keys(states).sort().forEach(function(id){
+                              if(id.indexOf(P) !== 0 || id.slice(-7) !== '_status') return;
+                              var b = id.slice(0, -7), s = states[id];
+                              var lt = states[b + '_last_run'] ? new Date(states[b + '_last_run'].state).getTime() : NaN;
+                              var du = states[b + '_last_run_duration'] ? Number(states[b + '_last_run_duration'].state) : NaN;
+                              var nm = states[b + '_task_name'] && ['unavailable', 'unknown'].indexOf(states[b + '_task_name'].state) === -1
+                                ? states[b + '_task_name'].state : b.slice(P.length);
+                              var sch = states['switch.' + b.slice(7) + '_schedule_enabled'];
+                              var loopt = /running|progress|active/i.test(s.state);
+                              var k = loopt ? 'info'
+                                : (s.state !== 'succeeded' || isNaN(lt) || nu - lt > 36 * 3600000 ? 'bad'
+                                : (sch && sch.state === 'off' ? 'warn' : 'ok'));
+                              var waarom = loopt ? 'loopt nu' : (s.state !== 'succeeded' ? s.state : (isNaN(lt) ? 'nooit gedraaid'
+                                : (nu - lt > 36 * 3600000 ? uren(nu - lt) + ' geleden' : (k === 'warn' ? 'schema uit' : uren(nu - lt) + ' geleden'))));
+                              taken.push({id: id, k: k, naam: esc(String(nm).replace(/\s*back-?up$/i, '') || nm), lt: lt, waarom: esc(waarom),
+                                duur: isNaN(du) ? '' : (du < 60 ? Math.round(du) + ' s' : (du < 3600 ? Math.round(du / 60) + ' min' : (du / 3600).toLocaleString('nl-NL', {maximumFractionDigits: 1}) + ' u'))});
+                            });
+                            if(taken.length) {
+                              var mis = taken.filter(function(t){ return t.k === 'bad' || t.k === 'warn'; });
+                              slecht += mis.length;
+                              var recent = Math.max.apply(null, taken.map(function(t){ return isNaN(t.lt) ? 0 : t.lt; }));
+                              var waarde = mis.length ? mis.length + ' van ' + taken.length + ' niet gelukt'
+                                : (taken.length === 1 ? 'gelukt' : 'alle ' + taken.length + ' gelukt') + (recent ? ' · ' + uren(nu - recent) + ' geleden' : '');
+                              r.push(rij(mis.length ? mis[0].id : taken[0].id, 'NAS', waarde, mis.length ? (mis.some(function(t){ return t.k === 'bad'; }) ? 'bad' : 'warn') : null)
+                                + '<div style="display:flex;flex-wrap:wrap;gap:5px;padding:0 0 8px 0;margin-top:-2px">'
+                                + taken.map(function(t){
+                                    var fout = t.k === 'bad' || t.k === 'warn';
+                                    return '<span title="' + t.naam + ': ' + t.waarom + '" onclick="' + info(t.id) + '" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:11.5px;padding:3px 9px;border-radius:20px;white-space:nowrap;background:'
+                                      + (fout ? 'var(--ov-' + t.k + '-15)' : 'var(--ov-ink-6)') + '">'
+                                      + '<span style="width:6px;height:6px;border-radius:50%;background:var(--ov-' + t.k + ')"></span>'
+                                      + '<span style="font-weight:600;color:' + (fout ? 'var(--ov-' + t.k + ')' : 'var(--primary-text-color)') + '">' + t.naam + '</span>'
+                                      + '<span style="color:var(--ov-ink-50)">' + (fout ? t.waarom : t.duur) + '</span></span>';
+                                  }).join('') + '</div>');
                             }
                             var nx = states['sensor.backup_next_scheduled_automatic_backup'];
                             var nxt = nx ? new Date(nx.state).getTime() : NaN;
