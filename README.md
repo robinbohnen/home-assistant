@@ -86,6 +86,15 @@ test fails on any `/hacsfiles/` URL, and on a module in `frontend.extra_module_u
 whose URL differs from its entry in `dashboards/resources.yaml` by even one character,
 because then the browser runs card-mod or kiosk-mode twice.
 
+`tests/test_button_card_klikbaar.py` (7-11-2026) walks every dashboard, with the templates
+of `overzicht_templates.yaml` resolved. button-card puts `pointer-events: none` on a card
+whose tap, hold and double-tap actions are all `none`, and then every `onclick` in its
+HTML (more-info, opening a pop-up) silently does nothing. That broke the Server
+dashboard, the Omvormer page and the `ov_uitlegtabel` template. The test fails on such a
+card unless it sets `- pointer-events: auto` under `styles: card:` (inline wins over the
+class), or every clickable element sets `pointer-events:auto` itself, as
+`dashboards/home/systeem.yaml` does.
+
 `tests/test_langzame_covers.py` guards the slow roller shutters. Overkiz drops its
 `cover.*_low_speed` entities in HA 2027.5 in favour of `speed: slow` on the normal cover.
 A cover group and the dashboard cards cannot pass that option, so
