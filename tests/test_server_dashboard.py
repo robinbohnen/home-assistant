@@ -532,6 +532,30 @@ def test_klikken_komt_aan():
         assert stijl.get("pointer-events") == "auto", (k.get("variables") or {}).get("kaart")
 
 
+def test_nas_nvme():
+    # NVMe-sloten (7-11-2026): naast de vakken, zelf gevonden, met eigen grenzen.
+    s = nas_states()
+    h = render("nas", s)
+    assert "NVMe" not in h and "M.2" not in h   # zonder NVMe-sensoren niets extra
+    s[U + "nvme_0_temperature"] = st(41)
+    s[U + "nvme_1_temperature"] = st(44)
+    s[U + "nvme_1_total_size"] = st(500, unit_of_measurement="GB")
+    h = render("nas", s)
+    assert "4 van 8 vakken · 2× NVMe" in h and ">in orde<" in h
+    assert "41°" in h and "44°" in h and "500 GB" in h and "M.2 0" in h
+    assert h.count("'#temp-nas'") == 1 + 4 + 2
+    h = render("nas", {**s, U + "nvme_0_temperature": st(65)})
+    assert ">NVMe 0 65°<" in h and "var(--ov-warn)" in h
+    h = render("nas", {**s, U + "nvme_1_temperature": st(72)})
+    assert ">NVMe 1 72°<" in h
+    h = render("nas", {**s, U + "nvme_0_status": st("<b>Failed</b>")})
+    assert "NVMe 0 &lt;b&gt;Failed&lt;/b&gt;" in h and "<b>" not in h
+    h = render("nas", {**s, U + "nvme_0_temperature": st("unavailable")})
+    assert "undefined" not in h and "NaN" not in h and "—" in h
+    # Ook in de pop-up, 4 en 24 uur.
+    assert {U + "nvme_0_temperature", U + "nvme_1_temperature"} <= set(reeksen(popups()["#temp-nas"]))
+
+
 def test_temperaturen_klikbaar():
     # NUC: CPU- en NVMe-tegel openen de pop-up, belasting en geheugen nog more-info.
     h = render("nuc", NUC)
@@ -555,11 +579,18 @@ def test_live_states():
         assert h and "undefined" not in h and "NaN" not in h, naam
     # Pop-ups: elke reeks bestaat, en elke schijf van de NAS staat erin.
     pp = popups()
+    nvme_re = re.escape(U) + r"nvme_?\d+_temperature"
+    nvme_live = {e for e in states if re.fullmatch(nvme_re, e)}
     for h, p in pp.items():
         for e in reeksen(p):
+            # Een dump van vóór de NVMe-sloten (7-11-2026) kent ze nog niet.
+            if not nvme_live and re.fullmatch(nvme_re, e):
+                print(f"let op: {e} niet te controleren, de dump heeft nog geen NVMe")
+                continue
             assert e in states, f"{h}: {e} bestaat niet"
     schijven = {e for e in states if re.fullmatch(re.escape(U) + r"hdd_\d+_temperature", e)}
     assert schijven and schijven <= set(reeksen(pp["#temp-nas"])), "nieuwe schijf: zet hem bij #temp-nas"
+    assert nvme_live <= set(reeksen(pp["#temp-nas"])), "nieuwe NVMe: zet hem bij #temp-nas"
 
 
 if __name__ == "__main__":

@@ -408,7 +408,9 @@ views:
                   # De UNAS Pro 8 staat in hetzelfde rack, daarom in deze kolom.
                   # Bovenaan wat ertoe doet: vrije ruimte en RAID, dan CPU,
                   # geheugen en ventilator, dan de acht schijfvakken als een
-                  # voorkant van de NAS (leeg vak = gedimd). Daaronder een paar
+                  # voorkant van de NAS (leeg vak = gedimd), met rechts daarnaast
+                  # de NVMe-sloten (M.2 0 en 1, sinds 07-11-2026; gevonden via
+                  # <p>nvme_<n>_temperature, dus een derde komt vanzelf). Daaronder een paar
                   # regels; regels die alleen een probleem melden (Immich-mount,
                   # monitorscripts, share bijna aan zijn quota) verschijnen pas
                   # als er iets mis is. Shares en de fan-instellingen staan er
@@ -441,6 +443,9 @@ views:
                         cpu_heet: 90
                         hdd_warm: 45
                         hdd_heet: 50
+                        # NVMe (cache, 07-11-2026): zelfde grenzen als de NVMe van de NUC.
+                        nvme_warm: 60
+                        nvme_heet: 70
                       styles: *html_kaart
                       custom_fields:
                         x: |
@@ -537,17 +542,36 @@ views:
                               vakken.push({i: i, id: b + 'status', led: led, t: t, tk: tk, gr: gr,
                                 titel: 'HDD ' + i + ': ' + (s ? esc(s.state) : '?') + (bs ? ', ' + nl(bs) + ' slechte sectoren' : '')});
                             }
+                            // NVMe-sloten (07-11-2026): niet vast genummerd zoals de vakken, dus
+                            // zoeken in states naar <P>nvme_<n>_temperature (ook nvme<n>_).
+                            var nvmeRe = new RegExp('^' + P.replace(/[.]/g, '\\.') + 'nvme_?(\\d+)_temperature$');
+                            var nvmes = Object.keys(states).map(function(id){ var m = id.match(nvmeRe); return m ? {n: +m[1], b: id.slice(0, -11)} : null; })
+                              .filter(Boolean).sort(function(a, c){ return a.n - c.n; }).map(function(x){
+                                var t = num(x.b + 'temperature'), s = states[x.b + 'status'], gr = tb(x.b + 'total_size');
+                                var stOk = !s || weg(s) || /^(optimal|ok|healthy|normal|good|passed)$/i.test(s.state);
+                                var tk = t === null ? 'ink-35' : (t >= V.nvme_heet ? 'bad' : (t >= V.nvme_warm ? 'warn' : null));
+                                if(!stOk) problemen.push({k: 'bad', t: 'NVMe ' + x.n + ' ' + esc(s.state)});
+                                if(t !== null && t >= V.nvme_warm) problemen.push({k: tk, t: 'NVMe ' + x.n + ' ' + nl(t) + '°'});
+                                return {i: 'M.2 ' + x.n, led: t === null && (!s || weg(s)) ? 'ink-25' : (stOk ? 'ok' : 'bad'), t: t, tk: tk,
+                                  gr: gr === null ? null : gr, titel: 'NVMe ' + x.n + (s ? ': ' + esc(s.state) : '')};
+                              });
                             var vak = function(v, i){
                               var basis = 'border-radius:9px;padding:5px 0 4px 0;text-align:center;min-width:0;';
                               if(!v) return '<div style="' + basis + 'border:1px dashed var(--ov-ink-12);color:var(--ov-ink-25);font-size:10.5px">' + (i + 1) + '</div>';
                               return '<div title="' + v.titel + '" onclick="' + graf(V.grafiek) + '" style="' + basis + 'cursor:pointer;background:var(--ov-ink-6)">'
                                 + '<div style="width:6px;height:6px;border-radius:50%;margin:0 auto 3px auto;background:var(--ov-' + v.led + ')' + (v.led === 'ok' ? '' : ';box-shadow:0 0 6px var(--ov-' + v.led + ')') + '"></div>'
                                 + '<div style="font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:' + (v.tk ? 'var(--ov-' + v.tk + ')' : 'var(--primary-text-color)') + '">' + (v.t === null ? '—' : nl(v.t) + '°') + '</div>'
-                                + '<div style="font-size:10px;color:var(--ov-ink-45);white-space:nowrap">' + (v.gr === null ? v.i : nl(v.gr) + ' TB') + '</div></div>';
+                                + '<div style="font-size:10px;color:var(--ov-ink-45);white-space:nowrap">' + grootte(v) + '</div></div>';
                             };
-                            var bays = schijven === 0 ? '' : '<div style="display:flex;justify-content:space-between;font-size:10.5px;font-weight:700;letter-spacing:1px;color:var(--ov-ink-45);margin:10px 0 5px 0">'
-                                + '<span>SCHIJVEN</span><span style="font-weight:600;letter-spacing:0">' + schijven + ' van ' + V.vakken + ' vakken</span></div>'
-                              + '<div style="display:grid;grid-template-columns:repeat(' + V.vakken + ',minmax(0,1fr));gap:5px">' + vakken.map(vak).join('') + '</div>';
+                            // Grootte in TB; een NVMe kleiner dan 1 TB in GB.
+                            var grootte = function(v){ return v.gr === null ? v.i : (v.gr < 1 ? nl(v.gr * 1000) + ' GB' : nl(v.gr, v.gr % 1 ? 1 : 0) + ' TB'); };
+                            // De NVMe-sloten staan rechts naast de acht vakken, met een lijntje ertussen: geen extra hoogte.
+                            var bays = schijven + nvmes.length === 0 ? '' : '<div style="display:flex;justify-content:space-between;font-size:10.5px;font-weight:700;letter-spacing:1px;color:var(--ov-ink-45);margin:10px 0 5px 0">'
+                                + '<span>SCHIJVEN</span><span style="font-weight:600;letter-spacing:0">' + schijven + ' van ' + V.vakken + ' vakken' + (nvmes.length ? ' · ' + nvmes.length + '× NVMe' : '') + '</span></div>'
+                              + '<div style="display:flex;gap:5px">'
+                                + '<div style="flex:' + V.vakken + ' 1 0;min-width:0;display:grid;grid-template-columns:repeat(' + V.vakken + ',minmax(0,1fr));gap:5px">' + vakken.map(vak).join('') + '</div>'
+                                + (nvmes.length ? '<div style="flex:' + nvmes.length + ' 1 0;min-width:0;display:grid;grid-template-columns:repeat(' + nvmes.length + ',minmax(0,1fr));gap:5px;border-left:1px solid var(--ov-ink-12);padding-left:5px">' + nvmes.map(vak).join('') + '</div>' : '')
+                              + '</div>';
 
                             // ---- regels
                             var r = [];
@@ -988,7 +1012,7 @@ views:
           # HTML-panelen sturen een hass-action met een navigate-actie (zie `graf`
           # in hun JS), de rackkaart heeft die als tap_action.
           #
-          # NIEUWE SCHIJF in de NAS: één regel bij de reeksen van #temp-nas
+          # NIEUWE SCHIJF of NVMe in de NAS: één regel bij de reeksen van #temp-nas
           # (de test controleert dit tegen een live states-dump).
           - type: custom:bubble-card
             card_type: pop-up
@@ -1176,6 +1200,10 @@ views:
                     name: schijf 3
                   - entity: sensor.garage_unas_garage_hdd_4_temperature
                     name: schijf 4
+                  - entity: sensor.garage_unas_garage_nvme_0_temperature
+                    name: NVMe 0
+                  - entity: sensor.garage_unas_garage_nvme_1_temperature
+                    name: NVMe 1
               - type: custom:apexcharts-card
                 graph_span: 24h
                 update_interval: 5min
