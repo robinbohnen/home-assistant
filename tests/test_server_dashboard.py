@@ -532,28 +532,41 @@ def test_klikken_komt_aan():
         assert stijl.get("pointer-events") == "auto", (k.get("variables") or {}).get("kaart")
 
 
+N = "sensor.unas_garage_nvme_"   # eigen prefix, niet U (7-11-2026)
+
+
 def test_nas_nvme():
     # NVMe-sloten (7-11-2026): naast de vakken, zelf gevonden, met eigen grenzen.
     s = nas_states()
     h = render("nas", s)
     assert "NVMe" not in h and "M.2" not in h   # zonder NVMe-sensoren niets extra
-    s[U + "nvme_0_temperature"] = st(41)
-    s[U + "nvme_1_temperature"] = st(44)
-    s[U + "nvme_1_total_size"] = st(500, unit_of_measurement="GB")
+    for n in (0, 1):
+        s[N + f"{n}_available_spare"] = st(100)
+        s[N + f"{n}_available_spare_threshold"] = st(10)
+        s[N + f"{n}_percentage_used"] = st(1)
+    s[N + "0_temperature"] = st(41)
+    s[N + "1_temperature"] = st(44)
+    s[N + "1_total_size"] = st(500, unit_of_measurement="GB")
     h = render("nas", s)
     assert "4 van 8 vakken · 2× NVMe" in h and ">in orde<" in h
-    assert "41°" in h and "44°" in h and "500 GB" in h and "M.2 0" in h
+    assert "41°" in h and "44°" in h and "500 GB" in h and "M.2 0" in h and "reserve 100%" in h
     assert h.count("'#temp-nas'") == 1 + 4 + 2
-    h = render("nas", {**s, U + "nvme_0_temperature": st(65)})
+    h = render("nas", {**s, N + "0_temperature": st(65)})
     assert ">NVMe 0 65°<" in h and "var(--ov-warn)" in h
-    h = render("nas", {**s, U + "nvme_1_temperature": st(72)})
-    assert ">NVMe 1 72°<" in h
-    h = render("nas", {**s, U + "nvme_0_status": st("<b>Failed</b>")})
+    assert ">NVMe 1 72°<" in render("nas", {**s, N + "1_temperature": st(72)})
+    assert ">NVMe 0 reserve 5%<" in render("nas", {**s, N + "0_available_spare": st(5)})
+    assert ">NVMe 1 85% versleten<" in render("nas", {**s, N + "1_percentage_used": st(85)})
+    h = render("nas", {**s, N + "0_status": st("<b>Failed</b>")})
     assert "NVMe 0 &lt;b&gt;Failed&lt;/b&gt;" in h and "<b>" not in h
-    h = render("nas", {**s, U + "nvme_0_temperature": st("unavailable")})
+    # Zonder temperatuur: slot blijft, tik = more-info van de reserve.
+    zonder = {k: v for k, v in s.items() if k != N + "0_temperature"}
+    h = render("nas", zonder)
+    assert "2× NVMe" in h and "entityId:'" + N + "0_available_spare'" in h
+    assert "undefined" not in h and "NaN" not in h
+    h = render("nas", {**s, N + "0_temperature": st("unavailable")})
     assert "undefined" not in h and "NaN" not in h and "—" in h
     # Ook in de pop-up, 4 en 24 uur.
-    assert {U + "nvme_0_temperature", U + "nvme_1_temperature"} <= set(reeksen(popups()["#temp-nas"]))
+    assert {N + "0_temperature", N + "1_temperature"} <= set(reeksen(popups()["#temp-nas"]))
 
 
 def test_temperaturen_klikbaar():
@@ -579,7 +592,7 @@ def test_live_states():
         assert h and "undefined" not in h and "NaN" not in h, naam
     # Pop-ups: elke reeks bestaat, en elke schijf van de NAS staat erin.
     pp = popups()
-    nvme_re = re.escape(U) + r"nvme_?\d+_temperature"
+    nvme_re = re.escape(N) + r"\d+_temperature"
     nvme_live = {e for e in states if re.fullmatch(nvme_re, e)}
     for h, p in pp.items():
         for e in reeksen(p):
@@ -591,6 +604,9 @@ def test_live_states():
     schijven = {e for e in states if re.fullmatch(re.escape(U) + r"hdd_\d+_temperature", e)}
     assert schijven and schijven <= set(reeksen(pp["#temp-nas"])), "nieuwe schijf: zet hem bij #temp-nas"
     assert nvme_live <= set(reeksen(pp["#temp-nas"])), "nieuwe NVMe: zet hem bij #temp-nas"
+    # De NVMe-temperaturen bestaan als er NVMe-sensoren zijn (anders lege lijnen in de pop-up).
+    if any(e.startswith(N) for e in states):
+        assert nvme_live, "geen " + N + "<n>_temperature: pas de reeksen van #temp-nas aan"
 
 
 if __name__ == "__main__":

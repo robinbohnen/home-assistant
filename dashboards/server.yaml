@@ -410,7 +410,7 @@ views:
                   # geheugen en ventilator, dan de acht schijfvakken als een
                   # voorkant van de NAS (leeg vak = gedimd), met rechts daarnaast
                   # de NVMe-sloten (M.2 0 en 1, sinds 07-11-2026; gevonden via
-                  # <p>nvme_<n>_temperature, dus een derde komt vanzelf). Daaronder een paar
+                  # sensor.unas_garage_nvme_<n>_*, dus een derde komt vanzelf). Daaronder een paar
                   # regels; regels die alleen een probleem melden (Immich-mount,
                   # monitorscripts, share bijna aan zijn quota) verschijnen pas
                   # als er iets mis is. Shares en de fan-instellingen staan er
@@ -443,7 +443,10 @@ views:
                         cpu_heet: 90
                         hdd_warm: 45
                         hdd_heet: 50
-                        # NVMe (cache, 07-11-2026): zelfde grenzen als de NVMe van de NUC.
+                        # NVMe (cache, 07-11-2026): eigen prefix, die sensoren heten
+                        # sensor.unas_garage_nvme_0_available_spare enz. (geen
+                        # garage_unas_garage_). Temperatuur: zelfde grenzen als de NUC.
+                        pn: sensor.unas_garage_
                         nvme_warm: 60
                         nvme_heet: 70
                       styles: *html_kaart
@@ -542,23 +545,31 @@ views:
                               vakken.push({i: i, id: b + 'status', led: led, t: t, tk: tk, gr: gr,
                                 titel: 'HDD ' + i + ': ' + (s ? esc(s.state) : '?') + (bs ? ', ' + nl(bs) + ' slechte sectoren' : '')});
                             }
-                            // NVMe-sloten (07-11-2026): niet vast genummerd zoals de vakken, dus
-                            // zoeken in states naar <P>nvme_<n>_temperature (ook nvme<n>_).
-                            var nvmeRe = new RegExp('^' + P.replace(/[.]/g, '\\.') + 'nvme_?(\\d+)_temperature$');
-                            var nvmes = Object.keys(states).map(function(id){ var m = id.match(nvmeRe); return m ? {n: +m[1], b: id.slice(0, -11)} : null; })
-                              .filter(Boolean).sort(function(a, c){ return a.n - c.n; }).map(function(x){
-                                var t = num(x.b + 'temperature'), s = states[x.b + 'status'], gr = tb(x.b + 'total_size');
+                            // NVMe-sloten (07-11-2026): niet vast genummerd zoals de vakken, dus zoeken
+                            // in states naar <pn>nvme_<n>_* (elke sensor telt, ook zonder temperatuur).
+                            var nvmeRe = new RegExp('^' + V.pn.replace(/[.]/g, '\\.') + 'nvme_?(\\d+)_[a-z0-9_]+$');
+                            var gezien = {};
+                            Object.keys(states).forEach(function(id){ var m = id.match(nvmeRe); if(m) gezien[+m[1]] = id.slice(0, id.indexOf(m[1] + '_') + m[1].length + 1); });
+                            var nvmes = Object.keys(gezien).map(Number).sort(function(a, c){ return a - c; }).map(function(n){
+                                var b = gezien[n];
+                                var t = num(b + 'temperature'), s = states[b + 'status'] || states[b + 'health'], gr = tb(b + 'total_size');
+                                var spare = num(b + 'available_spare'), spareMin = num(b + 'available_spare_threshold'), slijt = num(b + 'percentage_used');
                                 var stOk = !s || weg(s) || /^(optimal|ok|healthy|normal|good|passed)$/i.test(s.state);
                                 var tk = t === null ? 'ink-35' : (t >= V.nvme_heet ? 'bad' : (t >= V.nvme_warm ? 'warn' : null));
-                                if(!stOk) problemen.push({k: 'bad', t: 'NVMe ' + x.n + ' ' + esc(s.state)});
-                                if(t !== null && t >= V.nvme_warm) problemen.push({k: tk, t: 'NVMe ' + x.n + ' ' + nl(t) + '°'});
-                                return {i: 'M.2 ' + x.n, led: t === null && (!s || weg(s)) ? 'ink-25' : (stOk ? 'ok' : 'bad'), t: t, tk: tk,
-                                  gr: gr === null ? null : gr, titel: 'NVMe ' + x.n + (s ? ': ' + esc(s.state) : '')};
+                                var led = stOk ? 'ok' : 'bad';
+                                if(!stOk) problemen.push({k: 'bad', t: 'NVMe ' + n + ' ' + esc(s.state)});
+                                if(t !== null && t >= V.nvme_warm) problemen.push({k: tk, t: 'NVMe ' + n + ' ' + nl(t) + '°'});
+                                // Reserve onder de drempel van de schijf zelf (anders 10%) = vervangen.
+                                if(spare !== null && spare <= (spareMin === null ? 10 : spareMin)) { led = 'bad'; problemen.push({k: 'bad', t: 'NVMe ' + n + ' reserve ' + nl(spare) + '%'}); }
+                                if(slijt !== null && slijt >= 80) { if(led === 'ok') led = slijt >= 90 ? 'bad' : 'warn'; problemen.push({k: slijt >= 90 ? 'bad' : 'warn', t: 'NVMe ' + n + ' ' + nl(slijt) + '% versleten'}); }
+                                if(t === null && spare === null && (!s || weg(s))) led = 'ink-25';
+                                return {i: 'M.2 ' + n, led: led, t: t, tk: tk, gr: gr, klik: t === null ? b + 'available_spare' : null,
+                                  titel: 'NVMe ' + n + (s ? ': ' + esc(s.state) : '') + (spare === null ? '' : ', reserve ' + nl(spare) + '%') + (slijt === null ? '' : ', ' + nl(slijt) + '% versleten')};
                               });
                             var vak = function(v, i){
                               var basis = 'border-radius:9px;padding:5px 0 4px 0;text-align:center;min-width:0;';
                               if(!v) return '<div style="' + basis + 'border:1px dashed var(--ov-ink-12);color:var(--ov-ink-25);font-size:10.5px">' + (i + 1) + '</div>';
-                              return '<div title="' + v.titel + '" onclick="' + graf(V.grafiek) + '" style="' + basis + 'cursor:pointer;background:var(--ov-ink-6)">'
+                              return '<div title="' + v.titel + '" onclick="' + (v.klik ? info(v.klik) : graf(V.grafiek)) + '" style="' + basis + 'cursor:pointer;background:var(--ov-ink-6)">'
                                 + '<div style="width:6px;height:6px;border-radius:50%;margin:0 auto 3px auto;background:var(--ov-' + v.led + ')' + (v.led === 'ok' ? '' : ';box-shadow:0 0 6px var(--ov-' + v.led + ')') + '"></div>'
                                 + '<div style="font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:' + (v.tk ? 'var(--ov-' + v.tk + ')' : 'var(--primary-text-color)') + '">' + (v.t === null ? '—' : nl(v.t) + '°') + '</div>'
                                 + '<div style="font-size:10px;color:var(--ov-ink-45);white-space:nowrap">' + grootte(v) + '</div></div>';
@@ -1200,9 +1211,9 @@ views:
                     name: schijf 3
                   - entity: sensor.garage_unas_garage_hdd_4_temperature
                     name: schijf 4
-                  - entity: sensor.garage_unas_garage_nvme_0_temperature
+                  - entity: sensor.unas_garage_nvme_0_temperature
                     name: NVMe 0
-                  - entity: sensor.garage_unas_garage_nvme_1_temperature
+                  - entity: sensor.unas_garage_nvme_1_temperature
                     name: NVMe 1
               - type: custom:apexcharts-card
                 graph_span: 24h
