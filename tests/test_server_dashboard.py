@@ -18,7 +18,9 @@ Bewaakt wordt:
    de eenheid, RAID-, schijf- en temperatuurproblemen in de badge, probleemregels
    alleen bij een probleem, en de back-uptaken van de NAS als chips;
 7. het hele dashboard tegen een live /api/states-dump als die in
-   /tmp/states.json staat (overgeslagen als het bestand er niet is).
+   /tmp/states.json staat (overgeslagen als het bestand er niet is);
+8. (7 november 2026) de compacte opbouw die het dashboard op één scherm houdt:
+   Ventileren in het rackpaneel, lage grafieken, detailregels in twee kolommen.
 """
 import json
 import os
@@ -465,6 +467,25 @@ def test_state_tekst_wordt_ge_escaped():
     g = kaart("gasten")["variables"]["gasten"][0]["p"]
     h = render("gasten", {f"sensor.{g}_status": st(kwaad)})
     assert "<img" not in h
+
+
+def test_past_op_een_scherm():
+    # Ventileren staat in hetzelfde paneel als het rack, niet in een eigen paneel.
+    panelen = [k for k in ALLE if k.get("type") == "custom:mod-card"]
+    def namen(p):
+        return {(k.get("variables") or {}).get("kaart") for k in kaarten(p["card"])}
+    rackpaneel = next(p for p in panelen if "rack" in namen(p))
+    assert "ventileren" in namen(rackpaneel)
+    assert len(panelen) == 5, "rack+ventileren, NAS, NUC, gasten, back-ups"
+    # Grafieken laag genoeg.
+    for g in (k for k in ALLE if k.get("type") == "custom:apexcharts-card"):
+        assert g["apex_config"]["chart"]["height"] <= 140
+    # Detailregels in twee kolommen; balken van de NUC over de volle breedte.
+    for naam in ("nas", "nuc_details"):
+        assert "grid-template-columns:repeat(2,minmax(0,1fr))" in js(naam), naam
+    h = render("nuc_details", {"sensor.node_intel_disk_used": st(33), "sensor.node_intel_disk_total": st(101),
+                               "sensor.node_intel_swap_used": st(53)})
+    assert h.count("grid-column:1/-1") == 1
 
 
 def test_live_states():

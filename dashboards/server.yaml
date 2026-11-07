@@ -9,12 +9,18 @@
 #
 # OPBOUW (ontwerpregel: eerst wat er nu speelt, groot en met kleur; details
 # compact eronder - zie de kop van dashboards/home/omvormer.yaml):
-#   kolom 1  SERVERRACK  temperatuur in één oogopslag + 24-uursgrafiek
-#            VENTILEREN  1/2/4/8 uur aan, of terug naar automatisch
+#   kolom 1  SERVERRACK  temperatuur in één oogopslag + 24-uursgrafiek, met
+#                        onderin VENTILEREN: 1/2/4/8 uur aan, of terug naar automatisch
 #            NAS         vrije ruimte + RAID, CPU/geheugen/ventilator, de 8
 #                        schijfvakken, een paar regels (staat in hetzelfde rack)
 #   kolom 2  NUC         temperaturen, CPU, geheugen, schijf, grafiek, details
 #   kolom 3  VM'S EN CONTAINERS, BACK-UPS (HA, Immich, de taken van de NAS)
+#
+# OP ÉÉN SCHERM (07-11-2026): het hele dashboard past zonder scrollen op een
+# 1080p-scherm. Daarvoor: Ventileren zit in het rackpaneel, grafieken 135 px
+# hoog, tegels en regels compact, en de detailregels van NUC en NAS staan in
+# twee kolommen (de balken van NUC over de volle breedte). Wie iets toevoegt:
+# kolom 1 is de langste, houd die onder ~950 px.
 #
 # BRONNEN
 #   sensor.proxmox_nuc_intel_*   MQTT van de host zelf (packages/9 - Other/Proxmox NUC.yaml)
@@ -68,10 +74,10 @@ views:
             #root {
               /* Kleurtokens komen uit www/ov-tokens.js, zie overzicht.yaml. */
               --ov-panel-border: 1px solid var(--ov-ink-6);
-              gap: 16px !important;
+              gap: 12px !important;
               min-height: calc(100vh - 8px) !important;
               margin: 0 !important;
-              padding: 20px 24px 24px 24px !important;
+              padding: 12px 16px !important;
               background: var(--primary-background-color) !important;
               box-sizing: border-box !important;
             }
@@ -82,7 +88,7 @@ views:
                 #root {
                   display: grid !important;
                   grid-template-columns: 1fr 1fr 1fr !important;
-                  gap: 16px !important;
+                  gap: 12px !important;
                   align-items: start !important;
                 }
                 @media (max-width: 1500px) {
@@ -101,9 +107,9 @@ views:
                         ha-card {
                           background: var(--ov-panel-bg) !important;
                           border: var(--ov-panel-border) !important;
-                          border-radius: 20px !important;
+                          border-radius: 16px !important;
                           box-shadow: none !important;
-                          padding: 16px 18px !important;
+                          padding: 12px 16px !important;
                         }
                     card:
                       type: vertical-stack
@@ -157,7 +163,7 @@ views:
                                 var oordeel = rack === null ? pil('bad', 'geen meting')
                                   : (rack >= krit ? pil('bad', 'kritiek') : (rack >= warm ? pil('warn', 'warm') : pil('ok', 'koel genoeg')));
                                 var regel = function(label, waarde){
-                                  return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:3px 0">'
+                                  return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:1px 0">'
                                     + '<span style="color:var(--ov-ink-55)">' + label + '</span>'
                                     + '<span style="font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">' + waarde + '</span></div>';
                                 };
@@ -165,10 +171,10 @@ views:
                                 var fanTekst = !fan || ['unavailable', 'unknown'].indexOf(fan.state) !== -1
                                   ? '<span style="color:var(--ov-bad)">geen verbinding</span>'
                                   : (fan.state === 'on' ? '<span style="color:var(--ov-ok)">draaien</span>' : 'stil');
-                                return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 10px 0">'
+                                return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 0 6px 0">'
                                     + '<span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">SERVERRACK</span>' + oordeel + '</div>'
                                   + '<div style="display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:22px;align-items:center">'
-                                    + '<div><div style="font-size:46px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;color:var(--ov-' + k + ')">'
+                                    + '<div><div style="font-size:38px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;color:var(--ov-' + k + ')">'
                                       + (rack === null ? '—' : nl(rack, 1) + '°') + '</div>'
                                       + '<div style="font-size:12px;color:var(--ov-ink-50);margin-top:6px">warm ' + nl(warm, 0) + '° · kritiek ' + nl(krit, 0) + '°</div></div>'
                                     + '<div style="min-width:0">'
@@ -201,7 +207,7 @@ views:
                               max: 1
                           apex_config: &grafiek_apex
                             chart:
-                              height: 180
+                              height: 135
                               toolbar:
                                 show: false
                             grid:
@@ -268,17 +274,13 @@ views:
                               show:
                                 legend_value: false
 
-                  # ------------------------------------------------ VENTILEREN
-                  # Elke knop roept het bestaande handbedieningsscript aan met
-                  # `stand: aan`: tweemaal tikken zet ze dus niet weer uit. Zolang
-                  # de handbediening loopt blijft de automatisering eraf; alleen
-                  # de kritieke drempel wint nog (zie Ventilation.yaml).
-                  - type: custom:mod-card
-                    card_mod:
-                      style: *paneel
-                    card:
-                      type: vertical-stack
-                      cards:
+                        # ---------------------------------------- VENTILEREN
+                        # Onder in het rackpaneel (was een eigen paneel; samengevoegd
+                        # op 07-11-2026 zodat het dashboard op één scherm past).
+                        # Elke knop roept het bestaande handbedieningsscript aan met
+                        # `stand: aan`: tweemaal tikken zet ze dus niet weer uit. Zolang
+                        # de handbediening loopt blijft de automatisering eraf; alleen
+                        # de kritieke drempel wint nog (zie Ventilation.yaml).
                         - type: custom:button-card
                           entity: switch.garage_garage_stopcontact_serverrack_ventilatoren
                           show_icon: false
@@ -320,9 +322,9 @@ views:
                                   else if(!aan && lock !== null && lock > nu) uitleg = 'Automatisch. Blazen hielp niet meer; pas na ' + klok(lock) + ' weer aan, tenzij het rack kritiek wordt.';
                                   else uitleg = 'Automatisch: aan als het rack warm is en de garagelucht koeler.';
                                 }
-                                return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 8px 0">'
+                                return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0 4px 0;border-top:1px solid var(--ov-ink-6)">'
                                     + '<span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">VENTILEREN</span>' + badge + '</div>'
-                                  + '<div style="font-size:13px;line-height:1.45;color:var(--ov-ink-70);padding-bottom:12px">' + uitleg + '</div>';
+                                  + '<div style="font-size:12.5px;line-height:1.4;color:var(--ov-ink-70);padding-bottom:8px">' + uitleg + '</div>';
                               ]]]
                         - type: grid
                           columns: 5
@@ -347,9 +349,9 @@ views:
                                     - border: none
                                     - box-shadow: none
                                     - border-radius: 12px
-                                    - padding: 10px 2px
+                                    - padding: 6px 2px
                                   name:
-                                    - font-size: 13.5px
+                                    - font-size: 13px
                                     - font-weight: "600"
                                     - color: var(--primary-text-color)
                             - type: custom:button-card
@@ -442,13 +444,13 @@ views:
                               return n * ({GB: 0.001, GiB: 0.001073741824, TiB: 1.099511627776, PB: 1000}[u] || 1);
                             };
                             var tegel = function(id, label, waarde, k, sub){
-                              return '<div onclick="' + info(id) + '" style="cursor:pointer;flex:1 1 76px;min-width:0;background:var(--ov-ink-4);border-radius:14px;padding:11px 13px">'
+                              return '<div onclick="' + info(id) + '" style="cursor:pointer;flex:1 1 76px;min-width:0;background:var(--ov-ink-4);border-radius:12px;padding:6px 11px">'
                                 + '<div style="font-size:10.5px;font-weight:700;letter-spacing:1px;color:var(--ov-ink-55)">' + label + '</div>'
-                                + '<div style="font-size:24px;font-weight:700;line-height:1.25;margin-top:3px;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--ov-' + k + ')">' + waarde + '</div>'
+                                + '<div style="font-size:20px;font-weight:700;line-height:1.2;margin-top:1px;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--ov-' + k + ')">' + waarde + '</div>'
                                 + '<div style="font-size:11.5px;color:var(--ov-ink-58);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + sub + '</div></div>';
                             };
                             var rij = function(id, naam, waarde, k){
-                              return '<div onclick="' + info(id) + '" style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:8px 0;border-top:1px solid var(--ov-ink-6)">'
+                              return '<div onclick="' + info(id) + '" style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;border-top:1px solid var(--ov-ink-6)">'
                                 + '<span style="color:var(--ov-ink-80)">' + naam + '</span>'
                                 + '<span style="font-weight:600;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums;color:' + (k ? 'var(--ov-' + k + ')' : 'var(--primary-text-color)') + '">' + waarde + '</span></div>';
                             };
@@ -472,14 +474,14 @@ views:
                             var poolTekst = weg(pst) ? '—' : (poolOk ? 'gezond' : esc(pst.state));
                             var opslag = '<div onclick="' + info(P + 'storage_pool_1_available') + '" style="cursor:pointer">'
                               + '<div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px">'
-                                + '<div><span style="font-size:40px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;color:'
+                                + '<div><span style="font-size:32px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;color:'
                                   + (vrij === null ? 'var(--ov-ink-35)' : (bk === 'info' ? 'var(--primary-text-color)' : 'var(--ov-' + bk + ')')) + '">'
                                   + (vrij === null ? '—' : nl(vrij, vrij < 10 ? 1 : 0)) + '</span>'
                                   + '<span style="font-size:16px;font-weight:600;color:var(--ov-ink-55);margin-left:5px">TB vrij</span></div>'
                                 + '<div style="text-align:right;font-size:12px;line-height:1.5;color:var(--ov-ink-55)">'
                                   + '<div style="font-weight:700;color:var(--primary-text-color)">' + raidTekst + '</div>'
                                   + '<div style="color:' + (weg(pst) ? 'var(--ov-ink-35)' : (poolOk ? 'var(--ov-ok)' : (poolBezig ? 'var(--ov-warn)' : 'var(--ov-bad)'))) + '">' + poolTekst + '</div></div></div>'
-                              + '<div style="height:8px;border-radius:4px;background:var(--ov-ink-6);margin-top:10px;overflow:hidden">'
+                              + '<div style="height:8px;border-radius:4px;background:var(--ov-ink-6);margin-top:8px;overflow:hidden">'
                                 + '<div style="height:8px;border-radius:4px;min-width:4px;width:' + Math.max(0, Math.min(100, pct || 0)) + '%;background:var(--ov-' + bk + ')"></div></div>'
                               + '<div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--ov-ink-50);margin-top:5px;font-variant-numeric:tabular-nums">'
                                 + '<span>' + (used === null ? '—' : nl(used, 1) + ' TB gebruikt') + (pct === null ? '' : ' · ' + nl(pct) + '%') + '</span>'
@@ -492,7 +494,7 @@ views:
                             var ck = ct === null ? 'ink-35' : (ct >= V.cpu_heet ? 'bad' : (ct >= V.cpu_warm ? 'warn' : 'ok'));
                             if(ct !== null && ct >= V.cpu_warm) problemen.push({k: ck, t: 'CPU ' + nl(ct) + '°'});
                             var mk = mp === null ? 'ink-35' : (mp >= 95 ? 'bad' : (mp >= 85 ? 'warn' : 'ok'));
-                            var tegels = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">'
+                            var tegels = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">'
                               + tegel(P + 'cpu_temperature', 'CPU', ct === null ? '—' : nl(ct) + '°', ck, cu === null ? 'temperatuur' : nl(cu) + '% belast')
                               + tegel(P + 'memory_usage', 'GEHEUGEN', mp === null ? '—' : nl(mp) + '%', mk, mu === null || !mt ? 'in gebruik' : nl(mu, 1) + ' van ' + nl(mt) + ' GB')
                               + tegel(P + 'fan_speed_percent', 'VENTILATOR', fp === null ? '—' : nl(fp) + '%', fp === null ? 'ink-35' : 'ink-80',
@@ -516,14 +518,14 @@ views:
                                 titel: 'HDD ' + i + ': ' + (s ? esc(s.state) : '?') + (bs ? ', ' + nl(bs) + ' slechte sectoren' : '')});
                             }
                             var vak = function(v, i){
-                              var basis = 'border-radius:9px;padding:7px 0 6px 0;text-align:center;min-width:0;';
+                              var basis = 'border-radius:9px;padding:5px 0 4px 0;text-align:center;min-width:0;';
                               if(!v) return '<div style="' + basis + 'border:1px dashed var(--ov-ink-12);color:var(--ov-ink-25);font-size:10.5px">' + (i + 1) + '</div>';
                               return '<div title="' + v.titel + '" onclick="' + info(v.id) + '" style="' + basis + 'cursor:pointer;background:var(--ov-ink-6)">'
-                                + '<div style="width:6px;height:6px;border-radius:50%;margin:0 auto 5px auto;background:var(--ov-' + v.led + ')' + (v.led === 'ok' ? '' : ';box-shadow:0 0 6px var(--ov-' + v.led + ')') + '"></div>'
+                                + '<div style="width:6px;height:6px;border-radius:50%;margin:0 auto 3px auto;background:var(--ov-' + v.led + ')' + (v.led === 'ok' ? '' : ';box-shadow:0 0 6px var(--ov-' + v.led + ')') + '"></div>'
                                 + '<div style="font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:' + (v.tk ? 'var(--ov-' + v.tk + ')' : 'var(--primary-text-color)') + '">' + (v.t === null ? '—' : nl(v.t) + '°') + '</div>'
                                 + '<div style="font-size:10px;color:var(--ov-ink-45);white-space:nowrap">' + (v.gr === null ? v.i : nl(v.gr) + ' TB') + '</div></div>';
                             };
-                            var bays = schijven === 0 ? '' : '<div style="display:flex;justify-content:space-between;font-size:10.5px;font-weight:700;letter-spacing:1px;color:var(--ov-ink-45);margin:14px 0 6px 0">'
+                            var bays = schijven === 0 ? '' : '<div style="display:flex;justify-content:space-between;font-size:10.5px;font-weight:700;letter-spacing:1px;color:var(--ov-ink-45);margin:10px 0 5px 0">'
                                 + '<span>SCHIJVEN</span><span style="font-weight:600;letter-spacing:0">' + schijven + ' van ' + V.vakken + ' vakken</span></div>'
                               + '<div style="display:grid;grid-template-columns:repeat(' + V.vakken + ',minmax(0,1fr));gap:5px">' + vakken.map(vak).join('') + '</div>';
 
@@ -569,10 +571,10 @@ views:
                             var ergste = problemen.filter(function(p){ return p.k === 'bad'; }).length ? 'bad' : 'warn';
                             var badge = !problemen.length ? pil('ok', 'in orde')
                               : (problemen.length === 1 ? pil(problemen[0].k, problemen[0].t) : pil(ergste, problemen.length + ' meldingen'));
-                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 12px 0">'
+                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 0 6px 0">'
                                 + '<span onclick="' + info('device_tracker.unas_pro_8') + '" style="cursor:pointer;font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">NAS · UNAS PRO 8</span>' + badge + '</div>'
                               + opslag + tegels + bays
-                              + (r.length ? '<div style="margin-top:12px">' + r.join('') + '</div>' : '');
+                              + (r.length ? '<div style="margin-top:8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px">' + r.join('') + '</div>' : '');
                           ]]]
 
               # ========================== KOLOM 2: NUC ===========================
@@ -609,9 +611,9 @@ views:
                             var pil = function(k, t){ return '<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;white-space:nowrap;color:var(--ov-' + k + ');background:var(--ov-' + k + '-15)">' + t + '</span>'; };
                             var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + id + '\'},bubbles:true,composed:true}))'; };
                             var tegel = function(id, label, waarde, k, sub){
-                              return '<div onclick="' + info(id) + '" style="cursor:pointer;flex:1 1 76px;min-width:0;background:var(--ov-ink-4);border-radius:14px;padding:11px 13px">'
+                              return '<div onclick="' + info(id) + '" style="cursor:pointer;flex:1 1 76px;min-width:0;background:var(--ov-ink-4);border-radius:12px;padding:6px 11px">'
                                 + '<div style="font-size:10.5px;font-weight:700;letter-spacing:1px;color:var(--ov-ink-55)">' + label + '</div>'
-                                + '<div style="font-size:24px;font-weight:700;line-height:1.25;margin-top:3px;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--ov-' + k + ')">' + waarde + '</div>'
+                                + '<div style="font-size:20px;font-weight:700;line-height:1.2;margin-top:1px;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--ov-' + k + ')">' + waarde + '</div>'
                                 + '<div style="font-size:11.5px;color:var(--ov-ink-58);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + sub + '</div></div>';
                             };
                             var cpu = num('sensor.proxmox_nuc_intel_cpu_temperatuur');
@@ -631,7 +633,7 @@ views:
                             else if(cpu >= 92) badge = pil('bad', 'kritiek heet');
                             else if(cpu >= 85) badge = pil('warn', 'warm');
                             else badge = pil('ok', 'in orde');
-                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 10px 0">'
+                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 0 6px 0">'
                                 + '<span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">NUC · PROXMOX</span>' + badge + '</div>'
                               + '<div style="display:flex;flex-wrap:wrap;gap:8px">'
                                 + tegel('sensor.proxmox_nuc_intel_cpu_temperatuur', 'CPU', cpu === null ? '—' : nl(cpu) + '°', ck, watt === null ? 'temperatuur' : nl(watt) + ' W')
@@ -732,8 +734,8 @@ views:
                                 + Math.max(0, Math.min(100, pct)) + '%;background:var(--ov-' + k + ')"></div></div>';
                             };
                             var rij = function(id, naam, waarde, k, extra){
-                              return '<div onclick="' + info(id) + '" style="cursor:pointer;padding:8px 0;border-top:1px solid var(--ov-ink-6)">'
-                                + '<div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px">'
+                              return '<div onclick="' + info(id) + '" style="cursor:pointer;' + (extra ? 'grid-column:1/-1;' : '') + 'padding:4px 0;border-top:1px solid var(--ov-ink-6)">'
+                                + '<div style="display:flex;justify-content:space-between;gap:10px;font-size:13px">'
                                 + '<span style="color:var(--ov-ink-80)">' + naam + '</span>'
                                 + '<span style="font-weight:600;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:' + (k ? 'var(--ov-' + k + ')' : 'var(--primary-text-color)') + '">' + waarde + '</span></div>'
                                 + (extra || '') + '</div>';
@@ -768,7 +770,7 @@ views:
                             var ver = states['sensor.node_intel_version'], upd = states['update.proxmox_ve_update'];
                             var nieuw = upd && upd.state === 'on';
                             if(ver) r.push(rij(nieuw ? 'update.proxmox_ve_update' : 'sensor.node_intel_version', 'Proxmox VE', esc(ver.state) + (nieuw ? ' · update klaar' : ''), nieuw ? 'warn' : null));
-                            return '<div style="padding-top:4px">' + r.join('') + '</div>';
+                            return '<div style="padding-top:2px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:20px">' + r.join('') + '</div>';
                           ]]]
 
               # ==================== KOLOM 3: GASTEN, BACK-UPS =====================
@@ -825,7 +827,7 @@ views:
                               var mem = num('sensor.' + g.p + '_memory_used_percentage');
                               var dsk = num('sensor.' + g.p + '_disk_used_percentage');
                               var stip = draait ? 'ok' : (bekend ? 'bad' : 'ink-25');
-                              return '<div onclick="' + info('sensor.' + g.p + '_status') + '" style="cursor:pointer;' + kol + ';padding:7px 0;border-top:1px solid var(--ov-ink-6);font-size:13px">'
+                              return '<div onclick="' + info('sensor.' + g.p + '_status') + '" style="cursor:pointer;' + kol + ';padding:4px 0;border-top:1px solid var(--ov-ink-6);font-size:13px">'
                                 + '<span style="width:8px;height:8px;border-radius:50%;background:var(--ov-' + stip + ')"></span>'
                                 + '<span style="min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-weight:600">' + g.naam + '</span>'
                                 + ' <span style="color:var(--ov-ink-45);font-size:11.5px">' + g.id + (draait || !st ? '' : ' · ' + esc(st.state)) + '</span></span>'
@@ -834,7 +836,7 @@ views:
                                 + pct(dsk, dsk === null ? null : (dsk >= 95 ? 'bad' : (dsk >= 85 ? 'warn' : null))) + '</div>';
                             });
                             var badge = uit.length ? pil('bad', uit.length + ' uit') : pil('ok', 'alles draait');
-                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 10px 0">'
+                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 0 6px 0">'
                                 + '<span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">VM\'S EN CONTAINERS</span>' + badge + '</div>'
                               + '<div style="' + kol + ';font-size:10.5px;font-weight:700;letter-spacing:.8px;color:var(--ov-ink-45);padding-bottom:4px">'
                                 + '<span></span><span></span><span style="text-align:right">CPU</span><span style="text-align:right">RAM</span><span style="text-align:right">SCHIJF</span></div>'
@@ -874,7 +876,7 @@ views:
                             var pil = function(k, t){ return '<span style="font-size:11.5px;font-weight:600;padding:3px 11px;border-radius:20px;white-space:nowrap;color:var(--ov-' + k + ');background:var(--ov-' + k + '-15)">' + t + '</span>'; };
                             var info = function(id){ return 'this.dispatchEvent(new CustomEvent(\'hass-more-info\',{detail:{entityId:\'' + id + '\'},bubbles:true,composed:true}))'; };
                             var rij = function(id, naam, waarde, k){
-                              return '<div onclick="' + info(id) + '" style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding:8px 0;border-top:1px solid var(--ov-ink-6)">'
+                              return '<div onclick="' + info(id) + '" style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0;border-top:1px solid var(--ov-ink-6)">'
                                 + '<span style="color:var(--ov-ink-80)">' + naam + '</span>'
                                 + '<span style="font-weight:600;white-space:nowrap;text-align:right;color:' + (k ? 'var(--ov-' + k + ')' : 'var(--primary-text-color)') + '">' + waarde + '</span></div>';
                             };
@@ -941,7 +943,7 @@ views:
                             var nxt = nx ? new Date(nx.state).getTime() : NaN;
                             var volgende = isNaN(nxt) ? '' : '<div style="font-size:11.5px;color:var(--ov-ink-45);padding-top:8px">Volgende HA-back-up '
                               + new Date(nxt).toLocaleString('nl-NL', {weekday: 'short', hour: '2-digit', minute: '2-digit'}) + '.</div>';
-                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:2px 0 10px 0">'
+                            return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 0 6px 0">'
                                 + '<span style="font-size:12px;font-weight:700;letter-spacing:1.2px;color:var(--ov-ink-55)">BACK-UPS</span>'
                                 + (slecht ? pil('bad', slecht === 1 ? '1 probleem' : slecht + ' problemen') : pil('ok', 'bij')) + '</div>'
                               + r.join('') + volgende;
