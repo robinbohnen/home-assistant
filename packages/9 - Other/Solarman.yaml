@@ -1,0 +1,193 @@
+##############################################################################
+## SOLARMAN - MERKEN DAT DE INTEGRATIE VASTZIT, EN HEM OPNIEUW LADEN
+##
+## Sinds 4 november 2026 leest HA de Deye weer via ha-solarman (davidrapan),
+## via de LSW-3-logger. Af en toe loopt die integratie vast, en dan helpt
+## alleen opnieuw laden (Instellingen > Apparaten & diensten > Solarman >
+## Opnieuw laden). Dit bestand doet dat zelf.
+##
+## WAT ER STIL MISGAAT ALS SOLARMAN STILVALT
+##   * `sensor.huis_verbruik` valt terug op de P1 (Electricity.yaml), zonder
+##     zon en accu: het getal klopt dan niet meer;
+##   * zon, accu, energietellers en de Omvormer-pagina staan stil of op `—`;
+##   * `binary_sensor.huis_op_accu` mist zijn eerste getuige.
+## MarkeDroid (de baas van de accu) merkt er niets van; die leest zelf.
+##
+## HOE HIJ HET MERKT
+## `binary_sensor.solarman_storing_ruw` hieronder, elke minuut opnieuw
+## uitgerekend met de macro in custom_templates/solarman.jinja:
+##   1. `binary_sensor.inverter_connection` is niet `on`, of
+##   2. de verbinding staat op `on` maar er komen al vijf minuten geen nieuwe
+##      metingen binnen (vastgelopen, waarden bevroren).
+## Tijdgestuurd en geen gewone template-sensor, om dezelfde reden als in
+## Thread.yaml: tijdens het herladen verdwijnen de bronentiteiten even, en een
+## template die zijn bronnen kwijt is rendert niet meer opnieuw - hij bevriest
+## op zijn laatste stand. Elke minuut kijken kan niet bevriezen.
+##
+## WAAROM PAS NA TIEN MINUTEN
+## Op 4 november had `inverter_connection` in vijf uur acht korte
+## onderbrekingen, van seconden tot ~9 minuten, die vanzelf overgingen (zie
+## de kop van Battery.yaml: waarschijnlijk MarkeDroid op dezelfde RS485-lijn).
+## Die willen we niet met een herstart beantwoorden; tien minuten zit daar net
+## boven.
+##
+## WAT DE AUTOMATISERING DOET
+##   1. integratie opnieuw laden, tot vijf minuten wachten tot de metingen
+##      terug zijn, en dan nog twee minuten kijken of het zo blijft;
+##   2. lukt dat niet: nog één keer;
+##   3. lukt dat ook niet: één melding. Daarna elk uur stil nog een poging,
+##      zes uur lang. Komt hij in zo'n latere poging terug, dan volgt een
+##      melding dat het weer werkt (want je had eerder gehoord dat het stuk was).
+## Lukt het de eerste keer wel, dan komt er GEEN melding - dat is het
+## normale geval en zou anders een dagelijkse piep worden. Terugzien kan in
+## de trace van de automatisering en in het logboek ("Solarman").
+##
+## WAT HIJ NIET DOET
+## Hij schrijft niets naar de omvormer. Opnieuw laden leest alleen opnieuw in.
+## Schrijf NOOIT vanuit HA naar `number.`/`select.`/`switch.`/`time.inverter_*`:
+## dat zijn de registers van MarkeDroid (zie de kop van Battery.yaml). De test
+## tests/test_solarman_watchdog.py bewaakt dat voor dit bestand.
+##
+## Helpt opnieuw laden structureel niet (de logger zelf hangt, of de wifi
+## ervan is weg), dan is de stroom van de logger eraf halen de volgende stap;
+## dat kan HA nu niet.
+##
+## LET OP: dit is een nieuw packagebestand en een nieuw custom template; ze
+## laden pas na een volledige herstart van Home Assistant.
+##############################################################################
+
+solarman_package:
+
+  template:
+    - triggers:
+        - trigger: time_pattern
+          minutes: "/1"
+        - trigger: homeassistant
+          event: start
+      binary_sensor:
+        # RUW: zonder vertraging. De tien minuten zitten in de trigger van de
+        # automatisering, zodat de wachtlus daar direct ziet wanneer het weer
+        # goed is.
+        - name: "Solarman storing ruw"
+          unique_id: solarman_storing_ruw
+          default_entity_id: binary_sensor.solarman_storing_ruw
+          device_class: problem
+          icon: mdi:solar-power-variant-outline
+          state: >-
+            {% from 'solarman.jinja' import solarman_storing %}
+            {{ solarman_storing() | trim != '' }}
+          attributes:
+            reden: >-
+              {% from 'solarman.jinja' import solarman_storing %}
+              {{ solarman_storing() | trim }}
+
+  automation:
+    - id: solarman_herladen_bij_storing
+      alias: Solarman - Integratie opnieuw laden bij storing
+      description: >-
+        Laadt de Solarman-integratie (Deye-omvormer) opnieuw als hij tien
+        minuten geen verbinding of geen nieuwe metingen heeft. Meldt alleen
+        als opnieuw laden niet helpt, of als het later alsnog lukt.
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.solarman_storing_ruw
+          to: "on"
+          for: "00:10:00"
+          id: storing
+        # Nieuwe poging zolang het stuk blijft. Vangt ook een storing die een
+        # herstart van HA overleeft: dan begint de `for` hierboven opnieuw te
+        # tellen, maar dit vangnet niet.
+        - trigger: time_pattern
+          minutes: "7"
+          id: uur
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.solarman_storing_ruw
+          state: "on"
+          for: "00:10:00"
+        # Niet meteen na een herstart van HA: dan is de integratie nog aan het
+        # verbinden (zelfde regel als in Thread.yaml).
+        - condition: template
+          value_template: >-
+            {% set start = states('sensor.home_assistant_gestart') | as_datetime(none) %}
+            {{ start is none or (now() - start) > timedelta(minutes=20) }}
+        # Hooguit één ronde per uur. 55 en niet 60 minuten: de uurtrigger
+        # valt anders net binnen het uur na de vorige ronde en slaat over.
+        - condition: template
+          value_template: >-
+            {{ this.attributes.last_triggered is none
+               or now() - this.attributes.last_triggered > timedelta(minutes=55) }}
+        # Na zes uur lost herladen het niet meer op; dan is het iets fysieks.
+        - condition: template
+          value_template: >-
+            {% set s = states.binary_sensor.solarman_storing_ruw %}
+            {{ s is none or (now() - s.last_changed) < timedelta(hours=6) }}
+      actions:
+        - variables:
+            reden: "{{ state_attr('binary_sensor.solarman_storing_ruw', 'reden') }}"
+            # De eerste ronde van deze storing: begonnen binnen het uur. Alleen
+            # dán melden we dat het niet lukt; in latere rondes melden we
+            # alleen nog dat het weer werkt.
+            eerste_ronde: >-
+              {{ now() - states.binary_sensor.solarman_storing_ruw.last_changed
+                 < timedelta(minutes=50) }}
+        - repeat:
+            count: 2
+            sequence:
+              - action: logbook.log
+                data:
+                  name: Solarman
+                  message: "wordt opnieuw geladen (poging {{ repeat.index }}): {{ reden }}"
+                  entity_id: binary_sensor.solarman_storing_ruw
+              # Via de entiteit en niet via een config_entry_id: zo blijft dit
+              # werken als de integratie ooit opnieuw wordt toegevoegd.
+              - action: homeassistant.reload_config_entry
+                target:
+                  entity_id: binary_sensor.inverter_connection
+                continue_on_error: true
+              - wait_template: "{{ is_state('binary_sensor.solarman_storing_ruw', 'off') }}"
+                timeout: "00:05:00"
+                continue_on_timeout: true
+              - if:
+                  - condition: template
+                    value_template: "{{ wait.completed }}"
+                then:
+                  # Blijft het ook goed? Na een herlaadbeurt komt de verbinding
+                  # soms even terug en valt dan opnieuw weg.
+                  - delay: "00:02:00"
+                  - if:
+                      - condition: state
+                        entity_id: binary_sensor.solarman_storing_ruw
+                        state: "off"
+                    then:
+                      - action: logbook.log
+                        data:
+                          name: Solarman
+                          message: "werkt weer na opnieuw laden (poging {{ repeat.index }})"
+                          entity_id: binary_sensor.solarman_storing_ruw
+                      - if:
+                          - condition: template
+                            value_template: "{{ not eerste_ronde }}"
+                        then:
+                          - action: notify.mobile_devices_adults
+                            data:
+                              title: Solarman werkt weer
+                              message: >-
+                                De Solarman-integratie is na opnieuw laden weer
+                                verbonden; zon, accu en huisverbruik kloppen weer.
+                      - stop: Solarman werkt weer
+        - if:
+            - condition: template
+              value_template: "{{ eerste_ronde }}"
+          then:
+            - action: notify.mobile_devices_adults
+              data:
+                title: Solarman blijft stil
+                message: >-
+                  De Solarman-integratie (Deye) werkt niet ({{ reden }}) en twee
+                  keer opnieuw laden hielp niet. Ik probeer het de komende zes
+                  uur elk uur opnieuw. Huisverbruik rekent nu met de P1-meter;
+                  zon en accu ontbreken. Kijk of de logger (192.168.30.152)
+                  nog bereikbaar is.

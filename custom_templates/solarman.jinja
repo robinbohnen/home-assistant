@@ -1,0 +1,68 @@
+{#-
+==============================================================================
+  SOLARMAN - IS DE INTEGRATIE GEZOND?
+==============================================================================
+
+  Gebruik:
+
+      {% from 'solarman.jinja' import solarman_storing %}{{ solarman_storing() }}
+
+  Geeft een LEGE string als alles goed is, en anders in gewone woorden wat er
+  mis is. Eén definitie voor zowel de state als het attribuut `reden` van
+  `binary_sensor.solarman_storing_ruw` (packages/9 - Other/Solarman.yaml), zodat
+  die twee elkaar nooit tegenspreken.
+
+  LET OP: custom_templates worden alleen bij het opstarten ingelezen, of met
+  de actie `homeassistant.reload_custom_templates`.
+
+  ---------------------------------------------------------------------------
+  WANNEER IS SOLARMAN STUK
+  ---------------------------------------------------------------------------
+  Twee manieren waarop de integratie (ha-solarman, davidrapan) vastloopt:
+
+    1. HIJ ZEGT HET ZELF: `binary_sensor.inverter_connection` is niet `on`
+       (uit, `unavailable`, of de entiteit bestaat niet meer).
+    2. HIJ ZEGT NIETS MEER: de verbinding staat op `on`, maar er komen geen
+       nieuwe metingen binnen. De waarden blijven dan gewoon op de laatste
+       stand staan; zonder deze regel zie je dat alleen aan een dashboard dat
+       verdacht stil is.
+
+  Voor (2) kijken we naar `last_reported` - dat schuift bij ELKE schrijfbeurt
+  op, ook als de waarde gelijk blijft - van een paar sensoren die van nature
+  bij vrijwel elke ronde (~5 s) iets anders zeggen: netspanning, netfrequentie,
+  accuspanning en accuvermogen. Is de nieuwste daarvan ouder dan vijf minuten,
+  dan staat de integratie stil. Vier bronnen en niet één: 's nachts kan het
+  accuvermogen lang exact 0 zijn, maar de netspanning beweegt altijd.
+  `last_updated` is de terugval voor een HA zonder `last_reported`.
+
+  Wat NIET telt als storing: een enkele leesfout of een ronde op 0 (zie
+  LEESFOUTEN in Battery.yaml). Die worden elders weggefilterd; daar helpt een
+  herstart niet tegen.
+-#}
+{%- macro solarman_storing() -%}
+  {%- set bronnen = [
+       'sensor.inverter_grid_l1_voltage',
+       'sensor.inverter_grid_frequency',
+       'sensor.inverter_battery_voltage',
+       'sensor.inverter_battery_power'
+     ] -%}
+  {%- set max_stil = 300 -%}
+  {%- set ns = namespace(laatst=none) -%}
+  {%- for e in bronnen -%}
+    {%- set s = states[e] -%}
+    {%- if s is not none and s.state not in ['unknown', 'unavailable'] -%}
+      {%- set t = s.last_reported or s.last_updated -%}
+      {%- if t is not none and (ns.laatst is none or t > ns.laatst) -%}
+        {%- set ns.laatst = t -%}
+      {%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- set verbinding = states('binary_sensor.inverter_connection') -%}
+  {%- if verbinding != 'on' -%}
+    verbinding {{ verbinding }}
+  {%- elif ns.laatst is none -%}
+    geen metingen
+  {%- elif (now() - ns.laatst).total_seconds() > max_stil -%}
+    {{ ((now() - ns.laatst).total_seconds() / 60) | round(0) | int }} minuten geen nieuwe metingen
+  {%- endif -%}
+{%- endmacro -%}

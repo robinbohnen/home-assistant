@@ -138,6 +138,19 @@ moment and they always add up; the fallback to the P1 meter when Solarman is sil
 (then a new value only every 5 s, state and attributes held in between), the battery
 hiccup hold, the one-second trigger, and that the 120 s average is gone.
 
+`tests/test_solarman_watchdog.py` (8-11-2026) covers the Solarman watchdog in
+`packages/9 - Other/Solarman.yaml`. When ha-solarman gets stuck, only reloading the
+integration brings it back; the watchdog does that itself. `binary_sensor.solarman_storing_ruw`
+(recomputed every minute by the macro in `custom_templates/solarman.jinja`) is on when
+`binary_sensor.inverter_connection` is not `on`, or when none of four always-moving
+sensors (grid voltage, grid frequency, battery voltage and power) has reported for five
+minutes. After ten minutes (short drops of up to ~9 minutes heal on their own) the
+automation reloads the config entry through the entity, at most twice per round, one round
+per hour, for at most six hours. It notifies only when reloading does not help, or when a
+later round does bring it back. The test runs the macro against fake states and checks the
+automation's structure, including that this package never writes to the inverter's
+`number.`/`select.`/`switch.`/`time.inverter_*` registers (those belong to MarkeDroid).
+
 ### Dashboards in Server style (7-11-2026)
 
 Kamers, School, Klimaat, Accu, Omvormer and Systeem look like the Server dashboard: a
@@ -369,7 +382,7 @@ Locks are used mostly as a way to lock / unlock doors based on locations or time
 | Ikea Alpstuga air quality monitor | 2 | Matter | [Matter](https://www.home-assistant.io/integrations/matter/) | Temperature, humidity, CO2 and PM2.5. One in the living room, one in Maxi's bedroom since 4 September 2026; there it is the room's designated thermometer (see custom_templates/kamers.jinja) and its display is switched off during bedtime, see packages/1 - First Floor/Bedroom Maxi/Multisensor.yaml |
 | Ikea Myggspray motion sensor | 3 | Matter | [Matter](https://www.home-assistant.io/integrations/matter/) | Occupancy and illuminance in Maxi's bedroom, the office and the meter cupboard. The meter cupboard one keeps the led strip on together with the door contact, see `packages/0 - Ground Floor/Meterkast/Lights.yaml` |
 | Ikea Timmerflotte temp/humidity sensor | 8 | Matter | [Matter](https://www.home-assistant.io/integrations/matter/) | Temperature and humidity per room |
-| Deye LV three-phase hybrid inverter 20 kW + 51.2 kWh battery (1,000 Ah) | 1 | Solarman logger | [ha-solarman](https://github.com/davidrapan/ha-solarman) | Home battery since 20 September 2026, replacing the Marstek Venus E; since 14 October all 28 panels (9.46 kWp, two strings) hang on it too. Controlled by the MarkeDroid appliance (ModuSun), not by Home Assistant: HA only reads it (since 4 November 2026 via Solarman again, MarkeDroid's MQTT only for its control mode), through the `sensor.accu_*` and `sensor.zon_*` layers in `packages/9 - Other/Battery.yaml` and `packages/2 - Second Floor/Attic/Solarpanels.yaml` |
+| Deye LV three-phase hybrid inverter 20 kW + 51.2 kWh battery (1,000 Ah) | 1 | Solarman logger | [ha-solarman](https://github.com/davidrapan/ha-solarman) | Home battery since 20 September 2026, replacing the Marstek Venus E; since 14 October all 28 panels (9.46 kWp, two strings) hang on it too. Controlled by the MarkeDroid appliance (ModuSun), not by Home Assistant: HA only reads it (since 4 November 2026 via Solarman again, MarkeDroid's MQTT only for its control mode), through the `sensor.accu_*` and `sensor.zon_*` layers in `packages/9 - Other/Battery.yaml` and `packages/2 - Second Floor/Attic/Solarpanels.yaml`. When the integration gets stuck, `packages/9 - Other/Solarman.yaml` reloads it |
 | [KEBA KeContact P40 Pro](https://www.keba.com/en/emobility/products/ac-charging-stations/p40/kecontact-p40-overview) | 1 | Ethernet | [Modbus](https://www.home-assistant.io/integrations/modbus/) + [KEBA P40](https://github.com/Ich-h4lt/keba-p40-home-assistant) | Wallbox at the carport, 16 A over three phases. Modbus TCP on port 502 gives the readings with readable names (`packages/3 - Outside/Carport/KEBA P40 Pro.yaml`), the HACS integration adds the controls over the local REST API. The wallbox answers only one Modbus session at a time, so nothing else may poll port 502 |
 
 ## <a name="vms">Virtual Machines</a>
