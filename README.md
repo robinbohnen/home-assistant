@@ -122,6 +122,16 @@ evening wind-down or bedtime it has to go straight back off with a notification,
 except when nobody is home (then the switch-on came from the blueprint itself), and
 in daytime nothing happens. It also checks that both rooms pass a notification.
 
+`tests/test_motion_light_vangnet.py` (13-11-2026) covers the optional safety net
+(`vangnet_na`) in `blueprints/automation/robin/motion_light.yaml`. Normally a motion
+light only goes off after a clean `on` → `off` of its motion sensor, so a lamp switched
+on some other way (Mini's door, the dashboard, voice) or a sensor that drops out while
+`on` left the light burning. With `vangnet_na` set, a template trigger switches it off
+once the lamp has been on and the sensor quiet (or unavailable) for that long. It is
+off by default; only the attic landing (`Attic Corridor/Lights.yaml`, 10 minutes) uses
+it. The test renders the trigger template from the blueprint through 16 scenarios and
+checks that only the off branch handles it and that the attic enables it.
+
 `tests/test_zon_filter.py` runs the read-error filters on the solar feed. Since
 4-11-2026 the sun comes from Solarman again, per string (`sensor.zon_vermogen_zw` from
 PV1, `sensor.zon_vermogen_o` from PV2, `sensor.zon_vermogen_nu` is their sum). It

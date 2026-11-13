@@ -24,6 +24,9 @@
 # uitstellen zolang er iets loopt (`uit_uitstel`, in de badkamer: de douche).
 # Alle drie komen uit dezelfde ochtend in die badkamer; de toelichting staat
 # bij de takken onderaan.
+# Sinds 13 november 2026 is er een optioneel vangnet (`vangnet_na`): een lamp
+# die al lang brandt terwijl de melder al lang niets ziet, gaat alsnog uit -
+# ook als hij nooit door beweging aanging. Uitleg bij de trigger `vangnet`.
 blueprint:
   name: Bewegingslicht
   description: >-
@@ -133,6 +136,20 @@ blueprint:
       default: []
       selector:
         condition:
+    vangnet_na:
+      name: Vangnet - uit als het zo lang stil is (optioneel)
+      description: >-
+        Brandt de lamp al zo lang én heeft de bewegingsmelder al zo lang niets
+        gezien, dan gaat hij alsnog uit - ook als hij niet door beweging aanging
+        (een deur-automatisering, het dashboard) of als de melder tussendoor
+        wegviel en dus geen nette aan-naar-uit-overgang maakte. 0 = uit. Kies
+        hem ruim langer dan `uit_na`, het is een vangnet en geen tweede timer.
+      default:
+        hours: 0
+        minutes: 0
+        seconds: 0
+      selector:
+        duration:
     extra_uit_triggers:
       name: Extra uit-triggers (optioneel)
       description: >-
@@ -219,6 +236,13 @@ variables:
       {{ p[0] * 3600 + p[1] * 60 + p[2] }}
     {% endif %}
 
+# Alleen voor de vangnet-trigger onderaan de lijst: een template-trigger ziet
+# `variables:` niet, alleen `trigger_variables:`.
+trigger_variables:
+  vangnet_pir: !input bewegingssensor
+  vangnet_lampen: !input lamp
+  vangnet_na: !input vangnet_na
+
 triggers:
   - trigger: state
     entity_id: !input bewegingssensor
@@ -278,6 +302,61 @@ triggers:
     not_from:
       - unknown
       - unavailable
+  # HET VANGNET (13 november 2026, aanleiding: de overloop zolder)
+  # Alles hierboven zet de lamp alleen uit na een nette `on` -> `off` van de
+  # bewegingsmelder. Gaat de lamp op een andere manier aan, dan komt die
+  # overgang nooit en blijft hij branden tot er toevallig iemand langsloopt:
+  #   - een andere automatisering zet hem aan en de melder ziet niemand
+  #     (Mini's deur na zonsondergang doet dat met beide overlopen; die
+  #     automatisering dooft zelf na vijf minuten, maar met één los
+  #     uit-commando zonder herhaling, en een herlaad van de automatiseringen
+  #     tijdens haar `delay` gooit dat uitzetten helemaal weg);
+  #   - iemand zet hem aan via het dashboard of de stem;
+  #   - de melder valt weg terwijl hij `on` staat en komt terug op `off`: de
+  #     `not_from`-guard op de uit-trigger laat dat bewust niet tellen.
+  #
+  # Een template-trigger en geen `time_pattern`: een tijdpatroon dat elke
+  # minuut afgaat en meestal op een conditie strandt, laat elke minuut een
+  # trace achter en drukt zo de vijf echte runs uit de trace-lijst. Deze
+  # trigger gaat alleen af op het moment dat de situatie ontstaat (rekent elke
+  # minuut opnieuw door `now()`), en blijft stil zolang `vangnet_na` 0 is.
+  #
+  # Een melder die `unavailable` is of niet bestaat telt als stil: een dode
+  # melder mag de lamp niet eeuwig aan houden. Zolang hij `on` meldt, telt dat
+  # als iemand die er is, en dan wacht het vangnet gewoon op de gewone
+  # uit-trigger. Bij meer lampen moet de jongste al `vangnet_na` aan staan.
+  #
+  # Hij komt in de uit-tak hieronder, dus de deur-coulance, `uit_vereisten`,
+  # `uit_uitstel` en de dubbele uit gelden er net zo voor.
+  - trigger: template
+    id: vangnet
+    value_template: >-
+      {% set d = vangnet_na %}
+      {% if d is mapping %}
+        {% set sec = (d.days | default(0) | int) * 86400
+                     + (d.hours | default(0) | int) * 3600
+                     + (d.minutes | default(0) | int) * 60
+                     + (d.seconds | default(0) | int) %}
+      {% else %}
+        {% set p = (d | string).split(':') %}
+        {% set sec = (p[0] | int(0)) * 3600 + (p[1] | default(0) | int(0)) * 60
+                     + (p[2] | default(0) | int(0)) %}
+      {% endif %}
+      {% set ns = namespace(aan=false, vers=false) %}
+      {% for e in vangnet_lampen %}
+        {% set s = states[e] %}
+        {% if s is not none and s.state == 'on' %}
+          {% set ns.aan = true %}
+          {% if (now() - s.last_changed).total_seconds() < sec %}
+            {% set ns.vers = true %}
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+      {% set m = states[vangnet_pir] %}
+      {% set stil = m is none
+         or (m.state != 'on'
+             and (now() - m.last_changed).total_seconds() >= sec) %}
+      {{ sec > 0 and ns.aan and not ns.vers and stil }}
   # Genest triggers-blok: zo voeg je een trigger-selector-input samen met de
   # vaste triggers hierboven. De input zelf direct als lijstitem plakken
   # (`- !input ...`) is ongeldig en liet de hele blueprint stuklopen.
@@ -381,6 +460,7 @@ actions:
             id:
               - geen_beweging
               - uit
+              - vangnet
           - alias: "Kamerspecifieke voorwaarden voor uitzetten"
             condition: and
             conditions: !input uit_vereisten
