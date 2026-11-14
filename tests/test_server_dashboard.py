@@ -444,6 +444,21 @@ def test_gasten_naam_van_het_apparaat():
     assert ">HA test<" in render("gasten", s, hass=hass)
 
 
+def test_gasten_proxmox_apparaatnaam_opgeschoond():
+    # Zo heet het apparaat echt (dashboard, 14-11-2026): "QEMU media (112)".
+    s = {**_bekend(), **_gast("qemu_media_112", friendly_name="QEMU media (112) Status")}
+    hass = {"entities": {"sensor.qemu_media_112_status": {"device_id": "d"}},
+            "devices": {"d": {"name": "QEMU media (112)"}}}
+    for h in (render("gasten", s, hass=hass), render("gasten", s)):
+        assert ">media<" in h and "VM 112" in h and "QEMU" not in h and "(112)" not in h, h
+    # LXC in de apparaatnaam wint van een `qemu_`-entity-id (zoals CT 100).
+    s = {**_bekend(), **_gast("qemu_oude_naam_121")}
+    hass = {"entities": {"sensor.qemu_oude_naam_121_status": {"device_id": "d"}},
+            "devices": {"d": {"name": "LXC grafana (121)"}}}
+    h = render("gasten", s, hass=hass)
+    assert ">grafana<" in h and "CT 121" in h and "VM 121" not in h, h
+
+
 def test_gasten_ontdekte_gast_die_uit_staat_telt():
     h = render("gasten", {**_bekend(), **_gast("lxc_test_120", status="stopped")})
     assert "1 uit" in h and "CT 120" in h and "· stopped" in h

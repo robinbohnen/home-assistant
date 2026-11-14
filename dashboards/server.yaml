@@ -913,7 +913,13 @@ views:
                                 if(fn) naam = String(fn).replace(/\s*status\s*$/i, '');
                               }
                               if(!naam || naam === m[1]) naam = m[3].replace(/_/g, '-');
-                              nieuw.push({naam: esc(naam), id: (m[2] === 'lxc' ? 'CT ' : 'VM ') + m[4], p: m[1], nr: Number(m[4])});
+                              // De Proxmox-integratie noemt een apparaat "QEMU media (112)" of
+                              // "LXC naam (nr)" (gezien 14-11-2026). Het nummer staat al in het
+                              // label, en QEMU/LXC zegt betrouwbaarder VM of CT dan de entity-id.
+                              var soort = m[2] === 'lxc' ? 'CT' : 'VM';
+                              var pm = String(naam).match(/^(QEMU|LXC)\s+(.+?)(?:\s*\(\d+\))?$/i);
+                              if(pm) { naam = pm[2]; soort = pm[1].toUpperCase() === 'LXC' ? 'CT' : 'VM'; }
+                              nieuw.push({naam: esc(naam), id: soort + ' ' + m[4], p: m[1], nr: Number(m[4])});
                             });
                             nieuw.sort(function(a, b){ return a.nr - b.nr; });
                             var gasten = bekend.filter(function(g){ return states['sensor.' + g.p + '_status']; }).concat(nieuw);
