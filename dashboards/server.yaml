@@ -50,8 +50,17 @@
 # DE ENTITY-ID'S VAN DE GASTEN KLOPPEN NIET MET HUN NAAM. De Proxmox-integratie
 # hield de oude id's toen VM's werden vervangen: `qemu_mqtt_100` is CT 100
 # (zigbee2mqtt), `qemu_scrypted_102` is CT 102 (npm), `qemu_nginx_proxy_manager_111`
-# is VM 111 (scanalyse-scanner). Daarom staat de lijst hieronder met de hand
-# uitgeschreven: naam en prefix per gast. Nieuwe gast = één regel erbij.
+# is VM 111 (scanalyse-scanner). Daarom staat er een lijst met de hand
+# uitgeschreven: naam en prefix per gast.
+#
+# SINDS 14-11-2026 IS DIE LIJST ALLEEN NOG EEN CORRECTIE. Het paneel vindt
+# zelf elke gast aan zijn `sensor.qemu_*_<nr>_status` of
+# `sensor.lxc_*_<nr>_status`; een nieuwe VM of container verschijnt vanzelf,
+# onder de bekende, op nummer. Zijn naam komt van het apparaat, anders uit de
+# friendly_name, anders uit de entity-id; VM of CT uit het voorvoegsel - en dat
+# kan dus net zo fout zijn als bij de drie hierboven. Klopt een naam niet:
+# één regel in `gasten`. Hoort een gast er niet bij: zijn prefix in `negeren`.
+# Een gast uit de lijst die niet meer bestaat valt vanzelf weg.
 #
 # GEHEUGEN PER VM KLEURT NIET ROOD. Proxmox rekent de paginacache van een
 # gast mee als gebruikt; een VM zonder ballooning staat dus vaak op 90-100%
@@ -838,7 +847,8 @@ views:
               - type: vertical-stack
                 cards:
                   # ---------------------------------- VM'S EN CONTAINERS
-                  # Expliciete lijst, zie de kop: naam + prefix van de entiteiten.
+                  # Gasten worden gevonden; de lijst hieronder corrigeert alleen
+                  # namen en volgorde (zie de kop).
                   - type: custom:mod-card
                     card_mod:
                       style: *paneel
@@ -867,6 +877,9 @@ views:
                           - {naam: tools, id: VM 110, p: qemu_tools_110}
                           - {naam: scanalyse-scanner, id: VM 111, p: qemu_nginx_proxy_manager_111}
                           - {naam: windows, id: VM 107, p: qemu_windows_107}
+                        # Prefixen van gasten die bewust niet op het dashboard
+                        # horen (een template, een VM die met opzet uit staat).
+                        negeren: []
                       styles: *html_kaart
                       custom_fields:
                         x: |
@@ -879,7 +892,32 @@ views:
                             var pct = function(n, k){ return '<span style="text-align:right;font-variant-numeric:tabular-nums;color:' + (k ? 'var(--ov-' + k + ')' : 'var(--ov-ink-70)') + '">' + (n === null ? '—' : Math.round(n) + '%') + '</span>'; };
                             var kol = 'display:grid;grid-template-columns:10px minmax(0,1fr) 44px 44px 50px;column-gap:10px;align-items:center';
                             var uit = [];
-                            var rijen = (variables.gasten || []).map(function(g){
+                            // Gasten (14-11-2026): de handlijst eerst, in haar volgorde, maar
+                            // alleen wie nog bestaat - een weggehaalde VM bleef anders eeuwig
+                            // "uit" in de badge. Daarna elke andere Proxmox-gast die er is, op
+                            // nummer. Naam van een ontdekte gast: apparaatnaam, anders de
+                            // friendly_name zonder "Status", anders uit de entity-id.
+                            var bekend = variables.gasten || [], gezien = {};
+                            bekend.forEach(function(g){ gezien[g.p] = true; });
+                            (variables.negeren || []).forEach(function(p){ gezien[p] = true; });
+                            var nieuw = [], H = typeof hass !== 'undefined' ? hass : null;
+                            Object.keys(states).forEach(function(id){
+                              var m = id.match(/^sensor\.((qemu|lxc)_([a-z0-9_]+?)_(\d+))_status$/);
+                              if(!m || gezien[m[1]]) return;
+                              var naam = null;
+                              var ent = H && H.entities ? H.entities[id] : null;
+                              var dev = ent && ent.device_id && H.devices ? H.devices[ent.device_id] : null;
+                              if(dev) naam = dev.name_by_user || dev.name;
+                              if(!naam) {
+                                var fn = (states[id].attributes || {}).friendly_name;
+                                if(fn) naam = String(fn).replace(/\s*status\s*$/i, '');
+                              }
+                              if(!naam || naam === m[1]) naam = m[3].replace(/_/g, '-');
+                              nieuw.push({naam: esc(naam), id: (m[2] === 'lxc' ? 'CT ' : 'VM ') + m[4], p: m[1], nr: Number(m[4])});
+                            });
+                            nieuw.sort(function(a, b){ return a.nr - b.nr; });
+                            var gasten = bekend.filter(function(g){ return states['sensor.' + g.p + '_status']; }).concat(nieuw);
+                            var rijen = gasten.map(function(g){
                               var st = states['sensor.' + g.p + '_status'];
                               var draait = st && st.state === 'running';
                               var bekend = st && ['unavailable', 'unknown'].indexOf(st.state) === -1;

@@ -17,8 +17,11 @@ ventilation_cooling_package:
   ##
   ## Het serverrack krijgt daarbovenop een kritieke drempel: daarboven altijd
   ## aan, ook als de garage niet koeler is, tijdens een lockout, en zonder
-  ## stagnatie-uit. Plus aan als de rack-sensor een half uur geen meting
-  ## geeft. De stagnatie-uit zelf doet hij wel (Robin, 19 september 2026):
+  ## stagnatie-uit. Geeft de rack-sensor een half uur geen meting, dan
+  ## beslissen sinds 14 november 2026 de NUC en de NAS: lopen hun
+  ## temperaturen op, dan aan; zitten ze een half uur stabiel en acceptabel,
+  ## dan uit (binary_sensor.serverrack_apparaten_warm). Meten die ook niets,
+  ## dan blind aan, zoals het was. De stagnatie-uit zelf doet hij wel (Robin, 19 september 2026):
   ## er staat weinig warmmakends in en de ventilatoren maken herrie.
   ##
   ## HANDBEDIENING SERVERRACK
@@ -253,6 +256,83 @@ ventilation_cooling_package:
       sampling_size: 500
       max_age:
         hours: 1
+
+  template:
+    - binary_sensor:
+        #######################################################################
+        ## APPARATEN IN HET RACK WARM? (14 november 2026)
+        ##
+        ## Alleen gebruikt als de rack-sensor zelf geen meting geeft. Tot nu toe
+        ## gingen de ventilatoren dan blind aan en bleven ze aan zolang de
+        ## sensor weg was - ook als de NUC en de NAS gewoon koel draaiden. Wat
+        ## die apparaten zelf meten zegt meer over "is blazen nodig" dan niets
+        ## (Robin, 14 november 2026): lopen ze op, dan aan; zijn ze stabiel en
+        ## acceptabel, dan uit.
+        ##
+        ## Per apparaat een AAN- en een UIT-grens. De aan-grens ligt net onder
+        ## de oranje grens op het Server-dashboard (dashboards/server.yaml en
+        ## de rackkaart in dashboards/home/overzicht/kolom_rechts.yaml), zodat
+        ## er geblazen wordt vóór het daar oranje wordt:
+        ##   NUC CPU           aan 80   uit 75   (dashboard: oranje 85, rood 92)
+        ##   NUC NVMe          aan 55   uit 50   (oranje 60, rood 70)
+        ##   NAS schijf 1-4    aan 42   uit 40   (oranje 45, rood 50)
+        ##   NAS NVMe 0-1      aan 55   uit 50   (oranje 60, rood 70)
+        ## Tussen de twee grenzen blijft de stand staan (hysterese).
+        ##
+        ## De CPU van de NAS doet bewust niet mee: daar heeft het dashboard
+        ## geen grens voor, dus er is geen geijkte "te warm".
+        ##
+        ## "Stabiel": `delay_off` van een half uur. Pas als alles een half uur
+        ## onder de uit-grens zit gaan de ventilatoren uit. `delay_on` van vijf
+        ## minuten houdt een korte CPU-piek (backup, update) buiten de deur,
+        ## dezelfde vijf minuten als de "NUC wordt warm"-melding.
+        ##
+        ## `unavailable` als geen enkel apparaat een meting geeft. De
+        ## automatisering valt dan terug op het oude gedrag: blind aan.
+        #######################################################################
+        - name: "Serverrack apparaten warm"
+          unique_id: serverrack_apparaten_warm
+          default_entity_id: binary_sensor.serverrack_apparaten_warm
+          device_class: heat
+          icon: mdi:server
+          availability: >-
+            {% set ids = [
+                 'sensor.proxmox_nuc_intel_cpu_temperatuur',
+                 'sensor.proxmox_nuc_intel_nvme_temperatuur',
+                 'sensor.garage_unas_garage_hdd_1_temperature',
+                 'sensor.garage_unas_garage_hdd_2_temperature',
+                 'sensor.garage_unas_garage_hdd_3_temperature',
+                 'sensor.garage_unas_garage_hdd_4_temperature',
+                 'sensor.unas_garage_nvme_0_temperature',
+                 'sensor.unas_garage_nvme_1_temperature'] %}
+            {{ ids | map('states') | select('is_number') | list | count > 0 }}
+          state: >-
+            {% set grenzen = {
+                 'sensor.proxmox_nuc_intel_cpu_temperatuur': [80, 75],
+                 'sensor.proxmox_nuc_intel_nvme_temperatuur': [55, 50],
+                 'sensor.garage_unas_garage_hdd_1_temperature': [42, 40],
+                 'sensor.garage_unas_garage_hdd_2_temperature': [42, 40],
+                 'sensor.garage_unas_garage_hdd_3_temperature': [42, 40],
+                 'sensor.garage_unas_garage_hdd_4_temperature': [42, 40],
+                 'sensor.unas_garage_nvme_0_temperature': [55, 50],
+                 'sensor.unas_garage_nvme_1_temperature': [55, 50]} %}
+            {% set ns = namespace(warm=false, onder=true) %}
+            {% for e, g in grenzen.items() %}
+              {% set t = states(e) | float(none) %}
+              {% if t is not none %}
+                {% if t >= g[0] %}{% set ns.warm = true %}{% endif %}
+                {% if t >= g[1] %}{% set ns.onder = false %}{% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.warm %}
+              true
+            {% elif ns.onder %}
+              false
+            {% else %}
+              {{ this.state == 'on' }}
+            {% endif %}
+          delay_on: "00:05:00"
+          delay_off: "00:30:00"
 
   automation:
     ###########################################################################
@@ -498,6 +578,7 @@ ventilation_cooling_package:
         Zet de rackventilatoren aan als het rack warm is en de garagelucht
         koeler, of altijd boven de kritieke drempel; uit zodra het rack is
         afgekoeld, ventileren niet meer koelt of een uur draaien niets oplevert.
+        Zonder rack-meting beslissen de temperaturen van de NUC en de NAS.
       mode: single
       triggers:
         - trigger: state
@@ -522,10 +603,24 @@ ventilation_cooling_package:
           for:
             minutes: 30
           id: sensor_weg
+        # Zonder rack-meting beslissen de apparaten zelf (zie
+        # binary_sensor.serverrack_apparaten_warm hierboven). De vertraging zit
+        # al in die sensor.
+        - trigger: state
+          entity_id:
+            - binary_sensor.serverrack_apparaten_warm
+          id: eval
       conditions: []
       actions:
         - choose:
-            # AAN: rack-sensor al een half uur zonder meting
+            # AAN: rack-sensor al een half uur zonder meting, en de apparaten
+            # in het rack lopen op - of die meten ook niets (14-11-2026)
+            #
+            # Tot 14 november ging hij hier altijd aan, en hij kon niet meer
+            # uit: alle uit-takken hieronder hebben een rack-meting nodig. Nu
+            # mogen de NUC en de NAS het zeggen. Geven die ook niets, dan is
+            # het weer zoals het was: liever onnodig blazen dan blind warm
+            # laten lopen.
             #
             # Leest de toestand zelf en niet alleen de trigger `sensor_weg`
             # (21-09-2026). Die vuurt precies één keer, na dertig minuten: liep
@@ -541,6 +636,12 @@ ventilation_cooling_package:
                     {{ rack is none
                        or (not is_number(rack.state)
                            and now() - rack.last_changed >= timedelta(minutes=30)) }}
+                # `!= 'off'` en niet `== 'on'`: een apparatensensor die zelf
+                # `unavailable` is (geen enkele meting) telt als warm.
+                - alias: "Apparaten lopen op, of meten niets"
+                  condition: template
+                  value_template: >-
+                    {{ not is_state('binary_sensor.serverrack_apparaten_warm', 'off') }}
                 # Niets doen zolang de handbediening loopt
                 - condition: template
                   value_template: >-
@@ -551,6 +652,33 @@ ventilation_cooling_package:
                   state: "off"
               sequence:
                 - action: switch.turn_on
+                  target:
+                    entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
+            # UIT: rack-sensor al een half uur zonder meting, maar de NUC en de
+            # NAS zitten stabiel onder hun uit-grens (de sensor gaat pas na een
+            # half uur rust op `off`). Zelfde half uur als de aan-tak hierboven,
+            # zodat een hikje van de rack-sensor niets omzet.
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set rack = states.sensor.garage_serverrack_temperatuur_temperature %}
+                    {{ rack is none
+                       or (not is_number(rack.state)
+                           and now() - rack.last_changed >= timedelta(minutes=30)) }}
+                - alias: "Apparaten stabiel en acceptabel"
+                  condition: state
+                  entity_id: binary_sensor.serverrack_apparaten_warm
+                  state: "off"
+                # Niets doen zolang de handbediening loopt
+                - condition: template
+                  value_template: >-
+                    {{ now().timestamp() >=
+                       (state_attr('input_datetime.ventilation_serverrack_handbediening_tot', 'timestamp') | float(0)) }}
+                - condition: state
+                  entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
+                  state: "on"
+              sequence:
+                - action: switch.turn_off
                   target:
                     entity_id: switch.garage_garage_stopcontact_serverrack_ventilatoren
             # AAN: boven de kritieke drempel - ook tijdens een lockout

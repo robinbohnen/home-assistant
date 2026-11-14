@@ -24,6 +24,12 @@ Bewaakt wordt:
 9. (7 november 2026) elke temperatuur opent een pop-up met grafieken over 4 en
    24 uur: elke gebruikte hash heeft een pop-up, elke pop-up dezelfde reeksen
    in beide grafieken, en (live) elke schijf van de NAS staat erin.
+10. (14 november 2026) het gastenpaneel vindt zelf elke Proxmox-gast: een
+   nieuwe VM of container verschijnt met naam (apparaat, friendly_name of
+   entity-id) en VM/CT-nummer, achter de handlijst en op nummer; een gast uit
+   de handlijst die niet meer bestaat valt weg in plaats van "uit" te tellen;
+   `negeren` werkt, de host zelf telt niet mee, en ontdekte namen worden
+   ge-escaped.
 """
 import json
 import os
@@ -170,7 +176,7 @@ def js(naam):
     return x[3:-3]
 
 
-def render(naam, states, entity_id=None):
+def render(naam, states, entity_id=None, hass=None):
     k = kaart(naam)
     entity_id = entity_id or k.get("entity")
     # De states gaan via stdin: met een volledige /api/states-dump als invoer
@@ -178,8 +184,10 @@ def render(naam, states, entity_id=None):
     prog = (
         "const states = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
         "const variables = %s; const entity = states[%s];"
+        "%s"
         "const out = (function(){ %s })(); process.stdout.write(out);"
-        % (json.dumps(k.get("variables") or {}), json.dumps(entity_id), js(naam))
+        % (json.dumps(k.get("variables") or {}), json.dumps(entity_id),
+           "" if hass is None else "const hass = %s;" % json.dumps(hass), js(naam))
     )
     r = subprocess.run(["node", "-e", prog], input=json.dumps(states),
                        capture_output=True, text=True, timeout=20)
@@ -395,6 +403,79 @@ def test_gasten():
     h = render("gasten", {**s, "sensor.qemu_windows_107_status": st("stopped"),
                           "sensor.qemu_tools_110_disk_used_percentage": st(97)})
     assert "1 uit" in h and "· stopped" in h and "var(--ov-bad)\">97%" in h
+
+
+def _gast(p, status="running", **attrs):
+    return {f"sensor.{p}_status": st(status, **attrs), f"sensor.{p}_cpu_used": st(2),
+            f"sensor.{p}_memory_used_percentage": st(50), f"sensor.{p}_disk_used_percentage": st(30)}
+
+
+def _bekend():
+    s = {}
+    for g in kaart("gasten")["variables"]["gasten"]:
+        s.update(_gast(g["p"]))
+    return s
+
+
+def test_gasten_nieuwe_gast_verschijnt_vanzelf():
+    s = {**_bekend(),
+         **_gast("lxc_immich_112", friendly_name="immich Status"),
+         **_gast("qemu_docker_host_109"),
+         "sensor.node_intel_status": st("online")}
+    h = render("gasten", s)
+    assert ">immich<" in h and "CT 112" in h, h
+    # Zonder friendly_name: naam uit de entity-id, underscores als streepje.
+    assert ">docker-host<" in h and "VM 109" in h, h
+    # De host zelf (sensor.node_intel_status) is geen gast: het aantal
+    # groene stippen hieronder is precies handlijst + 2.
+    # Achter de handlijst (laatste: windows), en onderling op nummer.
+    assert h.index("VM 107") < h.index("VM 109") < h.index("CT 112"), h
+    n = len(kaart("gasten")["variables"]["gasten"]) + 2
+    assert "alles draait" in h and h.count("var(--ov-ok)\"></span>") == n
+
+
+def test_gasten_naam_van_het_apparaat():
+    s = {**_bekend(), **_gast("qemu_oud_115", friendly_name="oud Status")}
+    hass = {"entities": {"sensor.qemu_oud_115_status": {"device_id": "d1"}},
+            "devices": {"d1": {"name": "home-assistant-dev", "name_by_user": None}}}
+    h = render("gasten", s, hass=hass)
+    assert ">home-assistant-dev<" in h and ">oud<" not in h, h
+    hass["devices"]["d1"]["name_by_user"] = "HA test"
+    assert ">HA test<" in render("gasten", s, hass=hass)
+
+
+def test_gasten_ontdekte_gast_die_uit_staat_telt():
+    h = render("gasten", {**_bekend(), **_gast("lxc_test_120", status="stopped")})
+    assert "1 uit" in h and "CT 120" in h and "· stopped" in h
+
+
+def test_gasten_weggehaalde_gast_valt_weg():
+    weg = kaart("gasten")["variables"]["gasten"][-1]
+    s = {k: v for k, v in _bekend().items() if not k.startswith(f"sensor.{weg['p']}_")}
+    h = render("gasten", s)
+    assert weg["naam"] not in h and "alles draait" in h, h
+
+
+def test_gasten_negeren():
+    k = kaart("gasten")
+    assert k["variables"].get("negeren") == [] or isinstance(k["variables"].get("negeren"), list)
+    # Met een prefix in `negeren` verschijnt die gast niet.
+    p = "lxc_template_9000"
+    k["variables"]["negeren"] = [p]
+    try:
+        h = render("gasten", {**_bekend(), **_gast(p, status="stopped")})
+    finally:
+        k["variables"]["negeren"] = []
+    assert "9000" not in h and "alles draait" in h, h
+
+
+def test_gasten_ontdekte_naam_wordt_ge_escaped():
+    kwaad = "<img src=x onerror=alert(1)>"
+    h = render("gasten", {**_gast("qemu_x_130", friendly_name=kwaad + " Status")})
+    assert "<img" not in h and "&lt;img" in h, h
+    hass = {"entities": {"sensor.qemu_x_130_status": {"device_id": "d"}}, "devices": {"d": {"name": kwaad}}}
+    h = render("gasten", {**_gast("qemu_x_130")}, hass=hass)
+    assert "<img" not in h and "&lt;img" in h, h
 
 
 def test_gasten_uniek():

@@ -122,6 +122,16 @@ evening wind-down or bedtime it has to go straight back off with a notification,
 except when nobody is home (then the switch-on came from the blueprint itself), and
 in daytime nothing happens. It also checks that both rooms pass a notification.
 
+`tests/test_rackventilatie.py` (14-11-2026) covers the server rack fans when the rack's
+own temperature sensor has been silent for half an hour. They used to switch on blindly
+and could not switch off again; now `binary_sensor.serverrack_apparaten_warm` (in
+`packages/9 - Other/Ventilation.yaml`) decides from the NUC and NAS temperatures: on
+when one device reaches its on-limit (just below the orange limits of the Server
+dashboard), off once everything has been below its off-limit for half an hour. Only if
+those devices report nothing either do the fans still run blind. The test runs the
+sensor's hysteresis and every branch of the automation, including manual override and
+the unchanged behaviour when the rack sensor does report.
+
 `tests/test_motion_light_vangnet.py` (13-11-2026) covers the optional safety net
 (`vangnet_na`) in `blueprints/automation/robin/motion_light.yaml`. Normally a motion
 light only goes off after a clean `on` → `off` of its motion sensor, so a lamp switched
@@ -266,7 +276,13 @@ rack) reads the UniFi UNAS Pro 8 through the HACS integration
 health, CPU, memory and fan, the eight drive bays with temperature and status, and a few
 rows; rows that only report a problem (Immich mount, monitor scripts, a share above 80% of
 its quota) appear only when there is one. The UNAS backup tasks show up as chips under
-*Back-ups* and are found by prefix, so a new task appears by itself. Its *Ventileren* block (since 7-11-2026 at the bottom of the rack panel, so the whole
+*Back-ups* and are found by prefix, so a new task appears by itself. Since 14-11-2026 the
+same goes for VMs and containers: the panel finds every Proxmox guest by its
+`sensor.qemu_*_<nr>_status` / `sensor.lxc_*_<nr>_status` and takes its name from the
+device, the friendly name or the entity id. The hand-kept `gasten` list in the dashboard
+only corrects names that are wrong (the Proxmox integration kept old entity ids when
+guests were replaced) and sets the order; a listed guest that no longer exists drops
+off instead of counting as "off", and `negeren` hides guests on purpose. Its *Ventileren* block (since 7-11-2026 at the bottom of the rack panel, so the whole
 page fits on one 1080p screen without scrolling) runs the rack fans for 1, 2, 4 or 8
 hours through `script.ventilation_serverrack_handbediening`, which since 6-11-2026 takes
 `stand: aan|uit` next to `uren` (without `stand` it still toggles, as the button on the
