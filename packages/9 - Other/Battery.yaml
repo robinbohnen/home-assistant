@@ -443,6 +443,29 @@ battery_package:
               {% if is_state('binary_sensor.inverter_battery_fault', 'on') %}{% set d.t = d.t + ['accufout'] %}{% endif %}
               {{ d.t | join(', ') if d.t else 'geen' }}
 
+        # DE METER ZELF (14 november 2026)
+        # Raakt de Deye zijn meter kwijt, dan zegt hij dat letterlijk:
+        # `sensor.inverter_device_alarm` = "Meter communication failure" (en
+        # "OK" als alles goed is). Dat is de directe bron voor "doet de meter
+        # het?" - geen afleiding uit accu- en netvermogen meer nodig, zoals
+        # `accu_stroommeting_verdacht` hieronder deed toen we deze melding nog
+        # niet zagen (22 september tot 4 november).
+        #
+        # Een deel-tekst en geen `==`: staan er twee meldingen tegelijk, dan
+        # komen ze samen in één state, en ook dan hoort deze aan te gaan.
+        # `unavailable` is de verbinding met de omvormer, niet de meter: dan
+        # weten we het niet, en dan is deze ook `unavailable`.
+        - name: "Omvormer meter storing"
+          unique_id: omvormer_meter_storing
+          default_entity_id: binary_sensor.omvormer_meter_storing
+          device_class: problem
+          icon: mdi:meter-electric-outline
+          availability: "{{ has_value('sensor.inverter_device_alarm') }}"
+          state: >-
+            {{ 'meter communication' in states('sensor.inverter_device_alarm') | lower }}
+          # Zelfde minuut als `omvormer_storing`: één foute uitlees is geen storing.
+          delay_on: "00:01:00"
+
     ##########################################################################
     ## Noodstroom - zie de NOODSTROOM-kop bovenaan
     ##########################################################################
@@ -605,6 +628,13 @@ battery_package:
     ## die van de P1 (`p1_net_w`). Zegt de P1 1 kW en de Deye ~0, dan ziet de
     ## CT van de Deye het verbruik niet; zeggen ze allebei 1 kW, dan ziet de
     ## Deye het wel en doet de regie (MarkeDroid) niets.
+    ##
+    ## SINDS 14 NOVEMBER ALLEEN NOG ALS VANGNET: of de meter praat, zegt de
+    ## Deye nu zelf (`binary_sensor.omvormer_meter_storing`). Meldt hij dat,
+    ## dan blijft deze uit - de oorzaak is dan bekend en
+    ## `omvormer_storing_melding` heeft het al gezegd. Wat deze nog vangt, is
+    ## wat de Deye niet meldt: een meter die praat maar het verbruik niet ziet,
+    ## of een regie die niets doet.
     ##########################################################################
     - binary_sensor:
         - name: "Accu stroommeting verdacht"
@@ -620,7 +650,8 @@ battery_package:
             {{ is_state('sensor.markedroid_regie', 'eigen_verbruik')
                and is_number(accu) and accu | float | abs < 100
                and is_number(net) and net | float - laadpaal > 200
-               and states('sensor.accu_lading') | float(0) > afslag + 5 }}
+               and states('sensor.accu_lading') | float(0) > afslag + 5
+               and not is_state('binary_sensor.omvormer_meter_storing', 'on') }}
           delay_on: "00:10:00"
           # Eén meting onder de drempel is nog geen herstel; zonder dit tikt
           # hij bij een wisselende last aan en uit.
@@ -819,4 +850,11 @@ battery_package:
             title: Omvormer meldt een probleem
             message: >-
               De Deye meldt: {{ state_attr('binary_sensor.omvormer_storing', 'omschrijving') }}.
+              {#- Ook de ruwe melding: beide sensoren wachten een minuut, en
+                  welke het eerst omgaat is niet te zeggen. #}
+              {%- if is_state('binary_sensor.omvormer_meter_storing', 'on')
+                     or 'meter communication' in states('sensor.inverter_device_alarm') | lower %}
+              Hij krijgt geen meting meer van de meter, dus de accu kan het
+              verbruik van het huis niet volgen.
+              {%- endif %}
               Kijk in de ModuSun- of Solarman-app.

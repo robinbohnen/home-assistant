@@ -218,7 +218,13 @@ the house draws more than 200 W from the grid and the battery stays within ±100
 ten minutes, so the current measurement is not working. It covers every other control
 mode, the car charger (on the grid side, so it doesn't count), a nearly empty battery,
 a silent source, the twelve-hour brake and the message text, which since 4-11-2026 also
-says what the Deye's own CT measures at the connection.
+says what the Deye's own CT measures at the connection. Since 14-11-2026 it also covers
+`binary_sensor.omvormer_meter_storing`, the direct meter status: the Deye itself reports
+"Meter communication failure" in `sensor.inverter_device_alarm` (otherwise "OK"). When
+that is on, the inferred sensor above stays off (the cause is known and the inverter
+notification already explains it), so it only remains as a safety net for what the
+Deye does not report: a meter that talks but misses the load, or a control mode that
+does nothing.
 
 `tests/test_warmtepomp_rem.py` checks the heat pump brake in
 `packages/9 - Other/Warmtepomp.yaml` (since 29-10-2026): while MarkeDroid holds the

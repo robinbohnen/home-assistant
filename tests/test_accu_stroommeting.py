@@ -13,6 +13,12 @@ Bewaakt wordt:
 4. de tien minuten vertraging, de twaalf-uursrem en het bericht zelf;
 5. sinds 4-11-2026 (accu uit Solarman via `sensor.accu_vermogen`): het
    bericht noemt wat de CT van de Deye zelf op de aansluiting meet.
+6. sinds 14-11-2026 de directe meterstatus `binary_sensor.omvormer_meter_storing`:
+   aan bij "Meter communication failure" in `sensor.inverter_device_alarm`
+   (ook tussen andere meldingen), uit bij "OK" en andere meldingen,
+   `unavailable` als de omvormer stil is. Staat hij aan, dan blijft
+   `accu_stroommeting_verdacht` uit (geen dubbele melding) en legt de
+   omvormermelding uit wat het betekent.
 """
 import os
 from datetime import datetime, timedelta
@@ -39,6 +45,10 @@ def ha_state_attr(eid, attr):
     return STATES.get(f"{eid}.{attr}")
 
 
+def ha_has_value(eid):
+    return ha_states(eid) not in ("unknown", "unavailable")
+
+
 def ha_is_number(v):
     try:
         float(v)
@@ -57,6 +67,7 @@ def f_float(value, default=0.0):
 env = Environment()
 env.filters["float"] = f_float
 env.globals.update(states=ha_states, is_state=ha_is_state, state_attr=ha_state_attr,
+                   has_value=ha_has_value,
                    is_number=ha_is_number, timedelta=timedelta)
 
 
@@ -76,9 +87,12 @@ def _zoek(pad, sleutel, waarde):
 
 SENSOR = _zoek(ACCU, "unique_id", "accu_stroommeting_verdacht")
 AUTO = _zoek(ACCU, "id", "accu_stroommeting_melding")
+METER = _zoek(ACCU, "unique_id", "omvormer_meter_storing")
+STORING_AUTO = _zoek(ACCU, "id", "omvormer_storing_melding")
 
 
-def wereld(regie="eigen_verbruik", accu="20", net="850", laadpaal="0", lading="60", deye="unknown"):
+def wereld(regie="eigen_verbruik", accu="20", net="850", laadpaal="0", lading="60", deye="unknown",
+           meter="off", alarm="OK"):
     STATES.clear()
     STATES.update({
         "sensor.markedroid_regie": regie,
@@ -88,6 +102,8 @@ def wereld(regie="eigen_verbruik", accu="20", net="850", laadpaal="0", lading="6
         "sensor.charging_station_active_power": laadpaal,
         "sensor.accu_lading": lading,
         "sensor.accu_capaciteit.afslag_procent": "10",
+        "binary_sensor.omvormer_meter_storing": meter,
+        "sensor.inverter_device_alarm": alarm,
     })
 
 
@@ -200,6 +216,77 @@ def test_getuigen_als_attribuut():
     attrs = SENSOR["attributes"]
     assert "omvormer_net_vermogen" in attrs["deye_net_w"]
     assert "slimhuys_zonneplan_actief_vermogen" in attrs["p1_net_w"]
+
+
+
+# --- 6. De meterstatus van de Deye zelf (14-11-2026) ------------------------
+
+def _render(template):
+    return env.from_string(template).render().strip()
+
+
+def meter_storing(alarm):
+    wereld(alarm=alarm)
+    beschikbaar = _render(METER["availability"]) == "True"
+    if not beschikbaar:
+        return "unavailable"
+    uit = _render(METER["state"])
+    assert uit in ("True", "False"), f"geen boolean: {uit!r}"
+    return "on" if uit == "True" else "off"
+
+
+def test_meter_storing_bij_communicatiefout():
+    assert meter_storing("Meter communication failure") == "on"
+
+
+def test_meter_storing_ook_tussen_andere_meldingen():
+    assert meter_storing("Fan failure, Meter communication failure") == "on"
+    assert meter_storing("METER COMMUNICATION FAILURE") == "on"
+
+
+def test_meter_ok_en_andere_meldingen():
+    assert meter_storing("OK") == "off"
+    assert meter_storing("Fan failure") == "off"
+    assert meter_storing("Grid phase failure") == "off"
+
+
+def test_meter_onbekend_als_omvormer_stil_is():
+    assert meter_storing("unavailable") == "unavailable"
+    assert meter_storing("unknown") == "unavailable"
+
+
+def test_meter_type_en_vertraging():
+    assert METER["device_class"] == "problem"
+    assert METER["delay_on"] == "00:01:00"
+
+
+def test_geen_dubbele_melding_bij_bekende_meterstoring():
+    # Precies de situatie van `test_storing_gaat_aan`, maar de Deye zegt nu
+    # zelf dat zijn meter weg is: die melding komt al via de omvormer.
+    assert verdacht(meter="off")
+    assert not verdacht(meter="on")
+    # Weet HA het niet (omvormer stil), dan blijft het vangnet werken.
+    assert verdacht(meter="unavailable")
+
+
+def _storingsbericht(**kw):
+    wereld(**kw)
+    STATES["binary_sensor.omvormer_storing.omschrijving"] = "melding: " + kw.get("alarm", "OK")
+    return env.from_string(STORING_AUTO["actions"][0]["data"]["message"]).render()
+
+
+def test_omvormerbericht_legt_meterstoring_uit():
+    for meter in ("on", "off"):  # ook als de metersensor zijn minuut nog wacht
+        b = _storingsbericht(alarm="Meter communication failure", meter=meter)
+        assert "melding: Meter communication failure." in b, b
+        assert "geen meting meer van de meter" in b, b
+        assert "  " not in b.strip(), repr(b)
+        assert b.strip().endswith("Kijk in de ModuSun- of Solarman-app."), b
+
+
+def test_omvormerbericht_zonder_meterstoring_ongewijzigd():
+    b = _storingsbericht(alarm="Fan failure", meter="off").strip()
+    assert b == "De Deye meldt: melding: Fan failure. Kijk in de ModuSun- of Solarman-app.", repr(b)
 
 
 if __name__ == "__main__":
