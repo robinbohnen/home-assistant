@@ -132,7 +132,7 @@ in daytime nothing happens. It also checks that both rooms pass a notification.
 `tests/test_deursensoren_matter.py` (16-11-2026) guards the switch of the bathroom door
 and Maxi's door from Zigbee (zigbee2mqtt) to Matter: `binary_sensor.badkamer_deur_contact`
 became `binary_sensor.badkamer_badkamer_deur_deur` and `binary_sensor.slaapkamer_maxi_deur_contact`
-became `binary_sensor.slaapkamer_maxi_slaapkamer_maxi_deur_deur`. An automation on an entity
+became `binary_sensor.slaapkamer_logan_slaapkamer_maxi_deur_deur`. An automation on an entity
 id that no longer exists breaks silently, so the test fails on any leftover reference to the
 old ids in packages, blueprints, dashboards and templates (comments may still mention them),
 and checks that every place that relies on these doors uses the new ones.

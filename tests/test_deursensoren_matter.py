@@ -9,7 +9,7 @@ Matter-varianten (waren Zigbee via zigbee2mqtt):
     binary_sensor.badkamer_deur_contact
         -> binary_sensor.badkamer_badkamer_deur_deur
     binary_sensor.slaapkamer_maxi_deur_contact
-        -> binary_sensor.slaapkamer_maxi_slaapkamer_maxi_deur_deur
+        -> binary_sensor.slaapkamer_logan_slaapkamer_maxi_deur_deur
 
 Een automatisering op een entity-id die niet meer bestaat, gaat stil kapot:
 geen fout, geen trigger. Daarom bewaakt deze test:
@@ -19,7 +19,13 @@ geen fout, geen trigger. Daarom bewaakt deze test:
    badkamerverlichting en -media, de bedtijdsensor, de deur-tijdens-bedtijd-
    automatisering van Maxi, Mini's "lichten uit bij deur dicht", Kinderen
    wakker en de deurengroep van het brandalarm;
-3. alle YAML-bestanden die ze noemen, zijn nog geldig.
+3. alle YAML-bestanden die ze noemen, zijn nog geldig;
+4. (live, als /tmp/states.json er is) beide nieuwe id's bestaan echt. Die
+   staat er omdat de eerste versie van deze overstap een GERADEN id voor Maxi
+   gebruikte (`slaapkamer_maxi_slaapkamer_maxi_deur_deur`); het apparaat
+   staat in HA in de ruimte "Slaapkamer Logan", dus de id begint daarmee.
+   Alle offline controles hierboven waren groen terwijl vier automatiseringen
+   op een niet-bestaande entiteit hingen.
 """
 import os
 
@@ -30,7 +36,7 @@ MAPPEN = ["packages", "blueprints", "dashboards", "custom_templates", "custom_se
 
 OUD = ["binary_sensor.badkamer_deur_contact", "binary_sensor.slaapkamer_maxi_deur_contact"]
 BADKAMER = "binary_sensor.badkamer_badkamer_deur_deur"
-MAXI = "binary_sensor.slaapkamer_maxi_slaapkamer_maxi_deur_deur"
+MAXI = "binary_sensor.slaapkamer_logan_slaapkamer_maxi_deur_deur"
 
 VERWACHT = {
     "packages/1 - First Floor/Bathroom/Lights.yaml": [BADKAMER],
@@ -98,6 +104,24 @@ def test_deurengroep_brandalarm():
     leden = groepen[0]["entities"]
     assert BADKAMER in leden and MAXI in leden
     assert len(leden) == len(set(leden)), "dubbele deur in de groep"
+
+
+def test_live_ids_bestaan():
+    import json
+    pad = "/tmp/states.json"
+    if not os.path.exists(pad):
+        return
+    with open(pad, encoding="utf-8") as f:
+        live = {e["entity_id"]: e for e in json.load(f)}
+    for e in (BADKAMER, MAXI):
+        assert e in live, f"{e} bestaat niet in Home Assistant"
+        assert live[e]["attributes"].get("device_class") == "door", e
+    for e in OUD:
+        # De oude Zigbee-entiteiten mogen nog bestaan (tot ze in z2m weg zijn),
+        # maar dan alleen als `unavailable`: een levende oude sensor betekent
+        # dat de overstap niet is wat we denken.
+        if e in live:
+            assert live[e]["state"] == "unavailable", f"{e} leeft nog: {live[e]['state']}"
 
 
 if __name__ == "__main__":
