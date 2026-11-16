@@ -1,0 +1,1004 @@
+# KEBA P40 Pro - modbus + slim laden op kwartierprijzen
+#
+# Overdraagbare versie van packages/3 - Outside/Carport/KEBA P40 Pro.yaml.
+# Installatie en uitleg: export/keba-p40/README.md.
+#
+# Alles wat per huis verschilt staat in blok 1 (ADAPTER) en is gemarkeerd met
+# `VERVANG`. De rest is de logica en hoort ongewijzigd te blijven; past er iets
+# niet, pas het dan in het origineel EN hier aan.
+#
+# Zet dit bestand in de packages-map van Home Assistant, bijvoorbeeld:
+#   configuration.yaml:
+#     homeassistant:
+#       packages: !include_dir_named packages
+keba_p40_slim_laden:
+
+  # ==========================================================================
+  # 1. ADAPTER - de enige plek met entiteiten van dit specifieke huis
+  # ==========================================================================
+  template:
+    - sensor:
+        # Accustand van de auto in procent. Geen waarde = het laadplan rekent op
+        # een volle lading (liever te lang laden dan 's ochtends een lege auto).
+        - name: "Laadpaal - Auto accu"
+          unique_id: laadpaal_auto_accu
+          unit_of_measurement: "%"
+          device_class: battery
+          state_class: measurement
+          availability: "{{ has_value('sensor.vervang_door_accu_van_de_auto') }}"   # VERVANG
+          state: "{{ states('sensor.vervang_door_accu_van_de_auto') | float(0) }}"   # VERVANG
+
+        # Tot hoeveel procent er geladen moet worden. Heeft de auto daar geen
+        # entiteit voor, laat het dan staan: dan wordt het 100.
+        - name: "Laadpaal - Auto laaddoel"
+          unique_id: laadpaal_auto_laaddoel
+          unit_of_measurement: "%"
+          state: "{{ states('number.vervang_door_laaddoel_van_de_auto') | float(100) }}"   # VERVANG
+
+        # Bruikbare accucapaciteit in kWh (netto, niet bruto).
+        - name: "Laadpaal - Auto capaciteit"
+          unique_id: laadpaal_auto_capaciteit
+          unit_of_measurement: "kWh"
+          state: "60"   # VERVANG
+
+    # Prijzen per blok (kwartier of uur), samengevoegd tot één lijst
+    # [{'t': unix-tijd, 'p': prijs}]. Werkt zoals hij staat met elke sensor die
+    # `raw_today` / `raw_tomorrow` heeft met daarin `start` en `value`, zoals de
+    # Nord Pool-integratie uit HACS. Andere bron? Pas alleen `blokken` aan, het
+    # formaat van de uitkomst moet hetzelfde blijven.
+    #
+    # Compact opgeslagen (t/p, geen ISO-tekst) omdat 2 x 96 kwartieren anders
+    # boven de 16 kB-grens van de recorder voor attributen uitkomen.
+    - triggers:
+        - trigger: homeassistant
+          event: start
+        - trigger: time_pattern
+          minutes: "/15"
+        - trigger: state
+          entity_id:
+            - sensor.vervang_door_prijzen_vandaag   # VERVANG (zelfde als bron_vandaag)
+            - sensor.vervang_door_prijzen_morgen    # VERVANG (zelfde als bron_morgen)
+      variables:
+        bron_vandaag: sensor.vervang_door_prijzen_vandaag   # VERVANG
+        bron_morgen: sensor.vervang_door_prijzen_morgen     # VERVANG (Nord Pool: zelfde entiteit)
+        blokken: >-
+          {% set ns = namespace(b=[]) %}
+          {% set ruw = (state_attr(bron_vandaag, 'raw_today') or [])
+                     + (state_attr(bron_morgen, 'raw_tomorrow') or []) %}
+          {% for b in ruw %}
+            {% set s = b.start | as_datetime(none) if b.start is string else b.start %}
+            {% set p = b.value | float(none) %}
+            {% if s is not none and p is not none %}
+              {% set ns.b = ns.b + [{'t': as_timestamp(s) | int, 'p': p}] %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.b | unique(attribute='t') | sort(attribute='t') | list }}
+      sensor:
+        - name: "Laadpaal - Prijzen"
+          unique_id: laadpaal_prijzen
+          icon: mdi:cash-clock
+          state: "{{ blokken | count }}"
+          attributes:
+            blokken: "{{ blokken }}"
+
+    # Moment van de laatste start; de hartslag zwijgt de eerste minuut daarna
+    # (zie charging_station_modbus_steering).
+    - triggers:
+        - trigger: homeassistant
+          event: start
+      sensor:
+        - name: "Laadpaal - HA gestart"
+          unique_id: laadpaal_ha_gestart
+          icon: mdi:restart
+          device_class: timestamp
+          state: "{{ now().isoformat() }}"
+
+    # ========================================================================
+    # 2. VERTALING VAN DE RUWE STATUS
+    # ========================================================================
+    - sensor:
+        - name: "Charging Station - Charging state"
+          unique_id: charging_station_charging_state
+          icon: mdi:ev-station
+          availability: "{{ has_value('sensor.charging_station_charging_state_raw') }}"
+          state: >-
+            {% set m = {
+              '0': 'Opstarten',
+              '1': 'Niet gereed',
+              '2': 'Gereed, wacht op auto',
+              '3': 'Aan het laden',
+              '4': 'Storing',
+              '5': 'Tijdelijk onderbroken' } %}
+            {{ m.get(states('sensor.charging_station_charging_state_raw'), 'Onbekend') }}
+
+        - name: "Charging Station - Cable state"
+          unique_id: charging_station_cable_state
+          icon: mdi:ev-plug-type2
+          availability: "{{ has_value('sensor.charging_station_cable_state_raw') }}"
+          state: >-
+            {% set m = {
+              '0': 'Geen kabel',
+              '1': 'Alleen in de laadpaal',
+              '3': 'In de laadpaal, vergrendeld',
+              '5': 'In laadpaal en auto, niet vergrendeld',
+              '7': 'In laadpaal en auto, vergrendeld' } %}
+            {{ m.get(states('sensor.charging_station_cable_state_raw'), 'Onbekend') }}
+
+        # 1 of 3: de stand die er ECHT staat (register 1552).
+        - name: "Charging Station - Phases"
+          unique_id: charging_station_phases
+          icon: mdi:sine-wave
+          availability: "{{ has_value('sensor.charging_station_phase_switching_state_raw') }}"
+          state: "{{ states('sensor.charging_station_phase_switching_state_raw') }}"
+
+    # ========================================================================
+    # 3. HET LAADPLAN
+    #
+    # Hoeveel moet erin, hoe lang duurt dat, en welk aaneengesloten venster is
+    # het goedkoopst en is vóór de deadline klaar. Rekenregels:
+    #  * 90% rendement (laadverlies), 15% marge op de rekentijd;
+    #  * vermogen = max stroom van de WALLBOX x fasen x 230 V. Dat is een
+    #    bovengrens; daarom stopt het laden niet aan het eind van het venster
+    #    maar pas bij vol, deadline of stekker eruit;
+    #  * een nieuwe sessie pas als de accu >= 5% onder het doel zit, anders
+    #    wordt elke procent standby-verlies een eigen laadbeurt.
+    #
+    # State = de reden ('vol', 'plan', 'past niet', 'geen prijzen',
+    # 'wacht op prijzen'); van/tot/kwh/gemiddelde/deadline als attributen.
+    # ========================================================================
+    - triggers:
+        - trigger: time_pattern
+          minutes: "/1"
+        - trigger: state
+          entity_id:
+            - sensor.laadpaal_prijzen
+            - sensor.laadpaal_auto_accu
+            - sensor.laadpaal_auto_laaddoel
+            - input_datetime.charging_station_klaar_om
+            - input_boolean.charging_station_laadsessie
+      variables:
+        plan: >-
+          {% set cap = states('sensor.laadpaal_auto_capaciteit') | float(60) %}
+          {% set rendement = 0.90 %}
+          {% set marge = 1.15 %}
+          {% set startdrempel = 5 %}
+          {% set soc = states('sensor.laadpaal_auto_accu') | float(none) %}
+          {% set doel = states('sensor.laadpaal_auto_laaddoel') | float(100) %}
+          {% set amp = states('sensor.charging_station_max_supported_current') | float(16) %}
+          {% set fasen = states('sensor.charging_station_phases') | float(3) %}
+          {% set vermogen = (amp * 230 * fasen / 1000) | round(2) %}
+          {% set tekort = (cap * doel / 100) if soc is none else ([0, doel - soc] | max * cap / 100) %}
+          {% set uren = (tekort / rendement / vermogen * marge) | round(3) if vermogen > 0 else 0 %}
+          {# Het `timestamp`-attribuut: de state heeft geen tijdzone. Deadline in
+             het verleden of nooit gezet = de eerstvolgende 07:00. #}
+          {% set ts = state_attr('input_datetime.charging_station_klaar_om', 'timestamp') | float(none) %}
+          {% set standaard = today_at('07:00') %}
+          {% set standaard = standaard if standaard > now() else standaard + timedelta(days=1) %}
+          {% set eind = (ts | as_datetime(none) | as_local) if ts is not none and ts > as_timestamp(now()) else standaard %}
+          {% set punten = state_attr('sensor.laadpaal_prijzen', 'blokken') or [] %}
+          {% set nu = as_timestamp(now()) %}
+          {% set eind_ts = as_timestamp(eind) %}
+          {% set bijna_vol = soc is not none and soc > doel - startdrempel
+                             and is_state('input_boolean.charging_station_laadsessie', 'off') %}
+          {% if uren <= 0.01 or bijna_vol %}
+            {{ {'reden': 'vol', 'uren': 0, 'kwh': 0, 'vermogen': vermogen, 'deadline': eind.isoformat()} }}
+          {% elif (punten | count) < 2 %}
+            {{ {'reden': 'geen prijzen', 'uren': uren, 'kwh': tekort | round(2), 'vermogen': vermogen, 'deadline': eind.isoformat()} }}
+          {% else %}
+            {% set stap = punten[1].t - punten[0].t %}
+            {% set nodig = [1, ((uren * 3600) / stap) | round(0, 'ceil') | int] | max %}
+            {% set best = namespace(gem=none, van=none, tot=none) %}
+            {% for i in range(0, (punten | count) - nodig + 1) %}
+              {% set start = punten[i].t %}
+              {% set stop = punten[i + nodig - 1].t + stap %}
+              {% if start + stap > nu and stop <= eind_ts %}
+                {% set w = namespace(som=0.0, ok=true) %}
+                {% for j in range(nodig) %}
+                  {% if j > 0 and (punten[i + j].t - punten[i + j - 1].t) != stap %}{% set w.ok = false %}{% endif %}
+                  {% set w.som = w.som + punten[i + j].p %}
+                {% endfor %}
+                {% if w.ok %}
+                  {% set gem = w.som / nodig %}
+                  {% if best.gem is none or gem < best.gem %}
+                    {% set best.gem = gem %}{% set best.van = start %}{% set best.tot = stop %}
+                  {% endif %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {# Geen venster: of de deadline is te krap ('past niet', meteen
+               laden), of de prijzen reiken nog niet tot de deadline ('wacht op
+               prijzen'; die van morgen komen pas 's middags). #}
+            {% if best.gem is none and eind_ts - uren * 3600 > nu %}
+              {{ {'reden': 'wacht op prijzen', 'uren': uren, 'kwh': tekort | round(2),
+                  'vermogen': vermogen, 'deadline': eind.isoformat()} }}
+            {% elif best.gem is none %}
+              {{ {'reden': 'past niet', 'uren': uren, 'kwh': tekort | round(2),
+                  'vermogen': vermogen, 'deadline': eind.isoformat(),
+                  'van': (nu | as_datetime | as_local).isoformat(), 'tot': eind.isoformat()} }}
+            {% else %}
+              {{ {'reden': 'plan', 'uren': uren, 'kwh': tekort | round(2), 'vermogen': vermogen,
+                  'deadline': eind.isoformat(),
+                  'van': (best.van | as_datetime | as_local).isoformat(),
+                  'tot': (best.tot | as_datetime | as_local).isoformat(),
+                  'gemiddelde': best.gem | round(4)} }}
+            {% endif %}
+          {% endif %}
+      sensor:
+        - name: "Charging Station - Laadplan"
+          unique_id: charging_station_laadplan
+          icon: mdi:calendar-clock
+          state: "{{ plan.reden if plan is mapping else 'onbekend' }}"
+          attributes:
+            van: "{{ plan.van if plan is mapping and 'van' in plan else none }}"
+            tot: "{{ plan.tot if plan is mapping and 'tot' in plan else none }}"
+            uren: "{{ plan.uren if plan is mapping else none }}"
+            kwh: "{{ plan.kwh if plan is mapping else none }}"
+            vermogen: "{{ plan.vermogen if plan is mapping else none }}"
+            gemiddelde: "{{ plan.gemiddelde if plan is mapping and 'gemiddelde' in plan else none }}"
+            deadline: "{{ plan.deadline if plan is mapping else none }}"
+
+    # De ENIGE bron voor wat er naar register 5004 gaat. `unavailable` = HA
+    # stuurt niet; dan valt de wallbox via zijn failsafe terug op vol vermogen.
+    - sensor:
+        - name: "Charging Station - Gewenste stroom"
+          unique_id: charging_station_gewenste_stroom
+          unit_of_measurement: "A"
+          device_class: current
+          icon: mdi:current-ac
+          availability: >-
+            {{ is_state('input_boolean.charging_station_smart_charging', 'on')
+               or is_state('input_boolean.charging_station_modbus_control', 'on') }}
+          state: >-
+            {% if is_state('input_boolean.charging_station_smart_charging', 'on') %}
+              {{ (states('sensor.charging_station_max_supported_current') | float(16)) | round(0) | int
+                 if is_state('input_boolean.charging_station_laadsessie', 'on') else 0 }}
+            {% else %}
+              {{ states('input_number.charging_station_charging_current') | float(0) | round(0) | int }}
+            {% endif %}
+
+  # ==========================================================================
+  # 4. MODBUS
+  #
+  # Modbus TCP moet in de webinterface van de KEBA aan staan. Gemeten op een
+  # P40 Pro (firmware 5.0.1); de valkuilen:
+  #  1. elk register in het 1000-blok is uint32 op een even adres; uint16
+  #     leest het hoge woord en geeft altijd 0. Alleen het 5000-blok is 16-bits;
+  #  2. laadstatus = 1000, kabelstatus = 1004;
+  #  3. allemaal HOLDING registers (functiecode 4 geeft exception 2).
+  # De paal accepteert maar EEN modbus-sessie tegelijk: geen evcc of tweede
+  # modbus-config ernaast, dan komt er geen antwoord meer.
+  # Eenheden: mA, mW en 0,1 Wh.
+  # ==========================================================================
+  modbus:
+    - name: KebaP40Pro
+      type: tcp
+      host: 192.168.1.100   # VERVANG door het (vaste!) IP-adres van de paal
+      port: 502
+      sensors:
+        - name: "Charging Station - Charging state (raw)"
+          unique_id: wallbox_charging_state_raw
+          slave: 255
+          address: 1000
+          data_type: uint32
+          scan_interval: 30
+
+        - name: "Charging Station - Cable state (raw)"
+          unique_id: wallbox_cable_state_raw
+          slave: 255
+          address: 1004
+          data_type: uint32
+          scan_interval: 30
+
+        - name: "Charging Station - Error code"
+          unique_id: wallbox_error_code
+          slave: 255
+          address: 1006
+          data_type: uint32
+          scan_interval: 60
+
+        - name: "Charging Station - Current P1"
+          unique_id: wallbox_current_l1
+          slave: 255
+          address: 1008
+          data_type: uint32
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 30
+
+        - name: "Charging Station - Current P2"
+          unique_id: wallbox_current_l2
+          slave: 255
+          address: 1010
+          data_type: uint32
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 30
+
+        - name: "Charging Station - Current P3"
+          unique_id: wallbox_current_l3
+          slave: 255
+          address: 1012
+          data_type: uint32
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 30
+
+        - name: "Charging Station - Active power"
+          unique_id: wallbox_active_power
+          slave: 255
+          address: 1020
+          data_type: uint32
+          scale: 0.001
+          precision: 0
+          unit_of_measurement: "W"
+          state_class: measurement
+          device_class: power
+          scan_interval: 30
+
+        # total_increasing: na een reset begint de teller weer bij nul.
+        - name: "Charging Station - Total energy"
+          unique_id: wallbox_total_energy
+          slave: 255
+          address: 1036
+          data_type: uint32
+          scale: 0.0001
+          precision: 4
+          unit_of_measurement: "kWh"
+          state_class: total_increasing
+          device_class: energy
+          scan_interval: 60
+
+        - name: "Charging Station - Voltage P1"
+          unique_id: wallbox_voltage_l1
+          slave: 255
+          address: 1040
+          data_type: uint32
+          precision: 0
+          unit_of_measurement: "V"
+          state_class: measurement
+          device_class: voltage
+          scan_interval: 30
+
+        - name: "Charging Station - Voltage P2"
+          unique_id: wallbox_voltage_l2
+          slave: 255
+          address: 1042
+          data_type: uint32
+          precision: 0
+          unit_of_measurement: "V"
+          state_class: measurement
+          device_class: voltage
+          scan_interval: 30
+
+        - name: "Charging Station - Voltage P3"
+          unique_id: wallbox_voltage_l3
+          slave: 255
+          address: 1044
+          data_type: uint32
+          precision: 0
+          unit_of_measurement: "V"
+          state_class: measurement
+          device_class: voltage
+          scan_interval: 30
+
+        - name: "Charging Station - Max charging current"
+          unique_id: wallbox_max_charging_current
+          slave: 255
+          address: 1100
+          data_type: uint32
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 30
+
+        # Wat de installatie maximaal toestaat (DIP-switches/installateur).
+        - name: "Charging Station - Max supported current"
+          unique_id: wallbox_max_supported_current
+          slave: 255
+          address: 1110
+          data_type: uint32
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 300
+
+        - name: "Charging Station - Session energy"
+          unique_id: wallbox_session_energy
+          slave: 255
+          address: 1502
+          data_type: uint32
+          scale: 0.0001
+          precision: 4
+          unit_of_measurement: "kWh"
+          state_class: total_increasing
+          device_class: energy
+          scan_interval: 30
+
+        # 1550 = wie fasen mag wisselen (moet op modbus staan, anders negeert
+        # de paal het schakelscript zonder foutmelding), 1552 = huidige stand.
+        - name: "Charging Station - Phase switching source (raw)"
+          unique_id: wallbox_phase_switching_source
+          slave: 255
+          address: 1550
+          data_type: uint32
+          scan_interval: 300
+
+        - name: "Charging Station - Phase switching state (raw)"
+          unique_id: wallbox_phase_switching_state
+          slave: 255
+          address: 1552
+          data_type: uint32
+          scan_interval: 30
+
+        - name: "Charging Station - Failsafe current"
+          unique_id: wallbox_failsafe_current
+          slave: 255
+          address: 1600
+          data_type: uint32
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 300
+
+        - name: "Charging Station - Failsafe timeout"
+          unique_id: wallbox_failsafe_timeout
+          slave: 255
+          address: 1602
+          data_type: uint32
+          precision: 0
+          unit_of_measurement: "s"
+          device_class: duration
+          scan_interval: 300
+
+        # Spiegelt wat HA er het laatst in SCHREEF (niet wat de paal doet).
+        # Het sessieherstel na een herstart leunt hierop.
+        - name: "Charging Station - Modbus current setpoint"
+          unique_id: wallbox_charging_current
+          slave: 255
+          address: 5004
+          data_type: uint16
+          scale: 0.001
+          precision: 3
+          unit_of_measurement: "A"
+          state_class: measurement
+          device_class: current
+          scan_interval: 30
+
+  # ==========================================================================
+  # 5. HELPERS
+  # Bewust zonder `initial:`, zodat de opgeslagen stand een herstart overleeft.
+  # ==========================================================================
+  input_boolean:
+    # Handbediening: HA houdt input_number.charging_station_charging_current vast.
+    charging_station_modbus_control:
+      name: "Charging Station - Modbus control"
+      icon: mdi:transmission-tower-import
+
+    # Slim laden. Aan = de paal staat PERMANENT op 0 A en gaat alleen open in het
+    # geplande venster. Permanent omdat de KEBA binnen seconden na insteken
+    # begint; reageren op de stekker is te laat. Keerzijde: een bezoeker kan
+    # pas laden als dit uit staat of via "Nu laden".
+    charging_station_smart_charging:
+      name: "Charging Station - Smart charging"
+      icon: mdi:cash-clock
+
+    # De grendel: eenmaal begonnen blijft de sessie open tot vol, deadline of
+    # stekker eruit. Zonder grendel schuift het steeds herberekende venster
+    # naar later zodra er stroom in zit, en gaat het laden aan en uit.
+    charging_station_laadsessie:
+      name: "Charging Station - Laadsessie actief"
+      icon: mdi:ev-station
+
+  input_number:
+    # 0 = pauze, 6-16 = laden. Onder de 6 A kent de KEBA niets.
+    charging_station_charging_current:
+      name: "Charging Station - Charging current"
+      min: 0
+      max: 16   # VERVANG als de installatie meer of minder dan 16 A toestaat
+      step: 1
+      unit_of_measurement: "A"
+      icon: mdi:current-ac
+
+  input_datetime:
+    # Uiterlijk klaar (datum + tijd). Bepaalt bijna alles aan de prijs: "pas
+    # morgenmiddag nodig" maakt de zonnige middag bereikbaar.
+    charging_station_klaar_om:
+      name: "Charging Station - Klaar om"
+      has_date: true
+      has_time: true
+      icon: mdi:clock-check-outline
+
+    # De deadline van de LOPENDE sessie, vastgelegd bij openen. Het laadplan
+    # rolt zijn deadline door, dus daaruit lezen zou nooit afkappen.
+    charging_station_sessie_deadline:
+      name: "Charging Station - Sessie deadline"
+      has_date: true
+      has_time: true
+      icon: mdi:clock-alert-outline
+
+  # ==========================================================================
+  # 6. SCRIPTS
+  # ==========================================================================
+  script:
+    # ADAPTER: één plek waar meldingen naartoe gaan. De knoppen in de melding
+    # (actions) werken alleen met de Companion-app (notify.mobile_app_* of een
+    # notify-groep daarvan).
+    laadpaal_melding:
+      alias: "Laadpaal - Melding"
+      icon: mdi:cellphone-message
+      mode: parallel
+      fields:
+        title:
+          name: Titel
+        message:
+          name: Bericht
+          required: true
+        data:
+          name: Data
+      sequence:
+        - action: notify.mobile_app_vervang_door_telefoon   # VERVANG
+          data:
+            title: "{{ title | default('') }}"
+            message: "{{ message }}"
+            data: "{{ data | default({}) }}"
+
+    # Eerst de failsafe-hartslag (5018), dan de stroom (5004). De failsafe valt
+    # na `Failsafe timeout` seconden zonder nieuw commando terug op vol laden;
+    # daarom herhaalt de automatisering dit elke 15 s. Zet de failsafe NOOIT uit
+    # (0 naar 5018): dan blijft een 0 A staan als HA wegvalt.
+    charging_station_push_setpoint:
+      alias: "Charging Station - Push setpoint"
+      icon: mdi:transmission-tower-import
+      mode: single
+      max_exceeded: silent
+      sequence:
+        - action: modbus.write_register
+          data:
+            hub: KebaP40Pro
+            slave: 255
+            address: 5018
+            value: "{{ states('sensor.charging_station_failsafe_timeout') | int(30) }}"
+        - action: modbus.write_register
+          data:
+            hub: KebaP40Pro
+            slave: 255
+            address: 5004
+            value: >-
+              {% set a = states('sensor.charging_station_gewenste_stroom') | float(0) %}
+              {{ 0 if a < 6 else (a * 1000) | round(0) | int }}
+
+    charging_station_release:
+      alias: "Charging Station - Release to full current"
+      icon: mdi:transmission-tower-off
+      mode: single
+      sequence:
+        - action: modbus.write_register
+          data:
+            hub: KebaP40Pro
+            slave: 255
+            address: 5004
+            value: >-
+              {{ (states('sensor.charging_station_max_supported_current') | float(16) * 1000) | round(0) | int }}
+
+    # "ochtend" = eerstvolgende 07:00 (ook als dat over een uur is),
+    # "middag" = eerstvolgende 17:00 die minstens 3 uur weg is,
+    # "later" = "ochtend" + 1 dag.
+    charging_station_deadline_zetten:
+      alias: "Charging Station - Deadline zetten"
+      icon: mdi:clock-check-outline
+      mode: single
+      fields:
+        wanneer:
+          name: Wanneer
+          description: ochtend, middag of later
+          required: true
+          example: middag
+          selector:
+            select:
+              options:
+                - ochtend
+                - middag
+                - later
+      sequence:
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.charging_station_klaar_om
+          data:
+            datetime: >-
+              {% set klok = '17:00' if wanneer == 'middag' else '07:00' %}
+              {% set ondergrens = 10800 if wanneer == 'middag' else 0 %}
+              {% set t = today_at(klok) %}
+              {% set t = t if (t - now()).total_seconds() > ondergrens else t + timedelta(days=1) %}
+              {% set t = t + timedelta(days=1) if wanneer == 'later' else t %}
+              {{ t.strftime('%Y-%m-%d %H:%M:%S') }}
+
+    # Eerst de deadline vastleggen, dan pas de grendel open.
+    charging_station_sessie_openen:
+      alias: "Charging Station - Laadsessie openen"
+      icon: mdi:ev-station
+      mode: single
+      sequence:
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.charging_station_sessie_deadline
+          data:
+            datetime: >-
+              {% set dl = state_attr('sensor.charging_station_laadplan', 'deadline') | as_datetime(none) %}
+              {{ (dl | as_local).strftime('%Y-%m-%d %H:%M:%S')
+                 if dl is not none else (now() + timedelta(hours=12)).strftime('%Y-%m-%d %H:%M:%S') }}
+        - action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.charging_station_laadsessie
+
+    # "Nu laden": slim laden aan + auto aan de kabel = sessie meteen openen;
+    # handbediening = setpoint op max; allebei uit = paal laadt al zelf.
+    charging_station_nu_laden:
+      alias: "Charging Station - Nu laden"
+      icon: mdi:ev-station
+      mode: single
+      sequence:
+        - choose:
+            - conditions:
+                - condition: state
+                  entity_id: input_boolean.charging_station_smart_charging
+                  state: "on"
+                - condition: template
+                  value_template: "{{ states('sensor.charging_station_cable_state_raw') in ['5', '7'] }}"
+              sequence:
+                - action: script.charging_station_sessie_openen
+            - conditions:
+                - condition: state
+                  entity_id: input_boolean.charging_station_smart_charging
+                  state: "off"
+                - condition: state
+                  entity_id: input_boolean.charging_station_modbus_control
+                  state: "on"
+              sequence:
+                - action: input_number.set_value
+                  target:
+                    entity_id: input_number.charging_station_charging_current
+                  data:
+                    value: "{{ states('sensor.charging_station_max_supported_current') | float(16) | round(0) | int }}"
+
+    # 5052: 0 = 1 fase, 1 = 3 fasen. Werkt alleen als register 1550 modbus als
+    # bron heeft (instelling in de paal). Reken op ~30 s voor je het ziet.
+    charging_station_set_phases:
+      alias: "Charging Station - Set phases"
+      icon: mdi:sine-wave
+      mode: single
+      fields:
+        phases:
+          name: Fasen
+          description: 1 of 3
+          required: true
+          example: 3
+          selector:
+            number:
+              min: 1
+              max: 3
+              step: 2
+      sequence:
+        - action: modbus.write_register
+          data:
+            hub: KebaP40Pro
+            slave: 255
+            address: 5052
+            value: "{{ 1 if (phases | int(3)) == 3 else 0 }}"
+
+  # ==========================================================================
+  # 7. AUTOMATISERINGEN
+  # Kabelstatus 5 of 7 = kabel zit in de auto; 0, 1, 3 = alleen aan de paal.
+  # Komt bewust uit de wallbox en niet uit de auto-cloud (die zwijgt vaak).
+  # ==========================================================================
+  automation:
+    - id: charging_station_modbus_steering
+      alias: "Charging Station - Modbus steering"
+      description: "Houdt het laadstroom-setpoint vast zolang HA de wallbox stuurt"
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: state
+          entity_id: sensor.charging_station_gewenste_stroom
+        - trigger: time_pattern
+          seconds: "/15"
+      conditions:
+        - condition: template
+          value_template: "{{ has_value('sensor.charging_station_gewenste_stroom') }}"
+        # Waarde uit dezelfde modbus-verbinding = de verbinding staat.
+        - condition: template
+          value_template: "{{ has_value('sensor.charging_station_max_supported_current') }}"
+        # De eerste minuut na een start niet schrijven: 5004 is dan nog het
+        # bewijs dat er een sessie liep (zie charging_station_sessie_herstel).
+        - condition: template
+          value_template: >-
+            {% set start = states('sensor.laadpaal_ha_gestart') | as_datetime(none) %}
+            {{ start is none or (now() - start).total_seconds() >= 60 }}
+      actions:
+        - action: script.charging_station_push_setpoint
+
+    - id: charging_station_modbus_release
+      alias: "Charging Station - Modbus release"
+      description: "Geeft de wallbox terug aan zichzelf zodra HA stopt met sturen"
+      mode: single
+      triggers:
+        # Niet van/naar unknown/unavailable: een template-reload gaat
+        # 0 -> unavailable -> 0 en zou dan 16 A schrijven tegen de hartslag in.
+        - trigger: state
+          entity_id: sensor.charging_station_gewenste_stroom
+          to:
+            - unavailable
+            - unknown
+          not_from:
+            - unavailable
+            - unknown
+      conditions:
+        - condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+        - condition: state
+          entity_id:
+            - input_boolean.charging_station_smart_charging
+            - input_boolean.charging_station_modbus_control
+          state: "off"
+      actions:
+        - action: script.charging_station_release
+
+    - id: charging_station_smart_charge_start
+      alias: "Charging Station - Smart charge start"
+      description: "Opent de laadsessie zodra het geplande goedkope venster begint"
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: time_pattern
+          minutes: "/5"
+        - trigger: state
+          entity_id: sensor.charging_station_cable_state_raw
+      conditions:
+        - condition: state
+          entity_id: input_boolean.charging_station_smart_charging
+          state: "on"
+        - condition: state
+          entity_id: input_boolean.charging_station_laadsessie
+          state: "off"
+        - condition: template
+          value_template: "{{ states('sensor.charging_station_cable_state_raw') in ['5', '7'] }}"
+        # 'geen prijzen' start meteen (lege auto is erger dan wat euro's);
+        # 'vol' en 'wacht op prijzen' niet.
+        - condition: template
+          value_template: >-
+            {% set reden = states('sensor.charging_station_laadplan') %}
+            {% set van = state_attr('sensor.charging_station_laadplan', 'van') | as_datetime(none) %}
+            {{ reden in ['plan', 'past niet', 'geen prijzen']
+               and (van is none or now() >= van) }}
+      actions:
+        - action: script.charging_station_sessie_openen
+
+    # Stoppen bij vol, deadline, stekker eruit of slim laden uit. NIET aan het
+    # eind van het venster: het geplande vermogen is een bovengrens.
+    - id: charging_station_smart_charge_stop
+      alias: "Charging Station - Smart charge stop"
+      description: "Sluit de laadsessie bij vol, deadline, stekker eruit of slim laden uit"
+      mode: single
+      max_exceeded: silent
+      triggers:
+        - trigger: time_pattern
+          minutes: "/5"
+        # Niet naar unknown/unavailable: modbus valt soms even weg, en een lege
+        # kabelstatus is geen stekker eruit.
+        - trigger: state
+          entity_id:
+            - sensor.laadpaal_auto_accu
+            - sensor.charging_station_cable_state_raw
+            - input_boolean.charging_station_smart_charging
+          not_to:
+            - unavailable
+            - unknown
+      conditions:
+        - condition: state
+          entity_id: input_boolean.charging_station_laadsessie
+          state: "on"
+        - condition: template
+          value_template: >-
+            {% set soc = states('sensor.laadpaal_auto_accu') | float(none) %}
+            {% set doel = states('sensor.laadpaal_auto_laaddoel') | float(100) %}
+            {% set dl = state_attr('input_datetime.charging_station_sessie_deadline', 'timestamp') | float(none) %}
+            {{ (has_value('sensor.charging_station_cable_state_raw')
+                and states('sensor.charging_station_cable_state_raw') not in ['5', '7'])
+               or is_state('input_boolean.charging_station_smart_charging', 'off')
+               or (soc is not none and soc >= doel)
+               or (dl is not none and as_timestamp(now()) >= dl) }}
+      actions:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.charging_station_laadsessie
+
+    # Na een harde herstart kan de grendel op een oude stand terugkomen. Laadt
+    # de auto na de herstart, dan is dat meestal de failsafe; het echte bewijs
+    # is register 5004: >= 6 A betekent dat HA vlak voor de uitval liet laden.
+    - id: charging_station_sessie_herstel
+      alias: "Charging Station - Sessie herstel"
+      description: "Heropent na een herstart een laadsessie die de restore niet overleefde"
+      mode: single
+      triggers:
+        - trigger: homeassistant
+          event: start
+      conditions: []
+      actions:
+        - delay: "00:00:45"
+        - condition: state
+          entity_id: input_boolean.charging_station_smart_charging
+          state: "on"
+        - condition: state
+          entity_id: input_boolean.charging_station_laadsessie
+          state: "off"
+        - condition: template
+          value_template: >-
+            {{ states('sensor.charging_station_cable_state_raw') in ['5', '7']
+               and states('sensor.charging_station_charging_state_raw') == '3'
+               and states('sensor.charging_station_modbus_current_setpoint') | float(0) >= 6 }}
+        - action: script.charging_station_sessie_openen
+
+    # "WANNEER MOET HIJ KLAAR ZIJN?" - gevraagd bij het insteken. Tot er een
+    # antwoord komt geldt klaar om 07:00: wie niets doet heeft 's ochtends een
+    # volle auto.
+    - id: charging_station_vraag_deadline
+      alias: "Charging Station - Vraag deadline"
+      description: "Vraagt bij het insteken hoe laat de auto klaar moet zijn"
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: sensor.charging_station_cable_state_raw
+          to:
+            - "5"
+            - "7"
+      conditions:
+        - condition: state
+          entity_id: input_boolean.charging_station_smart_charging
+          state: "on"
+        # Alleen bij echt insteken (5->7 is vergrendelen, 7->unavailable->7 een
+        # modbus-hapering).
+        - condition: template
+          value_template: >-
+            {{ trigger.from_state is not none
+               and trigger.from_state.state in ['0', '1', '3'] }}
+      actions:
+        - action: script.charging_station_deadline_zetten
+          data:
+            wanneer: ochtend
+        - delay: "00:00:05"
+        - action: script.laadpaal_melding
+          data:
+            title: Auto hangt aan de lader
+            message: >-
+              {% macro moment(d) -%}
+                {%- set n = (d.date() - now().date()).days -%}
+                {{ '' if n == 0 else ('morgen ' if n == 1 else ('overmorgen ' if n == 2 else d.strftime('%d-%m '))) }}{{ d.strftime('%H:%M') }}
+              {%- endmacro %}
+              {% set reden = states('sensor.charging_station_laadplan') %}
+              {% set van = state_attr('sensor.charging_station_laadplan', 'van') | as_datetime(none) %}
+              {% set tot = state_attr('sensor.charging_station_laadplan', 'tot') | as_datetime(none) %}
+              {% set kwh = state_attr('sensor.charging_station_laadplan', 'kwh') | float(0) %}
+              {% set gem = state_attr('sensor.charging_station_laadplan', 'gemiddelde') | float(none) %}
+              {% set dl = state_attr('sensor.charging_station_laadplan', 'deadline') | as_datetime(none) %}
+              {% set klaar = 'Klaar om ' ~ moment(dl | as_local) if dl is not none else 'Klaar om 07:00' %}
+              {% if van is not none and tot is not none %}
+              {{ klaar }} betekent laden van {{ moment(van) }} tot {{ moment(tot) if tot.date() != van.date() else tot.strftime('%H:%M') }}:
+              {{ kwh | round(0) | int }} kWh{{ ' voor € ' ~ ('%.2f' | format(gem * kwh)) | replace('.', ',') if gem is not none else '' }}.
+              Mag hij later klaar zijn? Dan is het meestal een stuk goedkoper.
+              {% elif reden == 'wacht op prijzen' %}
+              {{ klaar }}: de prijzen tot dan zijn er nog niet, het plan volgt zodra ze binnen zijn.
+              Mag hij later klaar zijn? Dan is het meestal een stuk goedkoper.
+              {% else %}
+              Hoe laat moet hij klaar zijn?
+              {% endif %}
+            data:
+              tag: laadpaal_deadline
+              actions:
+                - action: LAADPAAL_KLAAR_OCHTEND
+                  title: Ochtend 07:00
+                - action: LAADPAAL_KLAAR_MIDDAG
+                  title: Middag 17:00
+                - action: LAADPAAL_KLAAR_LATER
+                  title: Pas een dag later
+
+    - id: charging_station_deadline_antwoord
+      alias: "Charging Station - Deadline antwoord"
+      description: "Verwerkt de keuze uit de melding en bevestigt het nieuwe plan"
+      mode: single
+      triggers:
+        - trigger: event
+          event_type: mobile_app_notification_action
+          event_data:
+            action: LAADPAAL_KLAAR_OCHTEND
+          id: ochtend
+        - trigger: event
+          event_type: mobile_app_notification_action
+          event_data:
+            action: LAADPAAL_KLAAR_MIDDAG
+          id: middag
+        - trigger: event
+          event_type: mobile_app_notification_action
+          event_data:
+            action: LAADPAAL_KLAAR_LATER
+          id: later
+      conditions: []
+      actions:
+        - variables:
+            oude_deadline: "{{ state_attr('input_datetime.charging_station_klaar_om', 'timestamp') | float(0) }}"
+        - action: script.charging_station_deadline_zetten
+          data:
+            wanneer: "{{ trigger.id }}"
+        # Echt andere deadline tijdens een lopende sessie: sessie sluiten en
+        # opnieuw laten plannen (wie "later" kiest wil dat het dure laden stopt).
+        - if:
+            - condition: state
+              entity_id: input_boolean.charging_station_laadsessie
+              state: "on"
+            - condition: template
+              value_template: >-
+                {{ state_attr('input_datetime.charging_station_klaar_om', 'timestamp') | float(0)
+                   != oude_deadline | float(0) }}
+          then:
+            - action: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.charging_station_laadsessie
+        - action: script.laadpaal_melding
+          data:
+            message: clear_notification
+            data:
+              tag: laadpaal_deadline
+        - delay: "00:00:05"
+        - action: automation.trigger
+          target:
+            entity_id: automation.charging_station_smart_charge_start
+          data:
+            skip_condition: false
+        - delay: "00:00:01"
+        - action: script.laadpaal_melding
+          data:
+            title: Laadplan aangepast
+            message: >-
+              {% macro moment(d) -%}
+                {%- set n = (d.date() - now().date()).days -%}
+                {{ '' if n == 0 else ('morgen ' if n == 1 else ('overmorgen ' if n == 2 else d.strftime('%d-%m '))) }}{{ d.strftime('%H:%M') }}
+              {%- endmacro %}
+              {% set reden = states('sensor.charging_station_laadplan') %}
+              {% set van = state_attr('sensor.charging_station_laadplan', 'van') | as_datetime(none) %}
+              {% set tot = state_attr('sensor.charging_station_laadplan', 'tot') | as_datetime(none) %}
+              {% set kwh = state_attr('sensor.charging_station_laadplan', 'kwh') | float(0) %}
+              {% set gem = state_attr('sensor.charging_station_laadplan', 'gemiddelde') | float(none) %}
+              {% set dl = state_attr('sensor.charging_station_laadplan', 'deadline') | as_datetime(none) %}
+              {% set klaar = 'Klaar om ' ~ moment(dl | as_local) if dl is not none else 'Klaar' %}
+              {% if is_state('input_boolean.charging_station_laadsessie', 'on') %}
+              {{ klaar }}. Hij laadt nu, door tot de auto vol is.
+              {% elif reden == 'plan' and van is not none and tot is not none %}
+              {{ klaar }}. Laden van
+              {{ moment(van) }} tot {{ moment(tot) if tot.date() != van.date() else tot.strftime('%H:%M') }}, {{ kwh | round(0) | int }} kWh
+              {{- ' voor € ' ~ ('%.2f' | format(gem * kwh)) | replace('.', ',') if gem is not none else '' }}.
+              {% elif reden == 'vol' %}
+              De auto is al vol, er valt niets te plannen.
+              {% elif reden == 'wacht op prijzen' %}
+              {{ klaar }}. De prijzen tot dan zijn er nog niet; het plan volgt zodra ze binnen zijn.
+              {% elif reden == 'geen prijzen' %}
+              Er zijn geen prijzen bekend, dus hij begint meteen.
+              {% else %}
+              Het past niet meer voor die tijd, hij begint meteen.
+              {% endif %}
+            data:
+              tag: laadpaal_deadline_bevestiging

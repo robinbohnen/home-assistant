@@ -39,6 +39,7 @@ UI editors happy. Everything is YAML, split per room.
 | `dashboards/` | Lovelace in YAML mode. `overzicht/` is the wall panel (split per column), plus separate views for Kamers, School, Klimaat, Accu, Omvormer, Systeem, Camera's, Kalender and a Nest Hub cast target. Since 7-11-2026 Kamers, School, Klimaat, Accu, Omvormer and Systeem share the look of the Server dashboard (see `docs/dashboard-stijl.md`). `server.yaml` is a dashboard of its own (*Server*: NUC, server rack, NAS, VMs, backups). |
 | `custom_sentences/nl/` | The sentences behind the house's own Assist intents. Matched literally — what isn't in there isn't understood. Needs a **full restart** as well. |
 | `docs/` | Design notes. `klimaatregie.md` explains the five layers of the climate control and why each rule exists; `spraak.md` does the same for the voice satellite; `dashboard-stijl.md` is the style guide of the dashboards in Server style. |
+| `export/keba-p40/` | Portable copy of the KEBA P40 Pro smart-charging logic (Modbus, price-based charge plan, the "when must it be ready?" question on plug-in) for another Home Assistant with the same wallbox. Everything house-specific sits in one adapter block marked `VERVANG`; see its `README.md` (Dutch). The original stays `packages/3 - Outside/Carport/KEBA P40 Pro.yaml` — port improvements across. |
 | `tests/` | Offline tests that run without Home Assistant. |
 
 Run the tests before restarting after a climate change:
@@ -67,6 +68,12 @@ status itself flips — `status_veranderd` in the payload is what makes that dis
 drift) and checks what the webhook derives from a P2000 payload: which body gets
 stored, which text is spoken, and whether a call is a follow-up alarm — that last
 one decides whether the yearly call counter ticks.
+
+`tests/test_keba_export.py` (15-11-2026) guards the portable wallbox package in
+`export/keba-p40/`: nothing of this house may leak into it (car, price sensors, notify
+group, wallbox IP), every `VERVANG` placeholder sits in an adapter line, every entity it
+references is created by the package itself, the Modbus registers match the original,
+and the charge plan, stop rule and deadline buttons behave as they do here.
 
 `tests/test_kamers.py` does the same for `custom_templates/kamers.jinja`: it runs
 the room measurement table against the real entity ids listed in that table, so a
@@ -121,6 +128,14 @@ and works out which branch wins when someone switches the purifier on: during th
 evening wind-down or bedtime it has to go straight back off with a notification,
 except when nobody is home (then the switch-on came from the blueprint itself), and
 in daytime nothing happens. It also checks that both rooms pass a notification.
+
+`tests/test_deursensoren_matter.py` (16-11-2026) guards the switch of the bathroom door
+and Maxi's door from Zigbee (zigbee2mqtt) to Matter: `binary_sensor.badkamer_deur_contact`
+became `binary_sensor.badkamer_badkamer_deur_deur` and `binary_sensor.slaapkamer_maxi_deur_contact`
+became `binary_sensor.slaapkamer_maxi_slaapkamer_maxi_deur_deur`. An automation on an entity
+id that no longer exists breaks silently, so the test fails on any leftover reference to the
+old ids in packages, blueprints, dashboards and templates (comments may still mention them),
+and checks that every place that relies on these doors uses the new ones.
 
 `tests/test_rackventilatie.py` (14-11-2026) covers the server rack fans when the rack's
 own temperature sensor has been silent for half an hour. They used to switch on blindly
